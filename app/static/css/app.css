@@ -246,6 +246,26 @@ a {
   margin: 0;
 }
 
+.raw-json {
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.raw-json summary {
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.raw-json pre {
+  margin-top: 10px;
+  padding: 12px;
+  background: var(--bg-elevated);
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 0.85rem;
+}
+
 @media (max-width: 900px) {
   .detail-split {
     grid-template-columns: 1fr;

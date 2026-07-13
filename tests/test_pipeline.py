@@ -43,7 +43,7 @@ def test_extract_text_falls_back_to_vision_on_low_confidence(app, tmp_path, monk
     assert confidence is None
 
 
-def test_process_document_task_updates_status_and_raw_text(app, db, tmp_path):
+def test_process_document_task_runs_ocr_and_ai_extraction(app, db, tmp_path):
     pdf_path = tmp_path / "task_test.pdf"
     make_pdf_file(pdf_path)
 
@@ -60,9 +60,11 @@ def test_process_document_task_updates_status_and_raw_text(app, db, tmp_path):
         process_document(document.id)
 
         db.session.refresh(document)
-        assert document.status == DocStatus.OCR_DONE
+        assert document.status == DocStatus.DONE
         assert document.raw_text == "Erkannter Testtext aus Tesseract."
         assert document.ocr_engine_used == OcrEngine.TESSERACT
+        assert document.customer.name == "Max Mustermann"
+        assert document.raw_json is not None
 
 
 def test_process_document_task_marks_failed_on_error(app, db, tmp_path):

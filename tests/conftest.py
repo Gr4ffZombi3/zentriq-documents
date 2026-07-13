@@ -36,3 +36,26 @@ def mock_ocr(monkeypatch):
         return "Erkannter Testtext aus Tesseract.", 96.0
 
     monkeypatch.setattr("app.services.ocr.tesseract_ocr.ocr_image", fake_ocr_image)
+
+
+@pytest.fixture(autouse=True)
+def mock_llm_extraction(monkeypatch):
+    """Ersetzt den OpenAI-Extraktionsaufruf durch einen deterministischen Fake, damit Tests
+    ohne echten API-Key laufen. Einzelne Tests koennen dies ueberschreiben."""
+    from app.models.enums import DocType
+    from app.services.llm.schemas import DocumentExtraction, ExtractedCustomer
+
+    def fake_extract_document_data(raw_text):
+        return DocumentExtraction(
+            doc_type=DocType.RECHNUNG,
+            customer=ExtractedCustomer(name="Max Mustermann", city="Köln", postal_code="50667"),
+            insurer="Testversicherung AG",
+            products=["Kfz-Haftpflicht"],
+        )
+
+    monkeypatch.setattr(
+        "app.services.llm.extraction.extract_document_data", fake_extract_document_data
+    )
+    monkeypatch.setattr(
+        "app.tasks.document_tasks.extract_document_data", fake_extract_document_data
+    )

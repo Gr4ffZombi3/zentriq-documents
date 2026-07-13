@@ -1,7 +1,11 @@
+from datetime import datetime, timezone
+
 from celery import shared_task
 
 from app.extensions import db
 from app.models import DocStatus, Document
+from app.services.documents import apply_extraction
+from app.services.llm.extraction import extract_document_data
 from app.services.ocr.pipeline import extract_text
 
 
@@ -25,5 +29,18 @@ def process_document(self, document_id: int):
     document.raw_text = raw_text
     document.ocr_engine_used = engine_used
     document.ocr_confidence = confidence
-    document.status = DocStatus.OCR_DONE
+    document.status = DocStatus.AI_PROCESSING
+    db.session.commit()
+
+    try:
+        extraction = extract_document_data(raw_text)
+        apply_extraction(document, extraction)
+    except Exception as exc:
+        document.status = DocStatus.FAILED
+        document.error_message = f"KI-Analyse fehlgeschlagen: {exc}"
+        db.session.commit()
+        return
+
+    document.status = DocStatus.DONE
+    document.processed_at = datetime.now(timezone.utc)
     db.session.commit()

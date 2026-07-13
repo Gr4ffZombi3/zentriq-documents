@@ -1,10 +1,16 @@
 from app.models import Customer, Document, DocStatus, DocType, Recommendation, RecommendationType
 
 
-def test_index_returns_200(client):
-    resp = client.get("/")
+def test_index_returns_200(auth_client):
+    resp = auth_client.get("/")
     assert resp.status_code == 200
     assert "Zentriq Documents" in resp.get_data(as_text=True)
+
+
+def test_index_redirects_to_login_when_unauthenticated(client):
+    resp = client.get("/")
+    assert resp.status_code == 302
+    assert "/auth/login" in resp.headers["Location"]
 
 
 def test_create_document_with_customer(db, tenant):

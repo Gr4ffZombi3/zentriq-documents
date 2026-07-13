@@ -1,7 +1,7 @@
 from app.models import DocStatus, Document
 
 
-def test_retry_reenqueues_failed_document(client, db, tenant):
+def test_retry_reenqueues_failed_document(auth_client, db, tenant):
     document = Document(
         filename="failed.pdf",
         original_filename="failed.pdf",
@@ -13,7 +13,7 @@ def test_retry_reenqueues_failed_document(client, db, tenant):
     db.session.add(document)
     db.session.commit()
 
-    resp = client.post(f"/documents/{document.id}/retry")
+    resp = auth_client.post(f"/documents/{document.id}/retry")
     assert resp.status_code == 302
 
     db.session.refresh(document)

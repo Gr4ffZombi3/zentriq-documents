@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -24,6 +25,12 @@ class BaseConfig:
     OCR_MIN_CONFIDENCE = float(os.environ.get("OCR_MIN_CONFIDENCE", "60"))
     OCR_MIN_TEXT_LENGTH = int(os.environ.get("OCR_MIN_TEXT_LENGTH", "20"))
 
+    # Session-/Cookie-Haertung
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true"
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
+
 
 class DevelopmentConfig(BaseConfig):
     DEBUG = True
@@ -34,6 +41,7 @@ class TestingConfig(BaseConfig):
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     CELERY_TASK_ALWAYS_EAGER = True
     WTF_CSRF_ENABLED = False
+    SESSION_COOKIE_SECURE = False
 
 
 class ProductionConfig(BaseConfig):

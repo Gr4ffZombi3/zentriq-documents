@@ -1,4 +1,5 @@
 from flask import Blueprint, abort, redirect, render_template, send_file, url_for
+from flask_login import login_required
 
 from app.extensions import db
 from app.models import DocStatus, Document
@@ -10,24 +11,28 @@ documents_bp = Blueprint("documents", __name__, url_prefix="/documents")
 
 
 @documents_bp.route("")
+@login_required
 def list_documents():
     documents = Document.query.order_by(Document.uploaded_at.desc()).all()
     return render_template("documents/list.html", documents=documents)
 
 
 @documents_bp.route("/<int:document_id>")
+@login_required
 def detail(document_id):
     document = get_or_404_scoped(Document, document_id)
     return render_template("documents/detail.html", document=document)
 
 
 @documents_bp.route("/<int:document_id>/row")
+@login_required
 def row(document_id):
     document = get_or_404_scoped(Document, document_id)
     return render_template("documents/_row.html", document=document)
 
 
 @documents_bp.route("/<int:document_id>/file")
+@login_required
 def file(document_id):
     document = get_or_404_scoped(Document, document_id)
     path = resolve_document_path(document.file_path)
@@ -37,6 +42,7 @@ def file(document_id):
 
 
 @documents_bp.route("/<int:document_id>/retry", methods=["POST"])
+@login_required
 def retry(document_id):
     document = get_or_404_scoped(Document, document_id)
     document.status = DocStatus.PENDING

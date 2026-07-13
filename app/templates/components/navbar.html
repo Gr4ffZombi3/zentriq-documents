@@ -3,11 +3,23 @@
     <span class="navbar__logo">Z</span>
     <span class="navbar__title">Zentriq Documents</span>
   </a>
-  <form action="{{ url_for('search.search') }}" method="get" class="navbar__search">
-    <input type="text" name="q" placeholder="KI-Suche…" class="navbar__search-input">
-  </form>
-  <nav class="navbar__links">
-    <a href="{{ url_for('dashboard.index') }}">Übersicht</a>
-    <a href="{{ url_for('documents.list_documents') }}">Dokumente</a>
-  </nav>
+  {% if current_user.is_authenticated %}
+    <form action="{{ url_for('search.search') }}" method="get" class="navbar__search">
+      <input type="text" name="q" placeholder="KI-Suche…" class="navbar__search-input">
+    </form>
+    <nav class="navbar__links">
+      <a href="{{ url_for('dashboard.index') }}">Übersicht</a>
+      <a href="{{ url_for('documents.list_documents') }}">Dokumente</a>
+      <span class="navbar__user">{{ current_user.email }}</span>
+      <form method="post" action="{{ url_for('auth.logout') }}" class="navbar__logout-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="navbar__logout-btn">Abmelden</button>
+      </form>
+    </nav>
+  {% else %}
+    <nav class="navbar__links">
+      <a href="{{ url_for('auth.login') }}">Anmelden</a>
+      <a href="{{ url_for('auth.register') }}">Registrieren</a>
+    </nav>
+  {% endif %}
 </header>

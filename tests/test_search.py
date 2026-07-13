@@ -113,27 +113,27 @@ def test_parse_search_query_falls_back_gracefully_on_invalid_enum(app, monkeypat
     assert result is None
 
 
-def test_search_endpoint_uses_filter_spec_when_available(client, db, tenant, monkeypatch):
+def test_search_endpoint_uses_filter_spec_when_available(auth_client, db, tenant, monkeypatch):
     doc1, doc2 = seed_documents(db, tenant.id)
     monkeypatch.setattr(
         "app.blueprints.search.routes.parse_search_query",
         lambda query: FilterSpec(city="Köln"),
     )
 
-    resp = client.get("/search?q=Zeige alle Kunden aus Köln")
+    resp = auth_client.get("/search?q=Zeige alle Kunden aus Köln")
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
     assert "a.pdf" in body
     assert "b.pdf" not in body
 
 
-def test_search_endpoint_falls_back_to_text_search(client, db, tenant, monkeypatch):
+def test_search_endpoint_falls_back_to_text_search(auth_client, db, tenant, monkeypatch):
     doc1, doc2 = seed_documents(db, tenant.id)
     monkeypatch.setattr(
         "app.blueprints.search.routes.parse_search_query", lambda query: None
     )
 
-    resp = client.get("/search?q=Berlin")
+    resp = auth_client.get("/search?q=Berlin")
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
     assert "b.pdf" in body

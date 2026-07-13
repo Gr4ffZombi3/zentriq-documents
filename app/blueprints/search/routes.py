@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request
+from flask_login import login_required
 
 from app.search.query_builder import fallback_text_search, search_documents
 from app.services.llm.search_parser import parse_search_query
@@ -7,6 +8,7 @@ search_bp = Blueprint("search", __name__, url_prefix="/search")
 
 
 @search_bp.route("")
+@login_required
 def search():
     query = request.args.get("q", "").strip()
     documents = []

@@ -30,11 +30,12 @@ def db(app):
 
 @pytest.fixture(autouse=True)
 def tenant(app, db):
-    """Erstellt den Default-Tenant (gleicher Slug wie das before_request-Fallback in
-    app/__init__.py) und setzt den Tenant-Kontext fuer die Dauer des Tests. Ohne dies
+    """Erstellt einen Tenant und setzt den Tenant-Kontext fuer die Dauer des Tests, damit
+    Tests direkte DB-Zugriffe machen koennen, ohne sich erst einzuloggen. Ohne dies
     schlaegt jede Query gegen ein TenantScopedMixin-Modell mit MissingTenantContextError
     fehl - das ist beabsichtigt (fail-closed) und der Beweis, dass die Mandantensperre
-    tatsaechlich greift."""
+    tatsaechlich greift. Fuer Requests ueber den Test-Client wird der Tenant-Kontext
+    stattdessen durch den Login (siehe auth_client-Fixture) via user_loader gesetzt."""
     from app.models import Tenant
 
     default_tenant = Tenant(name="Default Tenant", slug="default")
@@ -43,6 +44,28 @@ def tenant(app, db):
     set_current_tenant_id(default_tenant.id)
     yield default_tenant
     set_current_tenant_id(None)
+
+
+@pytest.fixture()
+def user(db, tenant):
+    from app.models import User
+
+    test_user = User(tenant_id=tenant.id, email="test@example.com", is_active=True)
+    test_user.set_password("testpassword123")
+    db.session.add(test_user)
+    db.session.commit()
+    return test_user
+
+
+@pytest.fixture()
+def auth_client(client, user):
+    """Test-Client, der bereits eingeloggt ist - fuer Requests gegen @login_required-Routen."""
+    client.post(
+        "/auth/login",
+        data={"email": user.email, "password": "testpassword123"},
+        follow_redirects=True,
+    )
+    return client
 
 
 @pytest.fixture(autouse=True)

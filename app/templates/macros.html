@@ -17,3 +17,13 @@
   } %}
   <span class="badge {{ styles.get(status.value, 'badge--muted') }}">{{ labels.get(status.value, status.value) }}</span>
 {%- endmacro %}
+
+{% macro field_errors(field) -%}
+  {% if field.errors %}
+    <ul class="form-errors">
+      {% for error in field.errors %}
+        <li>{{ error }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{%- endmacro %}

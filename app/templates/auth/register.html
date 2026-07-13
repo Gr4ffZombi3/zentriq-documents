@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "macros.html" import field_errors %}
+{% block title %}Registrieren – Zentriq Documents{% endblock %}
+{% block content %}
+<div class="container container--narrow">
+  <div class="card auth-card">
+    <h1>Konto erstellen</h1>
+    <form method="post" class="auth-form">
+      {{ form.hidden_tag() }}
+      <div class="form-field">
+        {{ form.company_name.label }}
+        {{ form.company_name(class_="form-input") }}
+        {{ field_errors(form.company_name) }}
+      </div>
+      <div class="form-field">
+        {{ form.email.label }}
+        {{ form.email(class_="form-input", autocomplete="email") }}
+        {{ field_errors(form.email) }}
+      </div>
+      <div class="form-field">
+        {{ form.password.label }}
+        {{ form.password(class_="form-input", autocomplete="new-password") }}
+        {{ field_errors(form.password) }}
+      </div>
+      <div class="form-field">
+        {{ form.password_confirm.label }}
+        {{ form.password_confirm(class_="form-input", autocomplete="new-password") }}
+        {{ field_errors(form.password_confirm) }}
+      </div>
+      {{ form.submit(class_="btn") }}
+    </form>
+    <p class="muted">Bereits registriert? <a href="{{ url_for('auth.login') }}">Anmelden</a></p>
+  </div>
+</div>
+{% endblock %}

@@ -57,6 +57,20 @@ def use_tenant_id(tenant_id: int | None):
         _current_tenant_id.reset(token)
 
 
+def begin_request_tenant_scope():
+    """Startet einen isolierten Tenant-Kontext-Rahmen fuer eine Anfrage und gibt ein Token
+    zurueck, das am Ende mit end_request_tenant_scope() wieder rueckgaengig gemacht werden
+    muss. Token-basiert statt eines harten Resets: in Testsuiten (und generell ueberall, wo
+    ein App-Context mehrere simulierte Requests umspannt - seit Flask 2.2 ist `g` an den
+    App-Context gebunden, nicht den Request-Context) wuerde ein hartes set(None) am Ende
+    sonst einen umgebenden, absichtlich gesetzten Tenant-Kontext zerstoeren."""
+    return _current_tenant_id.set(None)
+
+
+def end_request_tenant_scope(token) -> None:
+    _current_tenant_id.reset(token)
+
+
 @contextmanager
 def bypass_tenant_scope():
     """Erlaubt bewusste Cross-Tenant-Operationen (Plattform-Admin-Aggregate, Celery-

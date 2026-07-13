@@ -1,11 +1,14 @@
-from flask import Flask
+from flask import Flask, g
 
 from app.celery_app import make_celery
-from app.extensions import db, migrate
-from app.tenancy import set_current_tenant_id
+from app.extensions import csrf, db, login_manager, migrate
+from app.tenancy import (
+    begin_request_tenant_scope,
+    bypass_tenant_scope,
+    end_request_tenant_scope,
+    set_current_tenant_id,
+)
 from config import get_config
-
-DEFAULT_TENANT_SLUG = "default"
 
 
 def create_app(config_object=None):
@@ -15,25 +18,57 @@ def create_app(config_object=None):
     db.init_app(app)
     migrate.init_app(app, db)
     make_celery(app)
+    csrf.init_app(app)
+
+    login_manager.init_app(app)
+    login_manager.login_view = "auth.login"
+    login_manager.login_message = "Bitte melde dich an, um fortzufahren."
+    login_manager.login_message_category = "error"
 
     from app import models  # noqa: F401  (ensure models are registered with SQLAlchemy)
+    from app.auth.routes import auth_bp
     from app.blueprints.dashboard.routes import dashboard_bp
     from app.blueprints.documents.routes import documents_bp
     from app.blueprints.search.routes import search_bp
     from app.blueprints.upload.routes import upload_bp
 
+    app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(documents_bp)
     app.register_blueprint(upload_bp)
     app.register_blueprint(search_bp)
 
-    @app.before_request
-    def _set_tenant_context():
-        # Uebergangsweise bis M9 (echtes Login-basiertes Tenant-Routing): jede Anfrage
-        # laeuft im Kontext eines einzelnen "Default"-Tenants.
-        from app.models import Tenant
+    @login_manager.user_loader
+    def load_user(user_id):
+        from app.models import User
 
-        tenant = Tenant.query.filter_by(slug=DEFAULT_TENANT_SLUG).first()
-        set_current_tenant_id(tenant.id if tenant else None)
+        # Der eingeloggte Nutzer wird per ID aus der Session geladen, bevor sein eigener
+        # Tenant-Kontext ueberhaupt bekannt ist - dieser eine Lookup ist deshalb bewusst
+        # ungescoped. tenant_id wird noch INNERHALB des bypass-Blocks gelesen: war das
+        # Objekt durch einen vorherigen Commit expired (SQLAlchemy expire_on_commit),
+        # loest erst der ERSTE Attributzugriff den Reload aus, nicht schon db.session.get()
+        # selbst - ausserhalb des Blocks wuerde das mangels Tenant-Kontext fehlschlagen.
+        with bypass_tenant_scope():
+            user = db.session.get(User, int(user_id))
+            tenant_id = user.tenant_id if user is not None else None
+        if user is not None:
+            set_current_tenant_id(tenant_id)
+        return user
+
+    @app.before_request
+    def _begin_tenant_scope():
+        g._tenant_scope_token = begin_request_tenant_scope()
+
+    @app.teardown_request
+    def _end_tenant_scope(exception=None):
+        # Seit Flask 2.2 ist `g` an den App-Context gebunden, nicht den Request-Context.
+        # In Tests (und jedem Code, der einen App-Context ueber mehrere simulierte Requests
+        # offenhaelt) wuerde Flask-Logins zwischengespeicherter g._login_user sonst ueber
+        # Requests hinweg bestehen bleiben und beim naechsten Request NICHT erneut per
+        # user_loader geladen werden.
+        g.pop("_login_user", None)
+        token = g.pop("_tenant_scope_token", None)
+        if token is not None:
+            end_request_tenant_scope(token)
 
     return app

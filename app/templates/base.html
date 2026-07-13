@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Zentriq Documents{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.14.9/dist/cdn.min.js"></script>
+</head>
+<body>
+  {% include "components/navbar.html" %}
+  <main class="page">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

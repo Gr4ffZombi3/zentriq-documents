@@ -1,0 +1,16 @@
+Flask>=3.1
+Flask-SQLAlchemy>=3.1
+Flask-Migrate>=4.0
+SQLAlchemy>=2.0
+PyMySQL>=1.1
+celery[redis]>=5.4
+redis>=5.0
+openai>=1.50
+pydantic>=2.9
+pytesseract>=0.3.13
+PyMuPDF>=1.24
+Pillow>=10.4
+python-dotenv>=1.0
+gunicorn>=23.0
+pytest>=8.3
+pytest-flask>=1.3

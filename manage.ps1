@@ -1,0 +1,30 @@
+param(
+    [Parameter(Mandatory=$true)]
+    [ValidateSet("setup", "migrate", "upgrade", "run", "worker", "test")]
+    [string]$Command
+)
+
+$venvPython = ".venv\Scripts\python.exe"
+
+switch ($Command) {
+    "setup" {
+        python -m venv .venv
+        & $venvPython -m pip install --upgrade pip
+        & $venvPython -m pip install -r requirements.txt
+    }
+    "migrate" {
+        & $venvPython -m flask db migrate
+    }
+    "upgrade" {
+        & $venvPython -m flask db upgrade
+    }
+    "run" {
+        & $venvPython -m flask run
+    }
+    "worker" {
+        & $venvPython -m celery -A app.celery_app.celery worker --pool=solo --loglevel=info
+    }
+    "test" {
+        & $venvPython -m pytest
+    }
+}

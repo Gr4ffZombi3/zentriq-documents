@@ -8,17 +8,32 @@ from app.models.enums import DocType
 from app.services.documents import apply_extraction, apply_leipziger_liste_extraction
 from app.services.llm.extraction import extract_document_data, extract_leipziger_liste_rows
 from app.services.ocr.pipeline import extract_text
+from app.tenancy import bypass_tenant_scope, use_tenant_id
 
 
 @shared_task(bind=True)
 def process_document(self, document_id: int):
-    document = db.session.get(Document, document_id)
+    # Celery-Worker laufen ausserhalb eines Request-Kontexts, daher gibt es noch keinen
+    # Tenant-Kontext. Der initiale Lookup per ID ist bewusst ungescoped (vertrauenswuerdiger
+    # Backend-Code, die ID stammt von bereits autorisiertem Code) - direkt danach wird der
+    # Tenant-Kontext auf den des geladenen Dokuments gesetzt, sodass alle nachgelagerten
+    # Queries (Customer-Upsert etc.) automatisch korrekt gescoped sind. use_tenant_id() stellt
+    # danach den vorherigen Kontext wieder her, statt ihn hart zurueckzusetzen - im Eager-Modus
+    # (Tests/Dev) laeuft der Task sonst im selben Kontext wie der aufrufende Request und wuerde
+    # dessen Tenant-Kontext zerstoeren.
+    with bypass_tenant_scope():
+        document = db.session.get(Document, document_id)
     if document is None:
         return
 
+    with use_tenant_id(document.tenant_id):
+        _run_pipeline(document)
+
+
+def _run_pipeline(document: Document) -> None:
     # Idempotent machen: bei einem (Retry-)Durchlauf duerfen keine Reste aus einer
     # vorherigen Verarbeitung (z.B. document_customers) uebrig bleiben, sonst verletzt ein
-    # erneuter Insert den Unique-Constraint auf (document_id, customer_id).
+    # erneuter Insert den Unique-Constraint auf (tenant_id, document_id, customer_id).
     document.recommendations = []
     document.document_customers = []
     document.status = DocStatus.OCR_PROCESSING

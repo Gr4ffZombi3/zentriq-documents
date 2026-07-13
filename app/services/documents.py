@@ -4,14 +4,16 @@ from app.models.enums import DocType
 from app.services.llm.classification import compute_document_flags
 from app.services.llm.recommendations import create_recommendations
 from app.services.llm.schemas import DocumentExtraction, ExtractedCustomer, LeipzigerListeExtraction
+from app.tenancy import get_current_tenant_id
 
 
-def create_document(original_filename: str, stored_filename: str, file_path: str) -> Document:
+def create_document(original_filename: str, stored_filename: str, file_path: str, tenant_id: int) -> Document:
     document = Document(
         filename=stored_filename,
         original_filename=original_filename,
         file_path=file_path,
         status=DocStatus.PENDING,
+        tenant_id=tenant_id,
     )
     db.session.add(document)
     db.session.commit()
@@ -21,7 +23,7 @@ def create_document(original_filename: str, stored_filename: str, file_path: str
 def find_or_create_customer(data: ExtractedCustomer) -> Customer:
     customer = Customer.query.filter_by(name=data.name).first()
     if customer is None:
-        customer = Customer(name=data.name)
+        customer = Customer(name=data.name, tenant_id=get_current_tenant_id())
         db.session.add(customer)
 
     customer.address = data.address or customer.address
@@ -70,7 +72,12 @@ def apply_leipziger_liste_extraction(document: Document, extraction: LeipzigerLi
         row_dict = row.model_dump(mode="json")
         existing = document_customers_by_id.get(row_customer.id)
         if existing is None:
-            doc_customer = DocumentCustomer(document=document, customer=row_customer, row_data=[row_dict])
+            doc_customer = DocumentCustomer(
+                document=document,
+                customer=row_customer,
+                row_data=[row_dict],
+                tenant_id=document.tenant_id,
+            )
             db.session.add(doc_customer)
             document_customers_by_id[row_customer.id] = doc_customer
         else:

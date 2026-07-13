@@ -2,9 +2,10 @@ from datetime import datetime, timezone
 
 from app.extensions import db
 from app.models.enums import Priority, RecommendationStatus, RecommendationType
+from app.tenancy import TenantScopedMixin
 
 
-class Recommendation(db.Model):
+class Recommendation(TenantScopedMixin, db.Model):
     __tablename__ = "recommendations"
 
     id = db.Column(db.Integer, primary_key=True)

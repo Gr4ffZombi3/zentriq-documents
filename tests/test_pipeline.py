@@ -43,7 +43,7 @@ def test_extract_text_falls_back_to_vision_on_low_confidence(app, tmp_path, monk
     assert confidence is None
 
 
-def test_process_document_task_runs_ocr_and_ai_extraction(app, db, tmp_path):
+def test_process_document_task_runs_ocr_and_ai_extraction(app, db, tenant, tmp_path):
     pdf_path = tmp_path / "task_test.pdf"
     make_pdf_file(pdf_path)
 
@@ -53,6 +53,7 @@ def test_process_document_task_runs_ocr_and_ai_extraction(app, db, tmp_path):
             original_filename="task_test.pdf",
             file_path=str(pdf_path),
             status=DocStatus.PENDING,
+            tenant_id=tenant.id,
         )
         db.session.add(document)
         db.session.commit()
@@ -67,13 +68,14 @@ def test_process_document_task_runs_ocr_and_ai_extraction(app, db, tmp_path):
         assert document.raw_json is not None
 
 
-def test_process_document_task_marks_failed_on_error(app, db, tmp_path):
+def test_process_document_task_marks_failed_on_error(app, db, tenant, tmp_path):
     with app.app_context():
         document = Document(
             filename="missing.pdf",
             original_filename="missing.pdf",
             file_path=str(tmp_path / "does_not_exist.pdf"),
             status=DocStatus.PENDING,
+            tenant_id=tenant.id,
         )
         db.session.add(document)
         db.session.commit()

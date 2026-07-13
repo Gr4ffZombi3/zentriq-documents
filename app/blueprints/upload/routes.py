@@ -3,6 +3,7 @@ from flask import Blueprint, make_response, redirect, render_template, request, 
 from app.services.documents import create_document
 from app.services.storage import save_pdf
 from app.tasks.document_tasks import process_document
+from app.tenancy import get_current_tenant_id
 from app.utils.validation import InvalidPDFError, validate_pdf
 
 upload_bp = Blueprint("upload", __name__, url_prefix="/upload")
@@ -21,7 +22,7 @@ def upload_document():
         return render_template("components/upload_widget.html", error=str(exc)), 400
 
     stored_filename, file_path = save_pdf(file_bytes)
-    document = create_document(file.filename, stored_filename, file_path)
+    document = create_document(file.filename, stored_filename, file_path, tenant_id=get_current_tenant_id())
     process_document.delay(document.id)
 
     detail_url = url_for("documents.detail", document_id=document.id)

@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 
 from app.extensions import db
+from app.tenancy import TenantScopedMixin
 
 
-class Customer(db.Model):
+class Customer(TenantScopedMixin, db.Model):
     __tablename__ = "customers"
 
     id = db.Column(db.Integer, primary_key=True)

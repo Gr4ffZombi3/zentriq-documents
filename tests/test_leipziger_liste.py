@@ -67,8 +67,10 @@ def test_compute_document_flags_empty_rows_returns_defaults():
     assert flags["is_neugeschaeft"] is False
 
 
-def test_apply_leipziger_liste_extraction_creates_customers_and_merges_duplicate_rows(app, db):
-    document = Document(filename="liste.pdf", original_filename="liste.pdf", file_path="/tmp/liste.pdf")
+def test_apply_leipziger_liste_extraction_creates_customers_and_merges_duplicate_rows(app, db, tenant):
+    document = Document(
+        filename="liste.pdf", original_filename="liste.pdf", file_path="/tmp/liste.pdf", tenant_id=tenant.id
+    )
     db.session.add(document)
     db.session.commit()
 
@@ -97,7 +99,7 @@ def test_apply_leipziger_liste_extraction_creates_customers_and_merges_duplicate
 
 
 def test_process_document_task_routes_leipziger_liste_through_multi_row_extraction(
-    app, db, tmp_path, monkeypatch
+    app, db, tenant, tmp_path, monkeypatch
 ):
     pdf_path = tmp_path / "leipziger.pdf"
     make_pdf_file(pdf_path)
@@ -117,6 +119,7 @@ def test_process_document_task_routes_leipziger_liste_through_multi_row_extracti
             original_filename="leipziger.pdf",
             file_path=str(pdf_path),
             status=DocStatus.PENDING,
+            tenant_id=tenant.id,
         )
         db.session.add(document)
         db.session.commit()

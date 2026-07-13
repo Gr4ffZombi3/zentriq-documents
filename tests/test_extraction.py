@@ -50,9 +50,9 @@ def test_extract_document_data_parses_valid_json_response(app, monkeypatch):
     assert result.products == ["Kfz-Kasko"]
 
 
-def test_apply_extraction_maps_fields_and_upserts_customer(app, db):
+def test_apply_extraction_maps_fields_and_upserts_customer(app, db, tenant):
     document = Document(
-        filename="x.pdf", original_filename="x.pdf", file_path="/tmp/x.pdf"
+        filename="x.pdf", original_filename="x.pdf", file_path="/tmp/x.pdf", tenant_id=tenant.id
     )
     db.session.add(document)
     db.session.commit()
@@ -75,7 +75,7 @@ def test_apply_extraction_maps_fields_and_upserts_customer(app, db):
 
     # Zweites Dokument mit gleichem Kundennamen soll den bestehenden Kunden wiederverwenden.
     document2 = Document(
-        filename="y.pdf", original_filename="y.pdf", file_path="/tmp/y.pdf"
+        filename="y.pdf", original_filename="y.pdf", file_path="/tmp/y.pdf", tenant_id=tenant.id
     )
     db.session.add(document2)
     db.session.commit()

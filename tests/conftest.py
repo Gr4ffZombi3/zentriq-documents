@@ -2,6 +2,7 @@ import pytest
 
 from app import create_app
 from app.extensions import db as _db
+from app.tenancy import set_current_tenant_id
 from config import TestingConfig
 
 
@@ -25,6 +26,23 @@ def client(app):
 @pytest.fixture()
 def db(app):
     return _db
+
+
+@pytest.fixture(autouse=True)
+def tenant(app, db):
+    """Erstellt den Default-Tenant (gleicher Slug wie das before_request-Fallback in
+    app/__init__.py) und setzt den Tenant-Kontext fuer die Dauer des Tests. Ohne dies
+    schlaegt jede Query gegen ein TenantScopedMixin-Modell mit MissingTenantContextError
+    fehl - das ist beabsichtigt (fail-closed) und der Beweis, dass die Mandantensperre
+    tatsaechlich greift."""
+    from app.models import Tenant
+
+    default_tenant = Tenant(name="Default Tenant", slug="default")
+    db.session.add(default_tenant)
+    db.session.commit()
+    set_current_tenant_id(default_tenant.id)
+    yield default_tenant
+    set_current_tenant_id(None)
 
 
 @pytest.fixture(autouse=True)

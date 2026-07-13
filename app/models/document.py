@@ -2,9 +2,10 @@ from datetime import datetime, timezone
 
 from app.extensions import db
 from app.models.enums import DocStatus, DocType, OcrEngine, Priority
+from app.tenancy import TenantScopedMixin
 
 
-class Document(db.Model):
+class Document(TenantScopedMixin, db.Model):
     __tablename__ = "documents"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -66,11 +67,13 @@ class Document(db.Model):
         return f"<Document {self.id} {self.original_filename!r} status={self.status}>"
 
 
-class DocumentCustomer(db.Model):
+class DocumentCustomer(TenantScopedMixin, db.Model):
     """Verknuepft ein Document mit mehreren Kunden (z.B. Leipziger Liste)."""
 
     __tablename__ = "document_customers"
-    __table_args__ = (db.UniqueConstraint("document_id", "customer_id", name="uq_document_customer"),)
+    __table_args__ = (
+        db.UniqueConstraint("tenant_id", "document_id", "customer_id", name="uq_document_customer_tenant"),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     document_id = db.Column(db.Integer, db.ForeignKey("documents.id"), nullable=False, index=True)

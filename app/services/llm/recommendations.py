@@ -81,6 +81,7 @@ def create_recommendations(document: Document, customer: Customer | None, **flag
             type=rec_type,
             label=label,
             priority=rec_priority,
+            tenant_id=document.tenant_id,
         )
         db.session.add(recommendation)
         created.append(recommendation)

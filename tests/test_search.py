@@ -7,9 +7,9 @@ from app.search.query_builder import FilterSpec, fallback_text_search, search_do
 from app.services.llm.search_parser import parse_search_query
 
 
-def seed_documents(db):
-    koeln_customer = Customer(name="Anna Kunde", city="Köln", postal_code="50667")
-    berlin_customer = Customer(name="Bernd Kunde", city="Berlin", postal_code="10115")
+def seed_documents(db, tenant_id):
+    koeln_customer = Customer(name="Anna Kunde", city="Köln", postal_code="50667", tenant_id=tenant_id)
+    berlin_customer = Customer(name="Bernd Kunde", city="Berlin", postal_code="10115", tenant_id=tenant_id)
     db.session.add_all([koeln_customer, berlin_customer])
     db.session.commit()
 
@@ -17,46 +17,46 @@ def seed_documents(db):
         filename="a.pdf", original_filename="a.pdf", file_path="/tmp/a.pdf",
         status=DocStatus.DONE, doc_type=DocType.LEIPZIGER_LISTE,
         customer=koeln_customer, products=["Kfz-Haftpflicht"], is_neugeschaeft=True,
-        priority=Priority.HIGH, raw_text="Vertrag fuer Anna Kunde in Koeln",
+        priority=Priority.HIGH, raw_text="Vertrag fuer Anna Kunde in Koeln", tenant_id=tenant_id,
     )
     doc2 = Document(
         filename="b.pdf", original_filename="b.pdf", file_path="/tmp/b.pdf",
         status=DocStatus.DONE, doc_type=DocType.RECHNUNG,
         customer=berlin_customer, products=["Kfz-Haftpflicht", "Hausrat"],
-        raw_text="Rechnung fuer Bernd Kunde in Berlin",
+        raw_text="Rechnung fuer Bernd Kunde in Berlin", tenant_id=tenant_id,
     )
     db.session.add_all([doc1, doc2])
     db.session.commit()
     return doc1, doc2
 
 
-def test_search_documents_filters_by_city(db):
-    doc1, doc2 = seed_documents(db)
+def test_search_documents_filters_by_city(db, tenant):
+    doc1, doc2 = seed_documents(db, tenant.id)
     results = search_documents(FilterSpec(city="Köln"))
     assert results == [doc1]
 
 
-def test_search_documents_filters_by_doc_type_and_flag(db):
-    doc1, doc2 = seed_documents(db)
+def test_search_documents_filters_by_doc_type_and_flag(db, tenant):
+    doc1, doc2 = seed_documents(db, tenant.id)
     results = search_documents(FilterSpec(doc_type=DocType.LEIPZIGER_LISTE, is_neugeschaeft=True))
     assert results == [doc1]
 
 
-def test_search_documents_missing_product(db):
-    doc1, doc2 = seed_documents(db)
+def test_search_documents_missing_product(db, tenant):
+    doc1, doc2 = seed_documents(db, tenant.id)
     results = search_documents(FilterSpec(missing_product="Hausrat"))
     assert doc1 in results
     assert doc2 not in results
 
 
-def test_search_documents_has_product(db):
-    doc1, doc2 = seed_documents(db)
+def test_search_documents_has_product(db, tenant):
+    doc1, doc2 = seed_documents(db, tenant.id)
     results = search_documents(FilterSpec(has_product="Hausrat"))
     assert results == [doc2]
 
 
-def test_fallback_text_search_matches_raw_text(db):
-    doc1, doc2 = seed_documents(db)
+def test_fallback_text_search_matches_raw_text(db, tenant):
+    doc1, doc2 = seed_documents(db, tenant.id)
     results = fallback_text_search("Berlin")
     assert results == [doc2]
 
@@ -113,8 +113,8 @@ def test_parse_search_query_falls_back_gracefully_on_invalid_enum(app, monkeypat
     assert result is None
 
 
-def test_search_endpoint_uses_filter_spec_when_available(client, db, monkeypatch):
-    doc1, doc2 = seed_documents(db)
+def test_search_endpoint_uses_filter_spec_when_available(client, db, tenant, monkeypatch):
+    doc1, doc2 = seed_documents(db, tenant.id)
     monkeypatch.setattr(
         "app.blueprints.search.routes.parse_search_query",
         lambda query: FilterSpec(city="Köln"),
@@ -127,8 +127,8 @@ def test_search_endpoint_uses_filter_spec_when_available(client, db, monkeypatch
     assert "b.pdf" not in body
 
 
-def test_search_endpoint_falls_back_to_text_search(client, db, monkeypatch):
-    doc1, doc2 = seed_documents(db)
+def test_search_endpoint_falls_back_to_text_search(client, db, tenant, monkeypatch):
+    doc1, doc2 = seed_documents(db, tenant.id)
     monkeypatch.setattr(
         "app.blueprints.search.routes.parse_search_query", lambda query: None
     )

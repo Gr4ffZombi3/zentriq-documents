@@ -1,6 +1,11 @@
 import enum
 
 
+class TenantStatus(enum.Enum):
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+
+
 class DocType(enum.Enum):
     LEIPZIGER_LISTE = "leipziger_liste"
     HUK_LISTE = "huk_liste"

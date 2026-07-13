@@ -4,6 +4,7 @@ from app.extensions import db
 from app.models import DocStatus, Document
 from app.services.storage import resolve_document_path
 from app.tasks.document_tasks import process_document
+from app.tenancy import get_or_404_scoped
 
 documents_bp = Blueprint("documents", __name__, url_prefix="/documents")
 
@@ -16,19 +17,19 @@ def list_documents():
 
 @documents_bp.route("/<int:document_id>")
 def detail(document_id):
-    document = db.get_or_404(Document, document_id)
+    document = get_or_404_scoped(Document, document_id)
     return render_template("documents/detail.html", document=document)
 
 
 @documents_bp.route("/<int:document_id>/row")
 def row(document_id):
-    document = db.get_or_404(Document, document_id)
+    document = get_or_404_scoped(Document, document_id)
     return render_template("documents/_row.html", document=document)
 
 
 @documents_bp.route("/<int:document_id>/file")
 def file(document_id):
-    document = db.get_or_404(Document, document_id)
+    document = get_or_404_scoped(Document, document_id)
     path = resolve_document_path(document.file_path)
     if not path.exists():
         abort(404)
@@ -37,7 +38,7 @@ def file(document_id):
 
 @documents_bp.route("/<int:document_id>/retry", methods=["POST"])
 def retry(document_id):
-    document = db.get_or_404(Document, document_id)
+    document = get_or_404_scoped(Document, document_id)
     document.status = DocStatus.PENDING
     document.error_message = None
     document.retry_count += 1

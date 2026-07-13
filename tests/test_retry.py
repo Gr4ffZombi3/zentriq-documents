@@ -1,13 +1,14 @@
 from app.models import DocStatus, Document
 
 
-def test_retry_reenqueues_failed_document(client, db):
+def test_retry_reenqueues_failed_document(client, db, tenant):
     document = Document(
         filename="failed.pdf",
         original_filename="failed.pdf",
         file_path="/does/not/exist.pdf",
         status=DocStatus.FAILED,
         error_message="OCR fehlgeschlagen: irgendwas",
+        tenant_id=tenant.id,
     )
     db.session.add(document)
     db.session.commit()

@@ -1,0 +1,9 @@
+{% from "macros.html" import status_badge %}
+<tr class="table__row" onclick="window.location='{{ url_for('documents.detail', document_id=document.id) }}'">
+  <td>{{ document.original_filename }}</td>
+  <td>{{ document.doc_type.value if document.doc_type else '–' }}</td>
+  <td>{{ document.customer.name if document.customer else '–' }}</td>
+  <td>{{ document.uploaded_at.strftime('%d.%m.%Y %H:%M') if document.uploaded_at else '–' }}</td>
+  <td>{{ status_badge(document.status) }}</td>
+  <td>{{ '✓' if document.status.value == 'done' else '–' }}</td>
+</tr>

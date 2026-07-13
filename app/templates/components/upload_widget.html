@@ -1,0 +1,19 @@
+<div id="upload-widget" class="upload-widget"
+     x-data="{ dragging: false }"
+     x-on:dragover.prevent="dragging = true"
+     x-on:dragleave.prevent="dragging = false"
+     x-on:drop.prevent="dragging = false; $refs.fileInput.files = $event.dataTransfer.files; $refs.form.requestSubmit()"
+     :class="{ 'upload-widget--dragging': dragging }">
+  <form x-ref="form" hx-post="{{ url_for('upload.upload_document') }}" hx-encoding="multipart/form-data"
+        hx-target="#upload-widget" hx-swap="outerHTML">
+    <label for="file-input" class="upload-widget__label">
+      <span class="upload-widget__icon">⭱</span>
+      <span>PDF hierher ziehen oder klicken zum Auswählen</span>
+    </label>
+    <input x-ref="fileInput" id="file-input" type="file" name="file" accept="application/pdf"
+           class="upload-widget__input" x-on:change="$refs.form.requestSubmit()">
+  </form>
+  {% if error %}
+    <p class="upload-widget__error">{{ error }}</p>
+  {% endif %}
+</div>

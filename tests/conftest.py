@@ -6,8 +6,9 @@ from config import TestingConfig
 
 
 @pytest.fixture()
-def app():
+def app(tmp_path):
     application = create_app(TestingConfig)
+    application.config["UPLOAD_FOLDER"] = str(tmp_path / "uploads")
     with application.app_context():
         _db.create_all()
         yield application

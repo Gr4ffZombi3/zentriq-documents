@@ -1,0 +1,19 @@
+{% macro status_badge(status) -%}
+  {% set styles = {
+    'pending': 'badge--muted',
+    'ocr_processing': 'badge--info',
+    'ocr_done': 'badge--info',
+    'ai_processing': 'badge--info',
+    'done': 'badge--success',
+    'failed': 'badge--danger',
+  } %}
+  {% set labels = {
+    'pending': 'Ausstehend',
+    'ocr_processing': 'OCR läuft',
+    'ocr_done': 'OCR fertig',
+    'ai_processing': 'KI-Analyse läuft',
+    'done': 'Fertig',
+    'failed': 'Fehlgeschlagen',
+  } %}
+  <span class="badge {{ styles.get(status.value, 'badge--muted') }}">{{ labels.get(status.value, status.value) }}</span>
+{%- endmacro %}

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% from "macros.html" import status_badge %}
+{% block title %}{{ document.original_filename }} – Zentriq Documents{% endblock %}
+{% block content %}
+<div class="container container--wide">
+  <div class="detail-header">
+    <div>
+      <h1>{{ document.original_filename }}</h1>
+      <p class="muted">Hochgeladen am {{ document.uploaded_at.strftime('%d.%m.%Y %H:%M') if document.uploaded_at else '–' }}</p>
+    </div>
+    {{ status_badge(document.status) }}
+  </div>
+
+  <div class="detail-split">
+    <div class="detail-split__pdf card">
+      <embed src="{{ url_for('documents.file', document_id=document.id) }}" type="application/pdf">
+    </div>
+    <div class="detail-split__analysis card">
+      <h2>KI-Auswertung</h2>
+      {% if document.status.value == 'done' %}
+        <dl class="kv-list">
+          <dt>Kunde</dt><dd>{{ document.customer.name if document.customer else '–' }}</dd>
+          <dt>Fahrzeug</dt><dd>{{ document.vehicle or '–' }}</dd>
+          <dt>Kennzeichen</dt><dd>{{ document.license_plate or '–' }}</dd>
+          <dt>Versicherung</dt><dd>{{ document.insurer or '–' }}</dd>
+          <dt>Vertragsnummer</dt><dd>{{ document.contract_number or '–' }}</dd>
+        </dl>
+      {% elif document.status.value == 'failed' %}
+        <p class="upload-widget__error">Analyse fehlgeschlagen: {{ document.error_message or 'Unbekannter Fehler.' }}</p>
+      {% else %}
+        <p class="muted">Dieses Dokument wurde noch nicht von der KI analysiert.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

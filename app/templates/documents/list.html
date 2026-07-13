@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Dokumente – Zentriq Documents{% endblock %}
+{% block content %}
+<div class="container">
+  <h1>Dokumente</h1>
+  <p class="muted">Alle hochgeladenen Dokumente und ihr Analysestatus.</p>
+
+  {% include "components/upload_widget.html" %}
+
+  <div class="card table-card">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Dateiname</th>
+          <th>Dokumententyp</th>
+          <th>Kunde</th>
+          <th>Datum</th>
+          <th>Status</th>
+          <th>KI-Auswertung</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for document in documents %}
+          {% include "documents/_row.html" %}
+        {% else %}
+          <tr><td colspan="6" class="muted">Noch keine Dokumente hochgeladen.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,8 +1,9 @@
-from flask import Blueprint, abort, render_template, send_file
+from flask import Blueprint, abort, redirect, render_template, send_file, url_for
 
 from app.extensions import db
-from app.models import Document
+from app.models import DocStatus, Document
 from app.services.storage import resolve_document_path
+from app.tasks.document_tasks import process_document
 
 documents_bp = Blueprint("documents", __name__, url_prefix="/documents")
 
@@ -32,3 +33,14 @@ def file(document_id):
     if not path.exists():
         abort(404)
     return send_file(path, mimetype="application/pdf")
+
+
+@documents_bp.route("/<int:document_id>/retry", methods=["POST"])
+def retry(document_id):
+    document = db.get_or_404(Document, document_id)
+    document.status = DocStatus.PENDING
+    document.error_message = None
+    document.retry_count += 1
+    db.session.commit()
+    process_document.delay(document.id)
+    return redirect(url_for("documents.detail", document_id=document.id))

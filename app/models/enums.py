@@ -33,6 +33,9 @@ class Priority(enum.Enum):
     HIGH = "high"
 
 
+PRIORITY_ORDER = {Priority.LOW: 0, Priority.MEDIUM: 1, Priority.HIGH: 2}
+
+
 class RecommendationType(enum.Enum):
     CALL_TODAY = "call_today"
     PRIORITIZE_VEHICLE_CHANGE = "prioritize_vehicle_change"

@@ -95,6 +95,79 @@ a {
   max-width: 1400px;
 }
 
+/* Dashboard */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-tile__value {
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.stat-tile__label {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.stat-tile--success .stat-tile__value {
+  color: var(--success);
+}
+
+.stat-tile--danger .stat-tile__value {
+  color: var(--danger);
+}
+
+.section {
+  margin-bottom: 20px;
+}
+
+.section h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+}
+
+.doc-type-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.doc-type-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.doc-type-list li:last-child {
+  border-bottom: none;
+}
+
+.btn {
+  margin-top: 12px;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn:hover {
+  opacity: 0.9;
+}
+
 /* Upload widget */
 .upload-widget {
   margin: 20px 0 28px;

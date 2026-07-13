@@ -4,5 +4,54 @@
 <div class="container">
   <h1>Übersicht</h1>
   <p class="muted">KI-Dokumentenanalyse für Versicherungs- und Kfz-Dienstleister.</p>
+
+  <div class="stat-grid">
+    <div class="card stat-tile">
+      <span class="stat-tile__value">{{ stats.total_documents }}</span>
+      <span class="stat-tile__label">Dokumente gesamt</span>
+    </div>
+    <div class="card stat-tile">
+      <span class="stat-tile__value">{{ stats.new_documents }}</span>
+      <span class="stat-tile__label">Neue Dokumente (24h)</span>
+    </div>
+    <div class="card stat-tile stat-tile--success">
+      <span class="stat-tile__value">{{ stats.done_count }}</span>
+      <span class="stat-tile__label">KI-Verarbeitung abgeschlossen</span>
+    </div>
+    <div class="card stat-tile stat-tile--danger">
+      <span class="stat-tile__value">{{ stats.failed_count }}</span>
+      <span class="stat-tile__label">Fehlgeschlagene Analysen</span>
+    </div>
+  </div>
+
+  {% if stats.doc_type_counts %}
+    <div class="card section">
+      <h2>Dokumententypen</h2>
+      <ul class="doc-type-list">
+        {% for doc_type, count in stats.doc_type_counts.items() %}
+          <li><span>{{ doc_type.value }}</span><span class="muted">{{ count }}</span></li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  <div class="card section">
+    <h2>Offene Empfehlungen</h2>
+    {% if recommendations %}
+      {% for rec in recommendations %}
+        <div class="recommendation-card recommendation-card--{{ rec.priority.value }}">
+          <span class="recommendation-card__label">{{ rec.label }}</span>
+          <span class="recommendation-card__customer">
+            {{ rec.customer.name if rec.customer else '' }}
+            {% if rec.document_id %}
+              · <a href="{{ url_for('documents.detail', document_id=rec.document_id) }}">Dokument öffnen</a>
+            {% endif %}
+          </span>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="muted">Keine offenen Empfehlungen.</p>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

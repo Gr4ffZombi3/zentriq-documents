@@ -1,10 +1,8 @@
 """Rollup-Logik: aggregiert die Leipziger-Liste-Zeilenflags auf Dokumentenebene,
 damit z.B. `is_neugeschaeft` und `priority` als durchsuchbare Document-Spalten existieren."""
 
-from app.models.enums import Priority
+from app.models.enums import PRIORITY_ORDER, Priority
 from app.services.llm.schemas import LeipzigerListeExtraction
-
-_PRIORITY_ORDER = {Priority.LOW: 0, Priority.MEDIUM: 1, Priority.HIGH: 2}
 
 
 def compute_document_flags(extraction: LeipzigerListeExtraction) -> dict:
@@ -20,7 +18,7 @@ def compute_document_flags(extraction: LeipzigerListeExtraction) -> dict:
             "recommended_next_action": None,
         }
 
-    top_row = max(rows, key=lambda r: _PRIORITY_ORDER[r.priority])
+    top_row = max(rows, key=lambda r: PRIORITY_ORDER[r.priority])
     return {
         "is_neugeschaeft": any(r.is_neugeschaeft for r in rows),
         "is_fahrzeugwechsel": any(r.is_fahrzeugwechsel for r in rows),

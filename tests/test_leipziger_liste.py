@@ -128,3 +128,13 @@ def test_process_document_task_routes_leipziger_liste_through_multi_row_extracti
         assert document.doc_type == DocType.LEIPZIGER_LISTE
         assert len(document.document_customers) == 2
         assert len(document.recommendations) >= 2
+
+        # Reprocessing (z.B. via Retry-Button) darf nicht am Unique-Constraint auf
+        # (document_id, customer_id) scheitern und muss wieder sauber bei DONE landen,
+        # ohne doppelte document_customers/recommendations anzuhaeufen.
+        process_document(document.id)
+
+        db.session.refresh(document)
+        assert document.status == DocStatus.DONE
+        assert len(document.document_customers) == 2
+        assert len(document.recommendations) >= 2

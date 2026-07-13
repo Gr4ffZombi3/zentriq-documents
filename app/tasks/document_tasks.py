@@ -16,12 +16,18 @@ def process_document(self, document_id: int):
     if document is None:
         return
 
+    # Idempotent machen: bei einem (Retry-)Durchlauf duerfen keine Reste aus einer
+    # vorherigen Verarbeitung (z.B. document_customers) uebrig bleiben, sonst verletzt ein
+    # erneuter Insert den Unique-Constraint auf (document_id, customer_id).
+    document.recommendations = []
+    document.document_customers = []
     document.status = DocStatus.OCR_PROCESSING
     db.session.commit()
 
     try:
         raw_text, engine_used, confidence = extract_text(document.file_path)
     except Exception as exc:
+        db.session.rollback()
         document.status = DocStatus.FAILED
         document.error_message = f"OCR fehlgeschlagen: {exc}"
         db.session.commit()
@@ -41,6 +47,7 @@ def process_document(self, document_id: int):
         else:
             apply_extraction(document, extraction)
     except Exception as exc:
+        db.session.rollback()
         document.status = DocStatus.FAILED
         document.error_message = f"KI-Analyse fehlgeschlagen: {exc}"
         db.session.commit()

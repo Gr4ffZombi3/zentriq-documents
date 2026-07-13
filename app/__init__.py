@@ -16,10 +16,12 @@ def create_app(config_object=None):
     from app import models  # noqa: F401  (ensure models are registered with SQLAlchemy)
     from app.blueprints.dashboard.routes import dashboard_bp
     from app.blueprints.documents.routes import documents_bp
+    from app.blueprints.search.routes import search_bp
     from app.blueprints.upload.routes import upload_bp
 
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(documents_bp)
     app.register_blueprint(upload_bp)
+    app.register_blueprint(search_bp)
 
     return app

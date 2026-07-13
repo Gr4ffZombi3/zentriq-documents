@@ -3,6 +3,9 @@
     <span class="navbar__logo">Z</span>
     <span class="navbar__title">Zentriq Documents</span>
   </a>
+  <form action="{{ url_for('search.search') }}" method="get" class="navbar__search">
+    <input type="text" name="q" placeholder="KI-Suche…" class="navbar__search-input">
+  </form>
   <nav class="navbar__links">
     <a href="{{ url_for('dashboard.index') }}">Übersicht</a>
     <a href="{{ url_for('documents.list_documents') }}">Dokumente</a>

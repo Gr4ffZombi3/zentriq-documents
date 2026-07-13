@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Suche – Zentriq Documents{% endblock %}
+{% block content %}
+<div class="container">
+  <h1>KI-Suche</h1>
+  <form method="get" action="{{ url_for('search.search') }}" class="search-form">
+    <input type="text" name="q" value="{{ query }}" placeholder='z.B. &quot;Zeige alle Kunden aus Köln&quot;' class="search-form__input">
+    <button type="submit" class="btn">Suchen</button>
+  </form>
+
+  {% if query %}
+    <p class="muted">
+      {{ documents | length }} Ergebnis(se) für „{{ query }}“
+      {% if used_fallback %}(einfache Textsuche, kein KI-Filter erkannt){% endif %}
+    </p>
+
+    <div class="card table-card">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Dateiname</th>
+            <th>Dokumententyp</th>
+            <th>Kunde</th>
+            <th>Datum</th>
+            <th>Status</th>
+            <th>KI-Auswertung</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for document in documents %}
+            {% include "documents/_row.html" %}
+          {% else %}
+            <tr><td colspan="6" class="muted">Keine Ergebnisse.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,6 +1,9 @@
 from app.extensions import db
-from app.models import Customer, DocStatus, Document
-from app.services.llm.schemas import DocumentExtraction, ExtractedCustomer
+from app.models import Customer, DocStatus, Document, DocumentCustomer
+from app.models.enums import DocType
+from app.services.llm.classification import compute_document_flags
+from app.services.llm.recommendations import create_recommendations
+from app.services.llm.schemas import DocumentExtraction, ExtractedCustomer, LeipzigerListeExtraction
 
 
 def create_document(original_filename: str, stored_filename: str, file_path: str) -> Document:
@@ -43,3 +46,46 @@ def apply_extraction(document: Document, extraction: DocumentExtraction) -> None
 
     if extraction.customer is not None:
         document.customer = find_or_create_customer(extraction.customer)
+
+    create_recommendations(
+        document,
+        document.customer,
+        products=extraction.products,
+        vehicle=extraction.vehicle,
+    )
+
+
+def apply_leipziger_liste_extraction(document: Document, extraction: LeipzigerListeExtraction) -> None:
+    document.doc_type = DocType.LEIPZIGER_LISTE
+    document.raw_json = extraction.model_dump(mode="json")
+
+    for key, value in compute_document_flags(extraction).items():
+        setattr(document, key, value)
+
+    document_customers_by_id: dict[int, DocumentCustomer] = {}
+    for index, row in enumerate(extraction.rows):
+        row_customer = find_or_create_customer(row.customer)
+        db.session.flush()  # Kunden-ID fuer den Abgleich mehrfacher Zeilen bereitstellen
+
+        row_dict = row.model_dump(mode="json")
+        existing = document_customers_by_id.get(row_customer.id)
+        if existing is None:
+            doc_customer = DocumentCustomer(document=document, customer=row_customer, row_data=[row_dict])
+            db.session.add(doc_customer)
+            document_customers_by_id[row_customer.id] = doc_customer
+        else:
+            existing.row_data = [*(existing.row_data or []), row_dict]
+
+        if index == 0:
+            document.customer = row_customer
+
+        create_recommendations(
+            document,
+            row_customer,
+            products=row.products,
+            vehicle=row.vehicle,
+            is_neugeschaeft=row.is_neugeschaeft,
+            is_fahrzeugwechsel=row.is_fahrzeugwechsel,
+            cross_sell_opportunity=row.cross_sell_opportunity,
+            priority=row.priority,
+        )

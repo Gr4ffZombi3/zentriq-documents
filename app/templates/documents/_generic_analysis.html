@@ -1,0 +1,13 @@
+<dl class="kv-list">
+  <dt>Kunde</dt><dd>{{ document.customer.name if document.customer else '–' }}</dd>
+  <dt>Anschrift</dt><dd>{{ document.customer.address if document.customer and document.customer.address else '–' }}</dd>
+  <dt>Fahrzeug</dt><dd>{{ document.vehicle or '–' }}</dd>
+  <dt>Kennzeichen</dt><dd>{{ document.license_plate or '–' }}</dd>
+  <dt>Versicherung</dt><dd>{{ document.insurer or '–' }}</dd>
+  <dt>Vertragsnummer</dt><dd>{{ document.contract_number or '–' }}</dd>
+  <dt>Aktenzeichen</dt><dd>{{ document.case_number or '–' }}</dd>
+  <dt>Vermittler</dt><dd>{{ document.broker or '–' }}</dd>
+  <dt>Beginn</dt><dd>{{ document.contract_start_date.strftime('%d.%m.%Y') if document.contract_start_date else '–' }}</dd>
+  <dt>Produkte</dt><dd>{{ document.products | join(', ') if document.products else '–' }}</dd>
+  <dt>Besonderheiten</dt><dd>{{ document.special_notes or '–' }}</dd>
+</dl>

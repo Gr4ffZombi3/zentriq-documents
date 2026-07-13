@@ -266,6 +266,52 @@ a {
   font-size: 0.85rem;
 }
 
+.flag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.recommendations {
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.recommendations h3 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+
+.recommendation-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  border-left: 3px solid var(--accent);
+  margin-bottom: 8px;
+}
+
+.recommendation-card--high {
+  border-left-color: var(--danger);
+}
+
+.recommendation-card--medium {
+  border-left-color: var(--warning);
+}
+
+.recommendation-card--low {
+  border-left-color: var(--text-muted);
+}
+
+.recommendation-card__customer {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
 @media (max-width: 900px) {
   .detail-split {
     grid-template-columns: 1fr;

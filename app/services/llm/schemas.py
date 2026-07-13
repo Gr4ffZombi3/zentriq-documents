@@ -2,7 +2,7 @@ from datetime import date
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import DocType
+from app.models.enums import DocType, Priority
 
 
 class ExtractedCustomer(BaseModel):
@@ -25,3 +25,26 @@ class DocumentExtraction(BaseModel):
     contract_start_date: date | None = None
     products: list[str] = Field(default_factory=list)
     special_notes: str | None = None
+
+
+class LeipzigerListeRow(BaseModel):
+    """Eine Kundenzeile aus einer Leipziger Liste (ein PDF enthaelt typischerweise mehrere)."""
+
+    customer: ExtractedCustomer
+    vehicle: str | None = None
+    license_plate: str | None = None
+    insurer: str | None = None
+    contract_number: str | None = None
+    products: list[str] = Field(default_factory=list)
+    is_neugeschaeft: bool = False
+    is_fahrzeugwechsel: bool = False
+    is_angebot: bool = False
+    cross_sell_opportunity: bool = False
+    has_multiple_products: bool = False
+    priority: Priority = Priority.MEDIUM
+    recommended_next_action: str | None = None
+    special_notes: str | None = None
+
+
+class LeipzigerListeExtraction(BaseModel):
+    rows: list[LeipzigerListeRow] = Field(default_factory=list)

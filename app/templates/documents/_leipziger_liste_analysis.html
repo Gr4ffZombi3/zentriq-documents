@@ -1,0 +1,35 @@
+<div class="flag-row">
+  {% if document.is_neugeschaeft %}<span class="badge badge--info">Neugeschäft</span>{% endif %}
+  {% if document.is_fahrzeugwechsel %}<span class="badge badge--info">Fahrzeugwechsel</span>{% endif %}
+  {% if document.is_angebot %}<span class="badge badge--info">Angebot</span>{% endif %}
+  {% if document.cross_sell_opportunity %}<span class="badge badge--info">Cross-Selling-Chance</span>{% endif %}
+  {% if document.has_multiple_products %}<span class="badge badge--info">Mehrere Produkte</span>{% endif %}
+  {% if document.priority %}<span class="badge badge--muted">Priorität: {{ document.priority.value }}</span>{% endif %}
+</div>
+
+{% if document.recommended_next_action %}
+  <p><strong>Empfohlene nächste Aktion:</strong> {{ document.recommended_next_action }}</p>
+{% endif %}
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Kunde</th>
+      <th>Fahrzeug</th>
+      <th>Kennzeichen</th>
+      <th>Produkte</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for dc in document.document_customers %}
+      <tr>
+        <td>{{ dc.customer.name }}</td>
+        <td>{{ dc.row_data | map(attribute='vehicle') | select | join(', ') or '–' }}</td>
+        <td>{{ dc.row_data | map(attribute='license_plate') | select | join(', ') or '–' }}</td>
+        <td>{{ (dc.row_data | map(attribute='products') | sum(start=[])) | join(', ') or '–' }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="muted">Keine Kundenzeilen erkannt.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>

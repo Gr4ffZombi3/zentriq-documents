@@ -1,0 +1,9 @@
+<div class="recommendations">
+  <h3>Empfehlungen</h3>
+  {% for rec in document.recommendations %}
+    <div class="recommendation-card recommendation-card--{{ rec.priority.value }}">
+      <span class="recommendation-card__label">{{ rec.label }}</span>
+      {% if rec.customer %}<span class="recommendation-card__customer">{{ rec.customer.name }}</span>{% endif %}
+    </div>
+  {% endfor %}
+</div>

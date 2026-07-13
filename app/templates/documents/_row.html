@@ -1,5 +1,13 @@
 {% from "macros.html" import status_badge %}
-<tr class="table__row" onclick="window.location='{{ url_for('documents.detail', document_id=document.id) }}'">
+{% set is_active = document.status.value in ['pending', 'ocr_processing', 'ocr_done', 'ai_processing'] %}
+<tr id="doc-row-{{ document.id }}" class="table__row"
+    onclick="window.location='{{ url_for('documents.detail', document_id=document.id) }}'"
+    {% if is_active %}
+    hx-get="{{ url_for('documents.row', document_id=document.id) }}"
+    hx-trigger="every 3s"
+    hx-swap="outerHTML"
+    hx-target="this"
+    {% endif %}>
   <td>{{ document.original_filename }}</td>
   <td>{{ document.doc_type.value if document.doc_type else '–' }}</td>
   <td>{{ document.customer.name if document.customer else '–' }}</td>

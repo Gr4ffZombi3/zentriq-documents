@@ -2,6 +2,7 @@ from flask import Blueprint, make_response, redirect, render_template, request, 
 
 from app.services.documents import create_document
 from app.services.storage import save_pdf
+from app.tasks.document_tasks import process_document
 from app.utils.validation import InvalidPDFError, validate_pdf
 
 upload_bp = Blueprint("upload", __name__, url_prefix="/upload")
@@ -21,6 +22,7 @@ def upload_document():
 
     stored_filename, file_path = save_pdf(file_bytes)
     document = create_document(file.filename, stored_filename, file_path)
+    process_document.delay(document.id)
 
     detail_url = url_for("documents.detail", document_id=document.id)
     if request.headers.get("HX-Request"):

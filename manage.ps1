@@ -22,7 +22,7 @@ switch ($Command) {
         & $venvPython -m flask run
     }
     "worker" {
-        & $venvPython -m celery -A app.celery_app.celery worker --pool=solo --loglevel=info
+        & $venvPython -m celery -A celery_worker.celery worker --pool=solo --loglevel=info
     }
     "test" {
         & $venvPython -m pytest

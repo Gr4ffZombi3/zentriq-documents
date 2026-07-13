@@ -9,6 +9,7 @@ from config import TestingConfig
 def app(tmp_path):
     application = create_app(TestingConfig)
     application.config["UPLOAD_FOLDER"] = str(tmp_path / "uploads")
+    application.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{tmp_path / 'test.db'}"
     with application.app_context():
         _db.create_all()
         yield application
@@ -24,3 +25,14 @@ def client(app):
 @pytest.fixture()
 def db(app):
     return _db
+
+
+@pytest.fixture(autouse=True)
+def mock_ocr(monkeypatch):
+    """Ersetzt Tesseract-OCR durch einen deterministischen Fake, damit Tests ohne echte
+    Tesseract-Installation und ohne OpenAI-API-Aufrufe laufen."""
+
+    def fake_ocr_image(image):
+        return "Erkannter Testtext aus Tesseract.", 96.0
+
+    monkeypatch.setattr("app.services.ocr.tesseract_ocr.ocr_image", fake_ocr_image)

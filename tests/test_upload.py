@@ -25,7 +25,10 @@ def test_upload_valid_pdf_creates_document_and_redirects(client, db):
     document = Document.query.first()
     assert document is not None
     assert document.original_filename == "Rechnung.pdf"
-    assert document.status.value == "pending"
+    # Celery läuft im Test-Modus synchron (CELERY_TASK_ALWAYS_EAGER), daher ist die
+    # (gemockte) OCR-Verarbeitung zu diesem Zeitpunkt bereits abgeschlossen.
+    assert document.status.value == "ocr_done"
+    assert document.raw_text == "Erkannter Testtext aus Tesseract."
 
 
 def test_upload_rejects_non_pdf(client, db):

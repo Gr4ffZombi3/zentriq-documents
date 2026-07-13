@@ -19,6 +19,12 @@ def detail(document_id):
     return render_template("documents/detail.html", document=document)
 
 
+@documents_bp.route("/<int:document_id>/row")
+def row(document_id):
+    document = db.get_or_404(Document, document_id)
+    return render_template("documents/_row.html", document=document)
+
+
 @documents_bp.route("/<int:document_id>/file")
 def file(document_id):
     document = db.get_or_404(Document, document_id)

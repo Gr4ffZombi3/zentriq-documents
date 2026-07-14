@@ -1,17 +1,35 @@
-{% from "macros.html" import status_badge %}
+{% from "ui/icons.html" import icon %}
+{% from "ui/display.html" import status_badge %}
 {% set is_active = document.status.value in ['pending', 'ocr_processing', 'ocr_done', 'ai_processing'] %}
-<tr id="doc-row-{{ document.id }}" class="table__row"
-    onclick="window.location='{{ url_for('documents.detail', document_id=document.id) }}'"
-    {% if is_active %}
-    hx-get="{{ url_for('documents.row', document_id=document.id) }}"
-    hx-trigger="every 3s"
-    hx-swap="outerHTML"
-    hx-target="this"
-    {% endif %}>
-  <td>{{ document.original_filename }}</td>
-  <td>{{ document.doc_type.value if document.doc_type else '–' }}</td>
-  <td>{{ document.customer.name if document.customer else '–' }}</td>
-  <td>{{ document.uploaded_at.strftime('%d.%m.%Y %H:%M') if document.uploaded_at else '–' }}</td>
-  <td>{{ status_badge(document.status) }}</td>
-  <td>{{ '✓' if document.status.value == 'done' else '–' }}</td>
-</tr>
+<div id="doc-row-{{ document.id }}"
+     class="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-border bg-surface p-4 shadow-sm transition duration-200 hover:border-primary/40 hover:shadow-md sm:p-5"
+     onclick="window.location='{{ url_for('documents.detail', document_id=document.id) }}'"
+     {% if is_active %}
+     hx-get="{{ url_for('documents.row', document_id=document.id) }}"
+     hx-trigger="every 3s"
+     hx-swap="outerHTML"
+     hx-target="this"
+     {% endif %}>
+  <div class="flex min-w-0 items-center gap-3.5">
+    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+      {{ icon('file-text', class='w-5 h-5') }}
+    </span>
+    <div class="min-w-0">
+      <p class="truncate font-medium text-text">{{ document.original_filename }}</p>
+      <p class="mt-0.5 truncate text-sm text-text-muted">
+        {{ document.customer.name if document.customer else 'Kein Kunde' }}
+        {% if document.doc_type %} · {{ document.doc_type.value }}{% endif %}
+      </p>
+    </div>
+  </div>
+  <div class="flex shrink-0 items-center gap-4">
+    <span class="hidden text-sm text-text-muted sm:inline">{{ document.uploaded_at.strftime('%d.%m.%Y %H:%M') if document.uploaded_at else '–' }}</span>
+    {{ status_badge(document.status) }}
+    <a href="{{ url_for('documents.detail', document_id=document.id) }}"
+       onclick="event.stopPropagation()"
+       class="hidden shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text transition duration-200 hover:bg-bg md:inline-flex">
+      Öffnen
+      {{ icon('chevron-right', class='w-4 h-4') }}
+    </a>
+  </div>
+</div>

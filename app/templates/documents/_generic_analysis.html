@@ -1,13 +1,21 @@
-<dl class="kv-list">
-  <dt>Kunde</dt><dd>{{ document.customer.name if document.customer else '–' }}</dd>
-  <dt>Anschrift</dt><dd>{{ document.customer.address if document.customer and document.customer.address else '–' }}</dd>
-  <dt>Fahrzeug</dt><dd>{{ document.vehicle or '–' }}</dd>
-  <dt>Kennzeichen</dt><dd>{{ document.license_plate or '–' }}</dd>
-  <dt>Versicherung</dt><dd>{{ document.insurer or '–' }}</dd>
-  <dt>Vertragsnummer</dt><dd>{{ document.contract_number or '–' }}</dd>
-  <dt>Aktenzeichen</dt><dd>{{ document.case_number or '–' }}</dd>
-  <dt>Vermittler</dt><dd>{{ document.broker or '–' }}</dd>
-  <dt>Beginn</dt><dd>{{ document.contract_start_date.strftime('%d.%m.%Y') if document.contract_start_date else '–' }}</dd>
-  <dt>Produkte</dt><dd>{{ document.products | join(', ') if document.products else '–' }}</dd>
-  <dt>Besonderheiten</dt><dd>{{ document.special_notes or '–' }}</dd>
+{% set fields = [
+  ('Kunde', document.customer.name if document.customer else None),
+  ('Anschrift', document.customer.address if document.customer and document.customer.address else None),
+  ('Fahrzeug', document.vehicle),
+  ('Kennzeichen', document.license_plate),
+  ('Versicherung', document.insurer),
+  ('Vertragsnummer', document.contract_number),
+  ('Aktenzeichen', document.case_number),
+  ('Vermittler', document.broker),
+  ('Beginn', document.contract_start_date.strftime('%d.%m.%Y') if document.contract_start_date else None),
+  ('Produkte', document.products | join(', ') if document.products else None),
+  ('Besonderheiten', document.special_notes),
+] %}
+<dl class="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+  {% for label, value in fields %}
+    <div>
+      <dt class="text-xs font-medium uppercase tracking-wide text-text-muted">{{ label }}</dt>
+      <dd class="mt-0.5 text-sm text-text">{{ value or '–' }}</dd>
+    </div>
+  {% endfor %}
 </dl>

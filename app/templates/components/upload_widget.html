@@ -1,19 +1,32 @@
-<div id="upload-widget" class="upload-widget"
+{% from "ui/icons.html" import icon %}
+<div id="upload-widget"
      x-data="{ dragging: false }"
      x-on:dragover.prevent="dragging = true"
      x-on:dragleave.prevent="dragging = false"
-     x-on:drop.prevent="dragging = false; $refs.fileInput.files = $event.dataTransfer.files; $refs.form.requestSubmit()"
-     :class="{ 'upload-widget--dragging': dragging }">
+     x-on:drop.prevent="dragging = false; $refs.fileInput.files = $event.dataTransfer.files; $refs.form.requestSubmit()">
   <form x-ref="form" hx-post="{{ url_for('upload.upload_document') }}" hx-encoding="multipart/form-data"
-        hx-target="#upload-widget" hx-swap="outerHTML">
-    <label for="file-input" class="upload-widget__label">
-      <span class="upload-widget__icon">⭱</span>
-      <span>PDF hierher ziehen oder klicken zum Auswählen</span>
+        hx-target="#upload-widget" hx-swap="outerHTML" hx-indicator="#upload-progress"
+        class="rounded-xl border-2 border-dashed p-10 text-center transition duration-200"
+        :class="dragging ? 'border-primary bg-primary/5' : 'border-border bg-surface'">
+    <label for="file-input" class="flex cursor-pointer flex-col items-center gap-3">
+      <span class="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary transition duration-200" :class="dragging ? 'scale-110' : ''">
+        {{ icon('upload', class='w-6 h-6') }}
+      </span>
+      <span class="text-sm font-medium text-text">PDF hierher ziehen oder klicken zum Auswählen</span>
+      <span class="text-xs text-text-muted">Nur PDF-Dateien</span>
     </label>
     <input x-ref="fileInput" id="file-input" type="file" name="file" accept="application/pdf"
-           class="upload-widget__input" x-on:change="$refs.form.requestSubmit()">
+           class="sr-only" x-on:change="$refs.form.requestSubmit()">
+    <div id="upload-progress" class="htmx-indicator mt-5">
+      {% from "ui/display.html" import progressbar %}
+      {{ progressbar() }}
+      <p class="mt-2 text-xs text-text-muted">Wird hochgeladen…</p>
+    </div>
   </form>
   {% if error %}
-    <p class="upload-widget__error">{{ error }}</p>
+    <p class="mt-3 flex items-center gap-1.5 text-sm text-error">
+      {{ icon('alert-circle', class='w-4 h-4') }}
+      {{ error }}
+    </p>
   {% endif %}
 </div>

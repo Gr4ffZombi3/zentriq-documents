@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <title>{% block title %}Zentriq Documents{% endblock %}</title>
+  {% include "components/_head_common.html" %}
+  {% block head %}{% endblock %}
+</head>
+<body class="bg-bg text-text antialiased">
+  {% from "ui/overlays.html" import toast_container %}
+  {{ toast_container() }}
+  <main class="flex min-h-screen items-center justify-center p-4">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

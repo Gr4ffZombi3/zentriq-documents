@@ -1,0 +1,66 @@
+{% from "ui/icons.html" import icon %}
+
+<div
+  x-show="sidebarOpen"
+  x-on:click="sidebarOpen = false"
+  x-transition.opacity
+  x-cloak
+  class="fixed inset-0 z-30 bg-black/50 lg:hidden"
+></div>
+
+<aside
+  :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+  class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-border bg-surface transition-transform duration-200 ease-in-out"
+>
+  <div class="flex h-16 shrink-0 items-center gap-2 border-b border-border px-6">
+    <a href="{{ url_for('dashboard.index') }}" class="flex items-center gap-2.5 font-semibold text-text">
+      <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">Z</span>
+      <span>Zentriq Documents</span>
+    </a>
+  </div>
+
+  <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+    {% set nav_items = [
+      ('dashboard.index', 'layout-dashboard', 'Dashboard', ''),
+      ('documents.list_documents', 'file-text', 'Dokumente', ''),
+      ('customers.list_customers', 'users', 'Kunden', ''),
+      ('recommendations.list_recommendations', 'list-checks', 'Empfehlungen', ''),
+      ('documents.list_documents', 'upload', 'Upload', '#upload-widget'),
+      ('settings.users', 'user-cog', 'Benutzer', ''),
+      ('settings.index', 'settings', 'Einstellungen', ''),
+    ] %}
+    {% for endpoint, icon_name, label, anchor in nav_items %}
+      {% set is_active = request.endpoint == endpoint and not anchor %}
+      <a
+        href="{{ url_for(endpoint) }}{{ anchor }}"
+        class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition duration-200 {{ 'bg-primary/10 text-primary' if is_active else 'text-text-muted hover:bg-bg hover:text-text' }}"
+      >
+        {{ icon(icon_name) }}
+        {{ label }}
+      </a>
+    {% endfor %}
+  </nav>
+
+  <div class="space-y-1 border-t border-border p-3">
+    <button
+      type="button"
+      x-data="{ dark: document.documentElement.classList.contains('dark') }"
+      x-on:click="dark = !dark; document.documentElement.classList.toggle('dark', dark); localStorage.setItem('zentriq-theme', dark ? 'dark' : 'light')"
+      class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-text-muted transition duration-200 hover:bg-bg hover:text-text"
+    >
+      <template x-if="!dark">{{ icon('moon') }}</template>
+      <template x-if="dark">{{ icon('sun') }}</template>
+      <span x-text="dark ? 'Hell-Modus' : 'Dunkel-Modus'"></span>
+    </button>
+    <form method="post" action="{{ url_for('auth.logout') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button
+        type="submit"
+        class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-text-muted transition duration-200 hover:bg-bg hover:text-text"
+      >
+        {{ icon('log-out') }}
+        Abmelden
+      </button>
+    </form>
+  </div>
+</aside>

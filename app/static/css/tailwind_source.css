@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+/* Klassenbasierter Dark Mode: <html class="dark"> statt nur prefers-color-scheme, damit ein
+   manueller Toggle (siehe base.html Bootstrap-Script) moeglich ist. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@font-face {
+  font-family: "InterVariable";
+  src: url("/static/fonts/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  --font-sans: "InterVariable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Light Mode (Standard) - exakt aus dem Briefing */
+  --color-bg: #FAFAFA;
+  --color-surface: #FFFFFF;
+  --color-border: #E5E7EB;
+  --color-text: #111827;
+  --color-text-muted: #6B7280;
+  --color-primary: #2563EB;
+  --color-primary-hover: #1D4ED8;
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
+
+  --animate-indeterminate: indeterminate 1.2s ease-in-out infinite;
+}
+
+@keyframes indeterminate {
+  0% { transform: translateX(-100%); width: 40%; }
+  50% { width: 60%; }
+  100% { transform: translateX(250%); width: 40%; }
+}
+
+/* Dark Mode - uebernimmt die bisherige Dark-Palette aus app.css 1:1, damit der bereits
+   bewaehrte dunkle Look erhalten bleibt und nicht neu erfunden werden muss. */
+.dark {
+  --color-bg: #0B0E14;
+  --color-surface: #171C27;
+  --color-border: #262C3A;
+  --color-text: #E6E9F0;
+  --color-text-muted: #8B92A4;
+  --color-primary: #5B8CFF;
+  --color-primary-hover: #7CA3FF;
+  --color-success: #34D399;
+  --color-warning: #FBBF24;
+  --color-error: #F87171;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--color-bg);
+    color: var(--color-text);
+  }
+}
+
+/* htmx-Standardmuster: waehrend eines Requests sichtbar (z.B. Upload-Spinner), sonst
+   unsichtbar. Reines CSS, von Tailwind unveraendert durchgereicht. */
+.htmx-indicator {
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+  opacity: 1;
+}
+
+/* Alpine-Standardmuster: verhindert einen kurzen Flackerer eines Elements, bevor Alpine
+   initialisiert ist (z.B. Modal, das per x-show erst nach JS-Start korrekt verborgen ist). */
+[x-cloak] {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

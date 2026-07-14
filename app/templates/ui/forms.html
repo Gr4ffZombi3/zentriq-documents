@@ -1,0 +1,54 @@
+{% from "ui/icons.html" import icon %}
+
+{% set BUTTON_VARIANTS = {
+  'primary': 'bg-primary text-white hover:bg-primary-hover focus-visible:ring-primary',
+  'secondary': 'bg-surface text-text border border-border hover:bg-bg focus-visible:ring-primary',
+  'ghost': 'bg-transparent text-text-muted hover:bg-bg hover:text-text focus-visible:ring-primary shadow-none',
+  'danger': 'bg-error text-white hover:bg-error/90 focus-visible:ring-error',
+} %}
+{% set BUTTON_BASE = 'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium shadow-sm transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-50 disabled:pointer-events-none' %}
+
+{% macro button(text, variant='primary', type='button', href=None, icon_name=None, extra_class='', name=None, id=None) -%}
+{% set classes = BUTTON_BASE ~ ' ' ~ BUTTON_VARIANTS.get(variant, BUTTON_VARIANTS['primary']) ~ ' ' ~ extra_class %}
+{% if href %}
+<a href="{{ href }}"{% if id %} id="{{ id }}"{% endif %} class="{{ classes }}">
+  {%- if icon_name %}{{ icon(icon_name, class='w-4 h-4') }}{% endif %}{{ text }}
+</a>
+{%- else %}
+<button type="{{ type }}"{% if name %} name="{{ name }}"{% endif %}{% if id %} id="{{ id }}"{% endif %} class="{{ classes }}">
+  {%- if icon_name %}{{ icon(icon_name, class='w-4 h-4') }}{% endif %}{{ text }}
+</button>
+{%- endif %}
+{%- endmacro %}
+
+{% macro field_errors(field) -%}
+  {% if field.errors %}
+    <ul class="mt-1.5 space-y-0.5 text-sm text-error">
+      {% for error in field.errors %}
+        <li>{{ error }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{%- endmacro %}
+
+{% macro input_field(field, icon_name=None, autocomplete=None, placeholder=None) -%}
+<div class="flex flex-col gap-1.5">
+  <label for="{{ field.id }}" class="text-sm font-medium text-text">{{ field.label.text }}</label>
+  <div class="relative">
+    {% if icon_name %}
+      <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
+        {{ icon(icon_name, class='w-4 h-4') }}
+      </span>
+    {% endif %}
+    {#- WTForms rendert jedes uebergebene Kwarg wortwoertlich als HTML-Attribut, auch
+       None (-> placeholder="None") - deshalb nur tatsaechlich gesetzte Werte durchreichen. #}
+    {% set field_kwargs = {
+      'class_': "w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm text-text placeholder:text-text-muted transition duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary" ~ (' pl-10' if icon_name else ''),
+    } %}
+    {% if autocomplete %}{% set _ = field_kwargs.update({'autocomplete': autocomplete}) %}{% endif %}
+    {% if placeholder %}{% set _ = field_kwargs.update({'placeholder': placeholder}) %}{% endif %}
+    {{ field(**field_kwargs) }}
+  </div>
+  {{ field_errors(field) }}
+</div>
+{%- endmacro %}

@@ -28,3 +28,7 @@ migrations/versions/__pycache__/
 
 # Wegwerf-Skripte fuer manuelle Live-Verifikation waehrend der Entwicklung
 _manual_verify_*.py
+
+# Eigenstaendige Tailwind-CLI-Binary (lokales Build-Tool, ~110MB, kein Node.js noetig -
+# siehe README fuer den Download-Befehl). Nur die KOMPILIERTE app.css wird committet.
+tools/tailwindcss.exe

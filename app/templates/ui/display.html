@@ -1,0 +1,43 @@
+{% from "ui/icons.html" import icon %}
+
+{% macro card(extra_class='', padding='p-6') %}
+<div class="rounded-xl border border-border bg-surface shadow-sm {{ padding }} {{ extra_class }}">
+  {{ caller() }}
+</div>
+{% endmacro %}
+
+{% set BADGE_VARIANTS = {
+  'muted': 'bg-text-muted/10 text-text-muted',
+  'info': 'bg-primary/10 text-primary',
+  'success': 'bg-success/10 text-success',
+  'warning': 'bg-warning/10 text-warning',
+  'danger': 'bg-error/10 text-error',
+} %}
+
+{% macro badge(text, variant='muted', icon_name=None) -%}
+<span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium {{ BADGE_VARIANTS.get(variant, BADGE_VARIANTS['muted']) }}">
+  {%- if icon_name %}{{ icon(icon_name, class='w-3.5 h-3.5') }}{% endif %}{{ text }}
+</span>
+{%- endmacro %}
+
+{% macro status_badge(status) -%}
+  {% set variants = {
+    'pending': 'muted', 'ocr_processing': 'info', 'ocr_done': 'info', 'ai_processing': 'info',
+    'done': 'success', 'failed': 'danger',
+  } %}
+  {% set labels = {
+    'pending': 'Ausstehend', 'ocr_processing': 'OCR läuft', 'ocr_done': 'OCR fertig',
+    'ai_processing': 'KI-Analyse läuft', 'done': 'Fertig', 'failed': 'Fehlgeschlagen',
+  } %}
+  {{ badge(labels.get(status.value, status.value), variant=variants.get(status.value, 'muted')) }}
+{%- endmacro %}
+
+{% macro spinner(class='w-4 h-4') -%}
+{{ icon('loader-circle', class=class ~ ' animate-spin') }}
+{%- endmacro %}
+
+{% macro progressbar(extra_class='') -%}
+<div class="h-1.5 w-full overflow-hidden rounded-full bg-border {{ extra_class }}">
+  <div class="h-full w-1/3 rounded-full bg-primary animate-indeterminate"></div>
+</div>
+{%- endmacro %}

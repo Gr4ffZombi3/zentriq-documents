@@ -13,7 +13,7 @@
     <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
       {{ icon('search', class='w-4 h-4') }}
     </span>
-    <input type="text" name="q" value="{{ query }}" placeholder='z.B. „Zeige alle Kunden aus Köln“'
+    <input type="text" name="q" value="{{ query }}" aria-label="KI-Suche" placeholder='z.B. „Zeige alle Kunden aus Köln“'
            class="w-full rounded-lg border border-border bg-surface py-2.5 pl-10 pr-3.5 text-sm text-text placeholder:text-text-muted transition duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
   </div>
   {{ button('Suchen', type='submit', icon_name='search') }}

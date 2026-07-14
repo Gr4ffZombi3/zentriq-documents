@@ -27,6 +27,14 @@
   --color-warning: #F59E0B;
   --color-error: #EF4444;
 
+  /* Dunklere Variante fuer Text auf getoenten Badge-Hintergruenden (z.B. bg-success/10):
+     --color-success/warning/error direkt haben auf Weiss nur ~2.1-3.8:1 Kontrast (WCAG AA
+     verlangt 4.5:1 fuer kleinen Text). Die Basistoene bleiben ueberall sonst (Buttons, Icons,
+     Punkte) exakt wie im Briefing vorgegeben; nur die Badge-Textfarbe wird abgedunkelt. */
+  --color-success-text: #15803D;
+  --color-warning-text: #B45309;
+  --color-error-text: #B91C1C;
+
   --animate-indeterminate: indeterminate 1.2s ease-in-out infinite;
 }
 
@@ -49,6 +57,11 @@
   --color-success: #34D399;
   --color-warning: #FBBF24;
   --color-error: #F87171;
+
+  /* Auf dunklem Grund haben die Basistoene bereits >6:1 Kontrast, deshalb hier identisch. */
+  --color-success-text: #34D399;
+  --color-warning-text: #FBBF24;
+  --color-error-text: #F87171;
 }
 
 @layer base {

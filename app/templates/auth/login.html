@@ -1,25 +1,26 @@
-{% extends "base.html" %}
-{% from "macros.html" import field_errors %}
+{% extends "base_auth.html" %}
+{% from "ui/forms.html" import input_field, button %}
 {% block title %}Anmelden – Zentriq Documents{% endblock %}
 {% block content %}
-<div class="container container--narrow">
-  <div class="card auth-card">
-    <h1>Anmelden</h1>
-    <form method="post" class="auth-form">
-      {{ form.hidden_tag() }}
-      <div class="form-field">
-        {{ form.email.label }}
-        {{ form.email(class_="form-input", autocomplete="email") }}
-        {{ field_errors(form.email) }}
-      </div>
-      <div class="form-field">
-        {{ form.password.label }}
-        {{ form.password(class_="form-input", autocomplete="current-password") }}
-        {{ field_errors(form.password) }}
-      </div>
-      {{ form.submit(class_="btn") }}
-    </form>
-    <p class="muted">Noch kein Konto? <a href="{{ url_for('auth.register') }}">Jetzt registrieren</a></p>
+<div class="w-full max-w-md">
+  <div class="mb-8 flex flex-col items-center gap-3 text-center">
+    <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-lg font-bold text-white">Z</span>
+    <h1 class="text-2xl font-semibold tracking-tight text-text">Willkommen zurück</h1>
+    <p class="text-sm text-text-muted">Melde dich bei Zentriq Documents an.</p>
   </div>
+
+  <div class="rounded-2xl border border-border bg-surface p-8 shadow-sm">
+    <form method="post" class="flex flex-col gap-5">
+      {{ form.hidden_tag() }}
+      {{ input_field(form.email, icon_name='mail', autocomplete='email') }}
+      {{ input_field(form.password, icon_name='lock', autocomplete='current-password') }}
+      {{ button(form.submit.label.text, variant='primary', type='submit', extra_class='w-full mt-1') }}
+    </form>
+  </div>
+
+  <p class="mt-6 text-center text-sm text-text-muted">
+    Noch kein Konto?
+    <a href="{{ url_for('auth.register') }}" class="font-medium text-primary hover:text-primary-hover">Jetzt registrieren</a>
+  </p>
 </div>
 {% endblock %}

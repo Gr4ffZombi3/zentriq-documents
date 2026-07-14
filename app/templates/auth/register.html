@@ -1,35 +1,28 @@
-{% extends "base.html" %}
-{% from "macros.html" import field_errors %}
+{% extends "base_auth.html" %}
+{% from "ui/forms.html" import input_field, button %}
 {% block title %}Registrieren – Zentriq Documents{% endblock %}
 {% block content %}
-<div class="container container--narrow">
-  <div class="card auth-card">
-    <h1>Konto erstellen</h1>
-    <form method="post" class="auth-form">
-      {{ form.hidden_tag() }}
-      <div class="form-field">
-        {{ form.company_name.label }}
-        {{ form.company_name(class_="form-input") }}
-        {{ field_errors(form.company_name) }}
-      </div>
-      <div class="form-field">
-        {{ form.email.label }}
-        {{ form.email(class_="form-input", autocomplete="email") }}
-        {{ field_errors(form.email) }}
-      </div>
-      <div class="form-field">
-        {{ form.password.label }}
-        {{ form.password(class_="form-input", autocomplete="new-password") }}
-        {{ field_errors(form.password) }}
-      </div>
-      <div class="form-field">
-        {{ form.password_confirm.label }}
-        {{ form.password_confirm(class_="form-input", autocomplete="new-password") }}
-        {{ field_errors(form.password_confirm) }}
-      </div>
-      {{ form.submit(class_="btn") }}
-    </form>
-    <p class="muted">Bereits registriert? <a href="{{ url_for('auth.login') }}">Anmelden</a></p>
+<div class="w-full max-w-md">
+  <div class="mb-8 flex flex-col items-center gap-3 text-center">
+    <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-lg font-bold text-white">Z</span>
+    <h1 class="text-2xl font-semibold tracking-tight text-text">Konto erstellen</h1>
+    <p class="text-sm text-text-muted">Starte mit Zentriq Documents – kostenlos einrichten.</p>
   </div>
+
+  <div class="rounded-2xl border border-border bg-surface p-8 shadow-sm">
+    <form method="post" class="flex flex-col gap-5">
+      {{ form.hidden_tag() }}
+      {{ input_field(form.company_name, icon_name='building-2') }}
+      {{ input_field(form.email, icon_name='mail', autocomplete='email') }}
+      {{ input_field(form.password, icon_name='lock', autocomplete='new-password') }}
+      {{ input_field(form.password_confirm, icon_name='lock', autocomplete='new-password') }}
+      {{ button(form.submit.label.text, variant='primary', type='submit', extra_class='w-full mt-1') }}
+    </form>
+  </div>
+
+  <p class="mt-6 text-center text-sm text-text-muted">
+    Bereits registriert?
+    <a href="{{ url_for('auth.login') }}" class="font-medium text-primary hover:text-primary-hover">Anmelden</a>
+  </p>
 </div>
 {% endblock %}

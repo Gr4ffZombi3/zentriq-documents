@@ -2,7 +2,7 @@ from app.models import AuditEventType, AuditLog
 
 
 def test_successful_login_writes_audit_event(client, db, user, tenant):
-    client.post("/auth/login", data={"email": user.email, "password": "testpassword123"})
+    client.post("/auth/login", data={"login_type": "email", "identifier": user.email, "password": "testpassword123"})
 
     entry = AuditLog.query.filter_by(event_type=AuditEventType.LOGIN_SUCCESS).one()
     assert entry.actor_user_id == user.id
@@ -11,7 +11,9 @@ def test_successful_login_writes_audit_event(client, db, user, tenant):
 
 
 def test_failed_login_wrong_password_writes_audit_event_without_user(client, db, user):
-    client.post("/auth/login", data={"email": user.email, "password": "falsches-passwort"})
+    client.post(
+        "/auth/login", data={"login_type": "email", "identifier": user.email, "password": "falsches-passwort"}
+    )
 
     entry = AuditLog.query.filter_by(event_type=AuditEventType.LOGIN_FAILED).one()
     assert entry.actor_user_id is None
@@ -19,7 +21,9 @@ def test_failed_login_wrong_password_writes_audit_event_without_user(client, db,
 
 
 def test_failed_login_unknown_email_has_no_tenant(client, db):
-    client.post("/auth/login", data={"email": "unbekannt@example.com", "password": "irrelevant"})
+    client.post(
+        "/auth/login", data={"login_type": "email", "identifier": "unbekannt@example.com", "password": "irrelevant"}
+    )
 
     entry = AuditLog.query.filter_by(event_type=AuditEventType.LOGIN_FAILED).one()
     assert entry.tenant_id is None
@@ -37,7 +41,7 @@ def test_logout_writes_audit_event(auth_client, user, tenant):
 def test_audit_log_captures_ip_and_user_agent(client, db, user):
     client.post(
         "/auth/login",
-        data={"email": user.email, "password": "testpassword123"},
+        data={"login_type": "email", "identifier": user.email, "password": "testpassword123"},
         headers={"User-Agent": "pytest-agent/1.0"},
     )
 

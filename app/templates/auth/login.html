@@ -1,5 +1,6 @@
 {% extends "base_auth.html" %}
-{% from "ui/forms.html" import input_field, button %}
+{% from "ui/icons.html" import icon %}
+{% from "ui/forms.html" import input_field, button, field_errors %}
 {% block title %}Anmelden – Zentriq Documents{% endblock %}
 {% block content %}
 <div class="w-full max-w-md">
@@ -10,9 +11,33 @@
   </div>
 
   <div class="rounded-2xl border border-border bg-surface p-8 shadow-sm">
-    <form method="post" class="flex flex-col gap-5">
+    <form method="post" class="flex flex-col gap-5" x-data="{ type: '{{ form.login_type.data or 'email' }}' }">
       {{ form.hidden_tag() }}
-      {{ input_field(form.email, icon_name='mail', autocomplete='email') }}
+
+      <div>
+        <div class="grid grid-cols-2 gap-1 rounded-lg bg-bg p-1">
+          {% for subfield in form.login_type %}
+            <label class="cursor-pointer rounded-md py-1.5 text-center text-sm font-medium transition duration-200"
+                   :class="type === '{{ subfield.data }}' ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'">
+              {{ subfield(**{'x-model': 'type', 'class': 'sr-only'}) }}
+              {{ subfield.label.text }}
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label for="identifier" class="text-sm font-medium text-text" x-text="type === 'email' ? 'E-Mail' : 'Vermittlernummer'"></label>
+        <div class="relative">
+          <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
+            <template x-if="type === 'email'">{{ icon('mail', class='w-4 h-4') }}</template>
+            <template x-if="type === 'vermittlernummer'">{{ icon('key', class='w-4 h-4') }}</template>
+          </span>
+          {{ form.identifier(id='identifier', class_="w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 pl-10 text-sm text-text placeholder:text-text-muted transition duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary", **{':placeholder': "type === 'email' ? 'du@firma.de' : 'z.B. 123456'"}) }}
+        </div>
+        {{ field_errors(form.identifier) }}
+      </div>
+
       {{ input_field(form.password, icon_name='lock', autocomplete='current-password') }}
       {{ button(form.submit.label.text, variant='primary', type='submit', extra_class='w-full mt-1') }}
     </form>

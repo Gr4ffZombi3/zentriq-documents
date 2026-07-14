@@ -22,6 +22,7 @@ def register():
     form = RegisterForm()
     if form.validate_on_submit():
         email = form.email.data.lower().strip()
+        vermittlernummer = form.vermittlernummer.data.strip()
 
         with bypass_tenant_scope():
             existing = User.query.filter_by(email=email).first()
@@ -30,11 +31,17 @@ def register():
             return render_template("auth/register.html", form=form)
 
         with bypass_tenant_scope():
+            existing_vm = User.query.filter_by(vermittlernummer=vermittlernummer).first()
+        if existing_vm is not None:
+            flash("Diese Vermittlernummer ist bereits registriert.", "error")
+            return render_template("auth/register.html", form=form)
+
+        with bypass_tenant_scope():
             tenant = Tenant(name=form.company_name.data, slug=unique_tenant_slug(form.company_name.data))
             db.session.add(tenant)
             db.session.flush()
 
-            user = User(tenant_id=tenant.id, email=email)
+            user = User(tenant_id=tenant.id, email=email, vermittlernummer=vermittlernummer)
             user.set_password(form.password.data)
             db.session.add(user)
             db.session.commit()
@@ -57,14 +64,22 @@ def login():
 
     form = LoginForm()
     if form.validate_on_submit():
-        email = form.email.data.lower().strip()
+        login_type = form.login_type.data
+        identifier = form.identifier.data.strip()
 
         with bypass_tenant_scope():
-            user = User.query.filter_by(email=email).first()
+            if login_type == "vermittlernummer":
+                user = User.query.filter_by(vermittlernummer=identifier).first()
+            else:
+                user = User.query.filter_by(email=identifier.lower()).first()
 
         if user is None or not user.check_password(form.password.data):
-            log_audit_event(AuditEventType.LOGIN_FAILED, actor_email=email, details={"reason": "invalid_credentials"})
-            flash("E-Mail oder Passwort ist falsch.", "error")
+            log_audit_event(
+                AuditEventType.LOGIN_FAILED,
+                actor_email=identifier if login_type == "email" else None,
+                details={"reason": "invalid_credentials", "login_type": login_type},
+            )
+            flash("Anmeldedaten sind falsch.", "error")
             return render_template("auth/login.html", form=form)
 
         if not user.is_active:

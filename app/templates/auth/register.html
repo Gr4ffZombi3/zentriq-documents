@@ -14,6 +14,7 @@
       {{ form.hidden_tag() }}
       {{ input_field(form.company_name, icon_name='building-2') }}
       {{ input_field(form.email, icon_name='mail', autocomplete='email') }}
+      {{ input_field(form.vermittlernummer, icon_name='key') }}
       {{ input_field(form.password, icon_name='lock', autocomplete='new-password') }}
       {{ input_field(form.password_confirm, icon_name='lock', autocomplete='new-password') }}
       {{ button(form.submit.label.text, variant='primary', type='submit', extra_class='w-full mt-1') }}

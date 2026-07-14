@@ -12,6 +12,7 @@ class User(TenantScopedMixin, UserMixin, db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255), nullable=False, unique=True, index=True)
+    vermittlernummer = db.Column(db.String(50), nullable=True, unique=True, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     is_email_verified = db.Column(db.Boolean, nullable=False, default=False)

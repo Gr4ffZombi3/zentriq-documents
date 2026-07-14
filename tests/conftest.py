@@ -50,7 +50,7 @@ def tenant(app, db):
 def user(db, tenant):
     from app.models import User
 
-    test_user = User(tenant_id=tenant.id, email="test@example.com", is_active=True)
+    test_user = User(tenant_id=tenant.id, email="test@example.com", vermittlernummer="VM-1001", is_active=True)
     test_user.set_password("testpassword123")
     db.session.add(test_user)
     db.session.commit()
@@ -62,7 +62,7 @@ def auth_client(client, user):
     """Test-Client, der bereits eingeloggt ist - fuer Requests gegen @login_required-Routen."""
     client.post(
         "/auth/login",
-        data={"email": user.email, "password": "testpassword123"},
+        data={"login_type": "email", "identifier": user.email, "password": "testpassword123"},
         follow_redirects=True,
     )
     return client

@@ -47,7 +47,11 @@ Vor jedem Commit: `.\manage.ps1 check` (Lint + volle Testsuite).
 
 ## Deployment
 
-Entwicklung erfolgt ausschließlich lokal; der Server ist reines Deployment-Ziel und wird
-per `git pull` + `./deploy.sh` aktualisiert — keine manuellen Änderungen am Server-Code
-oder der Server-Datenbank. Details zur einmaligen Server-Einrichtung und zum laufenden
-Deployment: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+Entwicklung erfolgt ausschließlich lokal; der Server ist reines Deployment-Ziel.
+
+- **Frischer Server**: `chmod +x deploy/install.sh && ./deploy/install.sh` — richtet Python,
+  MariaDB, Redis, Nginx, systemd-Services, Firewall und optional SSL vollautomatisch ein.
+- **Laufendes Update**: `git pull && ./deploy.sh` — kein manueller Server-Zugriff auf Code
+  oder Datenbank nötig.
+
+Vollständige Dokumentation: [DEPLOYMENT.md](DEPLOYMENT.md).

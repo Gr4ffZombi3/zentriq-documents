@@ -32,7 +32,7 @@ def get_dashboard_stats() -> dict:
     }
 
 
-def get_open_recommendations(limit: int = 10) -> list[Recommendation]:
+def get_open_recommendations(limit: int | None = 10) -> list[Recommendation]:
     recommendations = Recommendation.query.filter_by(status=RecommendationStatus.OPEN).all()
     recommendations.sort(key=lambda r: (PRIORITY_ORDER[r.priority], r.created_at), reverse=True)
-    return recommendations[:limit]
+    return recommendations if limit is None else recommendations[:limit]

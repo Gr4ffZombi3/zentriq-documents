@@ -34,9 +34,12 @@ def create_app(config_object=None):
 
     from app import models  # noqa: F401  (ensure models are registered with SQLAlchemy)
     from app.auth.routes import auth_bp
+    from app.blueprints.customers.routes import customers_bp
     from app.blueprints.dashboard.routes import dashboard_bp
     from app.blueprints.documents.routes import documents_bp
+    from app.blueprints.recommendations.routes import recommendations_bp
     from app.blueprints.search.routes import search_bp
+    from app.blueprints.settings.routes import settings_bp
     from app.blueprints.upload.routes import upload_bp
 
     app.register_blueprint(auth_bp)
@@ -44,6 +47,9 @@ def create_app(config_object=None):
     app.register_blueprint(documents_bp)
     app.register_blueprint(upload_bp)
     app.register_blueprint(search_bp)
+    app.register_blueprint(customers_bp)
+    app.register_blueprint(recommendations_bp)
+    app.register_blueprint(settings_bp)
 
     @login_manager.user_loader
     def load_user(user_id):

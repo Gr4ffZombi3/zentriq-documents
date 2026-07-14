@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "ui/icons.html" import icon %}
+{% from "ui/display.html" import card %}
+{% block title %}Kunden – Zentriq Documents{% endblock %}
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-2xl font-semibold tracking-tight text-text">Kunden</h1>
+  <p class="mt-1 text-sm text-text-muted">Alle Kunden, die aus deinen Dokumenten erkannt wurden.</p>
+</div>
+
+{% if customers %}
+<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  {% for customer in customers %}
+    {% call card() %}
+      <div class="flex items-start gap-3">
+        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+          {{ customer.name[0] | upper }}
+        </span>
+        <div class="min-w-0">
+          <h2 class="truncate font-medium text-text">{{ customer.name }}</h2>
+          <p class="truncate text-sm text-text-muted">
+            {{ customer.city or "—" }}{% if customer.postal_code %} · {{ customer.postal_code }}{% endif %}
+          </p>
+        </div>
+      </div>
+      <dl class="mt-4 space-y-1.5 text-sm">
+        {% if customer.email %}
+          <div class="flex items-center gap-2 text-text-muted">
+            {{ icon('mail', class='w-3.5 h-3.5') }}
+            <span class="truncate">{{ customer.email }}</span>
+          </div>
+        {% endif %}
+        <div class="flex items-center gap-2 text-text-muted">
+          {{ icon('file-text', class='w-3.5 h-3.5') }}
+          <span>{{ customer.documents | length }} Dokument{{ 'e' if customer.documents | length != 1 else '' }}</span>
+        </div>
+      </dl>
+    {% endcall %}
+  {% endfor %}
+</div>
+{% else %}
+  <div class="flex flex-col items-center rounded-xl border border-dashed border-border py-16 text-center">
+    <span class="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+      {{ icon('users', class='w-6 h-6') }}
+    </span>
+    <p class="font-medium text-text">Noch keine Kunden</p>
+    <p class="mt-1 text-sm text-text-muted">Kunden erscheinen hier automatisch, sobald Dokumente ausgewertet wurden.</p>
+  </div>
+{% endif %}
+{% endblock %}

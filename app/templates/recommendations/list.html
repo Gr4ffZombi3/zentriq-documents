@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% from "ui/icons.html" import icon %}
+{% from "ui/display.html" import card, badge %}
+{% block title %}Empfehlungen – Zentriq Documents{% endblock %}
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-2xl font-semibold tracking-tight text-text">Empfehlungen</h1>
+  <p class="mt-1 text-sm text-text-muted">Offene, von der KI erkannte Handlungsempfehlungen.</p>
+</div>
+
+{% if recommendations %}
+<div class="flex flex-col gap-3">
+  {% for rec in recommendations %}
+    {% set priority_variant = {'high': 'danger', 'medium': 'warning', 'low': 'muted'}.get(rec.priority.value, 'muted') %}
+    {% call card(padding='p-5') %}
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+            {{ icon('list-checks', class='w-4.5 h-4.5') }}
+          </span>
+          <div>
+            <p class="font-medium text-text">{{ rec.label }}</p>
+            <p class="text-sm text-text-muted">
+              {{ rec.customer.name if rec.customer else "—" }}
+              {% if rec.document_id %} · <a href="{{ url_for('documents.detail', document_id=rec.document_id) }}" class="text-primary hover:text-primary-hover">Dokument öffnen</a>{% endif %}
+            </p>
+          </div>
+        </div>
+        {{ badge(rec.priority.value | capitalize, variant=priority_variant) }}
+      </div>
+    {% endcall %}
+  {% endfor %}
+</div>
+{% else %}
+  <div class="flex flex-col items-center rounded-xl border border-dashed border-border py-16 text-center">
+    <span class="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+      {{ icon('list-checks', class='w-6 h-6') }}
+    </span>
+    <p class="font-medium text-text">Keine offenen Empfehlungen</p>
+    <p class="mt-1 text-sm text-text-muted">Neue Empfehlungen erscheinen hier automatisch nach der Dokumentenauswertung.</p>
+  </div>
+{% endif %}
+{% endblock %}

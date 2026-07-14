@@ -1,6 +1,6 @@
 import fitz
 
-from app.models import Customer, Document, DocumentCustomer, DocStatus, Recommendation
+from app.models import Customer, DocStatus, Document, DocumentCustomer, Recommendation
 from app.models.enums import DocType, Priority
 from app.services.documents import apply_leipziger_liste_extraction
 from app.services.llm.classification import compute_document_flags

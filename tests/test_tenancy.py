@@ -1,6 +1,6 @@
 import pytest
 
-from app.models import Document, DocStatus, Tenant
+from app.models import DocStatus, Document, Tenant
 from app.tenancy import (
     MissingTenantContextError,
     bypass_tenant_scope,

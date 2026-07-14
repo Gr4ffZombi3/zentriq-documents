@@ -42,3 +42,12 @@ Details siehe Projektplan.
 ```powershell
 .\manage.ps1 test
 ```
+
+Vor jedem Commit: `.\manage.ps1 check` (Lint + volle Testsuite).
+
+## Deployment
+
+Entwicklung erfolgt ausschließlich lokal; der Server ist reines Deployment-Ziel und wird
+per `git pull` + `./deploy.sh` aktualisiert — keine manuellen Änderungen am Server-Code
+oder der Server-Datenbank. Details zur einmaligen Server-Einrichtung und zum laufenden
+Deployment: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).

@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet("setup", "migrate", "upgrade", "run", "worker", "test")]
+    [ValidateSet("setup", "migrate", "upgrade", "run", "worker", "test", "check")]
     [string]$Command
 )
 
@@ -10,7 +10,7 @@ switch ($Command) {
     "setup" {
         python -m venv .venv
         & $venvPython -m pip install --upgrade pip
-        & $venvPython -m pip install -r requirements.txt
+        & $venvPython -m pip install -r requirements-dev.txt
     }
     "migrate" {
         & $venvPython -m flask db migrate
@@ -25,6 +25,12 @@ switch ($Command) {
         & $venvPython -m celery -A celery_worker.celery worker --pool=solo --loglevel=info
     }
     "test" {
+        & $venvPython -m pytest
+    }
+    "check" {
+        # Vor jedem Commit: Syntax-/Importfehler, ungenutzte Importe, volle Testsuite.
+        & $venvPython -m ruff check .
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         & $venvPython -m pytest
     }
 }

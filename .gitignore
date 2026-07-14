@@ -12,6 +12,7 @@ storage/uploads/*
 
 *.log
 .pytest_cache/
+.ruff_cache/
 .coverage
 htmlcov/
 
@@ -24,3 +25,6 @@ migrations/versions/__pycache__/
 *.sqlite3
 
 .claude/settings.local.json
+
+# Wegwerf-Skripte fuer manuelle Live-Verifikation waehrend der Entwicklung
+_manual_verify_*.py

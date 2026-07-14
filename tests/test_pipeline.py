@@ -1,6 +1,6 @@
 import fitz
 
-from app.models import Document, DocStatus, OcrEngine
+from app.models import DocStatus, Document, OcrEngine
 from app.services.ocr.pipeline import extract_text
 from app.tasks.document_tasks import process_document
 

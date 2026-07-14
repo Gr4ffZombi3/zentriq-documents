@@ -1,4 +1,4 @@
-from app.models import Customer, Document, DocStatus, DocType, Recommendation, RecommendationType
+from app.models import Customer, DocStatus, DocType, Document, Recommendation, RecommendationType
 
 
 def test_index_returns_200(auth_client):

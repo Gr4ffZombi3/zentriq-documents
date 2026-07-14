@@ -1,0 +1,10 @@
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+exclude = ["migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+# E501 (Zeilenlaenge) ignoriert: mehrzeilige deutsche Prompt-/JSON-Schema-Strings in
+# app/services/llm/ waeren durch Umbrechen weniger lesbar, nicht mehr.
+ignore = ["E501"]

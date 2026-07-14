@@ -1,0 +1,6 @@
+# Shell-Skripte und Server-Konfigurationsvorlagen muessen auf dem Linux-Server garantiert
+# LF-Zeilenenden haben - unabhaengig vom core.autocrlf-Setting des jeweiligen lokalen
+# Windows-Git-Clients. CRLF in einem Bash-Skript fuehrt zu kryptischen Fehlern
+# ("bad interpreter", "$'\r': command not found").
+*.sh text eol=lf
+deploy/**/*.template text eol=lf

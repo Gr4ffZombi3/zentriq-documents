@@ -1,0 +1,17 @@
+[Unit]
+Description=Zentriq Documents Celery Worker
+After=network.target mariadb.service redis-server.service
+Requires=mariadb.service redis-server.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=__APP_DIR__
+EnvironmentFile=__APP_DIR__/.env
+ExecStartPre=__APP_DIR__/deploy/pre-start.sh
+ExecStart=__APP_DIR__/.venv/bin/celery -A celery_worker.celery worker --loglevel=info --logfile=__APP_DIR__/logs/celery.log
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

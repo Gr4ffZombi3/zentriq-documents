@@ -1,13 +1,12 @@
-# Beispiel-Konfiguration - an tatsaechliche Domain/TLS-Setup anpassen und nach
-# /etc/nginx/sites-available/zentriq kopieren (nicht automatisch von deploy.sh verwaltet).
 server {
     listen 80;
-    server_name documents.example.com;
+    server_name __DOMAIN__;
 
     client_max_body_size 30M;
 
     location /static/ {
-        alias /opt/zentriq-documents/app/static/;
+        alias __APP_DIR__/app/static/;
+        expires 30d;
     }
 
     location / {

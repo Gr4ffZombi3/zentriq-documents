@@ -1,0 +1,17 @@
+[Unit]
+Description=Zentriq Documents API (Gunicorn)
+After=network.target mariadb.service redis-server.service
+Requires=mariadb.service redis-server.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=__APP_DIR__
+EnvironmentFile=__APP_DIR__/.env
+ExecStartPre=__APP_DIR__/deploy/pre-start.sh
+ExecStart=__APP_DIR__/.venv/bin/gunicorn --workers 4 --bind 127.0.0.1:8000 --access-logfile __APP_DIR__/logs/access.log --error-logfile __APP_DIR__/logs/error.log wsgi:app
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

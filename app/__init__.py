@@ -1,4 +1,5 @@
 from flask import Flask, g
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.celery_app import make_celery
 from app.extensions import csrf, db, login_manager, migrate
@@ -14,6 +15,12 @@ from config import get_config
 def create_app(config_object=None):
     app = Flask(__name__)
     app.config.from_object(config_object or get_config())
+
+    # Hinter Nginx (Produktion): vertraut genau einem Proxy-Hop fuer X-Forwarded-For/
+    # -Proto/-Host, damit request.remote_addr (Audit-Log) die echte Client-IP zeigt statt
+    # 127.0.0.1, und Flask HTTPS korrekt erkennt (relevant fuer SESSION_COOKIE_SECURE).
+    # Ohne echten Proxy (lokale Entwicklung) ein No-Op, da die Header dann fehlen.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     db.init_app(app)
     migrate.init_app(app, db)

@@ -1,10 +1,11 @@
 from app.extensions import db
 from app.models import Customer, DocStatus, Document, DocumentCustomer
-from app.models.enums import DocType
+from app.models.enums import DocType, TimelineEventType
 from app.services.llm.classification import compute_document_flags
 from app.services.llm.recommendations import create_recommendations
 from app.services.llm.schemas import DocumentExtraction, ExtractedCustomer, LeipzigerListeExtraction
 from app.services.tasks import create_flag_based_tasks, create_tasks_from_recommendations
+from app.services.timeline import log_timeline_event
 from app.tenancy import get_current_tenant_id
 
 
@@ -61,6 +62,13 @@ def apply_extraction(document: Document, extraction: DocumentExtraction) -> None
         document.customer = find_or_create_customer(
             extraction.customer, uploaded_by_user_id=document.uploaded_by_user_id
         )
+        log_timeline_event(
+            document.customer,
+            TimelineEventType.DOCUMENT_UPLOADED,
+            f"Dokument hochgeladen: {document.original_filename}",
+            document=document,
+            occurred_at=document.uploaded_at,
+        )
 
     recommendations = create_recommendations(
         document,
@@ -94,8 +102,26 @@ def apply_leipziger_liste_extraction(document: Document, extraction: LeipzigerLi
             )
             db.session.add(doc_customer)
             document_customers_by_id[row_customer.id] = doc_customer
+            log_timeline_event(
+                row_customer,
+                TimelineEventType.DOCUMENT_UPLOADED,
+                f"Dokument hochgeladen: {document.original_filename}",
+                document=document,
+                occurred_at=document.uploaded_at,
+            )
         else:
             existing.row_data = [*(existing.row_data or []), row_dict]
+
+        for flag_value, flag_event_type, flag_label in (
+            (row.is_angebot, TimelineEventType.OFFER_DETECTED, "Angebot erkannt"),
+            (row.is_neugeschaeft, TimelineEventType.NEW_CONTRACT_DETECTED, "Neuer Vertrag erkannt"),
+            (row.is_fahrzeugwechsel, TimelineEventType.VEHICLE_CHANGE_DETECTED, "Fahrzeugwechsel erkannt"),
+            (row.is_storno, TimelineEventType.STORNO_DETECTED, "Storno erkannt"),
+        ):
+            if flag_value:
+                log_timeline_event(
+                    row_customer, flag_event_type, flag_label, document=document, occurred_at=document.uploaded_at
+                )
 
         if index == 0:
             document.customer = row_customer

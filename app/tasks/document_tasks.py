@@ -36,6 +36,7 @@ def _run_pipeline(document: Document) -> None:
     # erneuter Insert den Unique-Constraint auf (tenant_id, document_id, customer_id).
     document.recommendations = []
     document.document_customers = []
+    document.tasks = []
     document.status = DocStatus.OCR_PROCESSING
     db.session.commit()
 

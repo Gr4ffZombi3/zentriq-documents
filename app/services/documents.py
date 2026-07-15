@@ -4,6 +4,7 @@ from app.models.enums import DocType
 from app.services.llm.classification import compute_document_flags
 from app.services.llm.recommendations import create_recommendations
 from app.services.llm.schemas import DocumentExtraction, ExtractedCustomer, LeipzigerListeExtraction
+from app.services.tasks import create_flag_based_tasks, create_tasks_from_recommendations
 from app.tenancy import get_current_tenant_id
 
 
@@ -61,12 +62,13 @@ def apply_extraction(document: Document, extraction: DocumentExtraction) -> None
             extraction.customer, uploaded_by_user_id=document.uploaded_by_user_id
         )
 
-    create_recommendations(
+    recommendations = create_recommendations(
         document,
         document.customer,
         products=extraction.products,
         vehicle=extraction.vehicle,
     )
+    create_tasks_from_recommendations(document, document.customer, recommendations)
 
 
 def apply_leipziger_liste_extraction(document: Document, extraction: LeipzigerListeExtraction) -> None:
@@ -98,7 +100,7 @@ def apply_leipziger_liste_extraction(document: Document, extraction: LeipzigerLi
         if index == 0:
             document.customer = row_customer
 
-        create_recommendations(
+        row_recommendations = create_recommendations(
             document,
             row_customer,
             products=row.products,
@@ -108,3 +110,5 @@ def apply_leipziger_liste_extraction(document: Document, extraction: LeipzigerLi
             cross_sell_opportunity=row.cross_sell_opportunity,
             priority=row.priority,
         )
+        create_tasks_from_recommendations(document, row_customer, row_recommendations)
+        create_flag_based_tasks(document, row_customer, row)

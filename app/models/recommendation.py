@@ -22,6 +22,9 @@ class Recommendation(TenantScopedMixin, db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     resolved_at = db.Column(db.DateTime, nullable=True)
 
+    # M12: generierte Begruendung (Template ueber echte extrahierte Werte, kein GPT-Call).
+    explanation = db.Column(db.Text, nullable=True)
+
     document = db.relationship("Document", back_populates="recommendations")
     customer = db.relationship("Customer", back_populates="recommendations")
 

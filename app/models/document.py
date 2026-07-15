@@ -60,6 +60,17 @@ class Document(TenantScopedMixin, db.Model):
     # aeltere Dokumente und Celery-interne Erzeugung keinen User-Kontext haben.
     uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
 
+    # M12: zusaetzliche Erkennungsfelder. Bei Leipziger-Liste-Dokumenten bewusst NICHT befuellt
+    # (nur pro Zeile in DocumentCustomer.row_data gespeichert) - ein "erste Zeile gewinnt" waere
+    # bei einer mehrzeiligen Liste irrefuehrend. Nur apply_extraction() (generische Einzeldokumente)
+    # setzt diese Spalten. Beitrag bewusst als String: OCR-Text von Geldbetraegen ist zu uneinheitlich
+    # fuer verlaessliches Decimal-Parsing.
+    broker_number = db.Column(db.String(50), nullable=True)
+    product_line = db.Column(db.String(100), nullable=True, index=True)
+    premium = db.Column(db.String(50), nullable=True)
+    tariff = db.Column(db.String(100), nullable=True)
+    field_confidence = db.Column(db.JSON, nullable=True)
+
     customer = db.relationship("Customer", back_populates="documents")
     document_customers = db.relationship(
         "DocumentCustomer", back_populates="document", cascade="all, delete-orphan"
@@ -69,6 +80,9 @@ class Document(TenantScopedMixin, db.Model):
     )
     tasks = db.relationship("Task", back_populates="document", cascade="all, delete-orphan")
     uploaded_by = db.relationship("User", foreign_keys=[uploaded_by_user_id])
+    analysis_runs = db.relationship(
+        "AnalysisRun", back_populates="document", cascade="all, delete-orphan", order_by="AnalysisRun.started_at"
+    )
 
     def __repr__(self):
         return f"<Document {self.id} {self.original_filename!r} status={self.status}>"
@@ -86,6 +100,8 @@ class DocumentCustomer(TenantScopedMixin, db.Model):
     document_id = db.Column(db.Integer, db.ForeignKey("documents.id"), nullable=False, index=True)
     customer_id = db.Column(db.Integer, db.ForeignKey("customers.id"), nullable=False, index=True)
     row_data = db.Column(db.JSON, nullable=True)
+    # M12: Liste von Konfidenz-Dicts, parallel zu row_data (ein Eintrag pro Zeile).
+    field_confidence = db.Column(db.JSON, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     document = db.relationship("Document", back_populates="document_customers")

@@ -22,6 +22,9 @@ class Task(TenantScopedMixin, db.Model):
     due_date = db.Column(db.Date, nullable=True, index=True)
     notes = db.Column(db.Text, nullable=True)
 
+    # M12: von der auslösenden Recommendation kopierte Begruendung, falls vorhanden.
+    explanation = db.Column(db.Text, nullable=True)
+
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     resolved_at = db.Column(db.DateTime, nullable=True)
 
@@ -29,6 +32,9 @@ class Task(TenantScopedMixin, db.Model):
     customer = db.relationship("Customer", back_populates="tasks")
     recommendation = db.relationship("Recommendation")
     assigned_user = db.relationship("User")
+    feedback_entries = db.relationship(
+        "RecommendationFeedback", back_populates="task", cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<Task {self.id} {self.type} status={self.status}>"

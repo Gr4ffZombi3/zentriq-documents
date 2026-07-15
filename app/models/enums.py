@@ -49,6 +49,11 @@ class RecommendationType(enum.Enum):
     CHECK_ACCIDENT_INSURANCE = "check_accident_insurance"
     CHECK_SUPPLEMENTARY_HEALTH = "check_supplementary_health"
     OTHER = "other"
+    # M12: erweiterte Business-Regeln (app/services/analysis/business_rules.py)
+    CROSS_SELL_HOUSEHOLD_FROM_BUILDING = "cross_sell_household_from_building"
+    CROSS_SELL_LIABILITY_FROM_VEHICLE = "cross_sell_liability_from_vehicle"
+    SALES_RISK_MULTIPLE_OFFERS_NO_CLOSURE = "sales_risk_multiple_offers_no_closure"
+    HIGH_PRIORITY_STORNO = "high_priority_storno"
 
 
 class RecommendationStatus(enum.Enum):
@@ -88,6 +93,7 @@ class ListChangeType(enum.Enum):
     STATUS_CHANGE = "status_change"
     STORNO = "storno"
     REMOVED_CUSTOMER = "removed_customer"
+    NEW_PRODUCT_LINE = "new_product_line"
 
 
 class TimelineEventType(enum.Enum):
@@ -99,3 +105,14 @@ class TimelineEventType(enum.Enum):
     TASK_CREATED = "task_created"
     TASK_STATUS_CHANGED = "task_status_changed"
     LIST_COMPARISON_CHANGE = "list_comparison_change"
+
+
+class AnalysisRunStatus(enum.Enum):
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class FeedbackRating(enum.Enum):
+    UP = "up"
+    DOWN = "down"

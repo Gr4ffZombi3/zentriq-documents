@@ -25,6 +25,13 @@ class BaseConfig:
     OCR_MIN_CONFIDENCE = float(os.environ.get("OCR_MIN_CONFIDENCE", "60"))
     OCR_MIN_TEXT_LENGTH = int(os.environ.get("OCR_MIN_TEXT_LENGTH", "20"))
 
+    # M12: Analyse-Engine
+    FIELD_CONFIDENCE_UNCERTAIN_THRESHOLD = float(os.environ.get("FIELD_CONFIDENCE_UNCERTAIN_THRESHOLD", "70"))
+    ANALYSIS_ENGINE_VERSION = os.environ.get("ANALYSIS_ENGINE_VERSION", "m12.1")
+    ANALYSIS_PROMPT_VERSION = os.environ.get("ANALYSIS_PROMPT_VERSION", "v1")
+    ANALYSIS_NARRATIVE_ENABLED = os.environ.get("ANALYSIS_NARRATIVE_ENABLED", "true").lower() == "true"
+    ANALYSIS_NARRATIVE_MODEL = os.environ.get("ANALYSIS_NARRATIVE_MODEL", os.environ.get("OPENAI_MODEL", "gpt-4o"))
+
     # Session-/Cookie-Haertung
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
@@ -42,6 +49,9 @@ class TestingConfig(BaseConfig):
     CELERY_TASK_ALWAYS_EAGER = True
     WTF_CSRF_ENABLED = False
     SESSION_COOKIE_SECURE = False
+    # Verhindert echte/gemockte OpenAI-Aufrufe fuer den Analysebericht-Text in der gesamten
+    # bestehenden Testsuite; der Narrativ-Pfad wird gezielt in test_analysis_report.py getestet.
+    ANALYSIS_NARRATIVE_ENABLED = False
 
 
 class ProductionConfig(BaseConfig):

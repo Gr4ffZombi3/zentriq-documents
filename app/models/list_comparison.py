@@ -22,6 +22,7 @@ class ListComparison(TenantScopedMixin, db.Model):
     status_change_count = db.Column(db.Integer, nullable=False, default=0)
     storno_count = db.Column(db.Integer, nullable=False, default=0)
     removed_customer_count = db.Column(db.Integer, nullable=False, default=0)
+    new_product_line_count = db.Column(db.Integer, nullable=False, default=0)
 
     document = db.relationship("Document", foreign_keys=[document_id])
     previous_document = db.relationship("Document", foreign_keys=[previous_document_id])

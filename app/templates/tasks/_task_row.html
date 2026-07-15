@@ -1,0 +1,63 @@
+{% from "ui/icons.html" import icon %}
+{% from "ui/display.html" import badge %}
+{% set TASK_TYPE_ICONS = {
+  'call_today': 'phone', 'follow_up_offer': 'mail', 'request_documents': 'file-text',
+  'prepare_contract': 'file-text', 'check_closure': 'check-circle',
+  'schedule_appointment': 'calendar', 'other': 'list-todo',
+} %}
+{% set priority_variant = {'high': 'danger', 'medium': 'warning', 'low': 'muted'}.get(task.priority.value, 'muted') %}
+{% set status_variant = {'open': 'info', 'done': 'success', 'dismissed': 'muted'}.get(task.status.value, 'muted') %}
+{% set status_label = {'open': 'Offen', 'done': 'Erledigt', 'dismissed': 'Verworfen'}.get(task.status.value, task.status.value) %}
+<div id="task-row-{{ task.id }}" class="rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5">
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div class="flex min-w-0 items-start gap-3.5">
+      <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        {{ icon(TASK_TYPE_ICONS.get(task.type.value, 'list-todo'), class='w-5 h-5') }}
+      </span>
+      <div class="min-w-0">
+        <p class="font-medium text-text">{{ task.title }}</p>
+        <p class="mt-0.5 text-sm text-text-muted">
+          {{ task.customer.name if task.customer else 'Kein Kunde' }}
+          {% if task.document_id %} · <a href="{{ url_for('documents.detail', document_id=task.document_id) }}" class="text-primary hover:text-primary-hover">Quelle öffnen</a>{% endif %}
+        </p>
+        {% if task.notes %}<p class="mt-1 text-sm text-text-muted">{{ task.notes }}</p>{% endif %}
+      </div>
+    </div>
+    <div class="flex shrink-0 flex-wrap items-center gap-2">
+      {% if task.due_date %}
+        <span class="inline-flex items-center gap-1 text-xs text-text-muted">
+          {{ icon('calendar', class='w-3.5 h-3.5') }}
+          {{ task.due_date.strftime('%d.%m.%Y') }}
+        </span>
+      {% endif %}
+      {{ badge(task.priority.value | capitalize, variant=priority_variant) }}
+      {{ badge(status_label, variant=status_variant) }}
+    </div>
+  </div>
+
+  {% if task.status.value == 'open' %}
+    <div class="mt-4 flex gap-2 border-t border-border pt-3">
+      {% for target_status, label, icon_name in [('done', 'Erledigt', 'check-circle'), ('dismissed', 'Verwerfen', 'x')] %}
+        <form hx-post="{{ url_for('tasks.update_status', task_id=task.id) }}" hx-target="#task-row-{{ task.id }}" hx-swap="outerHTML">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="status" value="{{ target_status }}">
+          <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text transition duration-200 hover:bg-bg">
+            {{ icon(icon_name, class='w-4 h-4') }}
+            {{ label }}
+          </button>
+        </form>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="mt-4 border-t border-border pt-3">
+      <form hx-post="{{ url_for('tasks.update_status', task_id=task.id) }}" hx-target="#task-row-{{ task.id }}" hx-swap="outerHTML">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="status" value="open">
+        <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text transition duration-200 hover:bg-bg">
+          {{ icon('refresh-cw', class='w-4 h-4') }}
+          Wieder öffnen
+        </button>
+      </form>
+    </div>
+  {% endif %}
+</div>

@@ -40,6 +40,7 @@ def create_app(config_object=None):
     from app.blueprints.recommendations.routes import recommendations_bp
     from app.blueprints.search.routes import search_bp
     from app.blueprints.settings.routes import settings_bp
+    from app.blueprints.tasks.routes import tasks_bp
     from app.blueprints.upload.routes import upload_bp
 
     app.register_blueprint(auth_bp)
@@ -50,6 +51,7 @@ def create_app(config_object=None):
     app.register_blueprint(customers_bp)
     app.register_blueprint(recommendations_bp)
     app.register_blueprint(settings_bp)
+    app.register_blueprint(tasks_bp)
 
     @login_manager.user_loader
     def load_user(user_id):

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% from "ui/icons.html" import icon %}
+{% from "ui/display.html" import card, badge %}
+{% block title %}{{ customer.name }} – Zentriq Documents{% endblock %}
+{% block content %}
+<div class="mb-6 flex items-start gap-4">
+  <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
+    {{ customer.name[0] | upper }}
+  </span>
+  <div class="min-w-0">
+    <h1 class="text-2xl font-semibold tracking-tight text-text">{{ customer.name }}</h1>
+    <p class="mt-1 text-sm text-text-muted">
+      {{ customer.city or "—" }}{% if customer.postal_code %} · {{ customer.postal_code }}{% endif %}
+      {% if customer.email %} · {{ customer.email }}{% endif %}
+      {% if customer.phone %} · {{ customer.phone }}{% endif %}
+    </p>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+  {% call card() %}
+    <div class="flex items-center gap-2">
+      {{ icon('history', class='w-4 h-4 text-primary') }}
+      <h2 class="text-base font-semibold text-text">Chronologie</h2>
+    </div>
+    {% if timeline_events %}
+      <ol class="mt-4 flex flex-col gap-3">
+        {% for event in timeline_events %}
+          <li class="flex items-start gap-3 text-sm">
+            <span class="mt-0.5 shrink-0 text-xs font-medium text-text-muted">{{ event.occurred_at.strftime('%d.%m.') }}</span>
+            <span class="text-text">{{ event.label }}</span>
+          </li>
+        {% endfor %}
+      </ol>
+    {% else %}
+      <p class="mt-4 text-sm text-text-muted">Noch keine Ereignisse erfasst.</p>
+    {% endif %}
+  {% endcall %}
+
+  {% call card() %}
+    <div class="flex items-center gap-2">
+      {{ icon('list-todo', class='w-4 h-4 text-primary') }}
+      <h2 class="text-base font-semibold text-text">Offene Aufgaben</h2>
+    </div>
+    {% if open_tasks %}
+      <div class="mt-4 flex flex-col gap-2">
+        {% for task in open_tasks %}
+          <div class="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2.5">
+            <span class="truncate text-sm text-text">{{ task.title }}</span>
+            {% if task.due_date %}
+              <span class="shrink-0 text-xs text-text-muted">{{ task.due_date.strftime('%d.%m.%Y') }}</span>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+      <a href="{{ url_for('tasks.list_tasks') }}" class="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-hover">
+        Alle Aufgaben {{ icon('chevron-right', class='w-4 h-4') }}
+      </a>
+    {% else %}
+      <p class="mt-4 text-sm text-text-muted">Keine offenen Aufgaben.</p>
+    {% endif %}
+  {% endcall %}
+</div>
+
+<div class="mt-6">
+  {% call card() %}
+    <div class="flex items-center gap-2">
+      {{ icon('file-text', class='w-4 h-4 text-primary') }}
+      <h2 class="text-base font-semibold text-text">Leipziger-Liste-Verlauf</h2>
+    </div>
+    {% if document_customers %}
+      <div class="mt-4 overflow-x-auto rounded-lg border border-border">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-bg text-xs font-medium uppercase tracking-wide text-text-muted">
+            <tr>
+              <th class="px-4 py-2.5">Datum</th>
+              <th class="px-4 py-2.5">Dokument</th>
+              <th class="px-4 py-2.5">Angebot</th>
+              <th class="px-4 py-2.5">Neugeschäft</th>
+              <th class="px-4 py-2.5">Storno</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border">
+            {% for dc in document_customers %}
+              {% set rows = dc.row_data or [] %}
+              <tr class="transition duration-200 hover:bg-bg">
+                <td class="px-4 py-2.5 text-text-muted">{{ dc.document.uploaded_at.strftime('%d.%m.%Y') if dc.document.uploaded_at else '–' }}</td>
+                <td class="px-4 py-2.5">
+                  <a href="{{ url_for('documents.detail', document_id=dc.document_id) }}" class="text-primary hover:text-primary-hover">{{ dc.document.original_filename }}</a>
+                </td>
+                <td class="px-4 py-2.5">{{ badge('Ja', variant='warning') if rows | selectattr('is_angebot') | list else '–' }}</td>
+                <td class="px-4 py-2.5">{{ badge('Ja', variant='success') if rows | selectattr('is_neugeschaeft') | list else '–' }}</td>
+                <td class="px-4 py-2.5">{{ badge('Ja', variant='danger') if rows | selectattr('is_storno') | list else '–' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="mt-4 text-sm text-text-muted">Dieser Kunde wurde noch in keiner Leipziger Liste erfasst.</p>
+    {% endif %}
+  {% endcall %}
+</div>
+{% endblock %}

@@ -11,31 +11,33 @@
 {% if customers %}
 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
   {% for customer in customers %}
-    {% call card() %}
-      <div class="flex items-start gap-3">
-        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-          {{ customer.name[0] | upper }}
-        </span>
-        <div class="min-w-0">
-          <h2 class="truncate font-medium text-text">{{ customer.name }}</h2>
-          <p class="truncate text-sm text-text-muted">
-            {{ customer.city or "—" }}{% if customer.postal_code %} · {{ customer.postal_code }}{% endif %}
-          </p>
-        </div>
-      </div>
-      <dl class="mt-4 space-y-1.5 text-sm">
-        {% if customer.email %}
-          <div class="flex items-center gap-2 text-text-muted">
-            {{ icon('mail', class='w-3.5 h-3.5') }}
-            <span class="truncate">{{ customer.email }}</span>
+    <a href="{{ url_for('customers.detail', customer_id=customer.id) }}" class="block transition duration-200 hover:-translate-y-0.5">
+      {% call card() %}
+        <div class="flex items-start gap-3">
+          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+            {{ customer.name[0] | upper }}
+          </span>
+          <div class="min-w-0">
+            <h2 class="truncate font-medium text-text">{{ customer.name }}</h2>
+            <p class="truncate text-sm text-text-muted">
+              {{ customer.city or "—" }}{% if customer.postal_code %} · {{ customer.postal_code }}{% endif %}
+            </p>
           </div>
-        {% endif %}
-        <div class="flex items-center gap-2 text-text-muted">
-          {{ icon('file-text', class='w-3.5 h-3.5') }}
-          <span>{{ customer.documents | length }} Dokument{{ 'e' if customer.documents | length != 1 else '' }}</span>
         </div>
-      </dl>
-    {% endcall %}
+        <dl class="mt-4 space-y-1.5 text-sm">
+          {% if customer.email %}
+            <div class="flex items-center gap-2 text-text-muted">
+              {{ icon('mail', class='w-3.5 h-3.5') }}
+              <span class="truncate">{{ customer.email }}</span>
+            </div>
+          {% endif %}
+          <div class="flex items-center gap-2 text-text-muted">
+            {{ icon('file-text', class='w-3.5 h-3.5') }}
+            <span>{{ customer.documents | length }} Dokument{{ 'e' if customer.documents | length != 1 else '' }}</span>
+          </div>
+        </dl>
+      {% endcall %}
+    </a>
   {% endfor %}
 </div>
 {% else %}

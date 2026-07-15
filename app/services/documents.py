@@ -7,23 +7,33 @@ from app.services.llm.schemas import DocumentExtraction, ExtractedCustomer, Leip
 from app.tenancy import get_current_tenant_id
 
 
-def create_document(original_filename: str, stored_filename: str, file_path: str, tenant_id: int) -> Document:
+def create_document(
+    original_filename: str,
+    stored_filename: str,
+    file_path: str,
+    tenant_id: int,
+    uploaded_by_user_id: int | None = None,
+) -> Document:
     document = Document(
         filename=stored_filename,
         original_filename=original_filename,
         file_path=file_path,
         status=DocStatus.PENDING,
         tenant_id=tenant_id,
+        uploaded_by_user_id=uploaded_by_user_id,
     )
     db.session.add(document)
     db.session.commit()
     return document
 
 
-def find_or_create_customer(data: ExtractedCustomer) -> Customer:
+def find_or_create_customer(data: ExtractedCustomer, uploaded_by_user_id: int | None = None) -> Customer:
     customer = Customer.query.filter_by(name=data.name).first()
     if customer is None:
-        customer = Customer(name=data.name, tenant_id=get_current_tenant_id())
+        # M11: Bestandszuordnung wird nur beim erstmaligen Anlegen gesetzt und danach nie
+        # ueberschrieben - "Mein Bestand" soll nicht durch spaetere Uploads eines anderen
+        # Vermittlers fuer denselben Kunden umverteilt werden.
+        customer = Customer(name=data.name, tenant_id=get_current_tenant_id(), assigned_user_id=uploaded_by_user_id)
         db.session.add(customer)
 
     customer.address = data.address or customer.address
@@ -47,7 +57,9 @@ def apply_extraction(document: Document, extraction: DocumentExtraction) -> None
     document.raw_json = extraction.model_dump(mode="json")
 
     if extraction.customer is not None:
-        document.customer = find_or_create_customer(extraction.customer)
+        document.customer = find_or_create_customer(
+            extraction.customer, uploaded_by_user_id=document.uploaded_by_user_id
+        )
 
     create_recommendations(
         document,
@@ -66,7 +78,7 @@ def apply_leipziger_liste_extraction(document: Document, extraction: LeipzigerLi
 
     document_customers_by_id: dict[int, DocumentCustomer] = {}
     for index, row in enumerate(extraction.rows):
-        row_customer = find_or_create_customer(row.customer)
+        row_customer = find_or_create_customer(row.customer, uploaded_by_user_id=document.uploaded_by_user_id)
         db.session.flush()  # Kunden-ID fuer den Abgleich mehrfacher Zeilen bereitstellen
 
         row_dict = row.model_dump(mode="json")

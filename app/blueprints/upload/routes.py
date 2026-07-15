@@ -23,7 +23,13 @@ def upload_document():
         return render_template("components/upload_widget.html", error=str(exc)), 400
 
     stored_filename, file_path = save_pdf(file_bytes)
-    document = create_document(file.filename, stored_filename, file_path, tenant_id=current_user.tenant_id)
+    document = create_document(
+        file.filename,
+        stored_filename,
+        file_path,
+        tenant_id=current_user.tenant_id,
+        uploaded_by_user_id=current_user.id,
+    )
     process_document.delay(document.id)
 
     detail_url = url_for("documents.detail", document_id=document.id)

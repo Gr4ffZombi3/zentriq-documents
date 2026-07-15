@@ -1,7 +1,7 @@
 import json
 from types import SimpleNamespace
 
-from app.models import Customer, Document
+from app.models import Customer, Document, User
 from app.models.enums import DocType
 from app.services.documents import apply_extraction
 from app.services.llm.extraction import extract_document_data
@@ -88,3 +88,50 @@ def test_apply_extraction_maps_fields_and_upserts_customer(app, db, tenant):
 
     assert Customer.query.count() == 1
     assert document2.customer_id == document.customer_id
+
+
+def test_customer_assignment_is_sticky_to_first_uploader(app, db, tenant):
+    broker_a = User(tenant_id=tenant.id, email="a@example.com")
+    broker_a.set_password("passwort123")
+    broker_b = User(tenant_id=tenant.id, email="b@example.com")
+    broker_b.set_password("passwort123")
+    db.session.add_all([broker_a, broker_b])
+    db.session.commit()
+
+    document1 = Document(
+        filename="x.pdf",
+        original_filename="x.pdf",
+        file_path="/tmp/x.pdf",
+        tenant_id=tenant.id,
+        uploaded_by_user_id=broker_a.id,
+    )
+    db.session.add(document1)
+    db.session.commit()
+    apply_extraction(
+        document1,
+        DocumentExtraction(doc_type=DocType.RECHNUNG, customer=ExtractedCustomer(name="Sticky Kunde")),
+    )
+    db.session.commit()
+
+    customer = Customer.query.filter_by(name="Sticky Kunde").one()
+    assert customer.assigned_user_id == broker_a.id
+
+    # Zweiter Upload desselben Kunden durch einen ANDEREN Vermittler darf die Zuordnung
+    # nicht aendern - Bestand bleibt beim erstanlegenden Vermittler.
+    document2 = Document(
+        filename="y.pdf",
+        original_filename="y.pdf",
+        file_path="/tmp/y.pdf",
+        tenant_id=tenant.id,
+        uploaded_by_user_id=broker_b.id,
+    )
+    db.session.add(document2)
+    db.session.commit()
+    apply_extraction(
+        document2,
+        DocumentExtraction(doc_type=DocType.GUTACHTEN, customer=ExtractedCustomer(name="Sticky Kunde")),
+    )
+    db.session.commit()
+
+    db.session.refresh(customer)
+    assert customer.assigned_user_id == broker_a.id

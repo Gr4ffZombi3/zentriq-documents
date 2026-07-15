@@ -13,7 +13,7 @@ def make_pdf_bytes() -> bytes:
     return data
 
 
-def test_upload_valid_pdf_creates_document_and_redirects(auth_client, db):
+def test_upload_valid_pdf_creates_document_and_redirects(auth_client, db, user):
     pdf_bytes = make_pdf_bytes()
     resp = auth_client.post(
         "/upload",
@@ -31,6 +31,9 @@ def test_upload_valid_pdf_creates_document_and_redirects(auth_client, db):
     assert document.raw_text == "Erkannter Testtext aus Tesseract."
     assert document.customer.name == "Max Mustermann"
     assert document.insurer == "Testversicherung AG"
+    # M11: Uploader und Bestandszuordnung werden durchgereicht.
+    assert document.uploaded_by_user_id == user.id
+    assert document.customer.assigned_user_id == user.id
 
 
 def test_upload_requires_login(client):

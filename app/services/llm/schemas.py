@@ -39,6 +39,7 @@ class LeipzigerListeRow(BaseModel):
     is_neugeschaeft: bool = False
     is_fahrzeugwechsel: bool = False
     is_angebot: bool = False
+    is_storno: bool = False
     cross_sell_opportunity: bool = False
     has_multiple_products: bool = False
     priority: Priority = Priority.MEDIUM

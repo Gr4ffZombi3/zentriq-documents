@@ -43,6 +43,7 @@ Zeile als eigenes Objekt und antworte AUSSCHLIESSLICH mit einem JSON-Objekt in g
       "is_neugeschaeft": bool,
       "is_fahrzeugwechsel": bool,
       "is_angebot": bool,
+      "is_storno": bool,
       "cross_sell_opportunity": bool,
       "has_multiple_products": bool,
       "priority": "low" | "medium" | "high",
@@ -53,7 +54,9 @@ Zeile als eigenes Objekt und antworte AUSSCHLIESSLICH mit einem JSON-Objekt in g
 }
 
 Setze "is_neugeschaeft" bei neu abgeschlossenen Vertraegen, "is_fahrzeugwechsel" bei erkennbarem \
-Fahrzeugwechsel, "is_angebot" bei offenen Angeboten, "cross_sell_opportunity" wenn der Kunde \
+Fahrzeugwechsel, "is_angebot" bei offenen Angeboten, "is_storno" bei erkennbar stornierten oder \
+gekuendigten Vertraegen (z.B. Storno-Spalte, Vermerk "storniert"/"gekuendigt"), \
+"cross_sell_opportunity" wenn der Kunde \
 sinnvoll weitere Produkte angeboten bekommen koennte, und "has_multiple_products" wenn der Kunde \
 bereits mehrere Produkte hat. Erfinde keine Werte. Antworte NUR mit dem JSON-Objekt."""
 

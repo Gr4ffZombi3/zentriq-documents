@@ -50,10 +50,15 @@ class Document(TenantScopedMixin, db.Model):
     is_angebot = db.Column(db.Boolean, nullable=True)
     cross_sell_opportunity = db.Column(db.Boolean, nullable=True)
     has_multiple_products = db.Column(db.Boolean, nullable=True)
+    is_storno = db.Column(db.Boolean, nullable=True)
     priority = db.Column(db.Enum(Priority), nullable=True, index=True)
     recommended_next_action = db.Column(db.String(255), nullable=True)
 
     extra_data = db.Column(db.JSON, nullable=True)
+
+    # M11: wer den Upload ausgeloest hat (fuer "Mein Bestand"-Zuordnung); nullable, da
+    # aeltere Dokumente und Celery-interne Erzeugung keinen User-Kontext haben.
+    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
 
     customer = db.relationship("Customer", back_populates="documents")
     document_customers = db.relationship(
@@ -62,6 +67,8 @@ class Document(TenantScopedMixin, db.Model):
     recommendations = db.relationship(
         "Recommendation", back_populates="document", cascade="all, delete-orphan"
     )
+    tasks = db.relationship("Task", back_populates="document", cascade="all, delete-orphan")
+    uploaded_by = db.relationship("User", foreign_keys=[uploaded_by_user_id])
 
     def __repr__(self):
         return f"<Document {self.id} {self.original_filename!r} status={self.status}>"
@@ -82,4 +89,4 @@ class DocumentCustomer(TenantScopedMixin, db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     document = db.relationship("Document", back_populates="document_customers")
-    customer = db.relationship("Customer")
+    customer = db.relationship("Customer", back_populates="document_customers")

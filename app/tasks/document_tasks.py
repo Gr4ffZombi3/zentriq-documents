@@ -6,6 +6,7 @@ from app.extensions import db
 from app.models import DocStatus, Document
 from app.models.enums import DocType
 from app.services.documents import apply_extraction, apply_leipziger_liste_extraction
+from app.services.list_comparison import compare_leipziger_liste
 from app.services.llm.extraction import extract_document_data, extract_leipziger_liste_rows
 from app.services.ocr.pipeline import extract_text
 from app.tenancy import bypass_tenant_scope, use_tenant_id
@@ -60,6 +61,8 @@ def _run_pipeline(document: Document) -> None:
         if extraction.doc_type == DocType.LEIPZIGER_LISTE:
             leipziger_extraction = extract_leipziger_liste_rows(raw_text)
             apply_leipziger_liste_extraction(document, leipziger_extraction)
+            db.session.flush()  # document_customers-IDs fuer den Listenvergleich bereitstellen
+            compare_leipziger_liste(document)
         else:
             apply_extraction(document, extraction)
     except Exception as exc:

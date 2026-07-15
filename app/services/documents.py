@@ -1,6 +1,11 @@
 from app.extensions import db
 from app.models import Customer, DocStatus, Document, DocumentCustomer
 from app.models.enums import DocType, TimelineEventType
+from app.services.analysis.business_rules import (
+    count_offer_occurrences,
+    create_advanced_recommendations,
+    customer_has_ever_closed,
+)
 from app.services.analysis.validation import score_extraction, score_leipziger_liste_row
 from app.services.llm.classification import compute_document_flags
 from app.services.llm.recommendations import create_recommendations
@@ -150,3 +155,16 @@ def apply_leipziger_liste_extraction(document: Document, extraction: LeipzigerLi
         )
         create_tasks_from_recommendations(document, row_customer, row_recommendations)
         create_flag_based_tasks(document, row_customer, row)
+
+        # M12: erweiterte Business-Regeln (Cross-Selling nach Sparten-Luecke, Vertriebsrisiko,
+        # Storno-Prioritaet) - eigenstaendige Regelschicht, beruehrt build_recommendations() nicht.
+        advanced_recommendations = create_advanced_recommendations(
+            document,
+            row_customer,
+            products=row.products,
+            vehicle=row.vehicle,
+            is_storno=row.is_storno,
+            sibling_offer_count=count_offer_occurrences(row_customer.id),
+            has_closed=customer_has_ever_closed(row_customer.id),
+        )
+        create_tasks_from_recommendations(document, row_customer, advanced_recommendations)

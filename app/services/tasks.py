@@ -34,6 +34,11 @@ RECOMMENDATION_TYPE_TO_TASK_TYPE: dict[RecommendationType, TaskType] = {
     RecommendationType.CHECK_ACCIDENT_INSURANCE: TaskType.FOLLOW_UP_OFFER,
     RecommendationType.CHECK_SUPPLEMENTARY_HEALTH: TaskType.FOLLOW_UP_OFFER,
     RecommendationType.OTHER: TaskType.OTHER,
+    # M12: erweiterte Business-Regeln (app/services/analysis/business_rules.py)
+    RecommendationType.CROSS_SELL_HOUSEHOLD_FROM_BUILDING: TaskType.FOLLOW_UP_OFFER,
+    RecommendationType.CROSS_SELL_LIABILITY_FROM_VEHICLE: TaskType.FOLLOW_UP_OFFER,
+    RecommendationType.SALES_RISK_MULTIPLE_OFFERS_NO_CLOSURE: TaskType.CHECK_CLOSURE,
+    RecommendationType.HIGH_PRIORITY_STORNO: TaskType.CALL_TODAY,
 }
 
 FLAG_TASK_WIEDERVORLAGE_REASON: dict[TaskType, WiedervorlageReason] = {
@@ -81,6 +86,7 @@ def create_tasks_from_recommendations(
             priority=recommendation.priority,
             status=TaskStatus.OPEN,
             due_date=_due_date(task_type),
+            explanation=recommendation.explanation,
         )
         db.session.add(task)
         if customer is not None:

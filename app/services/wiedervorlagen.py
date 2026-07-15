@@ -8,6 +8,7 @@ from datetime import date
 from app.extensions import db
 from app.models import Customer, Document, DocumentCustomer, Task
 from app.models.enums import Priority, TaskStatus, TaskType, TimelineEventType, WiedervorlageReason
+from app.services.analysis.business_rules import offer_followup_explanation
 from app.services.timeline import log_timeline_event
 from app.tenancy import get_current_tenant_id
 
@@ -68,12 +69,15 @@ def sweep_offer_wiedervorlagen() -> list[Task]:
             Task.wiedervorlage_reason.in_(OFFER_AGE_REASONS),
         ).first()
 
+        explanation = offer_followup_explanation(days_since)
+
         if existing_open is not None:
             if existing_open.wiedervorlage_reason != target_reason:
                 existing_open.wiedervorlage_reason = target_reason
                 existing_open.priority = target_priority
                 existing_open.title = WIEDERVORLAGE_LABELS[target_reason]
                 existing_open.due_date = today
+                existing_open.explanation = explanation
             continue
 
         customer = Customer.query.filter_by(id=customer_id).first()
@@ -90,6 +94,7 @@ def sweep_offer_wiedervorlagen() -> list[Task]:
             priority=target_priority,
             status=TaskStatus.OPEN,
             due_date=today,
+            explanation=explanation,
         )
         db.session.add(task)
         log_timeline_event(customer, TimelineEventType.TASK_CREATED, f"Aufgabe erstellt: {task.title}", task=task)

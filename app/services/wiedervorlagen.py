@@ -19,7 +19,7 @@ WIEDERVORLAGE_LABELS: dict[WiedervorlageReason, str] = {
 OFFER_AGE_REASONS = (WiedervorlageReason.OFFER_OLDER_THAN_7_DAYS, WiedervorlageReason.OFFER_OLDER_THAN_14_DAYS)
 
 
-def _earliest_open_offer_dates() -> dict[int, date]:
+def get_open_offer_customer_dates() -> dict[int, date]:
     """customer_id -> Datum der aeltesten Dokument-Zeile mit is_angebot=True, sofern dieser
     Kunde nicht spaeter (nach diesem Angebot) bereits als Neugeschaeft erkannt wurde."""
     earliest_offer: dict[int, date] = {}
@@ -50,7 +50,7 @@ def sweep_offer_wiedervorlagen() -> list[Task]:
     today = date.today()
     created: list[Task] = []
 
-    for customer_id, offer_date in _earliest_open_offer_dates().items():
+    for customer_id, offer_date in get_open_offer_customer_dates().items():
         days_since = (today - offer_date).days
         if days_since < 7:
             continue

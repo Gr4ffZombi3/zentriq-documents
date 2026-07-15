@@ -15,6 +15,7 @@ _COUNTER_FIELD_BY_CHANGE_TYPE: dict[ListChangeType, str] = {
     ListChangeType.STATUS_CHANGE: "status_change_count",
     ListChangeType.STORNO: "storno_count",
     ListChangeType.REMOVED_CUSTOMER: "removed_customer_count",
+    ListChangeType.NEW_PRODUCT_LINE: "new_product_line_count",
 }
 
 _ENTRY_LABELS: dict[ListChangeType, str] = {
@@ -24,6 +25,7 @@ _ENTRY_LABELS: dict[ListChangeType, str] = {
     ListChangeType.STATUS_CHANGE: "Statusänderung erkannt",
     ListChangeType.STORNO: "Storno erkannt",
     ListChangeType.REMOVED_CUSTOMER: "Kunde nicht mehr in der Liste",
+    ListChangeType.NEW_PRODUCT_LINE: "Neue Sparte erkannt",
 }
 
 
@@ -35,7 +37,14 @@ def _row_signature(row_data: list[dict] | None) -> dict:
         "contract_numbers": sorted({r.get("contract_number") for r in rows if r.get("contract_number")}),
         "products": sorted({p for r in rows for p in (r.get("products") or [])}),
         "vehicle": sorted({r.get("vehicle") for r in rows if r.get("vehicle")}),
+        # M12: "Sparte" pro Zeile, zusaetzlich zur freien Produktliste - beide fliessen in
+        # die Neue-Sparte-Erkennung ein.
+        "product_lines": sorted({r.get("product_line") for r in rows if r.get("product_line")}),
     }
+
+
+def _product_lines(signature: dict) -> set:
+    return set(signature["products"]) | set(signature["product_lines"])
 
 
 def _find_previous_leipziger_liste(document: Document) -> Document | None:
@@ -116,6 +125,16 @@ def compare_leipziger_liste(document: Document) -> ListComparison | None:
             add_entry(customer_id, ListChangeType.NEW_OFFER, {"old": old_signature, "new": new_signature})
         elif new_signature != old_signature:
             add_entry(customer_id, ListChangeType.STATUS_CHANGE, {"old": old_signature, "new": new_signature})
+
+        # M12: unabhaengig von der obigen Kette - eine neue Sparte kann zusaetzlich zu einem
+        # der obigen Aenderungstypen auftreten, nicht nur anstelle davon.
+        added_product_lines = _product_lines(new_signature) - _product_lines(old_signature)
+        if added_product_lines:
+            add_entry(
+                customer_id,
+                ListChangeType.NEW_PRODUCT_LINE,
+                {"old": old_signature, "new": new_signature, "added_products": sorted(added_product_lines)},
+            )
 
     for customer_id in previous_by_customer:
         if customer_id not in new_by_customer:

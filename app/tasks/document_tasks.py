@@ -8,6 +8,7 @@ from app.extensions import db
 from app.models import AnalysisRun, DocStatus, Document
 from app.models.enums import AnalysisRunStatus, DocType
 from app.services.analysis.layout import detect_layout
+from app.services.analysis.report import build_analysis_report
 from app.services.analysis.tables import detect_tables
 from app.services.documents import apply_extraction, apply_leipziger_liste_extraction
 from app.services.list_comparison import compare_leipziger_liste
@@ -157,6 +158,7 @@ def _run_pipeline(document: Document) -> None:
                 "table_row_count": table_info.table_row_count,
                 "table_block_count": table_info.table_block_count,
             },
+            **build_analysis_report(document),
         },
         overall_confidence=_compute_overall_confidence(document),
     )

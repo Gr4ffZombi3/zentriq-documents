@@ -1,8 +1,8 @@
-from flask import Blueprint, abort, redirect, render_template, send_file, url_for
+from flask import Blueprint, abort, jsonify, redirect, render_template, send_file, url_for
 from flask_login import login_required
 
 from app.extensions import db
-from app.models import DocStatus, Document, ListComparison
+from app.models import AnalysisRun, DocStatus, Document, ListComparison
 from app.services.storage import resolve_document_path
 from app.tasks.document_tasks import process_document
 from app.tenancy import get_or_404_scoped
@@ -40,6 +40,32 @@ def file(document_id):
     if not path.exists():
         abort(404)
     return send_file(path, mimetype="application/pdf")
+
+
+@documents_bp.route("/<int:document_id>/analysis-runs")
+@login_required
+def analysis_runs(document_id):
+    document = get_or_404_scoped(Document, document_id)
+    runs = AnalysisRun.query.filter_by(document_id=document.id).order_by(AnalysisRun.started_at.desc()).all()
+    return jsonify(
+        [
+            {
+                "id": run.id,
+                "status": run.status.value,
+                "engine_version": run.engine_version,
+                "prompt_version": run.prompt_version,
+                "openai_model": run.openai_model,
+                "started_at": run.started_at.isoformat() if run.started_at else None,
+                "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+                "duration_ms": run.duration_ms,
+                "stage_durations": run.stage_durations,
+                "overall_confidence": run.overall_confidence,
+                "error_message": run.error_message,
+                "summary": run.summary,
+            }
+            for run in runs
+        ]
+    )
 
 
 @documents_bp.route("/<int:document_id>/retry", methods=["POST"])

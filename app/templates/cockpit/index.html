@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% from "ui/icons.html" import icon %}
+{% from "ui/display.html" import card, badge %}
+{% block title %}Tagescockpit – Zentriq Documents{% endblock %}
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-2xl font-semibold tracking-tight text-text">Tagescockpit</h1>
+  <p class="mt-1 text-sm text-text-muted">Das Wichtigste für dich heute – auf einen Blick.</p>
+</div>
+
+<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  {% call card() %}
+    <div class="flex items-center gap-2 text-sm font-medium text-text-muted">
+      {{ icon('flame', class='w-4 h-4 text-error') }}
+      Heute höchste Priorität
+    </div>
+    {% if cockpit.top_priority_task %}
+      <p class="mt-3 font-medium text-text">{{ cockpit.top_priority_task.title }}</p>
+      <p class="mt-1 text-sm text-text-muted">{{ cockpit.top_priority_task.customer.name if cockpit.top_priority_task.customer else 'Kein Kunde' }}</p>
+      <a href="{{ url_for('tasks.list_tasks') }}" class="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-hover">
+        Zu den Aufgaben {{ icon('chevron-right', class='w-4 h-4') }}
+      </a>
+    {% else %}
+      <p class="mt-3 text-sm text-text-muted">Keine offenen Aufgaben.</p>
+    {% endif %}
+  {% endcall %}
+
+  {% call card() %}
+    <div class="flex items-center gap-2 text-sm font-medium text-text-muted">
+      {{ icon('phone', class='w-4 h-4 text-primary') }}
+      Heute anrufen
+    </div>
+    {% if cockpit.call_today_tasks %}
+      <div class="mt-3 flex flex-col gap-2">
+        {% for task in cockpit.call_today_tasks %}
+          <p class="text-sm text-text">{{ task.customer.name if task.customer else task.title }}</p>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="mt-3 text-sm text-text-muted">Niemand steht heute zum Anrufen an.</p>
+    {% endif %}
+  {% endcall %}
+
+  {% call card() %}
+    <div class="flex items-center gap-2 text-sm font-medium text-text-muted">
+      {{ icon('target', class='w-4 h-4 text-success') }}
+      Höchstes Potenzial
+    </div>
+    {% if cockpit.top_potential %}
+      <p class="mt-3 font-medium text-text">{{ cockpit.top_potential.customer.name }}</p>
+      <p class="mt-1 text-sm text-text-muted">Potenzial-Score: {{ cockpit.top_potential.potential_score }}</p>
+    {% else %}
+      <p class="mt-3 text-sm text-text-muted">Noch keine Daten vorhanden.</p>
+    {% endif %}
+  {% endcall %}
+
+  {% call card() %}
+    <div class="flex items-center gap-2 text-sm font-medium text-text-muted">
+      {{ icon('alert-triangle', class='w-4 h-4 text-warning') }}
+      Überfällige Vorgänge
+    </div>
+    <p class="mt-3 text-2xl font-semibold tracking-tight text-text">{{ cockpit.overdue_tasks_count }}</p>
+    {% if cockpit.overdue_tasks_count %}
+      <a href="{{ url_for('tasks.list_tasks') }}" class="mt-2 inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-hover">
+        Ansehen {{ icon('chevron-right', class='w-4 h-4') }}
+      </a>
+    {% endif %}
+  {% endcall %}
+
+  {% call card() %}
+    <div class="flex items-center gap-2 text-sm font-medium text-text-muted">
+      {{ icon('file-text', class='w-4 h-4 text-primary') }}
+      Neue Dokumente (24h)
+    </div>
+    <p class="mt-3 text-2xl font-semibold tracking-tight text-text">{{ cockpit.new_documents_count }}</p>
+  {% endcall %}
+
+  {% call card() %}
+    <div class="flex items-center gap-2 text-sm font-medium text-text-muted">
+      {{ icon('trending-up', class='w-4 h-4 text-success') }}
+      Persönliche Abschlussquote
+    </div>
+    <p class="mt-3 text-2xl font-semibold tracking-tight text-text">{{ cockpit.abschlussquote_percent }}%</p>
+  {% endcall %}
+</div>
+{% endblock %}

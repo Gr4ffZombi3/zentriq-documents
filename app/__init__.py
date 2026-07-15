@@ -34,6 +34,7 @@ def create_app(config_object=None):
 
     from app import models  # noqa: F401  (ensure models are registered with SQLAlchemy)
     from app.auth.routes import auth_bp
+    from app.blueprints.cockpit.routes import cockpit_bp
     from app.blueprints.customers.routes import customers_bp
     from app.blueprints.dashboard.routes import dashboard_bp
     from app.blueprints.documents.routes import documents_bp
@@ -44,6 +45,7 @@ def create_app(config_object=None):
     from app.blueprints.upload.routes import upload_bp
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(cockpit_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(documents_bp)
     app.register_blueprint(upload_bp)

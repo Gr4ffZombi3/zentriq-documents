@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% from "ui/icons.html" import icon %}
+{% from "ui/display.html" import card, badge %}
+{% block title %}Mein Bestand – Zentriq Documents{% endblock %}
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-2xl font-semibold tracking-tight text-text">Mein Bestand</h1>
+  <p class="mt-1 text-sm text-text-muted">Nur deine eigenen Kunden, Aufgaben und Kennzahlen.</p>
+</div>
+
+<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+  {% set kpi_tiles = [
+    ('trending-up', 'Abschlussquote', bestand.kpis.abschlussquote_percent ~ '%'),
+    ('mail', 'Offene Angebote', bestand.kpis.open_offers_count),
+    ('alert-triangle', 'Ohne Rückmeldung', bestand.kpis.offers_without_response_count),
+    ('target', 'Cross-Selling-Potenzial', bestand.kpis.cross_sell_potential_count),
+  ] %}
+  {% for icon_name, label, value in kpi_tiles %}
+    {% call card() %}
+      <div class="flex items-center gap-2 text-sm font-medium text-text-muted">
+        {{ icon(icon_name, class='w-4 h-4 text-primary') }}
+        {{ label }}
+      </div>
+      <p class="mt-3 text-2xl font-semibold tracking-tight text-text">{{ value }}</p>
+    {% endcall %}
+  {% endfor %}
+</div>
+
+<div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+  {% call card() %}
+    <div class="flex items-center gap-2">
+      {{ icon('users', class='w-4 h-4 text-primary') }}
+      <h2 class="text-base font-semibold text-text">Eigene Kunden</h2>
+    </div>
+    {% if bestand.customers %}
+      <div class="mt-4 flex flex-col gap-2">
+        {% for customer in bestand.customers %}
+          <a href="{{ url_for('customers.detail', customer_id=customer.id) }}" class="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2.5 transition duration-200 hover:bg-bg">
+            <span class="truncate text-sm text-text">{{ customer.name }}</span>
+            {{ icon('chevron-right', class='w-4 h-4 text-text-muted') }}
+          </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="mt-4 text-sm text-text-muted">Dir sind noch keine Kunden zugeordnet.</p>
+    {% endif %}
+  {% endcall %}
+
+  {% call card() %}
+    <div class="flex items-center gap-2">
+      {{ icon('list-todo', class='w-4 h-4 text-primary') }}
+      <h2 class="text-base font-semibold text-text">Eigene Wiedervorlagen &amp; Aufgaben</h2>
+    </div>
+    {% if bestand.open_tasks %}
+      <div class="mt-4 flex flex-col gap-2">
+        {% for task in bestand.open_tasks %}
+          <div class="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2.5">
+            <div class="min-w-0">
+              <p class="truncate text-sm text-text">{{ task.title }}</p>
+              <p class="truncate text-xs text-text-muted">{{ task.customer.name if task.customer else 'Kein Kunde' }}</p>
+            </div>
+            {% if task.wiedervorlage_reason %}{{ badge('Wiedervorlage', variant='warning') }}{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+      <a href="{{ url_for('tasks.list_tasks') }}" class="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-hover">
+        Alle Aufgaben {{ icon('chevron-right', class='w-4 h-4') }}
+      </a>
+    {% else %}
+      <p class="mt-4 text-sm text-text-muted">Keine offenen Aufgaben.</p>
+    {% endif %}
+  {% endcall %}
+</div>
+{% endblock %}

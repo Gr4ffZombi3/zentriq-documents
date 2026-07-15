@@ -17,11 +17,12 @@ def test_extract_text_uses_tesseract_when_confidence_is_high(app, tmp_path):
     make_pdf_file(pdf_path)
 
     with app.app_context():
-        text, engine, confidence = extract_text(str(pdf_path))
+        text, engine, confidence, page_texts = extract_text(str(pdf_path))
 
     assert text == "Erkannter Testtext aus Tesseract."
     assert engine == OcrEngine.TESSERACT
     assert confidence == 96.0
+    assert page_texts == ["Erkannter Testtext aus Tesseract."]
 
 
 def test_extract_text_falls_back_to_vision_on_low_confidence(app, tmp_path, monkeypatch):
@@ -36,11 +37,12 @@ def test_extract_text_falls_back_to_vision_on_low_confidence(app, tmp_path, monk
     )
 
     with app.app_context():
-        text, engine, confidence = extract_text(str(pdf_path))
+        text, engine, confidence, page_texts = extract_text(str(pdf_path))
 
     assert text == "Vision-erkannter Text."
     assert engine == OcrEngine.VISION
     assert confidence is None
+    assert page_texts == ["Vision-erkannter Text."]
 
 
 def test_process_document_task_runs_ocr_and_ai_extraction(app, db, tenant, tmp_path):

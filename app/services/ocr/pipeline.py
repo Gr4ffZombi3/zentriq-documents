@@ -20,9 +20,11 @@ def _render_pages(file_path: str, zoom: float = 2.0) -> list[Image.Image]:
         doc.close()
 
 
-def extract_text(file_path: str) -> tuple[str, OcrEngine, float | None]:
+def extract_text(file_path: str) -> tuple[str, OcrEngine, float | None, list[str]]:
     """Extrahiert Text aus einer PDF: Tesseract primaer, OpenAI Vision als Fallback pro Seite
-    bei niedriger Konfidenz oder zu kurzem Text. Gibt (text, engine_used, avg_confidence) zurueck."""
+    bei niedriger Konfidenz oder zu kurzem Text. Gibt (text, engine_used, avg_confidence,
+    page_texts) zurueck - page_texts (M12) haelt die Seitengrenzen fest, die im verbundenen
+    `text` verloren gehen, fuer die Mehrseitige-Eintraege-Heuristik in app/services/analysis/."""
     min_confidence = current_app.config["OCR_MIN_CONFIDENCE"]
     min_text_length = current_app.config["OCR_MIN_TEXT_LENGTH"]
 
@@ -42,4 +44,4 @@ def extract_text(file_path: str) -> tuple[str, OcrEngine, float | None]:
     engine_used = OcrEngine.VISION if used_vision else OcrEngine.TESSERACT
     avg_confidence = sum(confidences) / len(confidences) if confidences else None
     full_text = "\n\n".join(page_texts)
-    return full_text, engine_used, avg_confidence
+    return full_text, engine_used, avg_confidence, page_texts

@@ -42,7 +42,7 @@ def _run_pipeline(document: Document) -> None:
     db.session.commit()
 
     try:
-        raw_text, engine_used, confidence = extract_text(document.file_path)
+        raw_text, engine_used, confidence, _page_texts = extract_text(document.file_path)
     except Exception as exc:
         db.session.rollback()
         document.status = DocStatus.FAILED

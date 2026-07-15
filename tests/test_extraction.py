@@ -62,6 +62,10 @@ def test_apply_extraction_maps_fields_and_upserts_customer(app, db, tenant):
         customer=ExtractedCustomer(name="Erika Musterfrau", city="Berlin"),
         insurer="Musterversicherung",
         products=["Kfz-Kasko"],
+        broker_number="VM-4711",
+        product_line="KFZ",
+        premium="123,45 EUR",
+        tariff="Komfort",
     )
 
     apply_extraction(document, extraction)
@@ -72,6 +76,11 @@ def test_apply_extraction_maps_fields_and_upserts_customer(app, db, tenant):
     assert document.products == ["Kfz-Kasko"]
     assert document.customer.name == "Erika Musterfrau"
     assert document.raw_json["doc_type"] == "rechnung"
+    # M12: neue Erkennungsfelder werden bei generischen Dokumenten auf Dokumentebene gesetzt.
+    assert document.broker_number == "VM-4711"
+    assert document.product_line == "KFZ"
+    assert document.premium == "123,45 EUR"
+    assert document.tariff == "Komfort"
 
     # Zweites Dokument mit gleichem Kundennamen soll den bestehenden Kunden wiederverwenden.
     document2 = Document(

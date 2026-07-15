@@ -25,6 +25,11 @@ class DocumentExtraction(BaseModel):
     contract_start_date: date | None = None
     products: list[str] = Field(default_factory=list)
     special_notes: str | None = None
+    # M12: zusaetzliche Erkennungsfelder
+    broker_number: str | None = None
+    product_line: str | None = None
+    premium: str | None = None
+    tariff: str | None = None
 
 
 class LeipzigerListeRow(BaseModel):
@@ -45,6 +50,11 @@ class LeipzigerListeRow(BaseModel):
     priority: Priority = Priority.MEDIUM
     recommended_next_action: str | None = None
     special_notes: str | None = None
+    # M12: zusaetzliche Erkennungsfelder
+    broker_number: str | None = None
+    product_line: str | None = None
+    premium: str | None = None
+    tariff: str | None = None
 
 
 class LeipzigerListeExtraction(BaseModel):

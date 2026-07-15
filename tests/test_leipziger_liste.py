@@ -98,6 +98,41 @@ def test_apply_leipziger_liste_extraction_creates_customers_and_merges_duplicate
     assert "prioritize_vehicle_change" in {t.value for t in types_by_customer["Bernd Kunde"]}
 
 
+def test_new_m12_fields_stay_per_row_not_on_document(app, db, tenant):
+    document = Document(
+        filename="liste.pdf", original_filename="liste.pdf", file_path="/tmp/liste.pdf", tenant_id=tenant.id
+    )
+    db.session.add(document)
+    db.session.commit()
+
+    extraction = LeipzigerListeExtraction(
+        rows=[
+            LeipzigerListeRow(
+                customer=ExtractedCustomer(name="Sparten Kunde"),
+                broker_number="VM-1001",
+                product_line="KFZ",
+                premium="99,90 EUR",
+                tariff="Basis",
+            )
+        ]
+    )
+    apply_leipziger_liste_extraction(document, extraction)
+    db.session.commit()
+
+    # Dokumentebene bleibt bewusst leer - waere bei mehrzeiligen Listen irrefuehrend.
+    assert document.broker_number is None
+    assert document.product_line is None
+    assert document.premium is None
+    assert document.tariff is None
+
+    doc_customer = DocumentCustomer.query.join(Customer).filter(Customer.name == "Sparten Kunde").one()
+    row = doc_customer.row_data[0]
+    assert row["broker_number"] == "VM-1001"
+    assert row["product_line"] == "KFZ"
+    assert row["premium"] == "99,90 EUR"
+    assert row["tariff"] == "Basis"
+
+
 def test_process_document_task_routes_leipziger_liste_through_multi_row_extraction(
     app, db, tenant, tmp_path, monkeypatch
 ):

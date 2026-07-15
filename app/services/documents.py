@@ -56,6 +56,13 @@ def apply_extraction(document: Document, extraction: DocumentExtraction) -> None
     document.contract_start_date = extraction.contract_start_date
     document.products = extraction.products
     document.special_notes = extraction.special_notes
+    # M12: nur bei generischen Einzeldokumenten auf Dokumentebene gesetzt - bei Leipziger-Liste-
+    # Dokumenten (mehrere Kunden pro PDF) waere ein Dokument-weiter Wert hier irrefuehrend, siehe
+    # apply_leipziger_liste_extraction() (bleibt dort bewusst NULL, Daten stecken in row_data).
+    document.broker_number = extraction.broker_number
+    document.product_line = extraction.product_line
+    document.premium = extraction.premium
+    document.tariff = extraction.tariff
     document.raw_json = extraction.model_dump(mode="json")
 
     if extraction.customer is not None:

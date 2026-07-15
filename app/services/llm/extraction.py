@@ -21,8 +21,18 @@ einem JSON-Objekt in genau diesem Format:
   "broker": str|null,
   "contract_start_date": "YYYY-MM-DD"|null,
   "products": [str],
-  "special_notes": str|null
+  "special_notes": str|null,
+  "broker_number": str|null,
+  "product_line": str|null,
+  "premium": str|null,
+  "tariff": str|null
 }
+
+"broker_number" ist die im Dokument aufgedruckte Vermittlernummer (VM-Nummer), NICHT der \
+Vermittlername (das ist "broker"). "product_line" ist die Versicherungssparte (z.B. "KFZ", \
+"Sach", "Leben"), nicht der konkrete Produktname. "premium" ist der Beitrag/die Praemie als \
+Text genau wie im Dokument geschrieben (z.B. "123,45 EUR"), keine eigene Umrechnung. "tariff" \
+ist die Tarifbezeichnung.
 
 Erfinde keine Werte. Wenn eine Information im Text nicht vorhanden ist, setze das Feld auf null \
 bzw. eine leere Liste. Antworte NUR mit dem JSON-Objekt, ohne zusätzlichen Text."""
@@ -48,7 +58,11 @@ Zeile als eigenes Objekt und antworte AUSSCHLIESSLICH mit einem JSON-Objekt in g
       "has_multiple_products": bool,
       "priority": "low" | "medium" | "high",
       "recommended_next_action": str|null,
-      "special_notes": str|null
+      "special_notes": str|null,
+      "broker_number": str|null,
+      "product_line": str|null,
+      "premium": str|null,
+      "tariff": str|null
     }
   ]
 }
@@ -58,7 +72,10 @@ Fahrzeugwechsel, "is_angebot" bei offenen Angeboten, "is_storno" bei erkennbar s
 gekuendigten Vertraegen (z.B. Storno-Spalte, Vermerk "storniert"/"gekuendigt"), \
 "cross_sell_opportunity" wenn der Kunde \
 sinnvoll weitere Produkte angeboten bekommen koennte, und "has_multiple_products" wenn der Kunde \
-bereits mehrere Produkte hat. Erfinde keine Werte. Antworte NUR mit dem JSON-Objekt."""
+bereits mehrere Produkte hat. "broker_number" ist die pro Zeile aufgedruckte Vermittlernummer, \
+"product_line" die Versicherungssparte dieser Zeile, "premium" der Beitrag/die Praemie als Text \
+genau wie im Dokument, "tariff" die Tarifbezeichnung. Erfinde keine Werte. Antworte NUR mit dem \
+JSON-Objekt."""
 
 
 def extract_document_data(raw_text: str) -> DocumentExtraction:

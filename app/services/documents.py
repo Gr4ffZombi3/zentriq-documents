@@ -1,6 +1,7 @@
 from app.extensions import db
 from app.models import Customer, DocStatus, Document, DocumentCustomer
 from app.models.enums import DocType, TimelineEventType
+from app.services.analysis.validation import score_extraction, score_leipziger_liste_row
 from app.services.llm.classification import compute_document_flags
 from app.services.llm.recommendations import create_recommendations
 from app.services.llm.schemas import DocumentExtraction, ExtractedCustomer, LeipzigerListeExtraction
@@ -64,6 +65,7 @@ def apply_extraction(document: Document, extraction: DocumentExtraction) -> None
     document.premium = extraction.premium
     document.tariff = extraction.tariff
     document.raw_json = extraction.model_dump(mode="json")
+    document.field_confidence = score_extraction(extraction, document.raw_text or "")
 
     if extraction.customer is not None:
         document.customer = find_or_create_customer(
@@ -99,12 +101,14 @@ def apply_leipziger_liste_extraction(document: Document, extraction: LeipzigerLi
         db.session.flush()  # Kunden-ID fuer den Abgleich mehrfacher Zeilen bereitstellen
 
         row_dict = row.model_dump(mode="json")
+        row_confidence = score_leipziger_liste_row(row, document.raw_text or "")
         existing = document_customers_by_id.get(row_customer.id)
         if existing is None:
             doc_customer = DocumentCustomer(
                 document=document,
                 customer=row_customer,
                 row_data=[row_dict],
+                field_confidence=[row_confidence],
                 tenant_id=document.tenant_id,
             )
             db.session.add(doc_customer)
@@ -118,6 +122,7 @@ def apply_leipziger_liste_extraction(document: Document, extraction: LeipzigerLi
             )
         else:
             existing.row_data = [*(existing.row_data or []), row_dict]
+            existing.field_confidence = [*(existing.field_confidence or []), row_confidence]
 
         for flag_value, flag_event_type, flag_label in (
             (row.is_angebot, TimelineEventType.OFFER_DETECTED, "Angebot erkannt"),

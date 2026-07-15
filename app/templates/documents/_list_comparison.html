@@ -1,0 +1,45 @@
+{% from "ui/icons.html" import icon %}
+{% from "ui/display.html" import card, badge %}
+{% call card() %}
+  <div class="flex items-center gap-2">
+    {{ icon('git-compare', class='w-4 h-4 text-primary') }}
+    <h2 class="text-base font-semibold text-text">Vergleich zur vorherigen Liste</h2>
+  </div>
+  <p class="mt-1 text-sm text-text-muted">
+    Verglichen mit
+    <a href="{{ url_for('documents.detail', document_id=list_comparison.previous_document_id) }}" class="text-primary hover:text-primary-hover">{{ list_comparison.previous_document.original_filename }}</a>
+  </p>
+
+  <div class="mt-4 flex flex-wrap gap-2">
+    {% set counter_badges = [
+      ('Neue Kunden', list_comparison.new_customer_count, 'success'),
+      ('Neue Verträge', list_comparison.new_contract_count, 'success'),
+      ('Neue Angebote', list_comparison.new_offer_count, 'info'),
+      ('Statusänderungen', list_comparison.status_change_count, 'warning'),
+      ('Stornos', list_comparison.storno_count, 'danger'),
+      ('Entfernte Kunden', list_comparison.removed_customer_count, 'muted'),
+    ] %}
+    {% for label, count, variant in counter_badges %}
+      {% if count %}{{ badge(label ~ ': ' ~ count, variant=variant) }}{% endif %}
+    {% endfor %}
+  </div>
+
+  {% if list_comparison.entries %}
+    <div class="mt-4 flex flex-col gap-2">
+      {% set change_labels = {
+        'new_customer': 'Neuer Kunde', 'new_contract': 'Neuer Vertrag', 'new_offer': 'Neues Angebot',
+        'status_change': 'Statusänderung', 'storno': 'Storno', 'removed_customer': 'Entfernt',
+      } %}
+      {% set change_variants = {
+        'new_customer': 'success', 'new_contract': 'success', 'new_offer': 'info',
+        'status_change': 'warning', 'storno': 'danger', 'removed_customer': 'muted',
+      } %}
+      {% for entry in list_comparison.entries %}
+        <div class="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2.5">
+          <a href="{{ url_for('customers.detail', customer_id=entry.customer_id) }}" class="truncate text-sm text-text hover:text-primary">{{ entry.customer.name }}</a>
+          {{ badge(change_labels.get(entry.change_type.value, entry.change_type.value), variant=change_variants.get(entry.change_type.value, 'muted')) }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endcall %}

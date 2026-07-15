@@ -61,4 +61,11 @@
     {% endif %}
   {% endcall %}
 </div>
+
+<div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+  {% include "documents/_verlauf.html" %}
+  {% if list_comparison %}
+    {% include "documents/_list_comparison.html" %}
+  {% endif %}
+</div>
 {% endblock %}

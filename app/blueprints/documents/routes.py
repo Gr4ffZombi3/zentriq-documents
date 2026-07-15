@@ -2,7 +2,7 @@ from flask import Blueprint, abort, redirect, render_template, send_file, url_fo
 from flask_login import login_required
 
 from app.extensions import db
-from app.models import DocStatus, Document
+from app.models import DocStatus, Document, ListComparison
 from app.services.storage import resolve_document_path
 from app.tasks.document_tasks import process_document
 from app.tenancy import get_or_404_scoped
@@ -21,7 +21,8 @@ def list_documents():
 @login_required
 def detail(document_id):
     document = get_or_404_scoped(Document, document_id)
-    return render_template("documents/detail.html", document=document)
+    list_comparison = ListComparison.query.filter_by(document_id=document.id).first()
+    return render_template("documents/detail.html", document=document, list_comparison=list_comparison)
 
 
 @documents_bp.route("/<int:document_id>/row")

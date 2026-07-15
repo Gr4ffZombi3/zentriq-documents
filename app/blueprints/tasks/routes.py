@@ -1,11 +1,12 @@
 from datetime import date
 
-from flask import Blueprint, redirect, render_template, request, url_for
-from flask_login import login_required
+from flask import Blueprint, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 
 from app.extensions import db
 from app.models import Task
-from app.models.enums import PRIORITY_ORDER, TaskStatus
+from app.models.enums import PRIORITY_ORDER, FeedbackRating, TaskStatus
+from app.services.feedback import record_feedback
 from app.services.tasks import update_task_status
 from app.tenancy import get_or_404_scoped
 
@@ -46,3 +47,17 @@ def update_status(task_id):
     if request.headers.get("HX-Request"):
         return render_template("tasks/_task_row.html", task=task)
     return redirect(url_for("tasks.list_tasks"))
+
+
+@tasks_bp.route("/<int:task_id>/feedback", methods=["POST"])
+@login_required
+def submit_feedback(task_id):
+    task = get_or_404_scoped(Task, task_id)
+    rating_raw = (request.get_json(silent=True) or {}).get("rating") or request.form.get("rating")
+    try:
+        rating = FeedbackRating(rating_raw)
+    except (ValueError, TypeError):
+        return jsonify({"error": "invalid rating"}), 400
+
+    feedback = record_feedback(task, current_user.id, rating)
+    return jsonify({"status": "ok", "feedback_id": feedback.id}), 201

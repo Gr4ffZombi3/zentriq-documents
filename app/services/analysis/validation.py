@@ -20,6 +20,7 @@ BOOLEAN_FLAG_KEYWORDS: dict[str, list[str]] = {
     "is_neugeschaeft": ["neugeschäft", "neugeschaeft", "neu abgeschlossen", "neuvertrag"],
     "is_fahrzeugwechsel": ["fahrzeugwechsel", "kennzeichenwechsel"],
     "is_angebot": ["angebot"],
+    "has_antrag": ["antrag"],
 }
 
 CUSTOMER_FIELDS = ("name", "address", "city", "postal_code")

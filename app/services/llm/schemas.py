@@ -55,6 +55,12 @@ class LeipzigerListeRow(BaseModel):
     product_line: str | None = None
     premium: str | None = None
     tariff: str | None = None
+    # M13: Beginn-Datum je Zeile (bewusst NICHT auf DocumentExtraction dupliziert - das ist
+    # ein anderes, unabhaengiges Feld fuer generische Einzeldokumente) und Antrag-Signal,
+    # getrennt von is_angebot: ein Antrag ist im Verkaufsprozess weiter fortgeschritten als
+    # ein reines Angebot, aber noch kein Abschluss ohne Beginn-Datum.
+    contract_start_date: date | None = None
+    has_antrag: bool = False
 
 
 class LeipzigerListeExtraction(BaseModel):

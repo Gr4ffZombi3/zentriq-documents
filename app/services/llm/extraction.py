@@ -62,7 +62,9 @@ Zeile als eigenes Objekt und antworte AUSSCHLIESSLICH mit einem JSON-Objekt in g
       "broker_number": str|null,
       "product_line": str|null,
       "premium": str|null,
-      "tariff": str|null
+      "tariff": str|null,
+      "contract_start_date": "YYYY-MM-DD"|null,
+      "has_antrag": bool
     }
   ]
 }
@@ -74,8 +76,12 @@ gekuendigten Vertraegen (z.B. Storno-Spalte, Vermerk "storniert"/"gekuendigt"), 
 sinnvoll weitere Produkte angeboten bekommen koennte, und "has_multiple_products" wenn der Kunde \
 bereits mehrere Produkte hat. "broker_number" ist die pro Zeile aufgedruckte Vermittlernummer, \
 "product_line" die Versicherungssparte dieser Zeile, "premium" der Beitrag/die Praemie als Text \
-genau wie im Dokument, "tariff" die Tarifbezeichnung. Erfinde keine Werte. Antworte NUR mit dem \
-JSON-Objekt."""
+genau wie im Dokument, "tariff" die Tarifbezeichnung. "contract_start_date" ist das \
+Versicherungsbeginn-Datum ("Beginn") dieser Zeile, NICHT das Antragsdatum - nur setzen, wenn ein \
+konkretes Beginn-Datum im Dokument erkennbar ist. "has_antrag" ist true, wenn fuer diese Zeile \
+erkennbar ein Versicherungsantrag vorliegt (z.B. Spalte "Antrag"/"Antragsdatum" oder Vermerk \
+"Antrag gestellt"), unabhaengig davon, ob bereits ein Beginn-Datum feststeht. Erfinde keine \
+Werte. Antworte NUR mit dem JSON-Objekt."""
 
 
 def extract_document_data(raw_text: str) -> DocumentExtraction:

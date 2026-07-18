@@ -133,6 +133,42 @@ def test_new_m12_fields_stay_per_row_not_on_document(app, db, tenant):
     assert row["tariff"] == "Basis"
 
 
+def test_leipziger_liste_row_defaults_for_m13_fields():
+    row = LeipzigerListeRow(customer=ExtractedCustomer(name="Ohne Beginn"))
+    assert row.contract_start_date is None
+    assert row.has_antrag is False
+
+
+def test_m13_fields_flow_into_row_data(app, db, tenant):
+    from datetime import date
+
+    document = Document(
+        filename="liste2.pdf", original_filename="liste2.pdf", file_path="/tmp/liste2.pdf", tenant_id=tenant.id
+    )
+    db.session.add(document)
+    db.session.commit()
+
+    extraction = LeipzigerListeExtraction(
+        rows=[
+            LeipzigerListeRow(
+                customer=ExtractedCustomer(name="Beginn Kunde"),
+                contract_start_date=date(2026, 1, 15),
+                has_antrag=True,
+            )
+        ]
+    )
+    apply_leipziger_liste_extraction(document, extraction)
+    db.session.commit()
+
+    doc_customer = DocumentCustomer.query.join(Customer).filter(Customer.name == "Beginn Kunde").one()
+    row = doc_customer.row_data[0]
+    assert row["contract_start_date"] == "2026-01-15"
+    assert row["has_antrag"] is True
+
+    # Wie bei den M12-Feldern: bewusst keine Dokumentebene-Aggregation fuer diese Zeilenfelder.
+    assert document.contract_start_date is None
+
+
 def test_process_document_task_routes_leipziger_liste_through_multi_row_extraction(
     app, db, tenant, tmp_path, monkeypatch
 ):

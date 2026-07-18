@@ -8,6 +8,20 @@
         hx-target="#upload-widget" hx-swap="outerHTML" hx-indicator="#upload-progress"
         class="rounded-xl border-2 border-dashed p-10 text-center transition duration-200"
         :class="dragging ? 'border-primary bg-primary/5' : 'border-border bg-surface'">
+    <div class="mb-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-text-muted">
+      <label class="flex cursor-pointer items-center gap-1.5">
+        <input type="radio" name="list_scope" value="" checked class="accent-primary">
+        Automatisch erkennen
+      </label>
+      <label class="flex cursor-pointer items-center gap-1.5">
+        <input type="radio" name="list_scope" value="own" class="accent-primary">
+        Eigene Liste
+      </label>
+      <label class="flex cursor-pointer items-center gap-1.5">
+        <input type="radio" name="list_scope" value="geschaeftsstelle" class="accent-primary">
+        GS-Liste
+      </label>
+    </div>
     <label for="file-input" class="flex cursor-pointer flex-col items-center gap-3">
       <span class="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary transition duration-200" :class="dragging ? 'scale-110' : ''">
         {{ icon('upload', class='w-6 h-6') }}

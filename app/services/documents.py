@@ -1,6 +1,6 @@
 from app.extensions import db
 from app.models import Customer, DocStatus, Document, DocumentCustomer
-from app.models.enums import DocType, TimelineEventType
+from app.models.enums import DocType, ListScope, TimelineEventType
 from app.services.analysis.business_rules import (
     count_offer_occurrences,
     create_advanced_recommendations,
@@ -21,6 +21,7 @@ def create_document(
     file_path: str,
     tenant_id: int,
     uploaded_by_user_id: int | None = None,
+    list_scope: ListScope | None = None,
 ) -> Document:
     document = Document(
         filename=stored_filename,
@@ -29,6 +30,9 @@ def create_document(
         status=DocStatus.PENDING,
         tenant_id=tenant_id,
         uploaded_by_user_id=uploaded_by_user_id,
+        # M13: manuell gewaehlter Listentyp, falls beim Upload angegeben - die automatische
+        # Erkennung in der Pipeline greift dann nicht mehr (siehe document_tasks.py).
+        list_scope=list_scope,
     )
     db.session.add(document)
     db.session.commit()

@@ -1,6 +1,7 @@
 from flask import Blueprint, make_response, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
+from app.models.enums import ListScope
 from app.services.documents import create_document
 from app.services.storage import save_pdf
 from app.tasks.document_tasks import process_document
@@ -22,6 +23,14 @@ def upload_document():
     except InvalidPDFError as exc:
         return render_template("components/upload_widget.html", error=str(exc)), 400
 
+    # M13: optionale manuelle Auswahl "Eigene Liste"/"GS-Liste" - bei leerem/unbekanntem Wert
+    # greift spaeter die automatische Erkennung in der Pipeline (documents_tasks.py).
+    list_scope_raw = request.form.get("list_scope", "")
+    try:
+        list_scope = ListScope(list_scope_raw) if list_scope_raw else None
+    except ValueError:
+        list_scope = None
+
     stored_filename, file_path = save_pdf(file_bytes)
     document = create_document(
         file.filename,
@@ -29,6 +38,7 @@ def upload_document():
         file_path,
         tenant_id=current_user.tenant_id,
         uploaded_by_user_id=current_user.id,
+        list_scope=list_scope,
     )
     process_document.delay(document.id)
 

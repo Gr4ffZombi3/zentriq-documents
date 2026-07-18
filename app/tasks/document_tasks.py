@@ -8,6 +8,7 @@ from app.extensions import db
 from app.models import AnalysisRun, DocStatus, Document
 from app.models.enums import AnalysisRunStatus, DocType
 from app.services.analysis.layout import detect_layout
+from app.services.analysis.list_scope_detection import detect_list_scope
 from app.services.analysis.report import build_analysis_report
 from app.services.analysis.tables import detect_tables
 from app.services.documents import apply_extraction, apply_leipziger_liste_extraction
@@ -130,6 +131,9 @@ def _run_pipeline(document: Document) -> None:
             apply_leipziger_liste_extraction(document, leipziger_extraction)
             db.session.flush()  # document_customers-IDs fuer den Listenvergleich bereitstellen
             compare_leipziger_liste(document)
+            # M13: nur automatisch erkennen, wenn beim Upload keine manuelle Auswahl getroffen wurde.
+            if document.list_scope is None:
+                document.list_scope = detect_list_scope(document)
         else:
             apply_extraction(document, extraction)
     except Exception as exc:

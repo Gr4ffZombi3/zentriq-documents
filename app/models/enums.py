@@ -118,6 +118,16 @@ class FeedbackRating(enum.Enum):
     DOWN = "down"
 
 
+class ListScope(enum.Enum):
+    """Ob ein Leipziger-Liste-Dokument nur die Daten des hochladenden Vermittlers (OWN) oder
+    die komplette Geschaeftsstellen-Liste mehrerer Vermittler (GESCHAEFTSSTELLE) enthaelt.
+    Primaer automatisch erkannt (siehe list_scope_detection.py), optional manuell beim Upload
+    uebersteuerbar."""
+
+    OWN = "own"
+    GESCHAEFTSSTELLE = "geschaeftsstelle"
+
+
 class PotentialCategory(enum.Enum):
     """Rein deterministische Einstufung eines Leipziger-Liste-Datensatzes (M13) - keine
     KI-Entscheidung, keine Prognose. Siehe app/services/analysis/potential_classification.py

@@ -2,7 +2,7 @@ import io
 
 import fitz
 
-from app.models import Document
+from app.models import Document, ListScope
 
 
 def make_pdf_bytes() -> bytes:
@@ -34,6 +34,29 @@ def test_upload_valid_pdf_creates_document_and_redirects(auth_client, db, user):
     # M11: Uploader und Bestandszuordnung werden durchgereicht.
     assert document.uploaded_by_user_id == user.id
     assert document.customer.assigned_user_id == user.id
+
+
+def test_upload_with_manual_list_scope_selection(auth_client, db):
+    pdf_bytes = make_pdf_bytes()
+    resp = auth_client.post(
+        "/upload",
+        data={"file": (io.BytesIO(pdf_bytes), "Liste.pdf"), "list_scope": "own"},
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 302
+    document = Document.query.first()
+    assert document.list_scope == ListScope.OWN
+
+
+def test_upload_with_empty_list_scope_leaves_it_unset(auth_client, db):
+    pdf_bytes = make_pdf_bytes()
+    auth_client.post(
+        "/upload",
+        data={"file": (io.BytesIO(pdf_bytes), "Liste2.pdf"), "list_scope": ""},
+        content_type="multipart/form-data",
+    )
+    document = Document.query.first()
+    assert document.list_scope is None
 
 
 def test_upload_requires_login(client):

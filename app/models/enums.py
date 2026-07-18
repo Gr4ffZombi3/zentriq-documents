@@ -128,6 +128,15 @@ class ListScope(enum.Enum):
     GESCHAEFTSSTELLE = "geschaeftsstelle"
 
 
+class ComparisonKind(enum.Enum):
+    """Womit ein ListComparison verglichen wurde: TEMPORAL = bisheriges Verhalten (letztes
+    vorheriges Leipziger-Liste-Dokument desselben Tenants, zeitbasiert). OWN_VS_GS = M13-
+    Vergleich zwischen der eigenen Liste und der Geschaeftsstellen-Liste."""
+
+    TEMPORAL = "temporal"
+    OWN_VS_GS = "own_vs_gs"
+
+
 class PotentialCategory(enum.Enum):
     """Rein deterministische Einstufung eines Leipziger-Liste-Datensatzes (M13) - keine
     KI-Entscheidung, keine Prognose. Siehe app/services/analysis/potential_classification.py

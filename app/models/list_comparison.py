@@ -1,19 +1,25 @@
 from datetime import datetime, timezone
 
 from app.extensions import db
-from app.models.enums import ListChangeType
+from app.models.enums import ComparisonKind, ListChangeType
 from app.tenancy import TenantScopedMixin
 
 
 class ListComparison(TenantScopedMixin, db.Model):
-    """Vergleichslauf zwischen einer neu hochgeladenen Leipziger Liste und der zuletzt
-    verarbeiteten Leipziger Liste desselben Tenants."""
+    """Vergleichslauf zwischen einer neu hochgeladenen Leipziger Liste und einem vorherigen
+    Dokument - entweder zeitbasiert (TEMPORAL, bisheriges Verhalten) oder M13s Eigene-Liste-
+    vs-GS-Liste-Vergleich (OWN_VS_GS). Ein Dokument kann fuer BEIDE Vergleichsarten je eine
+    eigene ListComparison-Zeile haben - die Idempotenz-Loeschung bei Reprocessing ist deshalb
+    nach (document_id, comparison_kind) skopiert, nicht nur nach document_id."""
 
     __tablename__ = "list_comparisons"
 
     id = db.Column(db.Integer, primary_key=True)
     document_id = db.Column(db.Integer, db.ForeignKey("documents.id"), nullable=False, index=True)
     previous_document_id = db.Column(db.Integer, db.ForeignKey("documents.id"), nullable=True)
+    comparison_kind = db.Column(
+        db.Enum(ComparisonKind), nullable=False, default=ComparisonKind.TEMPORAL, index=True
+    )
     compared_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     new_customer_count = db.Column(db.Integer, nullable=False, default=0)

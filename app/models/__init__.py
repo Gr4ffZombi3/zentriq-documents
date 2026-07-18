@@ -5,6 +5,7 @@ from app.models.customer_timeline_event import CustomerTimelineEvent
 from app.models.document import Document, DocumentCustomer
 from app.models.enums import (
     AnalysisRunStatus,
+    ComparisonKind,
     DocStatus,
     DocType,
     FeedbackRating,
@@ -44,6 +45,7 @@ __all__ = [
     "Tenant",
     "User",
     "AnalysisRunStatus",
+    "ComparisonKind",
     "DocType",
     "DocStatus",
     "FeedbackRating",

@@ -6,13 +6,13 @@ from flask import current_app
 
 from app.extensions import db
 from app.models import AnalysisRun, DocStatus, Document
-from app.models.enums import AnalysisRunStatus, DocType
+from app.models.enums import AnalysisRunStatus, ComparisonKind, DocType
 from app.services.analysis.layout import detect_layout
 from app.services.analysis.list_scope_detection import detect_list_scope
 from app.services.analysis.report import build_analysis_report
 from app.services.analysis.tables import detect_tables
 from app.services.documents import apply_extraction, apply_leipziger_liste_extraction
-from app.services.list_comparison import compare_leipziger_liste
+from app.services.list_comparison import compare_leipziger_liste, find_paired_gs_or_own_document
 from app.services.llm.extraction import extract_document_data, extract_leipziger_liste_rows
 from app.services.ocr.pipeline import extract_text
 from app.tenancy import bypass_tenant_scope, use_tenant_id
@@ -134,6 +134,13 @@ def _run_pipeline(document: Document) -> None:
             # M13: nur automatisch erkennen, wenn beim Upload keine manuelle Auswahl getroffen wurde.
             if document.list_scope is None:
                 document.list_scope = detect_list_scope(document)
+            # M13: zusaetzlicher Vergleich Eigene Liste <-> GS-Liste, neben dem obigen
+            # immer laufenden zeitbasierten Vergleich - nur wenn ein Gegenstueck existiert.
+            paired_document = find_paired_gs_or_own_document(document)
+            if paired_document is not None:
+                compare_leipziger_liste(
+                    document, previous_document=paired_document, comparison_kind=ComparisonKind.OWN_VS_GS
+                )
         else:
             apply_extraction(document, extraction)
     except Exception as exc:

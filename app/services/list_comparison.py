@@ -1,11 +1,13 @@
-"""Vergleicht eine neu verarbeitete Leipziger Liste gegen die zuletzt verarbeitete
-Leipziger Liste desselben Tenants und protokolliert Aenderungen pro Kunde dauerhaft
-(ListComparison + ListComparisonEntry). Rein additiv - beruehrt weder die Extraktion
-noch die Recommendation-/Task-Erzeugung."""
+"""Vergleicht eine neu verarbeitete Leipziger Liste gegen ein vorheriges Dokument und
+protokolliert Aenderungen pro Kunde dauerhaft (ListComparison + ListComparisonEntry). Zwei
+Vergleichsarten (siehe ComparisonKind): TEMPORAL (Default, bisheriges Verhalten - zeitbasiert
+gegen das zuletzt verarbeitete Leipziger-Liste-Dokument desselben Tenants) und OWN_VS_GS (M13 -
+Eigene Liste gegen Geschaeftsstellen-Liste, expliziter previous_document-Override). Rein
+additiv - beruehrt weder die Extraktion noch die Recommendation-/Task-Erzeugung."""
 
 from app.extensions import db
 from app.models import Document, ListComparison, ListComparisonEntry
-from app.models.enums import DocStatus, DocType, ListChangeType, TimelineEventType
+from app.models.enums import ComparisonKind, DocStatus, DocType, ListChangeType, ListScope, TimelineEventType
 from app.services.timeline import log_timeline_event
 
 _COUNTER_FIELD_BY_CHANGE_TYPE: dict[ListChangeType, str] = {
@@ -60,18 +62,47 @@ def _find_previous_leipziger_liste(document: Document) -> Document | None:
     )
 
 
-def compare_leipziger_liste(document: Document) -> ListComparison | None:
-    # Idempotenz bei Retry: eine vorherige Vergleichs-Auswertung fuer genau dieses Dokument
-    # darf nicht dupliziert werden. Bulk-delete umgeht ORM-Cascades, daher Entries zuerst
-    # explizit loeschen, dann die Kopf-Zeile.
-    existing_ids = [c.id for c in ListComparison.query.filter_by(document_id=document.id).all()]
+def find_paired_gs_or_own_document(document: Document) -> Document | None:
+    """Findet das juengste Leipziger-Liste-Dokument des jeweils ENTGEGENGESETZTEN list_scope
+    desselben Tenants - Grundlage fuer den M13-Eigene-Liste-vs-GS-Liste-Vergleich. Gibt None
+    zurueck, wenn document.list_scope noch nicht gesetzt ist oder kein Gegenstueck existiert."""
+    if document.list_scope is None:
+        return None
+    opposite_scope = ListScope.GESCHAEFTSSTELLE if document.list_scope == ListScope.OWN else ListScope.OWN
+    return (
+        Document.query.filter(
+            Document.doc_type == DocType.LEIPZIGER_LISTE,
+            Document.status == DocStatus.DONE,
+            Document.list_scope == opposite_scope,
+            Document.id != document.id,
+        )
+        .order_by(Document.uploaded_at.desc())
+        .first()
+    )
+
+
+def compare_leipziger_liste(
+    document: Document,
+    previous_document: Document | None = None,
+    comparison_kind: ComparisonKind = ComparisonKind.TEMPORAL,
+) -> ListComparison | None:
+    # Idempotenz bei Retry: eine vorherige Vergleichs-Auswertung fuer genau dieses Dokument UND
+    # diese Vergleichsart darf nicht dupliziert werden - nach comparison_kind skopiert, damit
+    # ein OWN_VS_GS-Lauf nicht versehentlich den TEMPORAL-Vergleich desselben Dokuments loescht
+    # (oder umgekehrt). Bulk-delete umgeht ORM-Cascades, daher Entries zuerst explizit loeschen,
+    # dann die Kopf-Zeile.
+    existing_ids = [
+        c.id
+        for c in ListComparison.query.filter_by(document_id=document.id, comparison_kind=comparison_kind).all()
+    ]
     if existing_ids:
         ListComparisonEntry.query.filter(ListComparisonEntry.list_comparison_id.in_(existing_ids)).delete(
             synchronize_session=False
         )
         ListComparison.query.filter(ListComparison.id.in_(existing_ids)).delete(synchronize_session=False)
 
-    previous_document = _find_previous_leipziger_liste(document)
+    if previous_document is None:
+        previous_document = _find_previous_leipziger_liste(document)
     if previous_document is None:
         return None
 
@@ -79,7 +110,10 @@ def compare_leipziger_liste(document: Document) -> ListComparison | None:
     previous_by_customer = {dc.customer_id: dc for dc in previous_document.document_customers}
 
     comparison = ListComparison(
-        tenant_id=document.tenant_id, document_id=document.id, previous_document_id=previous_document.id
+        tenant_id=document.tenant_id,
+        document_id=document.id,
+        previous_document_id=previous_document.id,
+        comparison_kind=comparison_kind,
     )
     db.session.add(comparison)
 

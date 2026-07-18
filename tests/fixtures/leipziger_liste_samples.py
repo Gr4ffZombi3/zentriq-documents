@@ -1,6 +1,8 @@
 """Wiederverwendbare Testdaten fuer die M12-Analyse-Engine-Tests (Layout-/Tabellen-Heuristik,
 Validierung, Business-Regeln). Reine Python-Datenstrukturen, keine DB-/App-Abhaengigkeit."""
 
+from datetime import date
+
 from app.models.enums import Priority
 from app.services.llm.schemas import ExtractedCustomer, LeipzigerListeRow
 
@@ -76,4 +78,71 @@ SAMPLE_MULTI_PAGE_TEXTS = [
     "Erika Musterfrau    Audi A4         M-YY 5678\n",
     "Fortsetzung Erika Musterfrau: Vertrag Nr. V-998877, Praemie 45,00 EUR\n"
     "Hans Beispiel       Opel Corsa      K-ZZ 9012\n",
+]
+
+# M13: SAMPLE_EIGENE_LISTE_ROWS - eine "eigene Liste" mit genau einer Vermittlernummer
+# (VM-4711) und allen fuenf PotentialCategory-Faellen. SAMPLE_GS_LISTE_ROWS - die
+# vollstaendige Geschaeftsstellen-Liste mit MEHREREN Vermittlernummern (VM-4711, VM-5522,
+# VM-6633), die "Anna Angebot" und "Peter Pruefen" aus der eigenen Liste unveraendert
+# enthaelt (kein Vergleichs-Eintrag erwartet) sowie zusaetzliche, nur dort vorkommende
+# Kunden anderer Vermittler - fuer detect_list_scope() (Kardinalitaet der
+# Vermittlernummern) und den Eigene-vs-GS-Vergleich (M13.4).
+SAMPLE_EIGENE_LISTE_ROWS = [
+    LeipzigerListeRow(
+        customer=ExtractedCustomer(name="Anna Angebot"),
+        broker_number="VM-4711",
+        product_line="KFZ",
+        is_angebot=True,
+    ),
+    LeipzigerListeRow(
+        customer=ExtractedCustomer(name="Peter Pruefen"),
+        broker_number="VM-4711",
+        product_line="Hausrat",
+        has_antrag=True,
+    ),
+    LeipzigerListeRow(
+        customer=ExtractedCustomer(name="Otto Offen"),
+        broker_number="VM-4711",
+        product_line="Leben",
+    ),
+    LeipzigerListeRow(
+        customer=ExtractedCustomer(name="Sabine Storno"),
+        broker_number="VM-4711",
+        product_line="KFZ",
+        is_storno=True,
+    ),
+    LeipzigerListeRow(
+        customer=ExtractedCustomer(name="Klaus Kunde"),
+        broker_number="VM-4711",
+        product_line="Hausrat",
+        contract_start_date=date(2026, 1, 15),
+    ),
+]
+
+SAMPLE_GS_LISTE_ROWS = [
+    # Unveraendert aus der eigenen Liste - kein Vergleichs-Eintrag erwartet.
+    LeipzigerListeRow(
+        customer=ExtractedCustomer(name="Anna Angebot"),
+        broker_number="VM-4711",
+        product_line="KFZ",
+        is_angebot=True,
+    ),
+    LeipzigerListeRow(
+        customer=ExtractedCustomer(name="Peter Pruefen"),
+        broker_number="VM-4711",
+        product_line="Hausrat",
+        has_antrag=True,
+    ),
+    # Nur in der GS-Liste - andere Vermittler.
+    LeipzigerListeRow(
+        customer=ExtractedCustomer(name="Frank Fremdvermittler"),
+        broker_number="VM-5522",
+        product_line="KFZ",
+        is_angebot=True,
+    ),
+    LeipzigerListeRow(
+        customer=ExtractedCustomer(name="Gisela Geschaeftsstelle"),
+        broker_number="VM-6633",
+        contract_start_date=date(2026, 2, 1),
+    ),
 ]

@@ -40,6 +40,7 @@ def create_app(config_object=None):
     from app.blueprints.customers.routes import customers_bp
     from app.blueprints.dashboard.routes import dashboard_bp
     from app.blueprints.documents.routes import documents_bp
+    from app.blueprints.potenziale.routes import potenziale_bp
     from app.blueprints.recommendations.routes import recommendations_bp
     from app.blueprints.search.routes import search_bp
     from app.blueprints.settings.routes import settings_bp
@@ -55,6 +56,7 @@ def create_app(config_object=None):
     app.register_blueprint(upload_bp)
     app.register_blueprint(search_bp)
     app.register_blueprint(customers_bp)
+    app.register_blueprint(potenziale_bp)
     app.register_blueprint(recommendations_bp)
     app.register_blueprint(settings_bp)
     app.register_blueprint(tasks_bp)

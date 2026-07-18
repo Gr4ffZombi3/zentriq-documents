@@ -8,7 +8,7 @@ Type=simple
 User=root
 WorkingDirectory=__APP_DIR__
 EnvironmentFile=__APP_DIR__/.env
-ExecStartPre=__APP_DIR__/deploy/pre-start.sh
+ExecStartPre=__APP_DIR__/deploy/pre-start.sh %n
 ExecStart=__APP_DIR__/.venv/bin/celery -A celery_worker.celery worker --loglevel=info --logfile=__APP_DIR__/logs/celery.log
 Restart=on-failure
 RestartSec=5

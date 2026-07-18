@@ -11,10 +11,18 @@ cd "$APP_DIR"
 
 echo "[pre-start] Projektverzeichnis: $APP_DIR"
 
-# 1) Verwaiste Gunicorn-/Celery-Prozesse DIESES Projekts sauber beenden (z.B. nach einem
-#    harten Kill, bevor systemd den PID-Stand aktualisieren konnte). Es werden ausschliesslich
-#    Prozesse mit passendem Arbeitsverzeichnis beendet - nie fremde Prozesse auf dem Server.
-for pattern in "gunicorn.*wsgi:app" "celery.*celery_worker.celery"; do
+# 1) Verwaiste Prozesse DIESES Dienstes (nicht des jeweils anderen!) sauber beenden, z.B.
+#    nach einem harten Kill, bevor systemd den PID-Stand aktualisieren konnte. Es werden
+#    ausschliesslich Prozesse mit passendem Arbeitsverzeichnis beendet - nie fremde Prozesse
+#    auf dem Server. Systemd uebergibt den eigenen Unit-Namen (%n) als $1 - ohne diese
+#    Unterscheidung wuerde z.B. der Start von zentriq-worker den gerade erst gestarteten,
+#    gesunden zentriq-api-Gunicorn toeten (und umgekehrt), weil beide Prozesse dasselbe
+#    Arbeitsverzeichnis haben.
+case "${1:-}" in
+    *worker*) PATTERNS=("celery.*celery_worker.celery") ;;
+    *)        PATTERNS=("gunicorn.*wsgi:app") ;;
+esac
+for pattern in "${PATTERNS[@]}"; do
     STALE_PIDS=$(pgrep -f "$pattern" || true)
     for pid in $STALE_PIDS; do
         PID_CWD="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"

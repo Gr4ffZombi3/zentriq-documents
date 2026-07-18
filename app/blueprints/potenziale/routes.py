@@ -3,7 +3,8 @@ from datetime import date
 from flask import Blueprint, render_template, request
 from flask_login import login_required
 
-from app.models.enums import ListScope, PotentialCategory
+from app.models import ListComparison
+from app.models.enums import ComparisonKind, ListScope, PotentialCategory
 from app.services.analysis.leipziger_liste_view import get_analysis_summary, get_potential_records
 
 potenziale_bp = Blueprint("potenziale", __name__, url_prefix="/potenziale")
@@ -48,3 +49,22 @@ def index():
         filters=filters,
         categories=PotentialCategory,
     )
+
+
+@potenziale_bp.route("/vergleich")
+@login_required
+def vergleich():
+    comparisons = (
+        ListComparison.query.filter_by(comparison_kind=ComparisonKind.OWN_VS_GS)
+        .order_by(ListComparison.compared_at.desc())
+        .all()
+    )
+
+    selected_id = request.args.get("document_id", type=int)
+    selected = None
+    if selected_id is not None:
+        selected = next((c for c in comparisons if c.document_id == selected_id), None)
+    if selected is None and comparisons:
+        selected = comparisons[0]
+
+    return render_template("potenziale/vergleich.html", comparisons=comparisons, selected=selected)

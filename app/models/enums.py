@@ -116,3 +116,15 @@ class AnalysisRunStatus(enum.Enum):
 class FeedbackRating(enum.Enum):
     UP = "up"
     DOWN = "down"
+
+
+class PotentialCategory(enum.Enum):
+    """Rein deterministische Einstufung eines Leipziger-Liste-Datensatzes (M13) - keine
+    KI-Entscheidung, keine Prognose. Siehe app/services/analysis/potential_classification.py
+    fuer die exakte Regel-Prioritaet."""
+
+    ABGESCHLOSSEN = "abgeschlossen"
+    NUR_ANGEBOT = "nur_angebot"
+    PRUEFEN = "pruefen"
+    OFFENER_VORGANG = "offener_vorgang"
+    STORNIERT = "storniert"

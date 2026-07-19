@@ -8,7 +8,7 @@
 <body class="bg-bg text-text antialiased">
   {% from "ui/overlays.html" import toast_container %}
   {{ toast_container() }}
-  <main class="flex min-h-screen items-center justify-center p-4">
+  <main class="flex min-h-screen items-center justify-center bg-[radial-gradient(ellipse_at_top,_color-mix(in_oklab,var(--color-primary)_7%,transparent)_0%,_transparent_60%)] p-4">
     {% block content %}{% endblock %}
   </main>
 </body>

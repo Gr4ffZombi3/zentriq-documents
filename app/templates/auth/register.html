@@ -9,7 +9,7 @@
     <p class="text-sm text-text-muted">Starte mit Zentriq Documents – kostenlos einrichten.</p>
   </div>
 
-  <div class="rounded-2xl border border-border bg-surface p-8 shadow-sm">
+  <div class="rounded-2xl border border-border bg-surface p-8 shadow-soft">
     <form method="post" class="flex flex-col gap-5">
       {{ form.hidden_tag() }}
       {{ input_field(form.company_name, icon_name='building-2') }}
@@ -17,7 +17,7 @@
       {{ input_field(form.vermittlernummer, icon_name='key') }}
       {{ input_field(form.password, icon_name='lock', autocomplete='new-password') }}
       {{ input_field(form.password_confirm, icon_name='lock', autocomplete='new-password') }}
-      {{ button(form.submit.label.text, variant='primary', type='submit', extra_class='w-full mt-1') }}
+      {{ button(form.submit.label.text, variant='primary', type='submit', size='lg', extra_class='w-full mt-1') }}
     </form>
   </div>
 

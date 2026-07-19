@@ -9,7 +9,7 @@
 </div>
 
 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-  {% call card() %}
+  {% call card(hover=True) %}
     <div class="flex items-center gap-2 text-sm font-medium text-text-muted">
       {{ icon('flame', class='w-4 h-4 text-error') }}
       Heute höchste Priorität
@@ -25,7 +25,7 @@
     {% endif %}
   {% endcall %}
 
-  {% call card() %}
+  {% call card(hover=True) %}
     <div class="flex items-center gap-2 text-sm font-medium text-text-muted">
       {{ icon('phone', class='w-4 h-4 text-primary') }}
       Heute anrufen
@@ -41,7 +41,7 @@
     {% endif %}
   {% endcall %}
 
-  {% call card() %}
+  {% call card(hover=True) %}
     <div class="flex items-center gap-2 text-sm font-medium text-text-muted">
       {{ icon('target', class='w-4 h-4 text-success') }}
       Höchstes Potenzial
@@ -54,12 +54,12 @@
     {% endif %}
   {% endcall %}
 
-  {% call card() %}
+  {% call card(hover=True) %}
     <div class="flex items-center gap-2 text-sm font-medium text-text-muted">
       {{ icon('alert-triangle', class='w-4 h-4 text-warning') }}
       Überfällige Vorgänge
     </div>
-    <p class="mt-3 text-2xl font-semibold tracking-tight text-text">{{ cockpit.overdue_tasks_count }}</p>
+    <p class="mt-3 text-3xl font-semibold tracking-tight text-text">{{ cockpit.overdue_tasks_count }}</p>
     {% if cockpit.overdue_tasks_count %}
       <a href="{{ url_for('tasks.list_tasks') }}" class="mt-2 inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-hover">
         Ansehen {{ icon('chevron-right', class='w-4 h-4') }}
@@ -67,20 +67,20 @@
     {% endif %}
   {% endcall %}
 
-  {% call card() %}
+  {% call card(hover=True) %}
     <div class="flex items-center gap-2 text-sm font-medium text-text-muted">
       {{ icon('file-text', class='w-4 h-4 text-primary') }}
       Neue Dokumente (24h)
     </div>
-    <p class="mt-3 text-2xl font-semibold tracking-tight text-text">{{ cockpit.new_documents_count }}</p>
+    <p class="mt-3 text-3xl font-semibold tracking-tight text-text">{{ cockpit.new_documents_count }}</p>
   {% endcall %}
 
-  {% call card() %}
+  {% call card(hover=True) %}
     <div class="flex items-center gap-2 text-sm font-medium text-text-muted">
       {{ icon('trending-up', class='w-4 h-4 text-success') }}
       Persönliche Abschlussquote
     </div>
-    <p class="mt-3 text-2xl font-semibold tracking-tight text-text">{{ cockpit.abschlussquote_percent }}%</p>
+    <p class="mt-3 text-3xl font-semibold tracking-tight text-text">{{ cockpit.abschlussquote_percent }}%</p>
   {% endcall %}
 </div>
 {% endblock %}

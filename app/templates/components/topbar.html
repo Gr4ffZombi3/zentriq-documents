@@ -1,6 +1,6 @@
 {% from "ui/icons.html" import icon %}
 
-<header class="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-border bg-surface/80 px-4 backdrop-blur lg:px-8">
+<header class="glass-surface sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-border px-4 lg:px-8">
   <button
     type="button"
     x-on:click="sidebarOpen = true"
@@ -10,17 +10,17 @@
     {{ icon('menu', class='w-6 h-6') }}
   </button>
 
-  <form action="{{ url_for('search.search') }}" method="get" class="max-w-md flex-1">
+  <form action="{{ url_for('search.search') }}" method="get" class="max-w-xl flex-1">
     <div class="relative">
-      <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
+      <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-text-muted">
         {{ icon('search', class='w-4 h-4') }}
       </span>
       <input
         type="text"
         name="q"
         aria-label="KI-Suche"
-        placeholder="KI-Suche…"
-        class="w-full rounded-lg border border-border bg-bg py-2 pl-9 pr-3 text-sm text-text placeholder:text-text-muted transition duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+        placeholder="Suchen…"
+        class="w-full rounded-xl border border-transparent bg-bg py-2.5 pl-11 pr-3 text-sm text-text placeholder:text-text-muted transition duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary focus:bg-surface"
       >
     </div>
   </form>
@@ -46,7 +46,7 @@
         x-show="open"
         x-cloak
         x-transition
-        class="absolute right-0 mt-2 w-56 rounded-xl border border-border bg-surface p-1.5 shadow-lg"
+        class="glass-surface absolute right-0 mt-2 w-56 rounded-2xl border border-border p-1.5 shadow-soft-lg"
       >
         <a href="{{ url_for('settings.profile') }}" class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-text transition duration-200 hover:bg-bg">
           {{ icon('user-cog', class='w-4 h-4') }}

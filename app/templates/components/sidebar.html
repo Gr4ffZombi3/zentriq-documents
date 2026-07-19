@@ -9,17 +9,29 @@
 ></div>
 
 <aside
-  :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
-  class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-border bg-surface transition-transform duration-200 ease-in-out"
+  :class="{
+    'translate-x-0': sidebarOpen,
+    '-translate-x-full lg:translate-x-0': !sidebarOpen,
+    'lg:!w-20': railCollapsed,
+  }"
+  class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-border bg-surface transition-[width,transform] duration-200 ease-in-out lg:w-64"
 >
-  <div class="flex h-16 shrink-0 items-center gap-2 border-b border-border px-6">
-    <a href="{{ url_for('dashboard.index') }}" class="flex items-center gap-2.5 font-semibold text-text">
-      <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">Z</span>
-      <span>Zentriq Documents</span>
+  <div class="flex h-16 shrink-0 items-center gap-1 border-b border-border px-4">
+    <a href="{{ url_for('dashboard.index') }}" class="flex flex-1 items-center gap-2.5 overflow-hidden font-semibold text-text">
+      <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-sm font-bold text-white">Z</span>
+      <span x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="whitespace-nowrap">Zentriq Documents</span>
     </a>
+    <button
+      type="button"
+      x-on:click="railCollapsed = !railCollapsed"
+      class="hidden shrink-0 rounded-lg p-2 text-text-muted transition duration-200 hover:bg-bg hover:text-text lg:flex"
+      aria-label="Sidebar ein-/ausklappen"
+    >
+      {{ icon('panel-left', class='w-4 h-4') }}
+    </button>
   </div>
 
-  <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+  <nav class="flex-1 space-y-1 overflow-y-auto overflow-x-hidden px-3 py-4">
     {% set nav_items = [
       ('dashboard.index', 'layout-dashboard', 'Dashboard', ''),
       ('cockpit.index', 'flame', 'Tagescockpit', ''),
@@ -38,10 +50,12 @@
       {% set is_active = request.endpoint == endpoint and not anchor %}
       <a
         href="{{ url_for(endpoint) }}{{ anchor }}"
-        class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition duration-200 {{ 'bg-primary/10 text-primary' if is_active else 'text-text-muted hover:bg-bg hover:text-text' }}"
+        class="flex items-center gap-3 rounded-xl px-2.5 py-2.5 text-sm font-medium transition duration-200 {{ 'bg-primary/10 text-primary' if is_active else 'text-text-muted hover:bg-bg hover:text-text hover:translate-x-0.5' }}"
       >
-        {{ icon(icon_name) }}
-        {{ label }}
+        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg {{ 'bg-primary/15' if is_active else '' }}">
+          {{ icon(icon_name, class='w-5 h-5') }}
+        </span>
+        <span x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="whitespace-nowrap">{{ label }}</span>
       </a>
     {% endfor %}
   </nav>
@@ -51,20 +65,22 @@
       type="button"
       x-data="{ dark: document.documentElement.classList.contains('dark') }"
       x-on:click="dark = !dark; document.documentElement.classList.toggle('dark', dark); localStorage.setItem('zentriq-theme', dark ? 'dark' : 'light')"
-      class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-text-muted transition duration-200 hover:bg-bg hover:text-text"
+      class="flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-sm font-medium text-text-muted transition duration-200 hover:bg-bg hover:text-text"
     >
-      <template x-if="!dark">{{ icon('moon') }}</template>
-      <template x-if="dark">{{ icon('sun') }}</template>
-      <span x-text="dark ? 'Hell-Modus' : 'Dunkel-Modus'"></span>
+      <span class="flex h-9 w-9 shrink-0 items-center justify-center">
+        <template x-if="!dark">{{ icon('moon') }}</template>
+        <template x-if="dark">{{ icon('sun') }}</template>
+      </span>
+      <span x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="whitespace-nowrap" x-text="dark ? 'Hell-Modus' : 'Dunkel-Modus'"></span>
     </button>
     <form method="post" action="{{ url_for('auth.logout') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button
         type="submit"
-        class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-text-muted transition duration-200 hover:bg-bg hover:text-text"
+        class="flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-sm font-medium text-text-muted transition duration-200 hover:bg-bg hover:text-text"
       >
-        {{ icon('log-out') }}
-        Abmelden
+        <span class="flex h-9 w-9 shrink-0 items-center justify-center">{{ icon('log-out') }}</span>
+        <span x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="whitespace-nowrap">Abmelden</span>
       </button>
     </form>
   </div>

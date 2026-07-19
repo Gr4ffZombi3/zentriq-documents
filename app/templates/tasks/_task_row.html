@@ -8,10 +8,10 @@
 {% set priority_variant = {'high': 'danger', 'medium': 'warning', 'low': 'muted'}.get(task.priority.value, 'muted') %}
 {% set status_variant = {'open': 'info', 'done': 'success', 'dismissed': 'muted'}.get(task.status.value, 'muted') %}
 {% set status_label = {'open': 'Offen', 'done': 'Erledigt', 'dismissed': 'Verworfen'}.get(task.status.value, task.status.value) %}
-<div id="task-row-{{ task.id }}" class="rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5">
+<div id="task-row-{{ task.id }}" class="rounded-2xl border border-border bg-surface p-4 shadow-soft transition duration-200 hover:border-primary/30 sm:p-5">
   <div class="flex flex-wrap items-start justify-between gap-4">
     <div class="flex min-w-0 items-start gap-3.5">
-      <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+      <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
         {{ icon(TASK_TYPE_ICONS.get(task.type.value, 'list-todo'), class='w-5 h-5') }}
       </span>
       <div class="min-w-0">
@@ -41,7 +41,7 @@
         <form hx-post="{{ url_for('tasks.update_status', task_id=task.id) }}" hx-target="#task-row-{{ task.id }}" hx-swap="outerHTML">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="status" value="{{ target_status }}">
-          <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text transition duration-200 hover:bg-bg">
+          <button type="submit" class="inline-flex items-center gap-1.5 rounded-xl border border-border px-3.5 py-2 text-sm font-medium text-text transition duration-200 hover:bg-bg">
             {{ icon(icon_name, class='w-4 h-4') }}
             {{ label }}
           </button>
@@ -53,7 +53,7 @@
       <form hx-post="{{ url_for('tasks.update_status', task_id=task.id) }}" hx-target="#task-row-{{ task.id }}" hx-swap="outerHTML">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="status" value="open">
-        <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text transition duration-200 hover:bg-bg">
+        <button type="submit" class="inline-flex items-center gap-1.5 rounded-xl border border-border px-3.5 py-2 text-sm font-medium text-text transition duration-200 hover:bg-bg">
           {{ icon('refresh-cw', class='w-4 h-4') }}
           Wieder öffnen
         </button>

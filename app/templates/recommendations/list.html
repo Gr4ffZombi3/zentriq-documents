@@ -12,10 +12,10 @@
 <div class="flex flex-col gap-3">
   {% for rec in recommendations %}
     {% set priority_variant = {'high': 'danger', 'medium': 'warning', 'low': 'muted'}.get(rec.priority.value, 'muted') %}
-    {% call card(padding='p-5') %}
+    {% call card(padding='p-5', hover=True) %}
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div class="flex items-center gap-3">
-          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
             {{ icon('list-checks', class='w-4.5 h-4.5') }}
           </span>
           <div>
@@ -32,8 +32,8 @@
   {% endfor %}
 </div>
 {% else %}
-  <div class="flex flex-col items-center rounded-xl border border-dashed border-border py-16 text-center">
-    <span class="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+  <div class="flex flex-col items-center rounded-2xl border border-dashed border-border py-20 text-center">
+    <span class="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
       {{ icon('list-checks', class='w-6 h-6') }}
     </span>
     <p class="font-medium text-text">Keine offenen Empfehlungen</p>

@@ -13,41 +13,41 @@
 </div>
 
 <div class="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-  {% call card(padding='p-4') %}
+  {% call card(padding='p-5') %}
     <p class="text-xs font-medium uppercase tracking-wide text-text-muted">Datensätze</p>
-    <p class="mt-1 text-xl font-semibold text-text">{{ summary.total_records }}</p>
+    <p class="mt-1 text-2xl font-semibold text-text">{{ summary.total_records }}</p>
   {% endcall %}
-  {% call card(padding='p-4') %}
+  {% call card(padding='p-5') %}
     <p class="text-xs font-medium uppercase tracking-wide text-text-muted">Abschlüsse</p>
-    <p class="mt-1 text-xl font-semibold text-text">{{ summary.abgeschlossen }}</p>
+    <p class="mt-1 text-2xl font-semibold text-text">{{ summary.abgeschlossen }}</p>
   {% endcall %}
-  {% call card(padding='p-4') %}
+  {% call card(padding='p-5') %}
     <p class="text-xs font-medium uppercase tracking-wide text-text-muted">Angebote</p>
-    <p class="mt-1 text-xl font-semibold text-text">{{ summary.angebote }}</p>
+    <p class="mt-1 text-2xl font-semibold text-text">{{ summary.angebote }}</p>
   {% endcall %}
-  {% call card(padding='p-4') %}
+  {% call card(padding='p-5') %}
     <p class="text-xs font-medium uppercase tracking-wide text-text-muted">Offene Vorgänge</p>
-    <p class="mt-1 text-xl font-semibold text-text">{{ summary.offene_vorgaenge }}</p>
+    <p class="mt-1 text-2xl font-semibold text-text">{{ summary.offene_vorgaenge }}</p>
   {% endcall %}
-  {% call card(padding='p-4') %}
+  {% call card(padding='p-5') %}
     <p class="text-xs font-medium uppercase tracking-wide text-text-muted">Stornos</p>
-    <p class="mt-1 text-xl font-semibold text-text">{{ summary.stornos }}</p>
+    <p class="mt-1 text-2xl font-semibold text-text">{{ summary.stornos }}</p>
   {% endcall %}
-  {% call card(padding='p-4') %}
+  {% call card(padding='p-5') %}
     <p class="text-xs font-medium uppercase tracking-wide text-text-muted">Ohne Beginn</p>
-    <p class="mt-1 text-xl font-semibold text-text">{{ summary.ohne_beginn }}</p>
+    <p class="mt-1 text-2xl font-semibold text-text">{{ summary.ohne_beginn }}</p>
   {% endcall %}
-  {% call card(padding='p-4') %}
+  {% call card(padding='p-5') %}
     <p class="text-xs font-medium uppercase tracking-wide text-text-muted">Ohne Antrag</p>
-    <p class="mt-1 text-xl font-semibold text-text">{{ summary.ohne_antrag }}</p>
+    <p class="mt-1 text-2xl font-semibold text-text">{{ summary.ohne_antrag }}</p>
   {% endcall %}
 </div>
 
-<form method="get" class="mb-6 flex flex-wrap items-end gap-3">
+<form method="get" class="mb-6 flex flex-wrap items-end gap-3 rounded-2xl border border-border bg-surface p-4 shadow-soft">
   <div class="flex flex-col gap-1.5">
     <label for="filter-category" class="text-xs font-medium text-text-muted">Kategorie</label>
     <select id="filter-category" name="category" onchange="this.form.submit()"
-            class="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+            class="rounded-xl border border-border bg-bg px-3.5 py-2.5 text-sm text-text transition duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
       <option value="">Alle offenen</option>
       {% for cat in categories %}
         <option value="{{ cat.value }}" {{ 'selected' if filters.category == cat else '' }}>
@@ -60,27 +60,30 @@
     <label for="filter-product-line" class="text-xs font-medium text-text-muted">Sparte</label>
     <input id="filter-product-line" type="text" name="product_line" value="{{ filters.product_line or '' }}"
            placeholder="z.B. KFZ"
-           class="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+           class="rounded-xl border border-border bg-bg px-3.5 py-2.5 text-sm text-text placeholder:text-text-muted transition duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
   </div>
   <div class="flex flex-col gap-1.5">
     <label for="filter-broker-number" class="text-xs font-medium text-text-muted">Vermittler</label>
     <input id="filter-broker-number" type="text" name="broker_number" value="{{ filters.broker_number or '' }}"
            placeholder="VM-Nummer"
-           class="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+           class="rounded-xl border border-border bg-bg px-3.5 py-2.5 text-sm text-text placeholder:text-text-muted transition duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
   </div>
   <div class="flex flex-col gap-1.5">
     <label for="filter-date-from" class="text-xs font-medium text-text-muted">Von</label>
     <input id="filter-date-from" type="date" name="date_from" value="{{ filters.date_from or '' }}"
-           class="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+           class="rounded-xl border border-border bg-bg px-3.5 py-2.5 text-sm text-text transition duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
   </div>
   <div class="flex flex-col gap-1.5">
     <label for="filter-date-to" class="text-xs font-medium text-text-muted">Bis</label>
     <input id="filter-date-to" type="date" name="date_to" value="{{ filters.date_to or '' }}"
-           class="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+           class="rounded-xl border border-border bg-bg px-3.5 py-2.5 text-sm text-text transition duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
   </div>
-  <label class="flex items-center gap-1.5 pb-2 text-sm text-text-muted">
-    <input type="checkbox" name="include_closed" value="1" {{ 'checked' if filters.include_closed else '' }}
-           onchange="this.form.submit()" class="accent-primary">
+  <label class="flex cursor-pointer items-center gap-2 pb-2.5 text-sm text-text-muted">
+    <span class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-border transition duration-200 has-[:checked]:bg-primary">
+      <input type="checkbox" name="include_closed" value="1" {{ 'checked' if filters.include_closed else '' }}
+             onchange="this.form.submit()" class="peer sr-only">
+      <span class="inline-block h-4 w-4 translate-x-1 rounded-full bg-surface shadow-sm transition duration-200 peer-checked:translate-x-6"></span>
+    </span>
     Abgeschlossene anzeigen
   </label>
   {{ button('Filtern', type='submit', icon_name='search') }}
@@ -107,30 +110,30 @@
 {% if records %}
 <div class="flex flex-col gap-3">
   {% for record in records %}
-    {% call card(padding='p-5') %}
-      <div class="flex flex-wrap items-start justify-between gap-3">
+    {% call card(padding='p-6', hover=True) %}
+      <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="min-w-0">
-          <p class="font-medium text-text">{{ record.customer_name or 'Unbekannter Kunde' }}</p>
-          <p class="mt-0.5 text-sm text-text-muted">
+          <div class="flex items-center gap-2">
+            <p class="font-semibold text-text">{{ record.customer_name or 'Unbekannter Kunde' }}</p>
+            {{ badge(category_labels.get(record.category.value, record.category.value), variant=category_variants.get(record.category.value, 'muted')) }}
+          </div>
+          <p class="mt-1 text-sm text-text-muted">
             {{ record.product or '–' }}{% if record.product_line %} · {{ record.product_line }}{% endif %}
             {% if record.angebotsdatum %} · {{ record.angebotsdatum.strftime('%d.%m.%Y') }}{% endif %}
           </p>
-          <p class="mt-2 text-sm text-text">{{ record.reason }}</p>
+          <p class="mt-3 text-sm text-text">{{ record.reason }}</p>
         </div>
-        <div class="flex shrink-0 items-center gap-2">
-          {{ badge(category_labels.get(record.category.value, record.category.value), variant=category_variants.get(record.category.value, 'muted')) }}
-          <a href="{{ url_for('documents.detail', document_id=record.document_id) }}"
-             class="inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-hover">
-            Dokument öffnen {{ icon('chevron-right', class='w-4 h-4') }}
-          </a>
-        </div>
+        <a href="{{ url_for('documents.detail', document_id=record.document_id) }}"
+           class="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-primary transition duration-200 hover:text-primary-hover hover:gap-1.5">
+          Dokument öffnen {{ icon('chevron-right', class='w-4 h-4') }}
+        </a>
       </div>
     {% endcall %}
   {% endfor %}
 </div>
 {% else %}
-  <div class="flex flex-col items-center rounded-xl border border-dashed border-border py-16 text-center">
-    <span class="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+  <div class="flex flex-col items-center rounded-2xl border border-dashed border-border py-20 text-center">
+    <span class="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
       {{ icon('target', class='w-6 h-6') }}
     </span>
     <p class="font-medium text-text">Keine passenden Datensätze</p>

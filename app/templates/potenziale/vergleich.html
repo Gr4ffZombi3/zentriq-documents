@@ -12,8 +12,8 @@
 </div>
 
 {% if not comparisons %}
-  <div class="flex flex-col items-center rounded-xl border border-dashed border-border py-16 text-center">
-    <span class="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+  <div class="flex flex-col items-center rounded-2xl border border-dashed border-border py-20 text-center">
+    <span class="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
       {{ icon('git-compare', class='w-6 h-6') }}
     </span>
     <p class="font-medium text-text">Noch kein Vergleich vorhanden</p>
@@ -26,7 +26,7 @@
     <form method="get" class="mb-6 flex flex-col gap-1.5">
       <label for="filter-document" class="text-xs font-medium text-text-muted">GS-Liste</label>
       <select id="filter-document" name="document_id" onchange="this.form.submit()"
-              class="w-full max-w-sm rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+              class="w-full max-w-sm rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm text-text transition duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
         {% for comparison in comparisons %}
           <option value="{{ comparison.document_id }}" {{ 'selected' if selected and selected.id == comparison.id else '' }}>
             {{ comparison.document.original_filename }} ({{ comparison.compared_at.strftime('%d.%m.%Y') }})
@@ -37,9 +37,11 @@
   {% endif %}
 
   {% if selected %}
-    {% call card() %}
+    {% call card(padding='p-7') %}
       <div class="flex items-center gap-2">
-        {{ icon('git-compare', class='w-4 h-4 text-primary') }}
+        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          {{ icon('git-compare', class='w-4 h-4') }}
+        </span>
         <h2 class="text-base font-semibold text-text">
           <a href="{{ url_for('documents.detail', document_id=selected.document_id) }}" class="hover:text-primary">
             {{ selected.document.original_filename }}
@@ -51,7 +53,7 @@
         </h2>
       </div>
 
-      <div class="mt-4 flex flex-wrap gap-2">
+      <div class="mt-5 flex flex-wrap gap-2">
         {% set counter_badges = [
           ('Neue Kunden', selected.new_customer_count, 'success'),
           ('Neue Verträge', selected.new_contract_count, 'success'),
@@ -70,7 +72,7 @@
       </div>
 
       {% if selected.entries %}
-        <div class="mt-4 flex flex-col gap-2">
+        <div class="mt-5 flex flex-col gap-2">
           {% set change_labels = {
             'new_customer': 'Neuer Kunde', 'new_contract': 'Neuer Vertrag', 'new_offer': 'Neues Angebot',
             'status_change': 'Statusänderung', 'storno': 'Storno', 'removed_customer': 'Fehlt in GS-Liste',
@@ -82,8 +84,8 @@
             'new_product_line': 'info',
           } %}
           {% for entry in selected.entries %}
-            <div class="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2.5">
-              <a href="{{ url_for('customers.detail', customer_id=entry.customer_id) }}" class="truncate text-sm text-text hover:text-primary">{{ entry.customer.name }}</a>
+            <div class="flex items-center justify-between gap-3 rounded-xl border border-border px-4 py-3 transition duration-200 hover:border-primary/30">
+              <a href="{{ url_for('customers.detail', customer_id=entry.customer_id) }}" class="truncate text-sm font-medium text-text hover:text-primary">{{ entry.customer.name }}</a>
               {{ badge(change_labels.get(entry.change_type.value, entry.change_type.value), variant=change_variants.get(entry.change_type.value, 'muted')) }}
             </div>
           {% endfor %}

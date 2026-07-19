@@ -11,10 +11,10 @@
 {% if customers %}
 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
   {% for customer in customers %}
-    <a href="{{ url_for('customers.detail', customer_id=customer.id) }}" class="block transition duration-200 hover:-translate-y-0.5">
-      {% call card() %}
+    <a href="{{ url_for('customers.detail', customer_id=customer.id) }}" class="block">
+      {% call card(hover=True) %}
         <div class="flex items-start gap-3">
-          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+          <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-semibold text-primary">
             {{ customer.name[0] | upper }}
           </span>
           <div class="min-w-0">
@@ -41,8 +41,8 @@
   {% endfor %}
 </div>
 {% else %}
-  <div class="flex flex-col items-center rounded-xl border border-dashed border-border py-16 text-center">
-    <span class="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+  <div class="flex flex-col items-center rounded-2xl border border-dashed border-border py-20 text-center">
+    <span class="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
       {{ icon('users', class='w-6 h-6') }}
     </span>
     <p class="font-medium text-text">Noch keine Kunden</p>

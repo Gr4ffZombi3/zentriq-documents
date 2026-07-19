@@ -45,7 +45,7 @@
     {% if open_tasks %}
       <div class="mt-4 flex flex-col gap-2">
         {% for task in open_tasks %}
-          <div class="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2.5">
+          <div class="flex items-center justify-between gap-3 rounded-xl border border-border px-3.5 py-2.5 transition duration-200 hover:border-primary/30">
             <span class="truncate text-sm text-text">{{ task.title }}</span>
             {% if task.due_date %}
               <span class="shrink-0 text-xs text-text-muted">{{ task.due_date.strftime('%d.%m.%Y') }}</span>
@@ -69,28 +69,28 @@
       <h2 class="text-base font-semibold text-text">Leipziger-Liste-Verlauf</h2>
     </div>
     {% if document_customers %}
-      <div class="mt-4 overflow-x-auto rounded-lg border border-border">
+      <div class="mt-4 max-h-[28rem] overflow-auto rounded-2xl border border-border">
         <table class="w-full text-left text-sm">
-          <thead class="bg-bg text-xs font-medium uppercase tracking-wide text-text-muted">
+          <thead class="sticky top-0 z-10 bg-surface text-xs font-medium uppercase tracking-wide text-text-muted shadow-[0_1px_0_0_var(--color-border)]">
             <tr>
-              <th class="px-4 py-2.5">Datum</th>
-              <th class="px-4 py-2.5">Dokument</th>
-              <th class="px-4 py-2.5">Angebot</th>
-              <th class="px-4 py-2.5">Neugeschäft</th>
-              <th class="px-4 py-2.5">Storno</th>
+              <th class="px-4 py-3">Datum</th>
+              <th class="px-4 py-3">Dokument</th>
+              <th class="px-4 py-3">Angebot</th>
+              <th class="px-4 py-3">Neugeschäft</th>
+              <th class="px-4 py-3">Storno</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-border">
             {% for dc in document_customers %}
               {% set rows = dc.row_data or [] %}
               <tr class="transition duration-200 hover:bg-bg">
-                <td class="px-4 py-2.5 text-text-muted">{{ dc.document.uploaded_at.strftime('%d.%m.%Y') if dc.document.uploaded_at else '–' }}</td>
-                <td class="px-4 py-2.5">
+                <td class="px-4 py-3.5 text-text-muted">{{ dc.document.uploaded_at.strftime('%d.%m.%Y') if dc.document.uploaded_at else '–' }}</td>
+                <td class="px-4 py-3.5">
                   <a href="{{ url_for('documents.detail', document_id=dc.document_id) }}" class="text-primary hover:text-primary-hover">{{ dc.document.original_filename }}</a>
                 </td>
-                <td class="px-4 py-2.5">{{ badge('Ja', variant='warning') if rows | selectattr('is_angebot') | list else '–' }}</td>
-                <td class="px-4 py-2.5">{{ badge('Ja', variant='success') if rows | selectattr('is_neugeschaeft') | list else '–' }}</td>
-                <td class="px-4 py-2.5">{{ badge('Ja', variant='danger') if rows | selectattr('is_storno') | list else '–' }}</td>
+                <td class="px-4 py-3.5">{{ badge('Ja', variant='warning') if rows | selectattr('is_angebot') | list else '–' }}</td>
+                <td class="px-4 py-3.5">{{ badge('Ja', variant='success') if rows | selectattr('is_neugeschaeft') | list else '–' }}</td>
+                <td class="px-4 py-3.5">{{ badge('Ja', variant='danger') if rows | selectattr('is_storno') | list else '–' }}</td>
               </tr>
             {% endfor %}
           </tbody>

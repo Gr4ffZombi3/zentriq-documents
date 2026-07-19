@@ -1,7 +1,7 @@
 {% from "ui/icons.html" import icon %}
 
-{% macro card(extra_class='', padding='p-6') %}
-<div class="rounded-xl border border-border bg-surface shadow-sm {{ padding }} {{ extra_class }}">
+{% macro card(extra_class='', padding='p-6', hover=False) %}
+<div class="rounded-2xl border border-border bg-surface shadow-soft {{ 'transition duration-200 hover:-translate-y-0.5 hover:shadow-soft-lg' if hover else '' }} {{ padding }} {{ extra_class }}">
   {{ caller() }}
 </div>
 {% endmacro %}
@@ -40,4 +40,17 @@
 <div class="h-1.5 w-full overflow-hidden rounded-full bg-border {{ extra_class }}">
   <div class="h-full w-1/3 rounded-full bg-primary animate-indeterminate"></div>
 </div>
+{%- endmacro %}
+
+{#- M14: visuelle Pille/Segmented-Control-Optik fuer ein ECHTES <input type="radio"|"checkbox">
+    ueber die reine CSS has-[:checked]-Variante - kein Alpine/JS noetig, das serverseitig
+    gerenderte checked-Attribut bleibt exakt wie bei einem normalen Formularfeld erhalten
+    (wichtig fuer bestehende Tests, die genau dieses Attribut pruefen). onchange wird
+    durchgereicht, damit bestehende Auto-Submit-Filter (onchange="this.form.submit()")
+    unveraendert weiterfunktionieren. #}
+{% macro pill(text, name, value, checked=False, icon_name=None, type='radio', onchange=None) -%}
+<label class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm font-medium text-text-muted transition duration-200 hover:border-primary/40 hover:text-text has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:checked]:text-primary">
+  <input type="{{ type }}" name="{{ name }}" value="{{ value }}" {% if checked %}checked{% endif %} class="sr-only"{% if onchange %} onchange="{{ onchange }}"{% endif %}>
+  {%- if icon_name %}{{ icon(icon_name, class='w-3.5 h-3.5') }}{% endif %}{{ text }}
+</label>
 {%- endmacro %}

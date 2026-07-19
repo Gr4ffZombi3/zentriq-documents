@@ -89,6 +89,29 @@
   display: none !important;
 }
 
+/* M14: gedaempfte, mehrstufige Schatten fuer den "premium" Card-Look (ersetzt shadow-sm auf
+   card()) - im Dark Mode dunkler/staerker, da helle Schlagschatten auf dunklem Grund unsichtbar
+   waeren. .glass-surface ist bewusst nur fuer Topbar/Dropdown/Modal vorgesehen, nicht fuer
+   Cards/Sidebar (Briefing: "Glassmorphism nur dezent"). */
+@layer utilities {
+  .shadow-soft {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px -8px rgba(0, 0, 0, 0.08);
+  }
+  .dark .shadow-soft {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 8px 24px -8px rgba(0, 0, 0, 0.4);
+  }
+  .shadow-soft-lg {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.04), 0 16px 40px -12px rgba(0, 0, 0, 0.12);
+  }
+  .dark .shadow-soft-lg {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.24), 0 16px 40px -12px rgba(0, 0, 0, 0.5);
+  }
+  .glass-surface {
+    background-color: color-mix(in oklab, var(--color-surface) 80%, transparent);
+    backdrop-filter: blur(12px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

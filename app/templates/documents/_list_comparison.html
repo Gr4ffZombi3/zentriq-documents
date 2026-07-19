@@ -35,7 +35,7 @@
         'status_change': 'warning', 'storno': 'danger', 'removed_customer': 'muted',
       } %}
       {% for entry in list_comparison.entries %}
-        <div class="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2.5">
+        <div class="flex items-center justify-between gap-3 rounded-xl border border-border px-3.5 py-2.5 transition duration-200 hover:border-primary/30">
           <a href="{{ url_for('customers.detail', customer_id=entry.customer_id) }}" class="truncate text-sm text-text hover:text-primary">{{ entry.customer.name }}</a>
           {{ badge(change_labels.get(entry.change_type.value, entry.change_type.value), variant=change_variants.get(entry.change_type.value, 'muted')) }}
         </div>

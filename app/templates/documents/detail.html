@@ -12,12 +12,12 @@
   {{ status_badge(document.status) }}
 </div>
 
-<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-  <div class="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+<div class="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
+  <div class="overflow-hidden rounded-2xl border border-border bg-surface shadow-soft lg:sticky lg:top-24">
     <embed src="{{ url_for('documents.file', document_id=document.id) }}" type="application/pdf" class="h-[75vh] w-full">
   </div>
 
-  {% call card() %}
+  {% call card(extra_class='lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto') %}
     <h2 class="text-base font-semibold text-text">KI-Auswertung</h2>
     {% if document.status.value == 'done' %}
       <div class="mt-4">
@@ -33,7 +33,7 @@
         </div>
       {% endif %}
       {% if document.raw_json %}
-        <details class="group mt-6 rounded-lg border border-border">
+        <details class="group mt-6 rounded-xl border border-border">
           <summary class="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium text-text">
             Rohdaten (JSON)
             <span class="text-text-muted transition duration-200 group-open:rotate-90">{{ icon('chevron-right', class='w-4 h-4') }}</span>
@@ -42,7 +42,7 @@
         </details>
       {% endif %}
     {% elif document.status.value == 'failed' %}
-      <div class="mt-4 rounded-lg border border-error/20 bg-error/5 p-4">
+      <div class="mt-4 rounded-xl border border-error/20 bg-error/5 p-4">
         <p class="flex items-center gap-1.5 text-sm text-error">
           {{ icon('alert-circle', class='w-4 h-4') }}
           {{ document.error_message or 'Unbekannter Fehler.' }}

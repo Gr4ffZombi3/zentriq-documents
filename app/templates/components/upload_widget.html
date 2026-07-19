@@ -6,25 +6,25 @@
      x-on:drop.prevent="dragging = false; $refs.fileInput.files = $event.dataTransfer.files; $refs.form.requestSubmit()">
   <form x-ref="form" hx-post="{{ url_for('upload.upload_document') }}" hx-encoding="multipart/form-data"
         hx-target="#upload-widget" hx-swap="outerHTML" hx-indicator="#upload-progress"
-        class="rounded-xl border-2 border-dashed p-10 text-center transition duration-200"
+        class="rounded-2xl border-2 border-dashed p-12 text-center shadow-soft transition duration-200"
         :class="dragging ? 'border-primary bg-primary/5' : 'border-border bg-surface'">
-    <div class="mb-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-text-muted">
-      <label class="flex cursor-pointer items-center gap-1.5">
-        <input type="radio" name="list_scope" value="" checked class="accent-primary">
+    <div class="mb-5 flex flex-wrap items-center justify-center gap-2">
+      <label class="inline-flex cursor-pointer items-center rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-text-muted transition duration-200 hover:border-primary/40 hover:text-text has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:checked]:text-primary">
+        <input type="radio" name="list_scope" value="" checked class="sr-only">
         Automatisch erkennen
       </label>
-      <label class="flex cursor-pointer items-center gap-1.5">
-        <input type="radio" name="list_scope" value="own" class="accent-primary">
+      <label class="inline-flex cursor-pointer items-center rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-text-muted transition duration-200 hover:border-primary/40 hover:text-text has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:checked]:text-primary">
+        <input type="radio" name="list_scope" value="own" class="sr-only">
         Eigene Liste
       </label>
-      <label class="flex cursor-pointer items-center gap-1.5">
-        <input type="radio" name="list_scope" value="geschaeftsstelle" class="accent-primary">
+      <label class="inline-flex cursor-pointer items-center rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-text-muted transition duration-200 hover:border-primary/40 hover:text-text has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:checked]:text-primary">
+        <input type="radio" name="list_scope" value="geschaeftsstelle" class="sr-only">
         GS-Liste
       </label>
     </div>
     <label for="file-input" class="flex cursor-pointer flex-col items-center gap-3">
-      <span class="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary transition duration-200" :class="dragging ? 'scale-110' : ''">
-        {{ icon('upload', class='w-6 h-6') }}
+      <span class="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary transition duration-200" :class="dragging ? 'scale-110' : ''">
+        {{ icon('upload', class='w-7 h-7') }}
       </span>
       <span class="text-sm font-medium text-text">PDF hierher ziehen oder klicken zum Auswählen</span>
       <span class="text-xs text-text-muted">Nur PDF-Dateien</span>

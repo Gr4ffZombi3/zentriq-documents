@@ -2,7 +2,7 @@
 {% from "ui/display.html" import status_badge %}
 {% set is_active = document.status.value in ['pending', 'ocr_processing', 'ocr_done', 'ai_processing'] %}
 <div id="doc-row-{{ document.id }}"
-     class="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-border bg-surface p-4 shadow-sm transition duration-200 hover:border-primary/40 hover:shadow-md sm:p-5"
+     class="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-border bg-surface p-4 shadow-soft transition duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-soft-lg sm:p-5"
      onclick="window.location='{{ url_for('documents.detail', document_id=document.id) }}'"
      {% if is_active %}
      hx-get="{{ url_for('documents.row', document_id=document.id) }}"
@@ -11,7 +11,7 @@
      hx-target="this"
      {% endif %}>
   <div class="flex min-w-0 items-center gap-3.5">
-    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
       {{ icon('file-text', class='w-5 h-5') }}
     </span>
     <div class="min-w-0">

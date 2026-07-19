@@ -6,7 +6,7 @@
 {% block content %}
 <div class="mx-auto max-w-2xl">
   <div class="mb-8 flex items-center gap-4">
-    <span class="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-2xl font-semibold text-primary">
+    <span class="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-2xl font-semibold text-primary">
       {{ current_user.email[0] | upper }}
     </span>
     <div>
@@ -39,7 +39,7 @@
         {{ input_field(form.current_password, icon_name='lock', autocomplete='current-password') }}
         {{ input_field(form.new_password, icon_name='lock', autocomplete='new-password') }}
         {{ input_field(form.new_password_confirm, icon_name='lock', autocomplete='new-password') }}
-        {{ button(form.submit.label.text, variant='primary', type='submit') }}
+        {{ button(form.submit.label.text, variant='primary', type='submit', size='lg') }}
       </form>
     {% endcall %}
 

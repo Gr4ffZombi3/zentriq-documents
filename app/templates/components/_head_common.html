@@ -6,13 +6,14 @@
   // damit ein manueller Toggle (siehe sidebar.html) ueber Reloads hinweg bestehen bleibt.
   (function () {
     var stored = localStorage.getItem("zentriq-theme");
-    var dark = stored ? stored === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    var dark = stored ? stored === "dark" : true;
     document.documentElement.classList.toggle("dark", dark);
   })();
 </script>
 <meta name="csrf-token" content="{{ csrf_token() }}">
-{% set asset_rev = '20260721-cssfix-1' %}
+{% set asset_rev = '20260721-upload-flow-1' %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=asset_rev) }}">
 <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 <script defer src="https://unpkg.com/alpinejs@3.14.9/dist/cdn.min.js"></script>
 <script defer src="{{ url_for('static', filename='js/htmx-csrf.js', v=asset_rev) }}"></script>
+<script defer src="{{ url_for('static', filename='js/app.js', v=asset_rev) }}"></script>

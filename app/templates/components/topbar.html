@@ -1,21 +1,24 @@
 {% from "ui/icons.html" import icon %}
 
-<header class="topbar-panel sticky top-4 z-20">
+<header class="topbar-panel sticky top-0 z-20">
   <button
     type="button"
     x-on:click="sidebarOpen = true"
     class="topbar-icon-button lg:hidden"
-    aria-label="Menü öffnen"
+    aria-label="Menue oeffnen"
   >
     {{ icon('menu', class='w-5 h-5') }}
   </button>
 
-  <div class="hidden min-w-0 lg:block">
-    <p class="text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-text-soft">Workspace</p>
-    <p class="mt-1 truncate text-sm font-medium text-text">Ruhiger Dokumentenfluss fuer Analyse, Empfehlungen und Folgearbeit</p>
+  <div class="topbar-copy hidden min-w-0 xl:block">
+    <p class="topbar-kicker">Operations Workspace</p>
+    <div class="mt-1 flex items-center gap-2">
+      <p class="topbar-title">Zentriq Command</p>
+      <span class="topbar-status-pill">Live</span>
+    </div>
   </div>
 
-  <form action="{{ url_for('search.search') }}" method="get" class="ml-auto flex-1 max-w-2xl">
+  <form action="{{ url_for('search.search') }}" method="get" class="topbar-search-wrap ml-auto min-w-0 flex-1">
     <label class="topbar-search">
       <span class="text-text-soft">
         {{ icon('search', class='w-4 h-4') }}
@@ -24,14 +27,14 @@
         type="text"
         name="q"
         aria-label="KI-Suche"
-        placeholder="Dokumente, Kunden oder Fragen durchsuchen"
+        placeholder="Dokumente, Kunden, Aufgaben oder Fragen durchsuchen"
         class="topbar-search-input"
       >
-      <span class="meta-chip hidden sm:inline-flex">/</span>
+      <span class="meta-chip hidden lg:inline-flex">/</span>
     </label>
   </form>
 
-  <div class="flex items-center gap-2.5">
+  <div class="topbar-actions flex items-center gap-2">
     <button
       type="button"
       x-data="{ dark: document.documentElement.classList.contains('dark') }"
@@ -39,12 +42,12 @@
       class="topbar-icon-button"
       aria-label="Farbschema wechseln"
     >
-      <template x-if="!dark">{{ icon('moon', class='w-4.5 h-4.5') }}</template>
-      <template x-if="dark">{{ icon('sun', class='w-4.5 h-4.5') }}</template>
+      <template x-if="!dark">{{ icon('moon', class='w-[1.05rem] h-[1.05rem]') }}</template>
+      <template x-if="dark">{{ icon('sun', class='w-[1.05rem] h-[1.05rem]') }}</template>
     </button>
 
     <button type="button" class="topbar-icon-button" aria-label="Benachrichtigungen">
-      {{ icon('bell', class='w-4.5 h-4.5') }}
+      {{ icon('bell', class='w-[1.05rem] h-[1.05rem]') }}
     </button>
 
     <div x-data="{ open: false }" x-on:click.outside="open = false" class="relative">
@@ -54,7 +57,7 @@
         class="topbar-profile"
       >
         <span class="avatar-chip">{{ current_user.email[0] | upper }}</span>
-        <span class="hidden min-w-0 text-left sm:block">
+        <span class="hidden min-w-0 text-left xl:block">
           <span class="block max-w-[190px] truncate text-sm font-semibold text-text">{{ current_user.email }}</span>
           <span class="block text-xs text-text-muted">Profil &amp; Einstellungen</span>
         </span>

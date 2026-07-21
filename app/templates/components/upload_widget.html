@@ -1,15 +1,12 @@
 {% from "ui/icons.html" import icon %}
 {% from "ui/display.html" import pill, progressbar %}
 
-<div id="upload-widget"
-     x-data="{ dragging: false }"
-     x-on:dragover.prevent="dragging = true"
-     x-on:dragleave.prevent="dragging = false"
-     x-on:drop.prevent="dragging = false; $refs.fileInput.files = $event.dataTransfer.files; $refs.form.requestSubmit()">
-  <form x-ref="form" hx-post="{{ url_for('upload.upload_document') }}" hx-encoding="multipart/form-data"
+<div id="upload-widget" data-upload-widget>
+  <form data-upload-form action="{{ url_for('upload.upload_document') }}" method="post" enctype="multipart/form-data"
+        hx-post="{{ url_for('upload.upload_document') }}" hx-encoding="multipart/form-data"
         hx-target="#upload-widget" hx-swap="outerHTML" hx-indicator="#upload-progress"
-        class="upload-dropzone p-6 sm:p-8 lg:p-10"
-        :class="dragging ? 'upload-dropzone-active' : ''">
+        class="upload-dropzone p-6 sm:p-8 lg:p-10">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="flex flex-col gap-8">
       <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div class="max-w-2xl">
@@ -25,9 +22,9 @@
         </div>
       </div>
 
-      <label for="file-input" class="cursor-pointer">
+      <label for="file-input" class="cursor-pointer" data-upload-label>
         <div class="surface-card surface-card-strong flex flex-col items-center justify-center gap-4 rounded-[1.75rem] p-8 text-center sm:p-12">
-          <span class="inline-flex h-20 w-20 items-center justify-center rounded-[1.6rem] bg-primary/10 text-primary transition duration-200" :class="dragging ? 'scale-110' : ''">
+          <span class="inline-flex h-20 w-20 items-center justify-center rounded-[1.6rem] bg-primary/10 text-primary transition duration-200" data-upload-icon>
             {{ icon('upload', class='w-9 h-9') }}
           </span>
           <div>
@@ -38,8 +35,18 @@
         </div>
       </label>
 
-      <input x-ref="fileInput" id="file-input" type="file" name="file" accept="application/pdf"
-             class="sr-only" x-on:change="$refs.form.requestSubmit()">
+      <input id="file-input" type="file" name="file" accept="application/pdf" class="sr-only" data-upload-input>
+
+      <div class="flex flex-col gap-4 rounded-[1.35rem] border border-border/80 bg-surface/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div class="min-w-0">
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-soft">Ausgewaehlte Datei</p>
+          <p class="mt-2 truncate text-sm font-medium text-text" data-upload-filename>Noch keine Datei ausgewaehlt.</p>
+        </div>
+        <button type="submit" class="btn btn-primary h-11 px-5 text-sm whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg">
+          {{ icon('upload', class='w-[1.05rem] h-[1.05rem]') }}
+          Dokumente einreichen
+        </button>
+      </div>
 
       <div id="upload-progress" class="htmx-indicator">
         {{ progressbar() }}

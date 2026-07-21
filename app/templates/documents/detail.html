@@ -4,7 +4,12 @@
 {% from "ui/forms.html" import button %}
 {% block title %}{{ document.original_filename }} - Zentriq Documents{% endblock %}
 {% block content %}
-<div class="page-shell">
+<div class="page-shell"
+     {% if document.status.value in ['pending', 'ocr_processing', 'ocr_done', 'ai_processing'] %}
+     data-analysis-monitor
+     data-analysis-status="{{ document.status.value }}"
+     data-analysis-refresh-ms="3000"
+     {% endif %}>
   {% call page_header(document.original_filename, 'Dokument, Analyse, Verlauf und Folgeaktionen in einem gemeinsamen Review-Workspace.', 'Document review') %}
     {{ status_badge(document.status) }}
     {{ button('Zur Dokumentenliste', href=url_for('documents.list_documents'), variant='secondary', icon_name='arrow-left') }}
@@ -68,7 +73,7 @@
         <div class="mt-6 rounded-[1.35rem] border border-border bg-surface-muted p-5">
           <p class="flex items-center gap-3 text-sm text-text-muted">
             {{ spinner() }}
-            Dieses Dokument wird noch von der KI analysiert...
+            Dieses Dokument wird noch von der KI analysiert. Die Ansicht aktualisiert sich automatisch.
           </p>
         </div>
       {% endif %}

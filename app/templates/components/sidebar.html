@@ -12,41 +12,47 @@
   :class="{
     'translate-x-0': sidebarOpen,
     '-translate-x-full lg:translate-x-0': !sidebarOpen,
-    'lg:!w-20': railCollapsed,
+    'sidebar-shell-collapsed': railCollapsed,
   }"
-  class="sidebar-shell fixed inset-y-0 left-0 z-40 flex w-64 flex-col transition-[width,transform] duration-200 ease-in-out lg:w-64"
+  class="sidebar-shell fixed inset-y-0 left-0 z-40 flex flex-col transition-[width,transform] duration-200 ease-in-out"
 >
-  <div class="border-b border-border/80 p-4">
+  <div class="border-b border-border/80 px-4 py-4 pb-3">
     <div class="flex items-start gap-3">
       <a href="{{ url_for('dashboard.index') }}" class="sidebar-brand min-w-0 flex-1">
         <span class="sidebar-brand-mark text-sm font-bold">Z</span>
         <span x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="sidebar-brand-copy">
           <span class="sidebar-brand-title">Zentriq Documents</span>
-          <span class="sidebar-brand-subtitle">AI workspace for insurance operations</span>
+          <span class="sidebar-brand-subtitle">Premium workspace for insurance operations</span>
         </span>
       </a>
       <button
         type="button"
         x-on:click="railCollapsed = !railCollapsed"
-        class="topbar-icon-button hidden shrink-0 lg:inline-flex"
+        class="topbar-icon-button sidebar-rail-toggle hidden shrink-0 lg:inline-flex"
         aria-label="Sidebar ein-/ausklappen"
       >
         {{ icon('panel-left', class='w-4 h-4') }}
       </button>
     </div>
 
-    <div x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="sidebar-note mt-4">
-      <p class="text-sm font-medium leading-6 text-text">
-        Ein ruhiger Arbeitsmodus fuer Upload, Analyse und konzentrierte Folgearbeit.
-      </p>
-      <div class="chip-bar mt-3">
-        <span class="meta-chip">Desktop first</span>
-        <span class="meta-chip">Queue + Details</span>
+    <div x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="sidebar-command-panel mt-4">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <p class="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-text-soft">Operations</p>
+          <p class="mt-2 text-sm font-medium leading-6 text-text">
+            Eine breite Desktop-Shell fuer Queue, Analyse und konzentrierte Folgearbeit.
+          </p>
+        </div>
+        <span class="sidebar-command-dot"></span>
+      </div>
+      <div class="chip-bar mt-4">
+        <span class="meta-chip">Desktop SaaS</span>
+        <span class="meta-chip">Single canvas</span>
       </div>
     </div>
   </div>
 
-  <div class="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4">
+  <div class="flex min-h-0 flex-1 flex-col px-3 py-4">
     {% set nav_groups = [
       ('Workspace', [
         ('dashboard.index', 'layout-dashboard', 'Dashboard', ''),
@@ -69,9 +75,9 @@
       ]),
     ] %}
 
-    <nav class="space-y-5">
+    <nav class="sidebar-nav">
       {% for group_label, nav_items in nav_groups %}
-        <div class="space-y-1">
+        <div class="space-y-1.5">
           <p x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="sidebar-section-label">
             {{ group_label }}
           </p>
@@ -82,9 +88,9 @@
               class="nav-link {{ 'nav-link-active' if is_active else '' }}"
             >
               <span class="nav-icon">
-                {{ icon(icon_name, class='w-4.5 h-4.5') }}
+                {{ icon(icon_name, class='w-[1.05rem] h-[1.05rem]') }}
               </span>
-              <span x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="min-w-0 flex-1 truncate text-sm font-medium">
+              <span x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="min-w-0 flex-1 truncate text-[0.95rem] font-medium">
                 {{ label }}
               </span>
             </a>
@@ -94,20 +100,20 @@
     </nav>
   </div>
 
-  <div class="border-t border-border/80 p-3">
-    <div class="sidebar-note">
+  <div class="border-t border-border/80 p-3 pt-2">
+    <div class="sidebar-user-panel">
       <div class="flex items-center gap-3">
         <span class="avatar-chip">
           {{ current_user.email[0] | upper if current_user and current_user.is_authenticated else 'Z' }}
         </span>
         <div x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="min-w-0">
           <p class="truncate text-sm font-semibold text-text">{{ current_user.email if current_user and current_user.is_authenticated else 'Workspace' }}</p>
-          <p class="truncate text-xs text-text-muted">Sicherer Dokumentenbereich</p>
+          <p class="truncate text-xs text-text-muted">Secure workspace access</p>
         </div>
       </div>
-      <form method="post" action="{{ url_for('auth.logout') }}" class="mt-3">
+      <form method="post" action="{{ url_for('auth.logout') }}" class="mt-4">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="dropdown-link w-full justify-center border border-border/70 bg-surface/70 font-medium">
+        <button type="submit" class="dropdown-link sidebar-logout-button w-full justify-center font-medium">
           {{ icon('log-out', class='w-4 h-4') }}
           <span x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms>Abmelden</span>
         </button>

@@ -1,16 +1,34 @@
 {% extends "base.html" %}
-{% from "ui/display.html" import page_header, empty_state %}
+{% from "ui/display.html" import page_header, empty_state, stat_card %}
 {% from "ui/forms.html" import button %}
 {% block title %}Dokumente – Zentriq Documents{% endblock %}
 {% block content %}
 <div class="page-shell">
+  {% set ns = namespace(active=0, done=0, failed=0) %}
+  {% for document in documents %}
+    {% if document.status.value in ['pending', 'ocr_processing', 'ocr_done', 'ai_processing'] %}
+      {% set ns.active = ns.active + 1 %}
+    {% elif document.status.value == 'done' %}
+      {% set ns.done = ns.done + 1 %}
+    {% elif document.status.value == 'failed' %}
+      {% set ns.failed = ns.failed + 1 %}
+    {% endif %}
+  {% endfor %}
+
   {% call page_header(
     "Dokumente",
-    "Die zentrale Arbeitsqueue fuer alle hochgeladenen Dokumente, ihren Analysestatus und den direkten Einstieg in Detail-Workspaces.",
+    "Die zentrale Arbeitsqueue fuer Uploads, Analysestatus und den direkten Einstieg in jeden Detail-Workspace.",
     "Document Queue"
   ) %}
     {{ button('KI-Suche', href=url_for('search.search'), variant='secondary', icon_name='search') }}
   {% endcall %}
+
+  <div class="stat-grid stat-grid-4">
+    {{ stat_card('Gesamt', documents|length, icon_name='file-text', variant='info', meta='Dokumente in dieser Ansicht', tone='strong') }}
+    {{ stat_card('In Arbeit', ns.active, icon_name='loader-circle', variant='info', meta='OCR oder KI laufen') }}
+    {{ stat_card('Bereit', ns.done, icon_name='check-circle', variant='success', meta='Fuer Review und Folgearbeit') }}
+    {{ stat_card('Fehler', ns.failed, icon_name='alert-circle', variant='danger', meta='Brauchen Nacharbeit') }}
+  </div>
 
   {% include "components/upload_widget.html" %}
 

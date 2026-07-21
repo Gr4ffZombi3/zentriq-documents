@@ -7,20 +7,20 @@
   'danger': 'btn btn-danger',
 } %}
 {% set BUTTON_SIZES = {
-  'sm': 'px-3.5 py-2 text-sm',
-  'md': 'px-4 py-2.5 text-sm',
-  'lg': 'px-5 py-3 text-base',
+  'sm': 'h-9 px-3.5 text-sm',
+  'md': 'h-10 px-4 text-sm',
+  'lg': 'h-11 px-5 text-sm',
 } %}
 
 {% macro button(text, variant='primary', type='button', href=None, icon_name=None, extra_class='', name=None, id=None, size='md') -%}
-{% set classes = BUTTON_VARIANTS.get(variant, BUTTON_VARIANTS['primary']) ~ ' ' ~ BUTTON_SIZES.get(size, BUTTON_SIZES['md']) ~ ' focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-50 disabled:pointer-events-none ' ~ extra_class %}
+{% set classes = BUTTON_VARIANTS.get(variant, BUTTON_VARIANTS['primary']) ~ ' ' ~ BUTTON_SIZES.get(size, BUTTON_SIZES['md']) ~ ' whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:pointer-events-none disabled:opacity-50 ' ~ extra_class %}
 {% if href %}
 <a href="{{ href }}"{% if id %} id="{{ id }}"{% endif %} class="{{ classes }}">
-  {%- if icon_name %}{{ icon(icon_name, class='w-4 h-4') }}{% endif %}{{ text }}
+  {%- if icon_name %}{{ icon(icon_name, class='w-[1.05rem] h-[1.05rem]') }}{% endif %}{{ text }}
 </a>
 {%- else %}
 <button type="{{ type }}"{% if name %} name="{{ name }}"{% endif %}{% if id %} id="{{ id }}"{% endif %} class="{{ classes }}">
-  {%- if icon_name %}{{ icon(icon_name, class='w-4 h-4') }}{% endif %}{{ text }}
+  {%- if icon_name %}{{ icon(icon_name, class='w-[1.05rem] h-[1.05rem]') }}{% endif %}{{ text }}
 </button>
 {%- endif %}
 {%- endmacro %}

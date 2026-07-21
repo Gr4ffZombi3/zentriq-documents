@@ -5,54 +5,79 @@
 {% block content %}
 <div class="page-shell">
   {% call page_header(
-    "Uebersicht" ~ (" fuer " ~ current_user.email.split("@")[0] if current_user.is_authenticated else ""),
-    "Dokumente, Analysen und Empfehlungen in einer kompakten Desktop-Ansicht mit klarer Hierarchie.",
+    "Operations-Uebersicht" ~ (" fuer " ~ current_user.email.split("@")[0] if current_user.is_authenticated else ""),
+    "Ein breiter Desktop-Workspace fuer Dokumenten-Intake, Analyse, Empfehlungen und die taegliche Steuerung des Arbeitsflusses.",
     "Dashboard"
   ) %}
-    {{ button('Dokumente', href=url_for('documents.list_documents'), variant='secondary', icon_name='file-text') }}
-    {{ button('Upload', href=url_for('documents.list_documents') ~ '#upload-widget', variant='primary', icon_name='upload') }}
+    {{ button('Dokumente oeffnen', href=url_for('documents.list_documents'), variant='secondary', icon_name='file-text') }}
+    {{ button('Upload starten', href=url_for('documents.list_documents') ~ '#upload-widget', variant='primary', icon_name='upload') }}
+  {% endcall %}
+
+  {% call card(padding='px-5 py-4 sm:px-6', tone='muted') %}
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="chip-bar">
+        {{ badge('Queue live', variant='info') }}
+        <span class="meta-chip">{{ stats.total_documents }} Dokumente im Workspace</span>
+        <span class="meta-chip">{{ stats.done_count }} Analysen bereit</span>
+        <span class="meta-chip">{{ stats.failed_count }} Faelle mit Nacharbeit</span>
+      </div>
+      <p class="text-sm text-text-muted">Desktop-first Steuerung mit einer ruhigen, breiten Arbeitsflaeche.</p>
+    </div>
   {% endcall %}
 
   <div class="stat-grid stat-grid-4">
-    {{ stat_card('Dokumente', stats.total_documents, icon_name='file-text', variant='info', meta='Gesamtbestand') }}
-    {{ stat_card('Neu in 24h', stats.new_documents, icon_name='upload', variant='info', meta='Frische Eingänge') }}
-    {{ stat_card('Fertig analysiert', stats.done_count, icon_name='check-circle', variant='success', meta='Bereit fuer Review') }}
-    {{ stat_card('Fehlerfaelle', stats.failed_count, icon_name='alert-circle', variant='danger', meta='Brauchen Nacharbeit') }}
+    {{ stat_card('Dokumente gesamt', stats.total_documents, icon_name='file-text', variant='info', meta='Aktiver Bestand im System') }}
+    {{ stat_card('Neu in 24 Stunden', stats.new_documents, icon_name='upload', variant='info', meta='Frische Eingänge fuer den Intake') }}
+    {{ stat_card('Analyse fertig', stats.done_count, icon_name='check-circle', variant='success', meta='Direkt bereit fuer Review und Folgearbeit') }}
+    {{ stat_card('Nacharbeit offen', stats.failed_count, icon_name='alert-circle', variant='danger', meta='Dokumente mit Fehlern oder fehlenden Angaben') }}
   </div>
 
-  <div class="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
+  <div class="grid gap-6 2xl:grid-cols-[minmax(0,1.18fr)_minmax(420px,0.82fr)]">
     {% if stats.doc_type_counts %}
       {% call card(padding='p-5 sm:p-6') %}
         <div class="section-heading">
           <div>
-            <h2 class="section-title">Dokumenttypen</h2>
-            <p class="section-copy">Welche Formate gerade den Arbeitsalltag bestimmen.</p>
+            <h2 class="section-title">Dokumenttypen im Fokus</h2>
+            <p class="section-copy">Welche Dokumentarten aktuell den Arbeitsalltag praegen und wie gross ihr Anteil im Bestand ist.</p>
           </div>
           <span class="meta-chip">{{ stats.total_documents }} gesamt</span>
         </div>
-        <div class="mt-5 grid gap-3 lg:grid-cols-2">
-          {% for doc_type, count in stats.doc_type_counts.items() %}
-            <div class="list-row-card px-4 py-4">
-              <div class="flex items-center justify-between gap-4">
-                <div>
-                  <p class="text-sm font-semibold text-text">{{ doc_type.value }}</p>
-                  <p class="mt-1 text-xs leading-6 text-text-muted">Aktiver Dokumenttyp im Workspace</p>
-                </div>
-                <span class="text-xl font-semibold tracking-tight text-text">{{ count }}</span>
-              </div>
-            </div>
-          {% endfor %}
+        <div class="table-shell mt-5">
+          <table>
+            <thead>
+              <tr>
+                <th class="text-left">Dokumenttyp</th>
+                <th class="text-right">Anzahl</th>
+                <th class="text-right">Anteil</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for doc_type, count in stats.doc_type_counts.items() %}
+                {% set share = ((count / stats.total_documents) * 100) if stats.total_documents else 0 %}
+                <tr>
+                  <td>
+                    <div>
+                      <p class="text-sm font-semibold text-text">{{ doc_type.value }}</p>
+                      <p class="mt-1 text-xs text-text-muted">Aktiver Dokumenttyp im Workspace</p>
+                    </div>
+                  </td>
+                  <td class="text-right text-sm font-semibold text-text">{{ count }}</td>
+                  <td class="text-right text-sm text-text-muted">{{ '%.0f'|format(share) }} %</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
       {% endcall %}
     {% else %}
       {% call empty_state('Noch keine Typverteilung', 'Sobald Dokumente analysiert wurden, erscheint hier eine saubere Verteilung der erkannten Dokumentarten.', 'file-text') %}{% endcall %}
     {% endif %}
 
-    {% call card(padding='p-5 sm:p-6', tone='muted') %}
+    {% call card(padding='p-5 sm:p-6', tone='strong') %}
       <div class="section-heading">
         <div>
           <h2 class="section-title">Offene Empfehlungen</h2>
-          <p class="section-copy">Von der KI erkannte naechste Schritte fuer den heutigen Arbeitsfluss.</p>
+          <p class="section-copy">Priorisierte naechste Schritte fuer die aktuelle Queue und ihre wichtigsten Folgeaktionen.</p>
         </div>
         <a href="{{ url_for('recommendations.list_recommendations') }}" class="text-sm font-medium text-primary hover:text-primary-hover">Alle anzeigen</a>
       </div>
@@ -61,15 +86,17 @@
           {% for rec in recommendations %}
             {% set priority_variant = {'high': 'danger', 'medium': 'warning', 'low': 'muted'}.get(rec.priority.value, 'muted') %}
             <div class="list-row-card px-4 py-4">
-              <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="flex items-start justify-between gap-4">
                 <div class="min-w-0">
-                  <p class="truncate text-sm font-semibold text-text">{{ rec.label }}</p>
-                  <p class="mt-1 text-sm text-text-muted">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <p class="truncate text-sm font-semibold text-text">{{ rec.label }}</p>
+                    {{ badge(rec.priority.value | capitalize, variant=priority_variant) }}
+                  </div>
+                  <p class="mt-2 text-sm text-text-muted">
                     {{ rec.customer.name if rec.customer else "Kein Kunde" }}
                     {% if rec.document_id %} / <a href="{{ url_for('documents.detail', document_id=rec.document_id) }}" class="text-primary hover:text-primary-hover">Dokument oeffnen</a>{% endif %}
                   </p>
                 </div>
-                {{ badge(rec.priority.value | capitalize, variant=priority_variant) }}
               </div>
             </div>
           {% endfor %}

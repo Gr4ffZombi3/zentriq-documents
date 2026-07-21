@@ -60,6 +60,12 @@ def _run_pipeline(document: Document) -> None:
     document.tasks = []
     document.status = DocStatus.OCR_PROCESSING
     db.session.commit()
+    current_app.logger.info(
+        "document.analysis.started tenant_id=%s document_id=%s status=%s",
+        document.tenant_id,
+        document.id,
+        document.status.value,
+    )
 
     run = AnalysisRun(
         tenant_id=document.tenant_id,
@@ -100,6 +106,11 @@ def _run_pipeline(document: Document) -> None:
         document.status = DocStatus.FAILED
         document.error_message = f"OCR fehlgeschlagen: {exc}"
         db.session.commit()
+        current_app.logger.exception(
+            "document.analysis.ocr_failed tenant_id=%s document_id=%s",
+            document.tenant_id,
+            document.id,
+        )
         _finish_run(AnalysisRunStatus.FAILED, error_message=document.error_message)
         return
     stage_durations["ocr"] = round((time.monotonic() - stage_start) * 1000, 1)
@@ -111,6 +122,13 @@ def _run_pipeline(document: Document) -> None:
     # gesetzt) - die UI hat dafuer bereits ein fertiges Badge, keine Template-Aenderung noetig.
     document.status = DocStatus.OCR_DONE
     db.session.commit()
+    current_app.logger.info(
+        "document.analysis.ocr_done tenant_id=%s document_id=%s engine=%s confidence=%s",
+        document.tenant_id,
+        document.id,
+        engine_used.value if hasattr(engine_used, "value") else engine_used,
+        confidence,
+    )
 
     stage_start = time.monotonic()
     layout_info = detect_layout(raw_text, page_texts)
@@ -122,6 +140,12 @@ def _run_pipeline(document: Document) -> None:
 
     document.status = DocStatus.AI_PROCESSING
     db.session.commit()
+    current_app.logger.info(
+        "document.analysis.ai_started tenant_id=%s document_id=%s status=%s",
+        document.tenant_id,
+        document.id,
+        document.status.value,
+    )
 
     stage_start = time.monotonic()
     try:
@@ -149,6 +173,11 @@ def _run_pipeline(document: Document) -> None:
         document.status = DocStatus.FAILED
         document.error_message = f"KI-Analyse fehlgeschlagen: {exc}"
         db.session.commit()
+        current_app.logger.exception(
+            "document.analysis.ai_failed tenant_id=%s document_id=%s",
+            document.tenant_id,
+            document.id,
+        )
         _finish_run(AnalysisRunStatus.FAILED, error_message=document.error_message)
         return
     stage_durations["extraction_and_rules"] = round((time.monotonic() - stage_start) * 1000, 1)
@@ -156,6 +185,13 @@ def _run_pipeline(document: Document) -> None:
     document.status = DocStatus.DONE
     document.processed_at = datetime.now(timezone.utc)
     db.session.commit()
+    current_app.logger.info(
+        "document.analysis.completed tenant_id=%s document_id=%s status=%s duration_ms=%s",
+        document.tenant_id,
+        document.id,
+        document.status.value,
+        int((time.monotonic() - pipeline_start) * 1000),
+    )
 
     _finish_run(
         AnalysisRunStatus.SUCCEEDED,

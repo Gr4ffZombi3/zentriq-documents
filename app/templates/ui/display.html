@@ -68,13 +68,13 @@
 {% macro page_header(title, description='', eyebrow=None) -%}
 <section class="page-hero">
   {% if eyebrow %}<span class="page-eyebrow">{{ eyebrow }}</span>{% endif %}
-  <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+  <div class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
     <div class="min-w-0">
       <h1 class="page-title">{{ title }}</h1>
       {% if description %}<p class="page-description mt-4">{{ description }}</p>{% endif %}
     </div>
     {% if caller is defined %}
-      <div class="page-actions">
+      <div class="page-actions xl:justify-end">
         {{ caller() }}
       </div>
     {% endif %}
@@ -98,16 +98,16 @@
 {%- endmacro %}
 
 {% macro stat_card(label, value, icon_name=None, variant='info', meta=None, tone='default') -%}
-{% call card(padding='p-5 sm:p-6', hover=True, tone=tone) %}
+{% call card(extra_class='h-full', padding='p-5 sm:p-6', hover=True, tone=tone) %}
   <div class="stat-card">
     <div class="flex items-start justify-between gap-4">
       <div>
         <p class="stat-label">{{ label }}</p>
-        <p class="stat-value mt-4">{{ value }}</p>
+        <p class="stat-value mt-5">{{ value }}</p>
       </div>
       {% if icon_name %}
-        <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl {{ METRIC_ACCENTS.get(variant, METRIC_ACCENTS['info']) }}">
-          {{ icon(icon_name, class='w-5 h-5') }}
+        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[1.05rem] border border-border/80 {{ METRIC_ACCENTS.get(variant, METRIC_ACCENTS['info']) }}">
+          {{ icon(icon_name, class='w-[1.05rem] h-[1.05rem]') }}
         </span>
       {% endif %}
     </div>

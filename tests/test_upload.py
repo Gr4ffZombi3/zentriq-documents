@@ -101,3 +101,15 @@ def test_document_list_and_detail_and_file_serving(auth_client, db):
     file_resp = auth_client.get(f"/documents/{document.id}/file")
     assert file_resp.status_code == 200
     assert file_resp.mimetype == "application/pdf"
+
+
+def test_document_list_renders_upload_form_with_standard_post_fallback(auth_client):
+    resp = auth_client.get("/documents")
+    html = resp.get_data(as_text=True)
+
+    assert resp.status_code == 200
+    assert 'action="/upload"' in html
+    assert 'method="post"' in html
+    assert 'enctype="multipart/form-data"' in html
+    assert 'name="csrf_token"' in html
+    assert "Dokumente einreichen" in html

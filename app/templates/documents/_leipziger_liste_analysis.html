@@ -1,44 +1,49 @@
 {% from "ui/display.html" import badge %}
 {% set flags = [
-  (document.is_neugeschaeft, 'Neugeschäft', 'info'),
+  (document.is_neugeschaeft, 'Neugeschaeft', 'info'),
   (document.is_fahrzeugwechsel, 'Fahrzeugwechsel', 'info'),
   (document.is_angebot, 'Angebot', 'info'),
   (document.cross_sell_opportunity, 'Cross-Selling-Chance', 'info'),
   (document.has_multiple_products, 'Mehrere Produkte', 'info'),
 ] %}
 {% if flags | selectattr(0) | list or document.priority %}
-<div class="flex flex-wrap gap-2">
+<div class="chip-bar">
   {% for is_set, label, variant in flags %}
     {% if is_set %}{{ badge(label, variant=variant) }}{% endif %}
   {% endfor %}
-  {% if document.priority %}{{ badge('Priorität: ' ~ document.priority.value, variant='muted') }}{% endif %}
+  {% if document.priority %}{{ badge('Prioritaet: ' ~ document.priority.value, variant='muted') }}{% endif %}
 </div>
 {% endif %}
 
 {% if document.recommended_next_action %}
-  <p class="mt-4 text-sm text-text"><span class="font-medium">Empfohlene nächste Aktion:</span> {{ document.recommended_next_action }}</p>
+  <div class="surface-card surface-card-muted mt-5 p-4">
+    <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-soft">Empfohlene naechste Aktion</p>
+    <p class="mt-3 text-sm leading-7 text-text">{{ document.recommended_next_action }}</p>
+  </div>
 {% endif %}
 
-<div class="mt-4 overflow-x-auto rounded-lg border border-border">
-  <table class="w-full text-left text-sm">
-    <thead class="bg-bg text-xs font-medium uppercase tracking-wide text-text-muted">
+<div class="table-shell mt-5 overflow-x-auto">
+  <table class="text-left text-sm">
+    <thead>
       <tr>
-        <th class="px-4 py-2.5">Kunde</th>
-        <th class="px-4 py-2.5">Fahrzeug</th>
-        <th class="px-4 py-2.5">Kennzeichen</th>
-        <th class="px-4 py-2.5">Produkte</th>
+        <th>Kunde</th>
+        <th>Fahrzeug</th>
+        <th>Kennzeichen</th>
+        <th>Produkte</th>
       </tr>
     </thead>
-    <tbody class="divide-y divide-border">
+    <tbody>
       {% for dc in document.document_customers %}
-        <tr class="transition duration-200 hover:bg-bg">
-          <td class="px-4 py-2.5 text-text">{{ dc.customer.name }}</td>
-          <td class="px-4 py-2.5 text-text-muted">{{ dc.row_data | map(attribute='vehicle') | select | join(', ') or '–' }}</td>
-          <td class="px-4 py-2.5 text-text-muted">{{ dc.row_data | map(attribute='license_plate') | select | join(', ') or '–' }}</td>
-          <td class="px-4 py-2.5 text-text-muted">{{ (dc.row_data | map(attribute='products') | sum(start=[])) | join(', ') or '–' }}</td>
+        <tr>
+          <td class="font-medium text-text">{{ dc.customer.name }}</td>
+          <td class="text-text-muted">{{ dc.row_data | map(attribute='vehicle') | select | join(', ') or '-' }}</td>
+          <td class="text-text-muted">{{ dc.row_data | map(attribute='license_plate') | select | join(', ') or '-' }}</td>
+          <td class="text-text-muted">{{ (dc.row_data | map(attribute='products') | sum(start=[])) | join(', ') or '-' }}</td>
         </tr>
       {% else %}
-        <tr><td colspan="4" class="px-4 py-6 text-center text-text-muted">Keine Kundenzeilen erkannt.</td></tr>
+        <tr>
+          <td colspan="4" class="text-center text-text-muted">Keine Kundenzeilen erkannt.</td>
+        </tr>
       {% endfor %}
     </tbody>
   </table>

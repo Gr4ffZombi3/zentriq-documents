@@ -1,78 +1,82 @@
 {% extends "base.html" %}
-{% from "ui/icons.html" import icon %}
-{% from "ui/display.html" import card, badge %}
-{% block title %}Übersicht – Zentriq Documents{% endblock %}
+{% from "ui/display.html" import card, badge, page_header, stat_card, empty_state %}
+{% from "ui/forms.html" import button %}
+{% block title %}Uebersicht – Zentriq Documents{% endblock %}
 {% block content %}
-<div class="mb-6">
-  <h1 class="text-2xl font-semibold tracking-tight text-text">Willkommen zurück{{ ", " ~ current_user.email.split("@")[0] if current_user.is_authenticated else "" }}</h1>
-  <p class="mt-1 text-sm text-text-muted">KI-Dokumentenanalyse für Versicherungs- und Kfz-Dienstleister.</p>
-</div>
-
-<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-  {% set kpis = [
-    ('file-text', 'muted', stats.total_documents, 'Dokumente gesamt'),
-    ('upload', 'info', stats.new_documents, 'Neue Dokumente (24h)'),
-    ('check-circle', 'success', stats.done_count, 'KI-Verarbeitung abgeschlossen'),
-    ('alert-circle', 'danger', stats.failed_count, 'Fehlgeschlagene Analysen'),
-  ] %}
-  {% set icon_bg = {
-    'muted': 'bg-text-muted/10 text-text-muted', 'info': 'bg-primary/10 text-primary',
-    'success': 'bg-success/10 text-success', 'danger': 'bg-error/10 text-error',
-  } %}
-  {% for icon_name, variant, value, label in kpis %}
-    {% call card(hover=True) %}
-      <div class="flex items-start justify-between">
-        <div>
-          <p class="text-3xl font-semibold tracking-tight text-text">{{ value }}</p>
-          <p class="mt-1 text-sm text-text-muted">{{ label }}</p>
-        </div>
-        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl {{ icon_bg[variant] }}">
-          {{ icon(icon_name, class='w-5 h-5') }}
-        </span>
-      </div>
-    {% endcall %}
-  {% endfor %}
-</div>
-
-<div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-  {% if stats.doc_type_counts %}
-    {% call card(padding='p-7') %}
-      <h2 class="text-base font-semibold text-text">Dokumententypen</h2>
-      <div class="mt-4 flex flex-col divide-y divide-border">
-        {% for doc_type, count in stats.doc_type_counts.items() %}
-          <div class="flex items-center justify-between py-2.5 text-sm">
-            <span class="text-text">{{ doc_type.value }}</span>
-            <span class="font-medium text-text-muted">{{ count }}</span>
-          </div>
-        {% endfor %}
-      </div>
-    {% endcall %}
-  {% endif %}
-
-  {% call card(padding='p-7') %}
-    <div class="flex items-center justify-between">
-      <h2 class="text-base font-semibold text-text">Offene Empfehlungen</h2>
-      <a href="{{ url_for('recommendations.list_recommendations') }}" class="text-sm font-medium text-primary hover:text-primary-hover">Alle anzeigen</a>
-    </div>
-    {% if recommendations %}
-      <div class="mt-4 flex flex-col gap-2">
-        {% for rec in recommendations %}
-          {% set priority_variant = {'high': 'danger', 'medium': 'warning', 'low': 'muted'}.get(rec.priority.value, 'muted') %}
-          <div class="flex items-center justify-between gap-3 rounded-xl border border-border px-3.5 py-2.5 transition duration-200 hover:border-primary/30">
-            <div class="min-w-0">
-              <p class="truncate text-sm font-medium text-text">{{ rec.label }}</p>
-              <p class="truncate text-xs text-text-muted">
-                {{ rec.customer.name if rec.customer else "—" }}
-                {% if rec.document_id %} · <a href="{{ url_for('documents.detail', document_id=rec.document_id) }}" class="text-primary hover:text-primary-hover">Dokument öffnen</a>{% endif %}
-              </p>
-            </div>
-            {{ badge(rec.priority.value | capitalize, variant=priority_variant) }}
-          </div>
-        {% endfor %}
-      </div>
-    {% else %}
-      <p class="mt-4 text-sm text-text-muted">Keine offenen Empfehlungen.</p>
-    {% endif %}
+<div class="page-shell">
+  {% call page_header(
+    "Willkommen zurueck" ~ (", " ~ current_user.email.split("@")[0] if current_user.is_authenticated else ""),
+    "KI-Dokumentenanalyse fuer Versicherungs- und Kfz-Dienstleister mit einem klaren Blick auf Queue, Empfehlungen und Arbeitsprioritaeten.",
+    "Overview"
+  ) %}
+    {{ button('Dokumente oeffnen', href=url_for('documents.list_documents'), variant='secondary', icon_name='file-text') }}
+    {{ button('Potenziale pruefen', href=url_for('potenziale.index'), variant='ghost', icon_name='target') }}
   {% endcall %}
+
+  <div class="stat-grid stat-grid-4">
+    {{ stat_card('Dokumente gesamt', stats.total_documents, icon_name='file-text', variant='info', meta='Gesamter dokumentierter Bestand', tone='strong') }}
+    {{ stat_card('Neue Dokumente', stats.new_documents, icon_name='upload', variant='info', meta='Neue Uploads der letzten 24 Stunden') }}
+    {{ stat_card('Analysen fertig', stats.done_count, icon_name='check-circle', variant='success', meta='Vollstaendig verarbeitete Dokumente') }}
+    {{ stat_card('Fehlgeschlagen', stats.failed_count, icon_name='alert-circle', variant='danger', meta='Dokumente mit Handlungsbedarf') }}
+  </div>
+
+  <div class="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+    {% if stats.doc_type_counts %}
+      {% call card(padding='p-6 sm:p-7') %}
+        <div class="section-heading">
+          <div>
+            <h2 class="section-title">Dokumenttypen im Bestand</h2>
+            <p class="section-copy">Welche Dokumentarten aktuell den groessten Teil deiner Arbeitsflaeche ausmachen.</p>
+          </div>
+        </div>
+        <div class="list-stack mt-5">
+          {% for doc_type, count in stats.doc_type_counts.items() %}
+            <div class="list-row-card px-4 py-4">
+              <div class="flex items-center justify-between gap-4">
+                <div>
+                  <p class="text-sm font-semibold text-text">{{ doc_type.value }}</p>
+                  <p class="mt-1 text-sm text-text-muted">Aktuell erfasste Dokumente dieses Typs.</p>
+                </div>
+                <span class="text-2xl font-semibold tracking-tight text-text">{{ count }}</span>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% endcall %}
+    {% else %}
+      {% call empty_state('Noch keine Typverteilung', 'Sobald Dokumente analysiert wurden, erscheint hier ein klarer Ueberblick ueber die erkannten Dokumentarten.', 'file-text') %}{% endcall %}
+    {% endif %}
+
+    {% call card(padding='p-6 sm:p-7', tone='muted') %}
+      <div class="section-heading">
+        <div>
+          <h2 class="section-title">Offene Empfehlungen</h2>
+          <p class="section-copy">Von der KI erkannte naechste Schritte, priorisiert fuer den Alltag.</p>
+        </div>
+        <a href="{{ url_for('recommendations.list_recommendations') }}" class="text-sm font-medium text-primary hover:text-primary-hover">Alle anzeigen</a>
+      </div>
+      {% if recommendations %}
+        <div class="list-stack mt-5">
+          {% for rec in recommendations %}
+            {% set priority_variant = {'high': 'danger', 'medium': 'warning', 'low': 'muted'}.get(rec.priority.value, 'muted') %}
+            <div class="list-row-card px-4 py-4">
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-semibold text-text">{{ rec.label }}</p>
+                  <p class="mt-1 text-sm text-text-muted">
+                    {{ rec.customer.name if rec.customer else "Kein Kunde" }}
+                    {% if rec.document_id %} · <a href="{{ url_for('documents.detail', document_id=rec.document_id) }}" class="text-primary hover:text-primary-hover">Dokument oeffnen</a>{% endif %}
+                  </p>
+                </div>
+                {{ badge(rec.priority.value | capitalize, variant=priority_variant) }}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        {% call empty_state('Keine offenen Empfehlungen', 'Neue Empfehlungen erscheinen automatisch nach der Dokumentenauswertung.', 'list-checks') %}{% endcall %}
+      {% endif %}
+    {% endcall %}
+  </div>
 </div>
 {% endblock %}

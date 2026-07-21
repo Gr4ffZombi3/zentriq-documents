@@ -1,39 +1,44 @@
 {% from "ui/icons.html" import icon %}
 {% from "ui/display.html" import card %}
-{% call card() %}
-  <div class="flex items-center gap-2">
-    {{ icon('history', class='w-4 h-4 text-primary') }}
-    <h2 class="text-base font-semibold text-text">Dokumentenverlauf</h2>
+{% call card(padding='p-6 sm:p-7') %}
+  <div class="section-heading">
+    <div>
+      <h2 class="section-title">Dokumentenverlauf</h2>
+      <p class="section-copy">Wann das Dokument eingegangen ist, wie es verarbeitet wurde und wer beteiligt war.</p>
+    </div>
+    <span class="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+      {{ icon('history', class='w-5 h-5') }}
+    </span>
   </div>
-  <dl class="mt-4 grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-    <div>
-      <dt class="text-xs font-medium uppercase tracking-wide text-text-muted">Upload</dt>
-      <dd class="mt-0.5 text-sm text-text">{{ document.uploaded_at.strftime('%d.%m.%Y %H:%M') if document.uploaded_at else '–' }}</dd>
+  <dl class="info-grid mt-6 sm:grid-cols-2">
+    <div class="info-item">
+      <dt>Upload</dt>
+      <dd>{{ document.uploaded_at.strftime('%d.%m.%Y %H:%M') if document.uploaded_at else '-' }}</dd>
     </div>
-    <div>
-      <dt class="text-xs font-medium uppercase tracking-wide text-text-muted">Analysiert am</dt>
-      <dd class="mt-0.5 text-sm text-text">{{ document.processed_at.strftime('%d.%m.%Y %H:%M') if document.processed_at else '–' }}</dd>
+    <div class="info-item">
+      <dt>Analysiert am</dt>
+      <dd>{{ document.processed_at.strftime('%d.%m.%Y %H:%M') if document.processed_at else '-' }}</dd>
     </div>
-    <div>
-      <dt class="text-xs font-medium uppercase tracking-wide text-text-muted">Bearbeitungsstatus</dt>
-      <dd class="mt-0.5 text-sm text-text">{{ document.status.value }}</dd>
+    <div class="info-item">
+      <dt>Bearbeitungsstatus</dt>
+      <dd>{{ document.status.value }}</dd>
     </div>
-    <div>
-      <dt class="text-xs font-medium uppercase tracking-wide text-text-muted">OCR-Engine</dt>
-      <dd class="mt-0.5 text-sm text-text">{{ document.ocr_engine_used.value if document.ocr_engine_used else '–' }}</dd>
+    <div class="info-item">
+      <dt>OCR-Engine</dt>
+      <dd>{{ document.ocr_engine_used.value if document.ocr_engine_used else '-' }}</dd>
     </div>
-    <div>
-      <dt class="text-xs font-medium uppercase tracking-wide text-text-muted">Confidence Score</dt>
-      <dd class="mt-0.5 text-sm text-text">{{ (document.ocr_confidence | round(1)) if document.ocr_confidence is not none else '–' }}{{ '%' if document.ocr_confidence is not none else '' }}</dd>
+    <div class="info-item">
+      <dt>Confidence Score</dt>
+      <dd>{{ (document.ocr_confidence | round(1)) if document.ocr_confidence is not none else '-' }}{{ '%' if document.ocr_confidence is not none else '' }}</dd>
     </div>
-    <div>
-      <dt class="text-xs font-medium uppercase tracking-wide text-text-muted">Hochgeladen von</dt>
-      <dd class="mt-0.5 text-sm text-text">{{ document.uploaded_by.email if document.uploaded_by else '–' }}</dd>
+    <div class="info-item">
+      <dt>Hochgeladen von</dt>
+      <dd>{{ document.uploaded_by.email if document.uploaded_by else '-' }}</dd>
     </div>
     {% if document.retry_count %}
-      <div>
-        <dt class="text-xs font-medium uppercase tracking-wide text-text-muted">Wiederholungen</dt>
-        <dd class="mt-0.5 text-sm text-text">{{ document.retry_count }}</dd>
+      <div class="info-item">
+        <dt>Wiederholungen</dt>
+        <dd>{{ document.retry_count }}</dd>
       </div>
     {% endif %}
   </dl>

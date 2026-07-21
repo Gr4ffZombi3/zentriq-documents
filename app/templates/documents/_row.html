@@ -1,8 +1,8 @@
 {% from "ui/icons.html" import icon %}
-{% from "ui/display.html" import status_badge %}
+{% from "ui/display.html" import status_badge, badge %}
 {% set is_active = document.status.value in ['pending', 'ocr_processing', 'ocr_done', 'ai_processing'] %}
 <div id="doc-row-{{ document.id }}"
-     class="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-border bg-surface p-4 shadow-soft transition duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-soft-lg sm:p-5"
+     class="list-row-card cursor-pointer px-4 py-4 sm:px-5 sm:py-5"
      onclick="window.location='{{ url_for('documents.detail', document_id=document.id) }}'"
      {% if is_active %}
      hx-get="{{ url_for('documents.row', document_id=document.id) }}"
@@ -10,26 +10,31 @@
      hx-swap="outerHTML"
      hx-target="this"
      {% endif %}>
-  <div class="flex min-w-0 items-center gap-3.5">
-    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-      {{ icon('file-text', class='w-5 h-5') }}
-    </span>
-    <div class="min-w-0">
-      <p class="truncate font-medium text-text">{{ document.original_filename }}</p>
-      <p class="mt-0.5 truncate text-sm text-text-muted">
-        {{ document.customer.name if document.customer else 'Kein Kunde' }}
-        {% if document.doc_type %} · {{ document.doc_type.value }}{% endif %}
-      </p>
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div class="flex min-w-0 flex-1 items-start gap-4">
+      <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+        {{ icon('file-text', class='w-5 h-5') }}
+      </span>
+      <div class="min-w-0 flex-1">
+        <div class="flex flex-wrap items-center gap-2">
+          <p class="truncate text-base font-semibold tracking-tight text-text">{{ document.original_filename }}</p>
+          {% if is_active %}{{ badge('Live', variant='info', icon_name='loader-circle') }}{% endif %}
+        </div>
+        <div class="chip-bar mt-3">
+          <span class="meta-chip">{{ document.customer.name if document.customer else 'Kein Kunde' }}</span>
+          {% if document.doc_type %}<span class="meta-chip">{{ document.doc_type.value }}</span>{% endif %}
+          <span class="meta-chip">{{ document.uploaded_at.strftime('%d.%m.%Y %H:%M') if document.uploaded_at else '–' }}</span>
+        </div>
+      </div>
     </div>
-  </div>
-  <div class="flex shrink-0 items-center gap-4">
-    <span class="hidden text-sm text-text-muted sm:inline">{{ document.uploaded_at.strftime('%d.%m.%Y %H:%M') if document.uploaded_at else '–' }}</span>
-    {{ status_badge(document.status) }}
-    <a href="{{ url_for('documents.detail', document_id=document.id) }}"
-       onclick="event.stopPropagation()"
-       class="hidden shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text transition duration-200 hover:bg-bg md:inline-flex">
-      Öffnen
-      {{ icon('chevron-right', class='w-4 h-4') }}
-    </a>
+    <div class="flex shrink-0 flex-wrap items-center gap-3">
+      {{ status_badge(document.status) }}
+      <a href="{{ url_for('documents.detail', document_id=document.id) }}"
+         onclick="event.stopPropagation()"
+         class="btn btn-secondary px-4 py-2 text-sm">
+        Oeffnen
+        {{ icon('chevron-right', class='w-4 h-4') }}
+      </a>
+    </div>
   </div>
 </div>

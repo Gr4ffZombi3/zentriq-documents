@@ -1,20 +1,27 @@
 {% from "ui/icons.html" import icon %}
 {% from "ui/display.html" import badge %}
-<h3 class="text-sm font-semibold text-text">Empfehlungen</h3>
-<div class="mt-3 flex flex-col gap-2">
+<div class="section-heading">
+  <div>
+    <h3 class="section-title">Empfehlungen</h3>
+    <p class="section-copy">Handlungsvorschlaege, die direkt aus der Analyse abgeleitet wurden.</p>
+  </div>
+</div>
+<div class="list-stack mt-4">
   {% for rec in document.recommendations %}
     {% set priority_variant = {'high': 'danger', 'medium': 'warning', 'low': 'muted'}.get(rec.priority.value, 'muted') %}
-    <div class="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2.5">
-      <div class="flex min-w-0 items-center gap-2.5">
-        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-          {{ icon('list-checks', class='w-3.5 h-3.5') }}
-        </span>
-        <div class="min-w-0">
-          <p class="truncate text-sm font-medium text-text">{{ rec.label }}</p>
-          {% if rec.customer %}<p class="truncate text-xs text-text-muted">{{ rec.customer.name }}</p>{% endif %}
+    <div class="list-row-card p-4">
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex min-w-0 items-center gap-3">
+          <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            {{ icon('list-checks', class='w-4 h-4') }}
+          </span>
+          <div class="min-w-0">
+            <p class="truncate text-sm font-semibold text-text">{{ rec.label }}</p>
+            {% if rec.customer %}<p class="truncate text-xs text-text-muted">{{ rec.customer.name }}</p>{% endif %}
+          </div>
         </div>
+        {{ badge(rec.priority.value | capitalize, variant=priority_variant) }}
       </div>
-      {{ badge(rec.priority.value | capitalize, variant=priority_variant) }}
     </div>
   {% endfor %}
 </div>

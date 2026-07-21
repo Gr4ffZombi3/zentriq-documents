@@ -1,73 +1,70 @@
 {% extends "base.html" %}
-{% from "ui/icons.html" import icon %}
-{% from "ui/display.html" import card, badge %}
+{% from "ui/display.html" import badge, card, page_header %}
 {% from "ui/forms.html" import input_field, button %}
-{% block title %}Profil – Zentriq Documents{% endblock %}
+{% block title %}Profil - Zentriq Documents{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-2xl">
-  <div class="mb-8 flex items-center gap-4">
-    <span class="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-2xl font-semibold text-primary">
-      {{ current_user.email[0] | upper }}
-    </span>
-    <div>
-      <h1 class="text-xl font-semibold text-text">{{ current_user.email }}</h1>
-      <p class="text-sm text-text-muted">{{ tenant.name if tenant else "—" }}</p>
+<div class="page-shell">
+  {% call page_header('Profil', 'Kontoinformationen, Sicherheit und persoenliche Einstellungen an einem Ort.', 'Account settings') %}{% endcall %}
+
+  <div class="grid gap-6 xl:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]">
+    {% call card(padding='p-6 sm:p-7', tone='strong') %}
+      <div class="flex items-start gap-4">
+        <span class="avatar-chip h-16 w-16 shrink-0 rounded-[1.35rem] text-lg">{{ current_user.email[0] | upper }}</span>
+        <div class="min-w-0">
+          <h2 class="text-2xl font-semibold tracking-tight text-text">{{ current_user.email }}</h2>
+          <p class="mt-3 text-sm leading-7 text-text-muted">{{ tenant.name if tenant else '-' }}</p>
+        </div>
+      </div>
+
+      <div class="info-grid mt-6">
+        <div class="info-item">
+          <dt>E-Mail</dt>
+          <dd>{{ current_user.email }}</dd>
+        </div>
+        <div class="info-item">
+          <dt>Firma</dt>
+          <dd>{{ tenant.name if tenant else '-' }}</dd>
+        </div>
+      </div>
+    {% endcall %}
+
+    <div class="flex flex-col gap-6">
+      {% call card(padding='p-6 sm:p-7') %}
+        <div class="section-heading">
+          <div>
+            <h2 class="section-title">Passwort aendern</h2>
+            <p class="section-copy">Waehle ein neues, sicheres Passwort mit mindestens 8 Zeichen.</p>
+          </div>
+        </div>
+        <form method="post" class="mt-6 flex flex-col gap-5">
+          {{ form.hidden_tag() }}
+          {{ input_field(form.current_password, icon_name='lock', autocomplete='current-password') }}
+          {{ input_field(form.new_password, icon_name='lock', autocomplete='new-password') }}
+          {{ input_field(form.new_password_confirm, icon_name='lock', autocomplete='new-password') }}
+          {{ button(form.submit.label.text, variant='primary', type='submit', size='lg') }}
+        </form>
+      {% endcall %}
+
+      {% call card(padding='p-6 sm:p-7') %}
+        <div class="section-heading">
+          <div>
+            <h2 class="section-title">Zwei-Faktor-Authentifizierung</h2>
+            <p class="section-copy">Zusaetzlicher Schutz per Authenticator-App.</p>
+          </div>
+          {{ badge('Bald verfuegbar', variant='muted', icon_name='clock') }}
+        </div>
+      {% endcall %}
+
+      {% call card(padding='p-6 sm:p-7') %}
+        <div class="section-heading">
+          <div>
+            <h2 class="section-title">API-Zugaenge</h2>
+            <p class="section-copy">Programmatischer Zugriff auf Zentriq Documents.</p>
+          </div>
+          {{ badge('Bald verfuegbar', variant='muted', icon_name='clock') }}
+        </div>
+      {% endcall %}
     </div>
-  </div>
-
-  <div class="flex flex-col gap-6">
-    {% call card() %}
-      <h2 class="mb-1 text-base font-semibold text-text">Konto</h2>
-      <p class="mb-5 text-sm text-text-muted">Deine Basisdaten bei Zentriq Documents.</p>
-      <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <dt class="text-xs font-medium uppercase tracking-wide text-text-muted">E-Mail</dt>
-          <dd class="mt-1 text-sm text-text">{{ current_user.email }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs font-medium uppercase tracking-wide text-text-muted">Firma</dt>
-          <dd class="mt-1 text-sm text-text">{{ tenant.name if tenant else "—" }}</dd>
-        </div>
-      </dl>
-    {% endcall %}
-
-    {% call card() %}
-      <h2 class="mb-1 text-base font-semibold text-text">Passwort ändern</h2>
-      <p class="mb-5 text-sm text-text-muted">Wähle ein neues, sicheres Passwort mit mindestens 8 Zeichen.</p>
-      <form method="post" class="flex flex-col gap-5">
-        {{ form.hidden_tag() }}
-        {{ input_field(form.current_password, icon_name='lock', autocomplete='current-password') }}
-        {{ input_field(form.new_password, icon_name='lock', autocomplete='new-password') }}
-        {{ input_field(form.new_password_confirm, icon_name='lock', autocomplete='new-password') }}
-        {{ button(form.submit.label.text, variant='primary', type='submit', size='lg') }}
-      </form>
-    {% endcall %}
-
-    {% call card() %}
-      <div class="flex items-start justify-between gap-4">
-        <div class="flex items-start gap-3">
-          <span class="mt-0.5 text-text-muted">{{ icon('shield', class='w-5 h-5') }}</span>
-          <div>
-            <h2 class="text-base font-semibold text-text">Zwei-Faktor-Authentifizierung</h2>
-            <p class="mt-1 text-sm text-text-muted">Zusätzlicher Schutz per Authenticator-App.</p>
-          </div>
-        </div>
-        {{ badge('Bald verfügbar', variant='muted', icon_name='clock') }}
-      </div>
-    {% endcall %}
-
-    {% call card() %}
-      <div class="flex items-start justify-between gap-4">
-        <div class="flex items-start gap-3">
-          <span class="mt-0.5 text-text-muted">{{ icon('key', class='w-5 h-5') }}</span>
-          <div>
-            <h2 class="text-base font-semibold text-text">API-Zugänge</h2>
-            <p class="mt-1 text-sm text-text-muted">Programmatischer Zugriff auf Zentriq Documents.</p>
-          </div>
-        </div>
-        {{ badge('Bald verfügbar', variant='muted', icon_name='clock') }}
-      </div>
-    {% endcall %}
   </div>
 </div>
 {% endblock %}

@@ -1,35 +1,39 @@
 {% extends "base.html" %}
-{% from "ui/icons.html" import icon %}
-{% block title %}Aufgaben – Zentriq Documents{% endblock %}
+{% from "ui/display.html" import empty_state, page_header %}
+{% block title %}Aufgaben - Zentriq Documents{% endblock %}
 {% block content %}
-<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-  <div>
-    <h1 class="text-2xl font-semibold tracking-tight text-text">Aufgaben</h1>
-    <p class="mt-1 text-sm text-text-muted">Automatisch erzeugte und manuell nachverfolgte Arbeitsschritte.</p>
-  </div>
-  <div class="flex gap-1 rounded-xl bg-bg p-1">
-    {% for value, label in [('open', 'Offen'), ('done', 'Erledigt'), ('dismissed', 'Verworfen'), ('all', 'Alle')] %}
-      <a href="{{ url_for('tasks.list_tasks', status=value) }}"
-         class="rounded-lg px-3.5 py-1.5 text-sm font-medium transition duration-200 {{ 'bg-surface text-text shadow-soft' if status_filter == value else 'text-text-muted hover:text-text' }}">
-        {{ label }}
-      </a>
-    {% endfor %}
-  </div>
-</div>
+<div class="page-shell">
+  {% call page_header('Aufgaben', 'Automatisch erzeugte und manuell nachverfolgte Arbeitsschritte in einer fokussierten Queue.', 'Task workflow') %}{% endcall %}
 
-{% if tasks %}
-<div class="flex flex-col gap-3">
-  {% for task in tasks %}
-    {% include "tasks/_task_row.html" %}
-  {% endfor %}
+  <section class="surface-card p-5 sm:p-6">
+    <div class="section-heading">
+      <div>
+        <h2 class="section-title">Statusansicht</h2>
+        <p class="section-copy">Filtere zwischen offenen, erledigten, verworfenen und allen Aufgaben.</p>
+      </div>
+      <div class="surface-card surface-card-muted p-1.5">
+        <div class="grid grid-cols-2 gap-1 sm:grid-cols-4">
+          {% for value, label in [('open', 'Offen'), ('done', 'Erledigt'), ('dismissed', 'Verworfen'), ('all', 'Alle')] %}
+            <a href="{{ url_for('tasks.list_tasks', status=value) }}"
+               class="rounded-[0.95rem] px-3.5 py-2.5 text-center text-sm font-semibold transition duration-200 {{ 'bg-surface text-text shadow-soft' if status_filter == value else 'text-text-muted hover:text-text' }}">
+              {{ label }}
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    {% if tasks %}
+      <div class="list-stack mt-6">
+        {% for task in tasks %}
+          {% include "tasks/_task_row.html" %}
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="mt-6">
+        {% call empty_state('Keine Aufgaben in dieser Ansicht', 'Neue Aufgaben entstehen automatisch nach jeder Dokumentenanalyse und erscheinen hier mit klarer Priorisierung.', 'list-todo') %}{% endcall %}
+      </div>
+    {% endif %}
+  </section>
 </div>
-{% else %}
-  <div class="flex flex-col items-center rounded-2xl border border-dashed border-border py-20 text-center">
-    <span class="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-      {{ icon('list-todo', class='w-6 h-6') }}
-    </span>
-    <p class="font-medium text-text">Keine Aufgaben in dieser Ansicht</p>
-    <p class="mt-1 text-sm text-text-muted">Neue Aufgaben entstehen automatisch nach jeder Dokumentenanalyse.</p>
-  </div>
-{% endif %}
 {% endblock %}

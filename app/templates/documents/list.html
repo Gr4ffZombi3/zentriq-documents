@@ -1,29 +1,27 @@
 {% extends "base.html" %}
-{% from "ui/icons.html" import icon %}
+{% from "ui/display.html" import page_header, empty_state %}
+{% from "ui/forms.html" import button %}
 {% block title %}Dokumente – Zentriq Documents{% endblock %}
 {% block content %}
-<div class="mb-6">
-  <h1 class="text-2xl font-semibold tracking-tight text-text">Dokumente</h1>
-  <p class="mt-1 text-sm text-text-muted">Alle hochgeladenen Dokumente und ihr Analysestatus.</p>
-</div>
+<div class="page-shell">
+  {% call page_header(
+    "Dokumente",
+    "Die zentrale Arbeitsqueue fuer alle hochgeladenen Dokumente, ihren Analysestatus und den direkten Einstieg in Detail-Workspaces.",
+    "Document Queue"
+  ) %}
+    {{ button('KI-Suche', href=url_for('search.search'), variant='secondary', icon_name='search') }}
+  {% endcall %}
 
-<div class="mb-6">
   {% include "components/upload_widget.html" %}
-</div>
 
-{% if documents %}
-<div class="flex flex-col gap-3">
-  {% for document in documents %}
-    {% include "documents/_row.html" %}
-  {% endfor %}
+  {% if documents %}
+    <div class="list-stack">
+      {% for document in documents %}
+        {% include "documents/_row.html" %}
+      {% endfor %}
+    </div>
+  {% else %}
+    {% call empty_state('Noch keine Dokumente hochgeladen', 'Lade oben eine PDF-Datei hoch, um mit OCR, Analyse und den daraus entstehenden Empfehlungen zu starten.', 'file-text') %}{% endcall %}
+  {% endif %}
 </div>
-{% else %}
-  <div class="flex flex-col items-center rounded-2xl border border-dashed border-border py-20 text-center">
-    <span class="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-      {{ icon('file-text', class='w-6 h-6') }}
-    </span>
-    <p class="font-medium text-text">Noch keine Dokumente hochgeladen</p>
-    <p class="mt-1 text-sm text-text-muted">Lade oben eine PDF-Datei hoch, um mit der KI-Analyse zu starten.</p>
-  </div>
-{% endif %}
 {% endblock %}

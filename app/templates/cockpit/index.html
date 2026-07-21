@@ -1,86 +1,75 @@
 {% extends "base.html" %}
 {% from "ui/icons.html" import icon %}
-{% from "ui/display.html" import card, badge %}
+{% from "ui/display.html" import card, page_header, stat_card, empty_state %}
+{% from "ui/forms.html" import button %}
 {% block title %}Tagescockpit – Zentriq Documents{% endblock %}
 {% block content %}
-<div class="mb-6">
-  <h1 class="text-2xl font-semibold tracking-tight text-text">Tagescockpit</h1>
-  <p class="mt-1 text-sm text-text-muted">Das Wichtigste für dich heute – auf einen Blick.</p>
-</div>
-
-<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-  {% call card(hover=True) %}
-    <div class="flex items-center gap-2 text-sm font-medium text-text-muted">
-      {{ icon('flame', class='w-4 h-4 text-error') }}
-      Heute höchste Priorität
-    </div>
-    {% if cockpit.top_priority_task %}
-      <p class="mt-3 font-medium text-text">{{ cockpit.top_priority_task.title }}</p>
-      <p class="mt-1 text-sm text-text-muted">{{ cockpit.top_priority_task.customer.name if cockpit.top_priority_task.customer else 'Kein Kunde' }}</p>
-      <a href="{{ url_for('tasks.list_tasks') }}" class="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-hover">
-        Zu den Aufgaben {{ icon('chevron-right', class='w-4 h-4') }}
-      </a>
-    {% else %}
-      <p class="mt-3 text-sm text-text-muted">Keine offenen Aufgaben.</p>
-    {% endif %}
+<div class="page-shell">
+  {% call page_header(
+    "Tagescockpit",
+    "Das Wichtigste fuer heute in einer konzentrierten Arbeitsansicht: Prioritaeten, Rueckrufe, Potenziale und Kennzahlen.",
+    "Daily Focus"
+  ) %}
+    {{ button('Zu den Aufgaben', href=url_for('tasks.list_tasks'), variant='secondary', icon_name='list-todo') }}
+    {{ button('Dokumente oeffnen', href=url_for('documents.list_documents'), variant='ghost', icon_name='file-text') }}
   {% endcall %}
 
-  {% call card(hover=True) %}
-    <div class="flex items-center gap-2 text-sm font-medium text-text-muted">
-      {{ icon('phone', class='w-4 h-4 text-primary') }}
-      Heute anrufen
-    </div>
-    {% if cockpit.call_today_tasks %}
-      <div class="mt-3 flex flex-col gap-2">
-        {% for task in cockpit.call_today_tasks %}
-          <p class="text-sm text-text">{{ task.customer.name if task.customer else task.title }}</p>
-        {% endfor %}
-      </div>
-    {% else %}
-      <p class="mt-3 text-sm text-text-muted">Niemand steht heute zum Anrufen an.</p>
-    {% endif %}
-  {% endcall %}
+  <div class="stat-grid stat-grid-3">
+    {{ stat_card('Ueberfaellige Vorgaenge', cockpit.overdue_tasks_count, icon_name='alert-triangle', variant='warning', meta='Faelle mit unmittelbarem Nachfassbedarf', tone='strong') }}
+    {{ stat_card('Neue Dokumente', cockpit.new_documents_count, icon_name='file-text', variant='info', meta='Neue Uploads der letzten 24 Stunden') }}
+    {{ stat_card('Abschlussquote', cockpit.abschlussquote_percent ~ '%', icon_name='trending-up', variant='success', meta='Persoenliche Abschlussquote') }}
+  </div>
 
-  {% call card(hover=True) %}
-    <div class="flex items-center gap-2 text-sm font-medium text-text-muted">
-      {{ icon('target', class='w-4 h-4 text-success') }}
-      Höchstes Potenzial
-    </div>
-    {% if cockpit.top_potential %}
-      <p class="mt-3 font-medium text-text">{{ cockpit.top_potential.customer.name }}</p>
-      <p class="mt-1 text-sm text-text-muted">Potenzial-Score: {{ cockpit.top_potential.potential_score }}</p>
-    {% else %}
-      <p class="mt-3 text-sm text-text-muted">Noch keine Daten vorhanden.</p>
-    {% endif %}
-  {% endcall %}
+  <div class="grid gap-6 xl:grid-cols-3">
+    {% call card(padding='p-6', hover=True) %}
+      <p class="stat-label">Hoechste Prioritaet</p>
+      {% if cockpit.top_priority_task %}
+        <div class="mt-4 space-y-4">
+          <div>
+            <p class="text-lg font-semibold tracking-tight text-text">{{ cockpit.top_priority_task.title }}</p>
+            <p class="mt-2 text-sm text-text-muted">{{ cockpit.top_priority_task.customer.name if cockpit.top_priority_task.customer else 'Kein Kunde' }}</p>
+          </div>
+          <a href="{{ url_for('tasks.list_tasks') }}" class="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-hover">
+            Zu den Aufgaben {{ icon('chevron-right', class='w-4 h-4') }}
+          </a>
+        </div>
+      {% else %}
+        {% call empty_state('Keine offene Prioritaet', 'Aktuell gibt es keine Aufgabe mit besonderem Vorrang.', 'list-todo') %}{% endcall %}
+      {% endif %}
+    {% endcall %}
 
-  {% call card(hover=True) %}
-    <div class="flex items-center gap-2 text-sm font-medium text-text-muted">
-      {{ icon('alert-triangle', class='w-4 h-4 text-warning') }}
-      Überfällige Vorgänge
-    </div>
-    <p class="mt-3 text-3xl font-semibold tracking-tight text-text">{{ cockpit.overdue_tasks_count }}</p>
-    {% if cockpit.overdue_tasks_count %}
-      <a href="{{ url_for('tasks.list_tasks') }}" class="mt-2 inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-hover">
-        Ansehen {{ icon('chevron-right', class='w-4 h-4') }}
-      </a>
-    {% endif %}
-  {% endcall %}
+    {% call card(padding='p-6', hover=True, tone='muted') %}
+      <p class="stat-label">Heute anrufen</p>
+      {% if cockpit.call_today_tasks %}
+        <div class="list-stack mt-4">
+          {% for task in cockpit.call_today_tasks %}
+            <div class="list-row-card px-4 py-4">
+              <p class="text-sm font-semibold text-text">{{ task.customer.name if task.customer else task.title }}</p>
+              <p class="mt-1 text-sm text-text-muted">{{ task.title }}</p>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        {% call empty_state('Keine Rueckrufe geplant', 'Fuer heute sind aktuell keine Rueckrufe vorgemerkt.', 'phone') %}{% endcall %}
+      {% endif %}
+    {% endcall %}
 
-  {% call card(hover=True) %}
-    <div class="flex items-center gap-2 text-sm font-medium text-text-muted">
-      {{ icon('file-text', class='w-4 h-4 text-primary') }}
-      Neue Dokumente (24h)
-    </div>
-    <p class="mt-3 text-3xl font-semibold tracking-tight text-text">{{ cockpit.new_documents_count }}</p>
-  {% endcall %}
-
-  {% call card(hover=True) %}
-    <div class="flex items-center gap-2 text-sm font-medium text-text-muted">
-      {{ icon('trending-up', class='w-4 h-4 text-success') }}
-      Persönliche Abschlussquote
-    </div>
-    <p class="mt-3 text-3xl font-semibold tracking-tight text-text">{{ cockpit.abschlussquote_percent }}%</p>
-  {% endcall %}
+    {% call card(padding='p-6', hover=True) %}
+      <p class="stat-label">Hoechstes Potenzial</p>
+      {% if cockpit.top_potential %}
+        <div class="mt-4 space-y-4">
+          <div>
+            <p class="text-lg font-semibold tracking-tight text-text">{{ cockpit.top_potential.customer.name }}</p>
+            <p class="mt-2 text-sm text-text-muted">Potenzial-Score: {{ cockpit.top_potential.potential_score }}</p>
+          </div>
+          <a href="{{ url_for('potenziale.index') }}" class="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-hover">
+            Potenziale ansehen {{ icon('chevron-right', class='w-4 h-4') }}
+          </a>
+        </div>
+      {% else %}
+        {% call empty_state('Noch kein Potenzial erfasst', 'Sobald passende Listen analysiert wurden, erscheint hier dein staerkster naechster Hebel.', 'target') %}{% endcall %}
+      {% endif %}
+    {% endcall %}
+  </div>
 </div>
 {% endblock %}

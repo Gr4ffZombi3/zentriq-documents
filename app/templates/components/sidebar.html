@@ -12,76 +12,106 @@
   :class="{
     'translate-x-0': sidebarOpen,
     '-translate-x-full lg:translate-x-0': !sidebarOpen,
-    'lg:!w-20': railCollapsed,
+    'lg:!w-24': railCollapsed,
   }"
-  class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-border bg-surface transition-[width,transform] duration-200 ease-in-out lg:w-64"
+  class="sidebar-shell fixed inset-y-0 left-0 z-40 flex w-72 flex-col transition-[width,transform] duration-200 ease-in-out lg:w-72"
 >
-  <div class="flex h-16 shrink-0 items-center gap-1 border-b border-border px-4">
-    <a href="{{ url_for('dashboard.index') }}" class="flex flex-1 items-center gap-2.5 overflow-hidden font-semibold text-text">
-      <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-sm font-bold text-white">Z</span>
-      <span x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="whitespace-nowrap">Zentriq Documents</span>
-    </a>
-    <button
-      type="button"
-      x-on:click="railCollapsed = !railCollapsed"
-      class="hidden shrink-0 rounded-lg p-2 text-text-muted transition duration-200 hover:bg-bg hover:text-text lg:flex"
-      aria-label="Sidebar ein-/ausklappen"
-    >
-      {{ icon('panel-left', class='w-4 h-4') }}
-    </button>
+  <div class="border-b border-border/80 p-4">
+    <div class="flex items-start gap-3">
+      <a href="{{ url_for('dashboard.index') }}" class="sidebar-brand min-w-0 flex-1">
+        <span class="sidebar-brand-mark text-sm font-bold">Z</span>
+        <span x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="sidebar-brand-copy">
+          <span class="sidebar-brand-title">Zentriq Documents</span>
+          <span class="sidebar-brand-subtitle">AI workspace for insurance operations</span>
+        </span>
+      </a>
+      <button
+        type="button"
+        x-on:click="railCollapsed = !railCollapsed"
+        class="topbar-icon-button hidden shrink-0 lg:inline-flex"
+        aria-label="Sidebar ein-/ausklappen"
+      >
+        {{ icon('panel-left', class='w-4 h-4') }}
+      </button>
+    </div>
+
+    <div x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="sidebar-note mt-4">
+      <p class="text-sm font-medium leading-6 text-text">
+        Ein ruhiger Arbeitsmodus fuer Upload, Analyse, Empfehlungen und praezise Folgearbeit.
+      </p>
+      <div class="chip-bar mt-3">
+        <span class="meta-chip">Breiter Shell</span>
+        <span class="meta-chip">Fokus auf Queue &amp; Details</span>
+      </div>
+    </div>
   </div>
 
-  <nav class="flex-1 space-y-1 overflow-y-auto overflow-x-hidden px-3 py-4">
-    {% set nav_items = [
-      ('dashboard.index', 'layout-dashboard', 'Dashboard', ''),
-      ('cockpit.index', 'flame', 'Tagescockpit', ''),
-      ('documents.list_documents', 'file-text', 'Dokumente', ''),
-      ('customers.list_customers', 'users', 'Kunden', ''),
-      ('potenziale.index', 'target', 'Potenziale', ''),
-      ('potenziale.vergleich', 'git-compare', 'Listenvergleich', ''),
-      ('recommendations.list_recommendations', 'list-checks', 'Empfehlungen', ''),
-      ('tasks.list_tasks', 'list-todo', 'Aufgaben', ''),
-      ('bestand.index', 'briefcase', 'Mein Bestand', ''),
-      ('documents.list_documents', 'upload', 'Upload', '#upload-widget'),
-      ('settings.users', 'user-cog', 'Benutzer', ''),
-      ('settings.index', 'settings', 'Einstellungen', ''),
+  <div class="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4">
+    {% set nav_groups = [
+      ('Workspace', [
+        ('dashboard.index', 'layout-dashboard', 'Dashboard', ''),
+        ('cockpit.index', 'flame', 'Tagescockpit', ''),
+        ('documents.list_documents', 'file-text', 'Dokumente', ''),
+        ('documents.list_documents', 'upload', 'Upload', '#upload-widget'),
+        ('search.search', 'search', 'KI-Suche', ''),
+      ]),
+      ('Beziehungen & Chancen', [
+        ('customers.list_customers', 'users', 'Kunden', ''),
+        ('potenziale.index', 'target', 'Potenziale', ''),
+        ('potenziale.vergleich', 'git-compare', 'Listenvergleich', ''),
+        ('recommendations.list_recommendations', 'list-checks', 'Empfehlungen', ''),
+        ('tasks.list_tasks', 'list-todo', 'Aufgaben', ''),
+        ('bestand.index', 'briefcase', 'Mein Bestand', ''),
+      ]),
+      ('System', [
+        ('settings.users', 'user-cog', 'Benutzer', ''),
+        ('settings.index', 'settings', 'Einstellungen', ''),
+      ]),
     ] %}
-    {% for endpoint, icon_name, label, anchor in nav_items %}
-      {% set is_active = request.endpoint == endpoint and not anchor %}
-      <a
-        href="{{ url_for(endpoint) }}{{ anchor }}"
-        class="flex items-center gap-3 rounded-xl px-2.5 py-2.5 text-sm font-medium transition duration-200 {{ 'bg-primary/10 text-primary' if is_active else 'text-text-muted hover:bg-bg hover:text-text hover:translate-x-0.5' }}"
-      >
-        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg {{ 'bg-primary/15' if is_active else '' }}">
-          {{ icon(icon_name, class='w-5 h-5') }}
-        </span>
-        <span x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="whitespace-nowrap">{{ label }}</span>
-      </a>
-    {% endfor %}
-  </nav>
 
-  <div class="space-y-1 border-t border-border p-3">
-    <button
-      type="button"
-      x-data="{ dark: document.documentElement.classList.contains('dark') }"
-      x-on:click="dark = !dark; document.documentElement.classList.toggle('dark', dark); localStorage.setItem('zentriq-theme', dark ? 'dark' : 'light')"
-      class="flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-sm font-medium text-text-muted transition duration-200 hover:bg-bg hover:text-text"
-    >
-      <span class="flex h-9 w-9 shrink-0 items-center justify-center">
-        <template x-if="!dark">{{ icon('moon') }}</template>
-        <template x-if="dark">{{ icon('sun') }}</template>
-      </span>
-      <span x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="whitespace-nowrap" x-text="dark ? 'Hell-Modus' : 'Dunkel-Modus'"></span>
-    </button>
-    <form method="post" action="{{ url_for('auth.logout') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button
-        type="submit"
-        class="flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-sm font-medium text-text-muted transition duration-200 hover:bg-bg hover:text-text"
-      >
-        <span class="flex h-9 w-9 shrink-0 items-center justify-center">{{ icon('log-out') }}</span>
-        <span x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="whitespace-nowrap">Abmelden</span>
-      </button>
-    </form>
+    <nav class="space-y-5">
+      {% for group_label, nav_items in nav_groups %}
+        <div class="space-y-1">
+          <p x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="sidebar-section-label">
+            {{ group_label }}
+          </p>
+          {% for endpoint, icon_name, label, anchor in nav_items %}
+            {% set is_active = request.endpoint == endpoint and not anchor %}
+            <a
+              href="{{ url_for(endpoint) }}{{ anchor }}"
+              class="nav-link {{ 'nav-link-active' if is_active else '' }}"
+            >
+              <span class="nav-icon">
+                {{ icon(icon_name, class='w-4.5 h-4.5') }}
+              </span>
+              <span x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="min-w-0 flex-1 truncate text-sm font-medium">
+                {{ label }}
+              </span>
+            </a>
+          {% endfor %}
+        </div>
+      {% endfor %}
+    </nav>
+  </div>
+
+  <div class="border-t border-border/80 p-3">
+    <div class="sidebar-note">
+      <div class="flex items-center gap-3">
+        <span class="avatar-chip">
+          {{ current_user.email[0] | upper if current_user and current_user.is_authenticated else 'Z' }}
+        </span>
+        <div x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="min-w-0">
+          <p class="truncate text-sm font-semibold text-text">{{ current_user.email if current_user and current_user.is_authenticated else 'Workspace' }}</p>
+          <p class="truncate text-xs text-text-muted">Sicherer Dokumentenbereich</p>
+        </div>
+      </div>
+      <form method="post" action="{{ url_for('auth.logout') }}" class="mt-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="dropdown-link w-full justify-center border border-border/70 bg-surface/70 font-medium">
+          {{ icon('log-out', class='w-4 h-4') }}
+          <span x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms>Abmelden</span>
+        </button>
+      </form>
+    </div>
   </div>
 </aside>

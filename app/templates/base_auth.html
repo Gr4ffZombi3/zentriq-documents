@@ -8,8 +8,59 @@
 <body class="bg-bg text-text antialiased">
   {% from "ui/overlays.html" import toast_container %}
   {{ toast_container() }}
-  <main class="flex min-h-screen items-center justify-center bg-[radial-gradient(ellipse_at_top,_color-mix(in_oklab,var(--color-primary)_7%,transparent)_0%,_transparent_60%)] p-4">
-    {% block content %}{% endblock %}
+  <main class="flex min-h-screen items-center justify-center p-4 sm:p-6 lg:p-8">
+    <div class="auth-shell">
+      <section class="auth-hero hidden lg:flex lg:flex-col lg:justify-between">
+        <div class="relative z-10">
+          <span class="hero-badge">Zentriq Workspace</span>
+          <h1 class="mt-6 text-[3.4rem] font-semibold leading-[0.92] tracking-[-0.08em] text-text">
+            Dokumentenarbeit, die wie ein ruhiger AI-Workspace wirkt.
+          </h1>
+          <p class="mt-6 max-w-xl text-base leading-8 text-text-muted">
+            Fuer Versicherungs- und Kfz-Teams gebaut: konzentrierte Oberflaechen, starke
+            Informationshierarchie und ein Arbeitsfluss, der Upload, Analyse und Folgeaufgaben
+            elegant zusammenfuehrt.
+          </p>
+          <div class="chip-bar mt-8">
+            <span class="meta-chip">Desktop first</span>
+            <span class="meta-chip">Live Status</span>
+            <span class="meta-chip">Calm AI</span>
+          </div>
+        </div>
+
+        <div class="relative z-10 grid gap-3 sm:grid-cols-3">
+          <div class="surface-card surface-card-strong p-5">
+            <p class="stat-label">Verarbeitung</p>
+            <p class="mt-4 text-2xl font-semibold tracking-tight text-text">HTMX live</p>
+            <p class="mt-2 text-sm leading-6 text-text-muted">Statusaenderungen bleiben direkt im Arbeitsfluss sichtbar.</p>
+          </div>
+          <div class="surface-card p-5">
+            <p class="stat-label">Layout</p>
+            <p class="mt-4 text-2xl font-semibold tracking-tight text-text">Breit &amp; klar</p>
+            <p class="mt-2 text-sm leading-6 text-text-muted">Gebaut fuer grosse Monitore und dichte Facharbeit.</p>
+          </div>
+          <div class="surface-card p-5">
+            <p class="stat-label">Tonality</p>
+            <p class="mt-4 text-2xl font-semibold tracking-tight text-text">Premium ruhig</p>
+            <p class="mt-2 text-sm leading-6 text-text-muted">Weniger Admin-Panel, mehr konzentrierte Produktoberflaeche.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="auth-card flex items-center justify-center">
+        <div class="w-full max-w-[460px]">
+          <div class="mb-8 lg:hidden">
+            <span class="hero-badge">Zentriq Workspace</span>
+            <p class="mt-4 text-sm leading-7 text-text-muted">
+              Dokumentenarbeit fuer Versicherungs- und Kfz-Teams mit ruhigem, modernem
+              Workspace-Gefuehl.
+            </p>
+            <div class="mt-6 subtle-divider"></div>
+          </div>
+          {% block content %}{% endblock %}
+        </div>
+      </section>
+    </div>
   </main>
 </body>
 </html>

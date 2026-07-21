@@ -1,46 +1,46 @@
 {% extends "base.html" %}
 {% from "ui/icons.html" import icon %}
+{% from "ui/display.html" import empty_state, page_header %}
 {% from "ui/forms.html" import button %}
-{% block title %}Suche – Zentriq Documents{% endblock %}
+{% block title %}Suche - Zentriq Documents{% endblock %}
 {% block content %}
-<div class="mb-6">
-  <h1 class="text-2xl font-semibold tracking-tight text-text">KI-Suche</h1>
-  <p class="mt-1 text-sm text-text-muted">Durchsuche Dokumente in natürlicher Sprache.</p>
-</div>
+<div class="page-shell">
+  {% call page_header('KI-Suche', 'Durchsuche Dokumente in natuerlicher Sprache und springe direkt in relevante Treffer.', 'Search workspace') %}{% endcall %}
 
-<form method="get" action="{{ url_for('search.search') }}" class="mb-6 flex flex-col gap-3 sm:flex-row">
-  <div class="relative flex-1">
-    <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
-      {{ icon('search', class='w-4 h-4') }}
-    </span>
-    <input type="text" name="q" value="{{ query }}" aria-label="KI-Suche" placeholder='z.B. „Zeige alle Kunden aus Köln“'
-           class="w-full rounded-lg border border-border bg-surface py-2.5 pl-10 pr-3.5 text-sm text-text placeholder:text-text-muted transition duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
-  </div>
-  {{ button('Suchen', type='submit', icon_name='search') }}
-</form>
+  <section class="surface-card p-5 sm:p-6">
+    <form method="get" action="{{ url_for('search.search') }}" class="flex flex-col gap-3 sm:flex-row">
+      <div class="relative flex-1">
+        <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-text-soft">
+          {{ icon('search', class='w-4 h-4') }}
+        </span>
+        <input type="text" name="q" value="{{ query }}" aria-label="KI-Suche" placeholder='z.B. "Zeige alle Kunden aus Koeln"'
+               class="field-surface pl-11 text-sm">
+      </div>
+      {{ button('Suchen', type='submit', icon_name='search') }}
+    </form>
 
-{% if query %}
-  <p class="mb-4 text-sm text-text-muted">
-    {{ documents | length }} Ergebnis(se) für „{{ query }}“
-    {% if used_fallback %}
-      <span class="ml-1 inline-flex items-center gap-1 text-warning">{{ icon('info', class='w-3.5 h-3.5') }}einfache Textsuche, kein KI-Filter erkannt</span>
+    {% if query %}
+      <div class="mt-6">
+        <p class="text-sm text-text-muted">
+          {{ documents | length }} Ergebnis(se) fuer "{{ query }}"
+          {% if used_fallback %}
+            <span class="ml-2 inline-flex items-center gap-1 text-warning">{{ icon('info', class='w-3.5 h-3.5') }}einfache Textsuche, kein KI-Filter erkannt</span>
+          {% endif %}
+        </p>
+
+        {% if documents %}
+          <div class="list-stack mt-5">
+            {% for document in documents %}
+              {% include "documents/_row.html" %}
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="mt-6">
+            {% call empty_state('Keine Ergebnisse', 'Versuche eine andere Suchanfrage oder formuliere sie etwas allgemeiner.', 'search') %}{% endcall %}
+          </div>
+        {% endif %}
+      </div>
     {% endif %}
-  </p>
-
-  {% if documents %}
-  <div class="flex flex-col gap-3">
-    {% for document in documents %}
-      {% include "documents/_row.html" %}
-    {% endfor %}
-  </div>
-  {% else %}
-    <div class="flex flex-col items-center rounded-xl border border-dashed border-border py-16 text-center">
-      <span class="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-        {{ icon('search', class='w-6 h-6') }}
-      </span>
-      <p class="font-medium text-text">Keine Ergebnisse</p>
-      <p class="mt-1 text-sm text-text-muted">Versuche eine andere Suchanfrage.</p>
-    </div>
-  {% endif %}
-{% endif %}
+  </section>
+</div>
 {% endblock %}

@@ -11,11 +11,11 @@
   ('Produkte', document.products | join(', ') if document.products else None),
   ('Besonderheiten', document.special_notes),
 ] %}
-<dl class="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+<div class="info-grid sm:grid-cols-2">
   {% for label, value in fields %}
-    <div>
-      <dt class="text-xs font-medium uppercase tracking-wide text-text-muted">{{ label }}</dt>
-      <dd class="mt-0.5 text-sm text-text">{{ value or '–' }}</dd>
+    <div class="info-item">
+      <dt>{{ label }}</dt>
+      <dd>{{ value or '-' }}</dd>
     </div>
   {% endfor %}
-</dl>
+</div>

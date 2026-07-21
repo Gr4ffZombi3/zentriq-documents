@@ -3,22 +3,28 @@
 {% from "ui/forms.html" import input_field, button, field_errors %}
 {% block title %}Anmelden – Zentriq Documents{% endblock %}
 {% block content %}
-<div class="w-full max-w-md">
-  <div class="mb-8 flex flex-col items-center gap-3 text-center">
-    <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-lg font-bold text-white">Z</span>
-    <h1 class="text-2xl font-semibold tracking-tight text-text">Willkommen zurück</h1>
-    <p class="text-sm text-text-muted">Melde dich bei Zentriq Documents an.</p>
+<div class="space-y-8">
+  <div>
+    <span class="hero-badge">Sign in</span>
+    <h1 class="mt-5 text-3xl font-semibold tracking-tight text-text">Willkommen zurueck</h1>
+    <p class="mt-3 text-sm leading-7 text-text-muted">
+      Melde dich bei Zentriq Documents an und arbeite weiter in deinem ruhigen
+      Dokumenten-Workspace.
+    </p>
   </div>
 
-  <div class="rounded-2xl border border-border bg-surface p-8 shadow-soft">
-    <form method="post" class="flex flex-col gap-5" x-data="{ type: '{{ form.login_type.data or 'email' }}' }">
+  <div class="surface-card p-6 sm:p-7">
+    <form method="post" class="space-y-5" x-data="{ type: '{{ form.login_type.data or 'email' }}' }">
       {{ form.hidden_tag() }}
 
-      <div>
-        <div class="grid grid-cols-2 gap-1 rounded-xl bg-bg p-1">
+      <div class="space-y-2">
+        <label class="field-label">Anmeldemodus</label>
+        <div class="segmented-shell grid grid-cols-2">
           {% for subfield in form.login_type %}
-            <label class="cursor-pointer rounded-lg py-1.5 text-center text-sm font-medium transition duration-200"
-                   :class="type === '{{ subfield.data }}' ? 'bg-surface text-text shadow-soft' : 'text-text-muted hover:text-text'">
+            <label
+              class="cursor-pointer rounded-[0.95rem] px-3 py-2 text-center text-sm font-medium transition duration-200"
+              :class="type === '{{ subfield.data }}' ? 'bg-surface text-text shadow-soft' : 'text-text-muted hover:text-text'"
+            >
               {{ subfield(**{'x-model': 'type', 'class': 'sr-only'}) }}
               {{ subfield.label.text }}
             </label>
@@ -26,24 +32,34 @@
         </div>
       </div>
 
-      <div class="flex flex-col gap-1.5">
-        <label for="identifier" class="text-sm font-medium text-text" x-text="type === 'email' ? 'E-Mail' : 'Vermittlernummer'"></label>
+      <div class="flex flex-col gap-2">
+        <label for="identifier" class="field-label" x-text="type === 'email' ? 'E-Mail' : 'Vermittlernummer'"></label>
         <div class="relative">
-          <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-text-muted">
+          <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-text-soft">
             <template x-if="type === 'email'">{{ icon('mail', class='w-4 h-4') }}</template>
             <template x-if="type === 'vermittlernummer'">{{ icon('key', class='w-4 h-4') }}</template>
           </span>
-          {{ form.identifier(id='identifier', class_="w-full rounded-xl border border-border bg-surface px-4 py-3 pl-10 text-sm text-text placeholder:text-text-muted transition duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary", **{':placeholder': "type === 'email' ? 'du@firma.de' : 'z.B. 123456'"}) }}
+          {{ form.identifier(
+            id='identifier',
+            class_='field-surface pl-11 text-sm',
+            **{':placeholder': "type === 'email' ? 'du@firma.de' : 'z.B. 123456'"}
+          ) }}
         </div>
         {{ field_errors(form.identifier) }}
       </div>
 
       {{ input_field(form.password, icon_name='lock', autocomplete='current-password') }}
-      {{ button(form.submit.label.text, variant='primary', type='submit', size='lg', extra_class='w-full mt-1') }}
+
+      <div class="space-y-3 pt-2">
+        {{ button(form.submit.label.text, variant='primary', type='submit', size='lg', extra_class='w-full') }}
+        <p class="text-xs leading-6 text-text-muted">
+          Zugriff nur fuer autorisierte Versicherungs- und Kfz-Teams.
+        </p>
+      </div>
     </form>
   </div>
 
-  <p class="mt-6 text-center text-sm text-text-muted">
+  <p class="text-center text-sm text-text-muted">
     Noch kein Konto?
     <a href="{{ url_for('auth.register') }}" class="font-medium text-primary hover:text-primary-hover">Jetzt registrieren</a>
   </p>

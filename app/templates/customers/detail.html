@@ -1,104 +1,121 @@
 {% extends "base.html" %}
 {% from "ui/icons.html" import icon %}
-{% from "ui/display.html" import card, badge %}
-{% block title %}{{ customer.name }} – Zentriq Documents{% endblock %}
+{% from "ui/display.html" import card, page_header %}
+{% from "ui/forms.html" import button %}
+{% block title %}{{ customer.name }} - Zentriq Documents{% endblock %}
 {% block content %}
-<div class="mb-6 flex items-start gap-4">
-  <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
-    {{ customer.name[0] | upper }}
-  </span>
-  <div class="min-w-0">
-    <h1 class="text-2xl font-semibold tracking-tight text-text">{{ customer.name }}</h1>
-    <p class="mt-1 text-sm text-text-muted">
-      {{ customer.city or "—" }}{% if customer.postal_code %} · {{ customer.postal_code }}{% endif %}
-      {% if customer.email %} · {{ customer.email }}{% endif %}
-      {% if customer.phone %} · {{ customer.phone }}{% endif %}
-    </p>
-  </div>
-</div>
-
-<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-  {% call card() %}
-    <div class="flex items-center gap-2">
-      {{ icon('history', class='w-4 h-4 text-primary') }}
-      <h2 class="text-base font-semibold text-text">Chronologie</h2>
-    </div>
-    {% if timeline_events %}
-      <ol class="mt-4 flex flex-col gap-3">
-        {% for event in timeline_events %}
-          <li class="flex items-start gap-3 text-sm">
-            <span class="mt-0.5 shrink-0 text-xs font-medium text-text-muted">{{ event.occurred_at.strftime('%d.%m.') }}</span>
-            <span class="text-text">{{ event.label }}</span>
-          </li>
-        {% endfor %}
-      </ol>
-    {% else %}
-      <p class="mt-4 text-sm text-text-muted">Noch keine Ereignisse erfasst.</p>
-    {% endif %}
+<div class="page-shell">
+  {% call page_header(customer.name, 'Dokumente, Historie und offene Punkte fuer diesen Kunden in einer fokussierten Detailansicht.', 'Customer detail') %}
+    {{ button('Alle Kunden', href=url_for('customers.list_customers'), variant='secondary', icon_name='arrow-left') }}
   {% endcall %}
 
-  {% call card() %}
-    <div class="flex items-center gap-2">
-      {{ icon('list-todo', class='w-4 h-4 text-primary') }}
-      <h2 class="text-base font-semibold text-text">Offene Aufgaben</h2>
-    </div>
-    {% if open_tasks %}
-      <div class="mt-4 flex flex-col gap-2">
-        {% for task in open_tasks %}
-          <div class="flex items-center justify-between gap-3 rounded-xl border border-border px-3.5 py-2.5 transition duration-200 hover:border-primary/30">
-            <span class="truncate text-sm text-text">{{ task.title }}</span>
-            {% if task.due_date %}
-              <span class="shrink-0 text-xs text-text-muted">{{ task.due_date.strftime('%d.%m.%Y') }}</span>
-            {% endif %}
+  <div class="grid gap-6 xl:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)]">
+    {% call card(padding='p-6 sm:p-7', tone='strong') %}
+      <div class="flex items-start gap-4">
+        <span class="avatar-chip h-16 w-16 shrink-0 rounded-[1.35rem] text-lg">{{ customer.name[0] | upper }}</span>
+        <div class="min-w-0">
+          <h2 class="text-2xl font-semibold tracking-tight text-text">{{ customer.name }}</h2>
+          <div class="mt-4 flex flex-wrap gap-2">
+            {% if customer.city or customer.postal_code %}<span class="meta-chip">{{ customer.city or '-' }}{% if customer.postal_code %} · {{ customer.postal_code }}{% endif %}</span>{% endif %}
+            {% if customer.email %}<span class="meta-chip">{{ customer.email }}</span>{% endif %}
+            {% if customer.phone %}<span class="meta-chip">{{ customer.phone }}</span>{% endif %}
           </div>
-        {% endfor %}
+        </div>
       </div>
-      <a href="{{ url_for('tasks.list_tasks') }}" class="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-hover">
-        Alle Aufgaben {{ icon('chevron-right', class='w-4 h-4') }}
-      </a>
-    {% else %}
-      <p class="mt-4 text-sm text-text-muted">Keine offenen Aufgaben.</p>
-    {% endif %}
-  {% endcall %}
-</div>
+    {% endcall %}
 
-<div class="mt-6">
-  {% call card() %}
-    <div class="flex items-center gap-2">
-      {{ icon('file-text', class='w-4 h-4 text-primary') }}
-      <h2 class="text-base font-semibold text-text">Leipziger-Liste-Verlauf</h2>
-    </div>
-    {% if document_customers %}
-      <div class="mt-4 max-h-[28rem] overflow-auto rounded-2xl border border-border">
-        <table class="w-full text-left text-sm">
-          <thead class="sticky top-0 z-10 bg-surface text-xs font-medium uppercase tracking-wide text-text-muted shadow-[0_1px_0_0_var(--color-border)]">
-            <tr>
-              <th class="px-4 py-3">Datum</th>
-              <th class="px-4 py-3">Dokument</th>
-              <th class="px-4 py-3">Angebot</th>
-              <th class="px-4 py-3">Neugeschäft</th>
-              <th class="px-4 py-3">Storno</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-border">
-            {% for dc in document_customers %}
-              {% set rows = dc.row_data or [] %}
-              <tr class="transition duration-200 hover:bg-bg">
-                <td class="px-4 py-3.5 text-text-muted">{{ dc.document.uploaded_at.strftime('%d.%m.%Y') if dc.document.uploaded_at else '–' }}</td>
-                <td class="px-4 py-3.5">
-                  <a href="{{ url_for('documents.detail', document_id=dc.document_id) }}" class="text-primary hover:text-primary-hover">{{ dc.document.original_filename }}</a>
-                </td>
-                <td class="px-4 py-3.5">{{ badge('Ja', variant='warning') if rows | selectattr('is_angebot') | list else '–' }}</td>
-                <td class="px-4 py-3.5">{{ badge('Ja', variant='success') if rows | selectattr('is_neugeschaeft') | list else '–' }}</td>
-                <td class="px-4 py-3.5">{{ badge('Ja', variant='danger') if rows | selectattr('is_storno') | list else '–' }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+    {% call card(padding='p-6 sm:p-7') %}
+      <div class="section-heading">
+        <div>
+          <h2 class="section-title">Offene Aufgaben</h2>
+          <p class="section-copy">Was fuer diesen Kunden aktuell in Arbeit ist.</p>
+        </div>
+        <a href="{{ url_for('tasks.list_tasks') }}" class="text-sm font-semibold text-primary transition duration-200 hover:text-primary-hover">Aufgaben oeffnen</a>
       </div>
-    {% else %}
-      <p class="mt-4 text-sm text-text-muted">Dieser Kunde wurde noch in keiner Leipziger Liste erfasst.</p>
-    {% endif %}
-  {% endcall %}
+      {% if open_tasks %}
+        <div class="list-stack mt-6">
+          {% for task in open_tasks %}
+            <div class="list-row-card p-4">
+              <div class="flex items-center justify-between gap-3">
+                <span class="truncate text-sm font-semibold text-text">{{ task.title }}</span>
+                {% if task.due_date %}
+                  <span class="meta-chip">{{ task.due_date.strftime('%d.%m.%Y') }}</span>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="mt-6 text-sm leading-7 text-text-muted">Keine offenen Aufgaben fuer diesen Kunden.</p>
+      {% endif %}
+    {% endcall %}
+  </div>
+
+  <div class="grid gap-6 xl:grid-cols-2">
+    {% call card(padding='p-6 sm:p-7') %}
+      <div class="section-heading">
+        <div>
+          <h2 class="section-title">Chronologie</h2>
+          <p class="section-copy">Die wichtigsten Ereignisse im zeitlichen Verlauf.</p>
+        </div>
+        <span class="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          {{ icon('history', class='w-5 h-5') }}
+        </span>
+      </div>
+      {% if timeline_events %}
+        <ol class="timeline-list mt-6">
+          {% for event in timeline_events %}
+            <li class="timeline-item">
+              <span class="timeline-date">{{ event.occurred_at.strftime('%d.%m.') }}</span>
+              <div class="timeline-content">{{ event.label }}</div>
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <p class="mt-6 text-sm leading-7 text-text-muted">Noch keine Ereignisse erfasst.</p>
+      {% endif %}
+    {% endcall %}
+
+    {% call card(padding='p-6 sm:p-7') %}
+      <div class="section-heading">
+        <div>
+          <h2 class="section-title">Leipziger-Liste-Verlauf</h2>
+          <p class="section-copy">Wann dieser Kunde in den Listen aufgetaucht ist und mit welchem Ergebnis.</p>
+        </div>
+        <span class="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          {{ icon('file-text', class='w-5 h-5') }}
+        </span>
+      </div>
+      {% if document_customers %}
+        <div class="table-shell mt-6 max-h-[32rem] overflow-auto">
+          <table class="text-left text-sm">
+            <thead>
+              <tr>
+                <th>Datum</th>
+                <th>Dokument</th>
+                <th>Angebot</th>
+                <th>Neugeschaeft</th>
+                <th>Storno</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for dc in document_customers %}
+                {% set rows = dc.row_data or [] %}
+                <tr>
+                  <td class="text-text-muted">{{ dc.document.uploaded_at.strftime('%d.%m.%Y') if dc.document.uploaded_at else '-' }}</td>
+                  <td><a href="{{ url_for('documents.detail', document_id=dc.document_id) }}" class="font-semibold text-primary transition duration-200 hover:text-primary-hover">{{ dc.document.original_filename }}</a></td>
+                  <td>{{ 'Ja' if rows | selectattr('is_angebot') | list else '-' }}</td>
+                  <td>{{ 'Ja' if rows | selectattr('is_neugeschaeft') | list else '-' }}</td>
+                  <td>{{ 'Ja' if rows | selectattr('is_storno') | list else '-' }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="mt-6 text-sm leading-7 text-text-muted">Dieser Kunde wurde noch in keiner Leipziger Liste erfasst.</p>
+      {% endif %}
+    {% endcall %}
+  </div>
 </div>
 {% endblock %}

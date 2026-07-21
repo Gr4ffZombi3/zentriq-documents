@@ -1,43 +1,38 @@
 {% extends "base.html" %}
 {% from "ui/icons.html" import icon %}
-{% from "ui/display.html" import card, badge %}
-{% block title %}Empfehlungen – Zentriq Documents{% endblock %}
+{% from "ui/display.html" import badge, empty_state, page_header %}
+{% block title %}Empfehlungen - Zentriq Documents{% endblock %}
 {% block content %}
-<div class="mb-6">
-  <h1 class="text-2xl font-semibold tracking-tight text-text">Empfehlungen</h1>
-  <p class="mt-1 text-sm text-text-muted">Offene, von der KI erkannte Handlungsempfehlungen.</p>
-</div>
+<div class="page-shell">
+  {% call page_header('Empfehlungen', 'Von der KI erkannte Handlungsschritte, priorisiert fuer einen klaren naechsten Move.', 'AI recommendations') %}{% endcall %}
 
-{% if recommendations %}
-<div class="flex flex-col gap-3">
-  {% for rec in recommendations %}
-    {% set priority_variant = {'high': 'danger', 'medium': 'warning', 'low': 'muted'}.get(rec.priority.value, 'muted') %}
-    {% call card(padding='p-5', hover=True) %}
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="flex items-center gap-3">
-          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            {{ icon('list-checks', class='w-4.5 h-4.5') }}
-          </span>
-          <div>
-            <p class="font-medium text-text">{{ rec.label }}</p>
-            <p class="text-sm text-text-muted">
-              {{ rec.customer.name if rec.customer else "—" }}
-              {% if rec.document_id %} · <a href="{{ url_for('documents.detail', document_id=rec.document_id) }}" class="text-primary hover:text-primary-hover">Dokument öffnen</a>{% endif %}
-            </p>
+  {% if recommendations %}
+    <div class="list-stack">
+      {% for rec in recommendations %}
+        {% set priority_variant = {'high': 'danger', 'medium': 'warning', 'low': 'muted'}.get(rec.priority.value, 'muted') %}
+        <div class="list-row-card p-5 sm:p-6">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div class="flex min-w-0 items-start gap-4">
+              <span class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                {{ icon('list-checks', class='w-4 h-4') }}
+              </span>
+              <div class="min-w-0">
+                <p class="text-base font-semibold tracking-tight text-text">{{ rec.label }}</p>
+                <div class="mt-3 flex flex-wrap gap-2">
+                  <span class="meta-chip">{{ rec.customer.name if rec.customer else 'Kein Kunde' }}</span>
+                  {% if rec.document_id %}
+                    <a href="{{ url_for('documents.detail', document_id=rec.document_id) }}" class="meta-chip text-primary transition duration-200 hover:text-primary-hover">Dokument oeffnen</a>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+            {{ badge(rec.priority.value | capitalize, variant=priority_variant) }}
           </div>
         </div>
-        {{ badge(rec.priority.value | capitalize, variant=priority_variant) }}
-      </div>
-    {% endcall %}
-  {% endfor %}
+      {% endfor %}
+    </div>
+  {% else %}
+    {% call empty_state('Keine offenen Empfehlungen', 'Neue Empfehlungen erscheinen hier automatisch nach der Dokumentenauswertung.', 'list-checks') %}{% endcall %}
+  {% endif %}
 </div>
-{% else %}
-  <div class="flex flex-col items-center rounded-2xl border border-dashed border-border py-20 text-center">
-    <span class="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-      {{ icon('list-checks', class='w-6 h-6') }}
-    </span>
-    <p class="font-medium text-text">Keine offenen Empfehlungen</p>
-    <p class="mt-1 text-sm text-text-muted">Neue Empfehlungen erscheinen hier automatisch nach der Dokumentenauswertung.</p>
-  </div>
-{% endif %}
 {% endblock %}

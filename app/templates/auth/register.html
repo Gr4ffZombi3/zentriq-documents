@@ -2,26 +2,34 @@
 {% from "ui/forms.html" import input_field, button %}
 {% block title %}Registrieren – Zentriq Documents{% endblock %}
 {% block content %}
-<div class="w-full max-w-md">
-  <div class="mb-8 flex flex-col items-center gap-3 text-center">
-    <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-lg font-bold text-white">Z</span>
-    <h1 class="text-2xl font-semibold tracking-tight text-text">Konto erstellen</h1>
-    <p class="text-sm text-text-muted">Starte mit Zentriq Documents – kostenlos einrichten.</p>
+<div class="space-y-8">
+  <div>
+    <span class="hero-badge">Create account</span>
+    <h1 class="mt-5 text-3xl font-semibold tracking-tight text-text">Konto erstellen</h1>
+    <p class="mt-3 text-sm leading-7 text-text-muted">
+      Richte deinen Zentriq-Workspace fuer Dokumentenanalysen, Empfehlungen und Folgeaufgaben ein.
+    </p>
   </div>
 
-  <div class="rounded-2xl border border-border bg-surface p-8 shadow-soft">
-    <form method="post" class="flex flex-col gap-5">
+  <div class="surface-card p-6 sm:p-7">
+    <form method="post" class="space-y-5">
       {{ form.hidden_tag() }}
       {{ input_field(form.company_name, icon_name='building-2') }}
       {{ input_field(form.email, icon_name='mail', autocomplete='email') }}
       {{ input_field(form.vermittlernummer, icon_name='key') }}
       {{ input_field(form.password, icon_name='lock', autocomplete='new-password') }}
       {{ input_field(form.password_confirm, icon_name='lock', autocomplete='new-password') }}
-      {{ button(form.submit.label.text, variant='primary', type='submit', size='lg', extra_class='w-full mt-1') }}
+
+      <div class="space-y-3 pt-2">
+        {{ button(form.submit.label.text, variant='primary', type='submit', size='lg', extra_class='w-full') }}
+        <p class="text-xs leading-6 text-text-muted">
+          Nach der Registrierung steht dir sofort die komplette Frontend-Oberflaeche zur Verfuegung.
+        </p>
+      </div>
     </form>
   </div>
 
-  <p class="mt-6 text-center text-sm text-text-muted">
+  <p class="text-center text-sm text-text-muted">
     Bereits registriert?
     <a href="{{ url_for('auth.login') }}" class="font-medium text-primary hover:text-primary-hover">Anmelden</a>
   </p>

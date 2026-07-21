@@ -20,8 +20,25 @@ set +a
 flask db upgrade
 
 echo "==> [4/5] Statische Assets..."
-echo "    Kein Build-/Collect-Schritt noetig: Flask liefert app/static/ direkt aus,"
-echo "    es wird kein JS-Bundler eingesetzt (htmx/Alpine per CDN)."
+CSS_FILE="app/static/css/app.css"
+if [ ! -f "$CSS_FILE" ]; then
+    echo "    FEHLER: $CSS_FILE fehlt." >&2
+    exit 1
+fi
+CSS_BYTES="$(wc -c < "$CSS_FILE" | tr -d ' ')"
+if [ "$CSS_BYTES" -lt 10000 ]; then
+    echo "    FEHLER: $CSS_FILE wirkt unvollstaendig (${CSS_BYTES} Bytes)." >&2
+    exit 1
+fi
+if ! grep -q "InterVariable" "$CSS_FILE"; then
+    echo "    FEHLER: $CSS_FILE enthaelt nicht die erwarteten Font-/Design-Regeln." >&2
+    exit 1
+fi
+if ! grep -q ".auth-shell" "$CSS_FILE"; then
+    echo "    FEHLER: $CSS_FILE enthaelt nicht die erwarteten Auth-Layout-Regeln." >&2
+    exit 1
+fi
+echo "    app.css vorhanden und plausibel (${CSS_BYTES} Bytes)."
 
 echo "==> [5/5] Starte Dienste neu..."
 sudo systemctl restart zentriq-api

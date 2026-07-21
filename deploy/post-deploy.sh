@@ -35,6 +35,33 @@ else
     FAILED=1
 fi
 
+echo "[post-deploy] Nginx-/Static-Check..."
+LOGIN_STATUS="$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1/auth/login || echo "000")"
+CSS_STATUS="$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1/static/css/app.css || echo "000")"
+CSS_TYPE="$(curl -sI http://127.0.0.1/static/css/app.css | awk -F': ' 'BEGIN{IGNORECASE=1} /^Content-Type:/{gsub("\r","",$2); print $2; exit}')"
+CSS_BYTES="$(curl -s http://127.0.0.1/static/css/app.css | wc -c | tr -d ' ')"
+LOGIN_HTML="$(curl -s http://127.0.0.1/auth/login || true)"
+if [ "$LOGIN_STATUS" = "200" ]; then
+    echo "    Nginx Login OK (HTTP 200)"
+else
+    echo "    FEHLER: Nginx Login fehlgeschlagen (HTTP ${LOGIN_STATUS})."
+    FAILED=1
+fi
+if [ "$CSS_STATUS" = "200" ] && printf '%s' "$CSS_TYPE" | grep -qi '^text/css'; then
+    echo "    CSS OK (${CSS_BYTES} Bytes, ${CSS_TYPE})"
+else
+    echo "    FEHLER: /static/css/app.css fehlerhaft (HTTP ${CSS_STATUS}, Content-Type '${CSS_TYPE:-unbekannt}')."
+    FAILED=1
+fi
+if [ "$CSS_BYTES" -lt 10000 ]; then
+    echo "    FEHLER: /static/css/app.css ist verdaechtig klein (${CSS_BYTES} Bytes)."
+    FAILED=1
+fi
+if ! printf '%s' "$LOGIN_HTML" | grep -q '/static/css/app.css'; then
+    echo "    FEHLER: Login-Seite bindet app.css nicht ein."
+    FAILED=1
+fi
+
 if [ "$FAILED" -ne 0 ]; then
     echo "[post-deploy] Es gab Probleme - siehe Warnungen/Fehler oben."
     exit 1

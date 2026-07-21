@@ -12,9 +12,9 @@
   :class="{
     'translate-x-0': sidebarOpen,
     '-translate-x-full lg:translate-x-0': !sidebarOpen,
-    'lg:!w-24': railCollapsed,
+    'lg:!w-20': railCollapsed,
   }"
-  class="sidebar-shell fixed inset-y-0 left-0 z-40 flex w-72 flex-col transition-[width,transform] duration-200 ease-in-out lg:w-72"
+  class="sidebar-shell fixed inset-y-0 left-0 z-40 flex w-64 flex-col transition-[width,transform] duration-200 ease-in-out lg:w-64"
 >
   <div class="border-b border-border/80 p-4">
     <div class="flex items-start gap-3">
@@ -37,11 +37,11 @@
 
     <div x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="sidebar-note mt-4">
       <p class="text-sm font-medium leading-6 text-text">
-        Ein ruhiger Arbeitsmodus fuer Upload, Analyse, Empfehlungen und praezise Folgearbeit.
+        Ein ruhiger Arbeitsmodus fuer Upload, Analyse und konzentrierte Folgearbeit.
       </p>
       <div class="chip-bar mt-3">
-        <span class="meta-chip">Breiter Shell</span>
-        <span class="meta-chip">Fokus auf Queue &amp; Details</span>
+        <span class="meta-chip">Desktop first</span>
+        <span class="meta-chip">Queue + Details</span>
       </div>
     </div>
   </div>

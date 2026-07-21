@@ -1,57 +1,58 @@
 {% extends "base.html" %}
-{% from "ui/display.html" import card, badge, page_header, stat_card, empty_state %}
+{% from "ui/display.html" import badge, card, empty_state, page_header, stat_card %}
 {% from "ui/forms.html" import button %}
-{% block title %}Uebersicht – Zentriq Documents{% endblock %}
+{% block title %}Uebersicht - Zentriq Documents{% endblock %}
 {% block content %}
 <div class="page-shell">
   {% call page_header(
-    "Willkommen zurueck" ~ (", " ~ current_user.email.split("@")[0] if current_user.is_authenticated else ""),
-    "KI-Dokumentenanalyse fuer Versicherungs- und Kfz-Dienstleister mit einem klaren Blick auf Queue, Empfehlungen und Arbeitsprioritaeten.",
-    "Overview"
+    "Uebersicht" ~ (" fuer " ~ current_user.email.split("@")[0] if current_user.is_authenticated else ""),
+    "Dokumente, Analysen und Empfehlungen in einer kompakten Desktop-Ansicht mit klarer Hierarchie.",
+    "Dashboard"
   ) %}
-    {{ button('Dokumente oeffnen', href=url_for('documents.list_documents'), variant='secondary', icon_name='file-text') }}
-    {{ button('Potenziale pruefen', href=url_for('potenziale.index'), variant='ghost', icon_name='target') }}
+    {{ button('Dokumente', href=url_for('documents.list_documents'), variant='secondary', icon_name='file-text') }}
+    {{ button('Upload', href=url_for('documents.list_documents') ~ '#upload-widget', variant='primary', icon_name='upload') }}
   {% endcall %}
 
   <div class="stat-grid stat-grid-4">
-    {{ stat_card('Dokumente gesamt', stats.total_documents, icon_name='file-text', variant='info', meta='Gesamter dokumentierter Bestand', tone='strong') }}
-    {{ stat_card('Neue Dokumente', stats.new_documents, icon_name='upload', variant='info', meta='Neue Uploads der letzten 24 Stunden') }}
-    {{ stat_card('Analysen fertig', stats.done_count, icon_name='check-circle', variant='success', meta='Vollstaendig verarbeitete Dokumente') }}
-    {{ stat_card('Fehlgeschlagen', stats.failed_count, icon_name='alert-circle', variant='danger', meta='Dokumente mit Handlungsbedarf') }}
+    {{ stat_card('Dokumente', stats.total_documents, icon_name='file-text', variant='info', meta='Gesamtbestand') }}
+    {{ stat_card('Neu in 24h', stats.new_documents, icon_name='upload', variant='info', meta='Frische Eingänge') }}
+    {{ stat_card('Fertig analysiert', stats.done_count, icon_name='check-circle', variant='success', meta='Bereit fuer Review') }}
+    {{ stat_card('Fehlerfaelle', stats.failed_count, icon_name='alert-circle', variant='danger', meta='Brauchen Nacharbeit') }}
   </div>
 
-  <div class="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+  <div class="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
     {% if stats.doc_type_counts %}
-      {% call card(padding='p-6 sm:p-7') %}
+      {% call card(padding='p-5 sm:p-6') %}
         <div class="section-heading">
           <div>
-            <h2 class="section-title">Dokumenttypen im Bestand</h2>
-            <p class="section-copy">Welche Dokumentarten aktuell den groessten Teil deiner Arbeitsflaeche ausmachen.</p>
+            <h2 class="section-title">Dokumenttypen</h2>
+            <p class="section-copy">Welche Formate gerade den Arbeitsalltag bestimmen.</p>
           </div>
+          <span class="meta-chip">{{ stats.total_documents }} gesamt</span>
         </div>
-        <div class="list-stack mt-5">
+        <div class="mt-5 grid gap-3 lg:grid-cols-2">
           {% for doc_type, count in stats.doc_type_counts.items() %}
             <div class="list-row-card px-4 py-4">
               <div class="flex items-center justify-between gap-4">
                 <div>
                   <p class="text-sm font-semibold text-text">{{ doc_type.value }}</p>
-                  <p class="mt-1 text-sm text-text-muted">Aktuell erfasste Dokumente dieses Typs.</p>
+                  <p class="mt-1 text-xs leading-6 text-text-muted">Aktiver Dokumenttyp im Workspace</p>
                 </div>
-                <span class="text-2xl font-semibold tracking-tight text-text">{{ count }}</span>
+                <span class="text-xl font-semibold tracking-tight text-text">{{ count }}</span>
               </div>
             </div>
           {% endfor %}
         </div>
       {% endcall %}
     {% else %}
-      {% call empty_state('Noch keine Typverteilung', 'Sobald Dokumente analysiert wurden, erscheint hier ein klarer Ueberblick ueber die erkannten Dokumentarten.', 'file-text') %}{% endcall %}
+      {% call empty_state('Noch keine Typverteilung', 'Sobald Dokumente analysiert wurden, erscheint hier eine saubere Verteilung der erkannten Dokumentarten.', 'file-text') %}{% endcall %}
     {% endif %}
 
-    {% call card(padding='p-6 sm:p-7', tone='muted') %}
+    {% call card(padding='p-5 sm:p-6', tone='muted') %}
       <div class="section-heading">
         <div>
           <h2 class="section-title">Offene Empfehlungen</h2>
-          <p class="section-copy">Von der KI erkannte naechste Schritte, priorisiert fuer den Alltag.</p>
+          <p class="section-copy">Von der KI erkannte naechste Schritte fuer den heutigen Arbeitsfluss.</p>
         </div>
         <a href="{{ url_for('recommendations.list_recommendations') }}" class="text-sm font-medium text-primary hover:text-primary-hover">Alle anzeigen</a>
       </div>
@@ -65,7 +66,7 @@
                   <p class="truncate text-sm font-semibold text-text">{{ rec.label }}</p>
                   <p class="mt-1 text-sm text-text-muted">
                     {{ rec.customer.name if rec.customer else "Kein Kunde" }}
-                    {% if rec.document_id %} · <a href="{{ url_for('documents.detail', document_id=rec.document_id) }}" class="text-primary hover:text-primary-hover">Dokument oeffnen</a>{% endif %}
+                    {% if rec.document_id %} / <a href="{{ url_for('documents.detail', document_id=rec.document_id) }}" class="text-primary hover:text-primary-hover">Dokument oeffnen</a>{% endif %}
                   </p>
                 </div>
                 {{ badge(rec.priority.value | capitalize, variant=priority_variant) }}

@@ -128,6 +128,22 @@ class ListScope(enum.Enum):
     GESCHAEFTSSTELLE = "geschaeftsstelle"
 
 
+class ListType(enum.Enum):
+    OWN = "own"
+    GS = "gs"
+    COMPARISON = "comparison"
+    OTHER = "other"
+
+    @property
+    def label(self) -> str:
+        return {
+            ListType.OWN: "Eigene Leipziger Liste",
+            ListType.GS: "GS-Liste",
+            ListType.COMPARISON: "Vergleichsliste",
+            ListType.OTHER: "Sonstige Leipziger Liste",
+        }[self]
+
+
 class ComparisonKind(enum.Enum):
     """Womit ein ListComparison verglichen wurde: TEMPORAL = bisheriges Verhalten (letztes
     vorheriges Leipziger-Liste-Dokument desselben Tenants, zeitbasiert). OWN_VS_GS = M13-

@@ -1,122 +1,194 @@
 {% extends "base.html" %}
-{% from "ui/display.html" import badge, empty_state, page_header, stat_card %}
+{% from "ui/display.html" import badge, empty_state, status_badge %}
 {% from "ui/forms.html" import button %}
-{% block title %}Potenziale - Zentriq Documents{% endblock %}
+{% block title %}Auswertungen - Zentriq Documents{% endblock %}
 {% block content %}
-{% set category_variants = {
-  'abgeschlossen': 'success',
-  'nur_angebot': 'muted',
-  'pruefen': 'warning',
-  'offener_vorgang': 'muted',
-  'storniert': 'danger',
-} %}
-{% set category_labels = {
-  'abgeschlossen': 'Abgeschlossen',
-  'nur_angebot': 'Nur Angebot',
-  'pruefen': 'Pruefen',
-  'offener_vorgang': 'Offener Vorgang',
-  'storniert': 'Storniert',
-} %}
+{% set selected_document = analysis.selected_document %}
+{% set document_options = analysis.document_options %}
+{% set summary = analysis.summary %}
+{% set rows = analysis.rows %}
+{% set status_filter = analysis.status_filter %}
+{% set status_filters = analysis.status_filters %}
+
 <div class="page-shell">
-  {% call page_header('Potenziale', 'Offene Vorgaenge aus deinen Leipziger Listen in einer klaren, scanbaren Arbeitsansicht statt als dichte Tabelle.', 'Opportunity workspace') %}
-    {{ button('Listenvergleich', href=url_for('potenziale.vergleich'), variant='secondary', icon_name='git-compare') }}
-  {% endcall %}
-
-  <div class="stat-grid stat-grid-4">
-    {{ stat_card('Datensaetze', summary.total_records, icon_name='database', variant='muted', meta='Alle relevanten Zeilen im Datenraum') }}
-    {{ stat_card('Abschluesse', summary.abgeschlossen, icon_name='check-circle', variant='success', meta='Bereits abgeschlossen') }}
-    {{ stat_card('Angebote', summary.angebote, icon_name='mail', variant='info', meta='Angebotsphase erkannt') }}
-    {{ stat_card('Offene Vorgaenge', summary.offene_vorgaenge, icon_name='target', variant='warning', meta='Brauchen ein Follow-up') }}
-    {{ stat_card('Stornos', summary.stornos, icon_name='x-circle', variant='danger', meta='Verlorene Faelle') }}
-    {{ stat_card('Ohne Beginn', summary.ohne_beginn, icon_name='clock-3', variant='muted', meta='Ohne Startdatum') }}
-    {{ stat_card('Ohne Antrag', summary.ohne_antrag, icon_name='file-warning', variant='warning', meta='Noch nicht vollstaendig') }}
-  </div>
-
-  <section class="filter-panel">
-    <div class="section-heading">
-      <div>
-        <h2 class="section-title">Filter und Segmentierung</h2>
-        <p class="section-copy">Schneide die Potenzialliste nach Kategorie, Sparte, Vermittler und Zeitraum zurecht.</p>
-      </div>
+  <section class="ops-page-header">
+    <div>
+      <p class="ops-page-kicker">Analysearbeitsplatz</p>
+      <h1 class="ops-page-title">Auswertungen</h1>
+      <p class="ops-page-copy">Ein Dokument im Fokus, eine kompakte Kennzahlenzeile und darunter die echte Leipziger-Liste als Arbeitsansicht.</p>
     </div>
-    <form method="get" class="mt-6 flex flex-col gap-4">
-      <div class="filter-grid filter-grid-6 lg:items-end">
-        <div class="flex flex-col gap-2">
-          <label for="filter-category" class="field-label">Kategorie</label>
-          <select id="filter-category" name="category" onchange="this.form.submit()" class="field-surface text-sm">
-            <option value="">Alle offenen</option>
-            {% for cat in categories %}
-              <option value="{{ cat.value }}" {{ 'selected' if filters.category == cat else '' }}>
-                {{ cat.value.replace('_', ' ') | title }}
+    <div class="flex flex-wrap items-center gap-3">
+      {{ button('Listenvergleich', href=url_for('potenziale.vergleich'), variant='secondary', icon_name='git-compare') }}
+    </div>
+  </section>
+
+  {% if document_options %}
+    <section class="ops-toolbar-panel">
+      <form method="get" class="ops-toolbar-grid">
+        <div class="ops-toolbar-span-3">
+          <label for="analysis-document-id" class="field-label">Leipziger Liste auswaehlen</label>
+          <select id="analysis-document-id" name="document_id" class="field-surface text-sm">
+            <option value="">Bitte Dokument auswaehlen</option>
+            {% for option in document_options %}
+              <option value="{{ option.id }}" {{ 'selected' if selected_document and selected_document.id == option.id else '' }}>
+                {{ option.name }} | {{ option.uploaded_at_label }} | {{ option.list_type_label }}
               </option>
             {% endfor %}
           </select>
         </div>
-        <div class="flex flex-col gap-2">
-          <label for="filter-product-line" class="field-label">Sparte</label>
-          <input id="filter-product-line" type="text" name="product_line" value="{{ filters.product_line or '' }}"
-                 placeholder="z.B. KFZ" class="field-surface text-sm">
-        </div>
-        <div class="flex flex-col gap-2">
-          <label for="filter-broker-number" class="field-label">Vermittler</label>
-          <input id="filter-broker-number" type="text" name="broker_number" value="{{ filters.broker_number or '' }}"
-                 placeholder="VM-Nummer" class="field-surface text-sm">
-        </div>
-        <div class="flex flex-col gap-2">
-          <label for="filter-date-from" class="field-label">Von</label>
-          <input id="filter-date-from" type="date" name="date_from" value="{{ filters.date_from or '' }}" class="field-surface text-sm">
-        </div>
-        <div class="flex flex-col gap-2">
-          <label for="filter-date-to" class="field-label">Bis</label>
-          <input id="filter-date-to" type="date" name="date_to" value="{{ filters.date_to or '' }}" class="field-surface text-sm">
-        </div>
-        <label class="flex items-center gap-3 rounded-[1.15rem] border border-border bg-surface px-4 py-3 text-sm text-text-muted">
-          <span class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-border transition duration-200 has-[:checked]:bg-primary">
-            <input type="checkbox" name="include_closed" value="1" {{ 'checked' if filters.include_closed else '' }}
-                   onchange="this.form.submit()" class="peer sr-only">
-            <span class="inline-block h-4 w-4 translate-x-1 rounded-full bg-surface shadow-sm transition duration-200 peer-checked:translate-x-6"></span>
-          </span>
-          Abgeschlossene anzeigen
-        </label>
-      </div>
-
-      <div class="flex flex-wrap gap-3">
-        {{ button('Filtern', type='submit', icon_name='search') }}
-        {% if filters.category or filters.product_line or filters.broker_number or filters.date_from or filters.date_to or filters.include_closed %}
-          {{ button('Zuruecksetzen', href=url_for('potenziale.index'), variant='ghost') }}
+        {% if selected_document %}
+          <div class="ops-toolbar-meta">
+            <span class="ops-toolbar-meta-label">Listentyp</span>
+            <span class="ops-toolbar-meta-value">{{ selected_document.list_type_label }}</span>
+          </div>
+          <div class="ops-toolbar-meta">
+            <span class="ops-toolbar-meta-label">Upload</span>
+            <span class="ops-toolbar-meta-value">{{ selected_document.uploaded_at_label }}</span>
+          </div>
+          <div class="ops-toolbar-meta">
+            <span class="ops-toolbar-meta-label">VM-Nr.</span>
+            <span class="ops-toolbar-meta-value">{{ selected_document.vm_number_label }}</span>
+          </div>
         {% endif %}
-      </div>
-    </form>
-  </section>
-
-  {% if records %}
-    <div class="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
-      {% for record in records %}
-        <div class="list-row-card p-5">
-          <div class="flex items-start justify-between gap-4">
-            <div class="min-w-0">
-              <div class="flex flex-wrap items-center gap-2">
-                <p class="truncate text-base font-semibold tracking-tight text-text">{{ record.customer_name or 'Unbekannter Kunde' }}</p>
-                {{ badge(category_labels.get(record.category.value, record.category.value), variant=category_variants.get(record.category.value, 'muted')) }}
-              </div>
-              <div class="mt-3 flex flex-wrap gap-2">
-                <span class="meta-chip">{{ record.product or '-' }}</span>
-                {% if record.product_line %}<span class="meta-chip">{{ record.product_line }}</span>{% endif %}
-                {% if record.angebotsdatum %}<span class="meta-chip">{{ record.angebotsdatum.strftime('%d.%m.%Y') }}</span>{% endif %}
-              </div>
-            </div>
-          </div>
-          <p class="mt-4 text-sm leading-7 text-text-muted">{{ record.reason }}</p>
-          <div class="mt-5">
-            <a href="{{ url_for('documents.detail', document_id=record.document_id) }}" class="btn btn-secondary px-4 py-2.5 text-sm">
-              Dokument oeffnen
-            </a>
-          </div>
+        <div class="flex items-end">
+          {{ button('Dokument laden', type='submit', icon_name='file-text') }}
         </div>
-      {% endfor %}
+      </form>
+    </section>
+  {% endif %}
+
+  {% if selected_document %}
+    <section class="ops-meta-panel">
+      <div class="ops-meta-grid">
+        <div class="ops-meta-item">
+          <span class="ops-meta-label">Dateiname</span>
+          <span class="ops-meta-value">{{ selected_document.name }}</span>
+        </div>
+        <div class="ops-meta-item">
+          <span class="ops-meta-label">Typ der Leipziger Liste</span>
+          <span class="ops-meta-value">{{ selected_document.list_type_label }}</span>
+        </div>
+        <div class="ops-meta-item">
+          <span class="ops-meta-label">Upload-Datum</span>
+          <span class="ops-meta-value">{{ selected_document.uploaded_at_label }}</span>
+        </div>
+        <div class="ops-meta-item">
+          <span class="ops-meta-label">VM-Nummer</span>
+          <span class="ops-meta-value">{{ selected_document.vm_number_label }}</span>
+        </div>
+        <div class="ops-meta-item">
+          <span class="ops-meta-label">Erkannte Zeilen</span>
+          <span class="ops-meta-value">{{ selected_document.row_count }}</span>
+        </div>
+        <div class="ops-meta-item">
+          <span class="ops-meta-label">Analyse-Status</span>
+          <span class="ops-meta-value">{{ status_badge(selected_document.status) }}</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="ops-stat-grid">
+      <article class="ops-stat-card">
+        <span class="ops-stat-label">Datensaetze</span>
+        <strong class="ops-stat-value">{{ summary.total_records }}</strong>
+      </article>
+      <article class="ops-stat-card">
+        <span class="ops-stat-label">Abschluesse</span>
+        <strong class="ops-stat-value">{{ summary.abgeschlossen }}</strong>
+      </article>
+      <article class="ops-stat-card">
+        <span class="ops-stat-label">Angebote</span>
+        <strong class="ops-stat-value">{{ summary.angebote }}</strong>
+      </article>
+      <article class="ops-stat-card">
+        <span class="ops-stat-label">Offene Vorgaenge</span>
+        <strong class="ops-stat-value">{{ summary.offene_vorgaenge }}</strong>
+      </article>
+      <article class="ops-stat-card">
+        <span class="ops-stat-label">Ohne Beginn</span>
+        <strong class="ops-stat-value">{{ summary.ohne_beginn }}</strong>
+      </article>
+      <article class="ops-stat-card">
+        <span class="ops-stat-label">Stornos</span>
+        <strong class="ops-stat-value">{{ summary.stornos }}</strong>
+      </article>
     </div>
+
+    {% if selected_document.show_ohne_antrag %}
+      <p class="ops-subtle-note">Ohne Antrag wird nur bei fachlich sicher erkannten Angaben ausgewiesen: {{ summary.ohne_antrag }}</p>
+    {% endif %}
+
+    <form method="get" class="ops-filter-bar">
+      <input type="hidden" name="document_id" value="{{ selected_document.id }}">
+      {% for filter_value, filter_label in status_filters %}
+        <button type="submit" name="status_filter" value="{{ filter_value }}" class="ops-filter-pill {{ 'is-active' if status_filter == filter_value else '' }}">
+          {{ filter_label }}
+        </button>
+      {% endfor %}
+    </form>
+
+    {% if rows %}
+      <div class="ops-table-shell">
+        <table class="ops-table">
+          <thead>
+            <tr>
+              <th>Kunde</th>
+              <th>Vertragsnummer</th>
+              <th>Status</th>
+              <th>Sparte</th>
+              <th>Beginn</th>
+              <th>VM-Nummer</th>
+              <th>Ergebnis</th>
+              <th>Sicherheit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr>
+                <td>
+                  <div class="ops-cell-stack">
+                    {% if row.customer_id %}
+                      <a href="{{ url_for('customers.detail', customer_id=row.customer_id) }}" class="ops-table-link">
+                        {{ row.customer_name }}
+                      </a>
+                    {% else %}
+                      <span class="font-medium text-text">{{ row.customer_name }}</span>
+                    {% endif %}
+                    <span class="text-xs text-text-soft">{{ row.document_name }}</span>
+                  </div>
+                </td>
+                <td class="text-text-muted">{{ row.contract_number }}</td>
+                <td>{{ badge(row.status_label, variant=row.status_variant) }}</td>
+                <td class="text-text-muted">{{ row.product_line }}</td>
+                <td class="text-text-muted">{{ row.start_date_label }}</td>
+                <td class="text-text-muted">{{ row.broker_number }}</td>
+                <td>
+                  <div class="ops-result-cell">
+                    <span class="font-medium text-text">{{ row.result_label }}</span>
+                    <span class="ops-result-note">{{ row.reason }}</span>
+                  </div>
+                </td>
+                <td>{{ badge(row.safety_label, variant=row.safety_variant) }}</td>
+              </tr>
+              <tr class="ops-table-detail-row">
+                <td colspan="8">
+                  <details class="ops-inline-details">
+                    <summary>Rohdaten einblenden</summary>
+                    <pre class="ops-json-block">{{ row.raw_row | tojson(indent=2) }}</pre>
+                  </details>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {% call empty_state('Keine passenden Datensaetze', 'Passe den Statusfilter an oder waehle eine andere Leipziger Liste.', 'list-checks') %}{% endcall %}
+    {% endif %}
   {% else %}
-    {% call empty_state('Keine passenden Datensaetze', 'Lade eine Leipziger Liste hoch oder passe die Filter an, um die relevanten Potenziale einzugrenzen.', 'target') %}{% endcall %}
+    {% call empty_state('Noch keine Leipziger Listen', 'Lade zuerst ein Leipziger-Listen-Dokument hoch. Danach erscheint hier automatisch die kompakte Auswertung pro Dokument.', 'file-text') %}
+      {{ button('Zu den Dokumenten', href=url_for('documents.list_documents'), variant='secondary', icon_name='arrow-right') }}
+    {% endcall %}
   {% endif %}
 </div>
 {% endblock %}

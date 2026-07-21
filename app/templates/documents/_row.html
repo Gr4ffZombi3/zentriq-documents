@@ -1,6 +1,13 @@
 {% from "ui/icons.html" import icon %}
-{% from "ui/display.html" import status_badge, badge %}
+{% from "ui/display.html" import badge, status_badge %}
 {% set is_active = document.status.value in ['pending', 'ocr_processing', 'ocr_done', 'ai_processing'] %}
+{% set list_scope_labels = {
+  'own': 'Eigene Leipziger Liste',
+  'geschaeftsstelle': 'GS-Liste',
+  'comparison': 'Vergleichsliste',
+  'other': 'Sonstige Leipziger Liste',
+} %}
+{% set list_scope_key = document.list_type.value if document.list_type else (document.list_scope.value if document.list_scope else '') %}
 <div id="doc-row-{{ document.id }}"
      class="list-row-card cursor-pointer px-4 py-4 sm:px-5 sm:py-5"
      onclick="window.location='{{ url_for('documents.detail', document_id=document.id) }}'"
@@ -22,8 +29,9 @@
         </div>
         <div class="chip-bar mt-3">
           <span class="meta-chip">{{ document.customer.name if document.customer else 'Kein Kunde' }}</span>
+          {% if list_scope_key %}<span class="meta-chip">{{ list_scope_labels.get(list_scope_key, list_scope_key) }}</span>{% endif %}
           {% if document.doc_type %}<span class="meta-chip">{{ document.doc_type.value }}</span>{% endif %}
-          <span class="meta-chip">{{ document.uploaded_at.strftime('%d.%m.%Y %H:%M') if document.uploaded_at else '–' }}</span>
+          <span class="meta-chip">{{ document.uploaded_at.strftime('%d.%m.%Y %H:%M') if document.uploaded_at else '-' }}</span>
         </div>
       </div>
     </div>

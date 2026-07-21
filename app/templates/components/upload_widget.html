@@ -1,51 +1,79 @@
 {% from "ui/icons.html" import icon %}
-{% from "ui/display.html" import pill, progressbar %}
+{% from "ui/display.html" import progressbar %}
 
 <div id="upload-widget" data-upload-widget>
+  {% set selected_list_type = request.form.get('list_type', '') %}
   <form data-upload-form action="{{ url_for('upload.upload_document') }}" method="post" enctype="multipart/form-data"
         hx-post="{{ url_for('upload.upload_document') }}" hx-encoding="multipart/form-data"
         hx-target="#upload-widget" hx-swap="outerHTML" hx-indicator="#upload-progress"
-        class="upload-dropzone p-6 sm:p-8 lg:p-10">
+        class="upload-dropzone upload-widget-shell p-5 sm:p-6 lg:p-7">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="flex flex-col gap-8">
-      <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+    <div class="flex flex-col gap-5">
+      <div class="upload-widget-header">
         <div class="max-w-2xl">
-          <span class="page-eyebrow">Upload workspace</span>
-          <h2 class="mt-4 text-3xl font-semibold tracking-tight text-text">Dokumente aufnehmen, ohne Reibung.</h2>
-          <p class="mt-4 text-sm leading-7 text-text-muted">Ziehe eine PDF hinein oder waehle sie manuell aus. Danach uebernimmt Zentriq den Intake und fuehrt direkt in die Analyse.</p>
+          <span class="page-eyebrow">Dokument-Upload</span>
+          <h2 class="upload-widget-title">Leipziger Liste hochladen</h2>
+          <p class="upload-widget-copy">Ein Dokument, eine klare Einordnung, dann direkt in die Analyse. Der bestehende Upload bleibt erhalten, die Oberflaeche wird nur kompakter und listenorientierter.</p>
         </div>
 
-        <div class="chip-bar">
-          {{ pill('Automatisch erkennen', 'list_scope', '', checked=True) }}
-          {{ pill('Eigene Liste', 'list_scope', 'own') }}
-          {{ pill('GS-Liste', 'list_scope', 'geschaeftsstelle') }}
+        <div class="upload-widget-aside">
+          <div class="flex flex-col gap-2">
+            <label for="upload-list-type" class="field-label">Welche Leipziger Liste wird hochgeladen?</label>
+            <select id="upload-list-type" name="list_type" required class="field-surface upload-list-type-select">
+              <option value="">Bitte auswaehlen</option>
+              <option value="own" {{ 'selected' if selected_list_type == 'own' else '' }}>Eigene Leipziger Liste</option>
+              <option value="gs" {{ 'selected' if selected_list_type == 'gs' else '' }}>GS-Liste</option>
+              <option value="comparison" {{ 'selected' if selected_list_type == 'comparison' else '' }}>Vergleichsliste</option>
+              <option value="other" {{ 'selected' if selected_list_type == 'other' else '' }}>Sonstige Leipziger Liste</option>
+            </select>
+            <p class="text-xs leading-6 text-text-soft">Die Auswahl wird fuer die fachliche Einordnung des Dokuments mitgegeben.</p>
+          </div>
         </div>
       </div>
 
       <label for="file-input" class="cursor-pointer" data-upload-label>
-        <div class="surface-card surface-card-strong flex flex-col items-center justify-center gap-4 rounded-[1.75rem] p-8 text-center sm:p-12">
-          <span class="inline-flex h-20 w-20 items-center justify-center rounded-[1.6rem] bg-primary/10 text-primary transition duration-200" data-upload-icon>
-            {{ icon('upload', class='w-9 h-9') }}
+        <div class="surface-card surface-card-strong upload-drop-target text-center">
+          <span class="upload-drop-icon" data-upload-icon>
+            {{ icon('upload', class='h-8 w-8') }}
           </span>
           <div>
-            <p class="text-lg font-semibold tracking-tight text-text">PDF hierher ziehen oder zum Auswaehlen klicken</p>
-            <p class="mt-2 text-sm leading-7 text-text-muted">Desktop-first, schnell, klar und direkt fuer den Analyse-Workflow gedacht.</p>
+            <p class="text-base font-semibold tracking-tight text-text sm:text-lg">PDF hierher ziehen oder Datei auswaehlen</p>
+            <p class="mt-2 text-sm leading-7 text-text-muted">Der Dateidialog bleibt der Standard-Fallback. Nach dem Upload startet die bestehende Analyse-Pipeline automatisch.</p>
           </div>
-          <span class="meta-chip">Nur PDF-Dateien</span>
+          <div class="chip-bar justify-center">
+            <span class="meta-chip">Nur PDF-Dateien</span>
+            <span class="meta-chip">Keine zweite Upload-Seite</span>
+          </div>
         </div>
       </label>
 
       <input id="file-input" type="file" name="file" accept="application/pdf" class="sr-only" data-upload-input>
 
-      <div class="flex flex-col gap-4 rounded-[1.35rem] border border-border/80 bg-surface/60 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div class="min-w-0">
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-soft">Ausgewaehlte Datei</p>
+      <div class="upload-submit-row">
+        <div class="min-w-0 flex-1">
+          <p class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-text-soft">Ausgewaehlte Datei</p>
           <p class="mt-2 truncate text-sm font-medium text-text" data-upload-filename>Noch keine Datei ausgewaehlt.</p>
+        </div>
+        <div class="chip-bar">
+          <span class="meta-chip">{{ icon('scan-line', class='h-3.5 w-3.5') }}OCR + KI</span>
+          <span class="meta-chip">{{ icon('list-checks', class='h-3.5 w-3.5') }}Listenanalyse</span>
         </div>
         <button type="submit" class="btn btn-primary h-11 px-5 text-sm whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg">
           {{ icon('upload', class='w-[1.05rem] h-[1.05rem]') }}
           Dokumente einreichen
         </button>
+      </div>
+
+      <div class="flex flex-col gap-3 rounded-[1.15rem] border border-border/80 bg-surface/50 px-4 py-3">
+        <div class="flex items-center justify-between gap-3">
+          <p class="text-sm font-semibold text-text">Nach dem Upload</p>
+          <span class="meta-chip">Bestehender Flow</span>
+        </div>
+        <div class="grid gap-2 text-sm text-text-muted sm:grid-cols-3">
+          <span class="upload-step-chip">1. Speicherung</span>
+          <span class="upload-step-chip">2. Analyse starten</span>
+          <span class="upload-step-chip">3. Ergebnis pruefen</span>
+        </div>
       </div>
 
       <div id="upload-progress" class="htmx-indicator">

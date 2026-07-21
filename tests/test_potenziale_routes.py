@@ -1,15 +1,17 @@
 from app.models import Customer, Document, DocumentCustomer, Tenant
-from app.models.enums import DocType
+from app.models.enums import DocStatus, DocType, ListType
 from app.tenancy import set_current_tenant_id
 
 
-def make_document(db, tenant_id, filename="liste.pdf"):
+def make_document(db, tenant_id, filename="liste.pdf", list_type=ListType.OWN):
     document = Document(
         filename=filename,
         original_filename=filename,
         file_path=f"/tmp/{filename}",
         tenant_id=tenant_id,
         doc_type=DocType.LEIPZIGER_LISTE,
+        status=DocStatus.DONE,
+        list_type=list_type,
     )
     db.session.add(document)
     db.session.commit()
@@ -20,7 +22,7 @@ def make_doc_customer(db, tenant_id, document, customer_name, row):
     customer = Customer(tenant_id=tenant_id, name=customer_name)
     db.session.add(customer)
     db.session.commit()
-    dc = DocumentCustomer(document=document, customer=customer, tenant_id=tenant_id, row_data=[row])
+    dc = DocumentCustomer(document=document, customer=customer, tenant_id=tenant_id, row_data=[row], field_confidence=[{}])
     db.session.add(dc)
     db.session.commit()
     return dc
@@ -36,71 +38,60 @@ def test_potenziale_renders_with_no_data(auth_client, db):
     resp = auth_client.get("/potenziale")
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
-    assert "Potenziale" in body
-    assert "Keine passenden Datensätze" in body
+    assert "Auswertungen" in body
+    assert "Noch keine Leipziger Listen" in body
 
 
-def test_potenziale_shows_open_records_with_reason(auth_client, db, tenant):
+def test_potenziale_shows_document_selector_and_translated_status(auth_client, db, tenant):
     document = make_document(db, tenant.id)
-    make_doc_customer(db, tenant.id, document, "Angebot Kunde", {"is_angebot": True})
+    make_doc_customer(db, tenant.id, document, "Angebot Kunde", {"is_angebot": True, "broker_number": "VM-1001"})
 
     resp = auth_client.get("/potenziale")
     body = resp.get_data(as_text=True)
+
+    assert "Leipziger Liste auswaehlen" in body
     assert "Angebot Kunde" in body
-    assert "Kunde erscheint in der Liste als Angebot. Es wurde kein Versicherungsbeginn gefunden." in body
+    assert "Angebot offen" in body
+    assert document.original_filename in body
 
 
-def test_potenziale_excludes_abgeschlossen_by_default(auth_client, db, tenant):
-    document = make_document(db, tenant.id)
-    make_doc_customer(db, tenant.id, document, "Abgeschlossen Kunde", {"contract_start_date": "2026-01-01"})
+def test_potenziale_document_selector_limits_rows_to_selected_document(auth_client, db, tenant):
+    first = make_document(db, tenant.id, "erste.pdf")
+    second = make_document(db, tenant.id, "zweite.pdf")
+    make_doc_customer(db, tenant.id, first, "Erster Kunde", {"is_angebot": True, "broker_number": "VM-1001"})
+    make_doc_customer(db, tenant.id, second, "Zweiter Kunde", {"contract_start_date": "2026-01-01", "broker_number": "VM-1001"})
 
-    resp = auth_client.get("/potenziale")
+    resp = auth_client.get(f"/potenziale?document_id={second.id}")
     body = resp.get_data(as_text=True)
-    assert "Abgeschlossen Kunde" not in body
+
+    assert "Zweiter Kunde" in body
+    assert "Erster Kunde" not in body
+    assert "zweite.pdf" in body
 
 
-def test_potenziale_include_closed_filter_shows_abgeschlossen(auth_client, db, tenant):
+def test_potenziale_status_filter_shows_only_matching_rows(auth_client, db, tenant):
     document = make_document(db, tenant.id)
-    make_doc_customer(db, tenant.id, document, "Abgeschlossen Kunde", {"contract_start_date": "2026-01-01"})
+    make_doc_customer(db, tenant.id, document, "Neu Kunde", {"is_neugeschaeft": True, "broker_number": "VM-1001"})
+    make_doc_customer(db, tenant.id, document, "Angebot Kunde", {"is_angebot": True, "broker_number": "VM-1001"})
 
-    resp = auth_client.get("/potenziale?include_closed=1")
+    resp = auth_client.get(f"/potenziale?document_id={document.id}&status_filter=neugeschaeft")
     body = resp.get_data(as_text=True)
-    assert "Abgeschlossen Kunde" in body
-    assert 'checked' in body
 
-
-def test_potenziale_category_filter_reflected_in_form(auth_client, db, tenant):
-    document = make_document(db, tenant.id)
-    make_doc_customer(db, tenant.id, document, "Pruefen Kunde", {"has_antrag": True})
-    make_doc_customer(db, tenant.id, document, "Angebot Kunde", {"is_angebot": True})
-
-    resp = auth_client.get("/potenziale?category=pruefen")
-    body = resp.get_data(as_text=True)
-    assert "Pruefen Kunde" in body
+    assert "Neu Kunde" in body
     assert "Angebot Kunde" not in body
-    assert 'value="pruefen" selected' in body
-
-
-def test_potenziale_product_line_filter_reflected_in_input(auth_client, db, tenant):
-    document = make_document(db, tenant.id)
-    make_doc_customer(db, tenant.id, document, "KFZ Kunde", {"is_angebot": True, "product_line": "KFZ"})
-
-    resp = auth_client.get("/potenziale?product_line=KFZ")
-    body = resp.get_data(as_text=True)
-    assert "KFZ Kunde" in body
-    assert 'value="KFZ"' in body
+    assert 'value="neugeschaeft"' in body
 
 
 def test_potenziale_tenant_isolation(auth_client, db, tenant):
     document = make_document(db, tenant.id)
-    make_doc_customer(db, tenant.id, document, "Eigener Kunde", {"is_angebot": True})
+    make_doc_customer(db, tenant.id, document, "Eigener Kunde", {"is_angebot": True, "broker_number": "VM-1001"})
 
     tenant_b = Tenant(name="Tenant B", slug="tenant-b-potenziale")
     db.session.add(tenant_b)
     db.session.commit()
     set_current_tenant_id(tenant_b.id)
     other_document = make_document(db, tenant_b.id, "andere.pdf")
-    make_doc_customer(db, tenant_b.id, other_document, "Fremder Kunde", {"is_angebot": True})
+    make_doc_customer(db, tenant_b.id, other_document, "Fremder Kunde", {"is_angebot": True, "broker_number": "VM-2002"})
     set_current_tenant_id(tenant.id)
 
     resp = auth_client.get("/potenziale")

@@ -1,33 +1,132 @@
 {% extends "base.html" %}
-{% from "ui/icons.html" import icon %}
-{% from "ui/display.html" import empty_state, page_header %}
+{% from "ui/display.html" import badge, empty_state %}
+{% from "ui/forms.html" import button %}
 {% block title %}Kunden - Zentriq Documents{% endblock %}
 {% block content %}
+{% set items = customer_directory["items"] %}
+{% set pagination = customer_directory["pagination"] %}
+{% set current_per_page = request.args.get('per_page', '25') | int %}
 <div class="page-shell">
-  {% call page_header('Kunden', 'Alle aus Dokumenten erkannten Kunden in einer ruhigen, scanbaren Uebersicht.', 'Customer graph') %}{% endcall %}
-
-  {% if customers %}
-    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-      {% for customer in customers %}
-        <a href="{{ url_for('customers.detail', customer_id=customer.id) }}" class="list-row-card p-5">
-          <div class="flex items-start gap-4">
-            <span class="avatar-chip h-12 w-12 shrink-0 rounded-2xl text-base">{{ customer.name[0] | upper }}</span>
-            <div class="min-w-0">
-              <h2 class="truncate text-base font-semibold tracking-tight text-text">{{ customer.name }}</h2>
-              <p class="mt-2 text-sm text-text-muted">
-                {{ customer.city or '-' }}{% if customer.postal_code %} · {{ customer.postal_code }}{% endif %}
-              </p>
-            </div>
-          </div>
-          <div class="mt-5 flex flex-wrap gap-2">
-            {% if customer.email %}<span class="meta-chip">{{ icon('mail', class='w-3.5 h-3.5') }}{{ customer.email }}</span>{% endif %}
-            <span class="meta-chip">{{ icon('file-text', class='w-3.5 h-3.5') }}{{ customer.documents | length }} Dokument{{ 'e' if customer.documents | length != 1 else '' }}</span>
-          </div>
-        </a>
-      {% endfor %}
+  <section class="ops-page-header">
+    <div>
+      <p class="ops-page-kicker">Kundenakte</p>
+      <h1 class="ops-page-title">Kunden</h1>
+      <p class="ops-page-copy">Leichtgewichtige Dossiers aus bereits analysierten Listen. Kein CRM, sondern ein klarer Blick auf Personen, Dokumente und wiederkehrende Vorgange.</p>
     </div>
+  </section>
+
+  {% if items %}
+    <section class="ops-toolbar-panel">
+      <form method="get" class="ops-toolbar-grid">
+        <div>
+          <label for="customers-per-page" class="field-label">Eintraege pro Seite</label>
+          <select id="customers-per-page" name="per_page" class="field-surface text-sm">
+            <option value="25" {{ 'selected' if current_per_page == 25 else '' }}>25</option>
+            <option value="50" {{ 'selected' if current_per_page == 50 else '' }}>50</option>
+          </select>
+        </div>
+        <div class="ops-toolbar-meta">
+          <span class="ops-toolbar-meta-label">Kunden auf dieser Seite</span>
+          <span class="ops-toolbar-meta-value">{{ items|length }}</span>
+        </div>
+        <div class="ops-toolbar-meta">
+          <span class="ops-toolbar-meta-label">Gesamtseiten</span>
+          <span class="ops-toolbar-meta-value">{{ pagination.pages or 1 }}</span>
+        </div>
+        <div class="flex items-end">
+          {{ button('Ansicht aktualisieren', type='submit', icon_name='refresh-cw') }}
+        </div>
+      </form>
+    </section>
+
+    <div class="ops-table-shell">
+      <table class="ops-table">
+        <thead>
+          <tr>
+            <th>Kunde</th>
+            <th>Geburtsdatum</th>
+            <th>Ort / PLZ</th>
+            <th>Vorgaenge</th>
+            <th>Letzter Vorgang</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+            {% set customer = item.customer %}
+            {% set latest_row = item.latest_row %}
+            <tr>
+              <td>
+                <div class="ops-cell-stack">
+                  <a href="{{ url_for('customers.detail', customer_id=customer.id) }}" class="ops-table-link">
+                    {{ customer.name }}
+                  </a>
+                  <div class="flex flex-wrap gap-2 text-xs text-text-soft">
+                    {% if item.possible_duplicates %}
+                      {{ badge('Moegliche Dublette', variant='warning') }}
+                    {% endif %}
+                    {% if latest_row %}
+                      <span>{{ latest_row.document_name }}</span>
+                    {% endif %}
+                  </div>
+                </div>
+              </td>
+              <td class="text-text-muted">
+                {% if customer.date_of_birth %}
+                  {{ customer.date_of_birth.strftime('%d.%m.%Y') }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="text-text-muted">
+                {{ customer.city or '-' }}{% if customer.postal_code %} / {{ customer.postal_code }}{% endif %}
+              </td>
+              <td class="text-text-muted">
+                {{ item.record_count }}
+              </td>
+              <td class="text-text-muted">
+                {% if item.latest_uploaded_at %}
+                  {{ item.latest_uploaded_at.strftime('%d.%m.%Y %H:%M') }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td>
+                {% if latest_row %}
+                  {{ badge(latest_row.status_label, variant=latest_row.status_variant) }}
+                {% elif item.possible_duplicates %}
+                  {{ badge('Moegliche Dublette', variant='warning') }}
+                {% else %}
+                  {{ badge('Noch keine Vorgaenge', variant='muted') }}
+                {% endif %}
+              </td>
+              <td class="text-right">
+                <a href="{{ url_for('customers.detail', customer_id=customer.id) }}" class="btn btn-secondary px-4 py-2 text-sm">
+                  Kundenakte oeffnen
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if pagination.pages > 1 %}
+      <div class="ops-pagination">
+        <div class="text-sm text-text-muted">Seite {{ pagination.page }} von {{ pagination.pages }}</div>
+        <div class="flex flex-wrap gap-3">
+          {% if pagination.has_prev %}
+            {{ button('Zurueck', href=url_for('customers.list_customers', page=pagination.prev_num, per_page=current_per_page), variant='secondary', icon_name='arrow-left') }}
+          {% endif %}
+          {% if pagination.has_next %}
+            {{ button('Weiter', href=url_for('customers.list_customers', page=pagination.next_num, per_page=current_per_page), variant='secondary', icon_name='arrow-right') }}
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
   {% else %}
-    {% call empty_state('Noch keine Kunden', 'Kunden erscheinen automatisch, sobald Dokumente erkannt und analysiert wurden.', 'users') %}{% endcall %}
+    {% call empty_state('Noch keine Kunden', 'Sobald Leipziger Listen analysiert wurden, entsteht hier automatisch die Kundenansicht aus den vorhandenen Dokumentdaten.', 'users') %}{% endcall %}
   {% endif %}
 </div>
 {% endblock %}

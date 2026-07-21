@@ -1,48 +1,182 @@
-{% from "ui/display.html" import badge %}
-{% set flags = [
-  (document.is_neugeschaeft, 'Neugeschaeft', 'info'),
-  (document.is_fahrzeugwechsel, 'Fahrzeugwechsel', 'info'),
-  (document.is_angebot, 'Angebot', 'info'),
-  (document.cross_sell_opportunity, 'Cross-Selling-Chance', 'info'),
-  (document.has_multiple_products, 'Mehrere Produkte', 'info'),
-] %}
-{% if flags | selectattr(0) | list or document.priority %}
-<div class="chip-bar">
-  {% for is_set, label, variant in flags %}
-    {% if is_set %}{{ badge(label, variant=variant) }}{% endif %}
+{% from "ui/icons.html" import icon %}
+{% from "ui/display.html" import badge, status_badge %}
+{% set list_scope_labels = {
+  'own': 'Eigene Leipziger Liste',
+  'geschaeftsstelle': 'GS-Liste',
+  'comparison': 'Vergleichsliste',
+  'other': 'Sonstige Leipziger Liste',
+} %}
+{% set list_scope_key = document.list_type.value if document.list_type else (document.list_scope.value if document.list_scope else '') %}
+{% set ns = namespace(total=0, offers=0, closed=0, storno=0, open_items=0, no_begin=0, first_broker='') %}
+{% for dc in document.document_customers %}
+  {% for row in dc.row_data or [] %}
+    {% set ns.total = ns.total + 1 %}
+    {% if not ns.first_broker and row.get('broker_number') %}{% set ns.first_broker = row.get('broker_number') %}{% endif %}
+    {% if row.get('is_storno') %}
+      {% set ns.storno = ns.storno + 1 %}
+    {% elif row.get('contract_start_date') %}
+      {% set ns.closed = ns.closed + 1 %}
+    {% else %}
+      {% if row.get('is_angebot') %}
+        {% set ns.offers = ns.offers + 1 %}
+      {% endif %}
+      {% set ns.open_items = ns.open_items + 1 %}
+      {% if not row.get('contract_start_date') %}{% set ns.no_begin = ns.no_begin + 1 %}{% endif %}
+    {% endif %}
   {% endfor %}
-  {% if document.priority %}{{ badge('Prioritaet: ' ~ document.priority.value, variant='muted') }}{% endif %}
+{% endfor %}
+
+<section class="ops-meta-panel">
+  <div class="ops-meta-grid">
+    <div class="ops-meta-item">
+      <span class="ops-meta-label">Dateiname</span>
+      <span class="ops-meta-value">{{ document.original_filename }}</span>
+    </div>
+    <div class="ops-meta-item">
+      <span class="ops-meta-label">Typ der Leipziger Liste</span>
+      <span class="ops-meta-value">{{ list_scope_labels.get(list_scope_key, 'Nicht angegeben') }}</span>
+    </div>
+    <div class="ops-meta-item">
+      <span class="ops-meta-label">Upload-Datum</span>
+      <span class="ops-meta-value">{{ document.uploaded_at.strftime('%d.%m.%Y %H:%M') if document.uploaded_at else '-' }}</span>
+    </div>
+    <div class="ops-meta-item">
+      <span class="ops-meta-label">VM-Nummer</span>
+      <span class="ops-meta-value">{{ document.broker_number or ns.first_broker or '-' }}</span>
+    </div>
+    <div class="ops-meta-item">
+      <span class="ops-meta-label">Erkannte Zeilen</span>
+      <span class="ops-meta-value">{{ ns.total }}</span>
+    </div>
+    <div class="ops-meta-item">
+      <span class="ops-meta-label">Analyse-Status</span>
+      <span class="ops-meta-value">{{ status_badge(document.status) }}</span>
+    </div>
+  </div>
+</section>
+
+<div class="ops-stat-grid mt-5">
+  <article class="ops-stat-card">
+    <span class="ops-stat-label">Datensaetze</span>
+    <strong class="ops-stat-value">{{ ns.total }}</strong>
+  </article>
+  <article class="ops-stat-card">
+    <span class="ops-stat-label">Abschluesse</span>
+    <strong class="ops-stat-value">{{ ns.closed }}</strong>
+  </article>
+  <article class="ops-stat-card">
+    <span class="ops-stat-label">Angebote</span>
+    <strong class="ops-stat-value">{{ ns.offers }}</strong>
+  </article>
+  <article class="ops-stat-card">
+    <span class="ops-stat-label">Offene Vorgaenge</span>
+    <strong class="ops-stat-value">{{ ns.open_items }}</strong>
+  </article>
+  <article class="ops-stat-card">
+    <span class="ops-stat-label">Ohne Beginn</span>
+    <strong class="ops-stat-value">{{ ns.no_begin }}</strong>
+  </article>
+  <article class="ops-stat-card">
+    <span class="ops-stat-label">Stornos</span>
+    <strong class="ops-stat-value">{{ ns.storno }}</strong>
+  </article>
 </div>
-{% endif %}
 
 {% if document.recommended_next_action %}
   <div class="surface-card surface-card-muted mt-5 p-4">
-    <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-soft">Empfohlene naechste Aktion</p>
+    <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-soft">Hinweis</p>
     <p class="mt-3 text-sm leading-7 text-text">{{ document.recommended_next_action }}</p>
   </div>
 {% endif %}
 
-<div class="table-shell mt-5 overflow-x-auto">
-  <table class="text-left text-sm">
+<div class="ops-table-shell mt-5">
+  <table class="ops-table">
     <thead>
       <tr>
         <th>Kunde</th>
-        <th>Fahrzeug</th>
-        <th>Kennzeichen</th>
-        <th>Produkte</th>
+        <th>Vertragsnummer</th>
+        <th>Status</th>
+        <th>Sparte</th>
+        <th>Beginn</th>
+        <th>VM-Nummer</th>
+        <th>Ergebnis</th>
+        <th>Sicherheit</th>
       </tr>
     </thead>
     <tbody>
       {% for dc in document.document_customers %}
-        <tr>
-          <td class="font-medium text-text">{{ dc.customer.name }}</td>
-          <td class="text-text-muted">{{ dc.row_data | map(attribute='vehicle') | select | join(', ') or '-' }}</td>
-          <td class="text-text-muted">{{ dc.row_data | map(attribute='license_plate') | select | join(', ') or '-' }}</td>
-          <td class="text-text-muted">{{ (dc.row_data | map(attribute='products') | sum(start=[])) | join(', ') or '-' }}</td>
-        </tr>
+        {% set row_confidences = dc.field_confidence or [] %}
+        {% for row in dc.row_data or [] %}
+          {% set confidence = row_confidences[loop.index0] if loop.index0 < row_confidences|length else {} %}
+          {% set signal_uncertain = (
+            confidence.get('contract_start_date', {}).get('uncertain') or
+            confidence.get('is_angebot', {}).get('uncertain') or
+            confidence.get('is_storno', {}).get('uncertain') or
+            confidence.get('has_antrag', {}).get('uncertain') or
+            confidence.get('is_neugeschaeft', {}).get('uncertain') or
+            confidence.get('is_fahrzeugwechsel', {}).get('uncertain')
+          ) %}
+          {% if row.get('is_storno') %}
+            {% set row_status = 'Storno' %}
+            {% set row_variant = 'danger' %}
+            {% set row_result = 'Nacharbeit erforderlich' %}
+          {% elif row.get('contract_start_date') %}
+            {% set row_status = 'Abgeschlossen' %}
+            {% set row_variant = 'success' %}
+            {% set row_result = 'Beginn vorhanden' %}
+          {% elif row.get('is_fahrzeugwechsel') %}
+            {% set row_status = 'Fahrzeugwechsel' %}
+            {% set row_variant = 'info' %}
+            {% set row_result = 'Fahrzeugwechsel erkannt' %}
+          {% elif row.get('is_neugeschaeft') %}
+            {% set row_status = 'Neugeschaeft' %}
+            {% set row_variant = 'info' %}
+            {% set row_result = 'Neugeschaeft erkannt' %}
+          {% elif row.get('is_angebot') %}
+            {% set row_status = 'Angebot' %}
+            {% set row_variant = 'warning' %}
+            {% set row_result = 'Angebot offen' %}
+          {% else %}
+            {% set row_status = 'Unklar' %}
+            {% set row_variant = 'muted' %}
+            {% set row_result = 'Manuelle Pruefung' %}
+          {% endif %}
+          <tr>
+            <td>
+              <div class="ops-cell-stack">
+                <span class="font-medium text-text">{{ dc.customer.name if dc.customer else (row.get('customer', {}).get('name') if row.get('customer') else 'Unbekannter Kunde') }}</span>
+                <div class="flex flex-wrap gap-2 text-xs text-text-soft">
+                  {% if row.get('vehicle') %}<span>{{ row.get('vehicle') }}</span>{% endif %}
+                  {% if row.get('license_plate') %}<span>{{ row.get('license_plate') }}</span>{% endif %}
+                </div>
+              </div>
+            </td>
+            <td class="text-text-muted">{{ row.get('contract_number') or '-' }}</td>
+            <td>{{ badge(row_status, variant=row_variant) }}</td>
+            <td class="text-text-muted">{{ row.get('product_line') or '-' }}</td>
+            <td class="text-text-muted">{{ row.get('contract_start_date') or '-' }}</td>
+            <td class="text-text-muted">{{ row.get('broker_number') or '-' }}</td>
+              <td>
+                <div class="ops-result-cell">
+                  <span class="font-medium text-text">{{ row_result }}</span>
+                  <details class="ops-inline-details">
+                    <summary>Rohdaten einblenden</summary>
+                    <pre class="ops-json-block">{{ row | tojson(indent=2) }}</pre>
+                  </details>
+                </div>
+              </td>
+            <td>
+              {% if signal_uncertain %}
+                {{ badge('Unklar', variant='warning') }}
+              {% else %}
+                {{ badge('Plausibel', variant='success') }}
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
       {% else %}
         <tr>
-          <td colspan="4" class="text-center text-text-muted">Keine Kundenzeilen erkannt.</td>
+          <td colspan="8" class="text-center text-text-muted">Keine Kundenzeilen erkannt.</td>
         </tr>
       {% endfor %}
     </tbody>

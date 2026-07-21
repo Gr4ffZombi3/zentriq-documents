@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from app.extensions import db
-from app.models.enums import DocStatus, DocType, ListScope, OcrEngine, Priority
+from app.models.enums import DocStatus, DocType, ListScope, ListType, OcrEngine, Priority
 from app.tenancy import TenantScopedMixin
 
 
@@ -76,6 +76,7 @@ class Document(TenantScopedMixin, db.Model):
     # automatisch erkannt (siehe app/services/analysis/list_scope_detection.py), aber beim
     # Upload manuell uebersteuerbar - wird dann nicht mehr automatisch neu erkannt.
     list_scope = db.Column(db.Enum(ListScope), nullable=True)
+    list_type = db.Column(db.Enum(ListType), nullable=True)
 
     customer = db.relationship("Customer", back_populates="documents")
     document_customers = db.relationship(

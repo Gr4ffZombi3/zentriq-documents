@@ -69,3 +69,27 @@ def test_customer_detail_returns_404_for_other_tenant(auth_client, db, tenant):
 
     resp = auth_client.get(f"/customers/{other_customer.id}")
     assert resp.status_code == 404
+
+
+def test_customer_detail_does_not_trigger_additional_ki_calls(auth_client, db, tenant, monkeypatch):
+    document = Document(
+        filename="liste2.pdf", original_filename="liste2.pdf", file_path="/tmp/liste2.pdf", tenant_id=tenant.id
+    )
+    db.session.add(document)
+    db.session.commit()
+
+    extraction = LeipzigerListeExtraction(
+        rows=[LeipzigerListeRow(customer=ExtractedCustomer(name="Ohne Reanalyse"), is_angebot=True)]
+    )
+    apply_leipziger_liste_extraction(document, extraction)
+    db.session.commit()
+
+    customer = Customer.query.filter_by(name="Ohne Reanalyse").one()
+    monkeypatch.setattr(
+        "app.tasks.document_tasks.extract_document_data",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not be called")),
+    )
+
+    resp = auth_client.get(f"/customers/{customer.id}")
+    assert resp.status_code == 200
+    assert "Ohne Reanalyse" in resp.get_data(as_text=True)

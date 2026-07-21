@@ -1,7 +1,7 @@
 from flask import Blueprint, current_app, make_response, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from app.models.enums import ListScope
+from app.models.enums import ListScope, ListType
 from app.services.documents import create_document
 from app.services.storage import save_pdf
 from app.tasks.document_tasks import process_document
@@ -13,6 +13,12 @@ upload_bp = Blueprint("upload", __name__, url_prefix="/upload")
 @upload_bp.route("", methods=["POST"])
 @login_required
 def upload_document():
+    list_type_raw = request.form.get("list_type", "")
+    try:
+        list_type = ListType(list_type_raw) if list_type_raw else ListType.OTHER
+    except ValueError:
+        list_type = ListType.OTHER
+
     file = request.files.get("file")
     if file is None or file.filename == "":
         current_app.logger.warning(
@@ -35,20 +41,18 @@ def upload_document():
         )
         return render_template("components/upload_widget.html", error=str(exc)), 400
 
-    # M13: optionale manuelle Auswahl "Eigene Liste"/"GS-Liste" - bei leerem/unbekanntem Wert
-    # greift spaeter die automatische Erkennung in der Pipeline (documents_tasks.py).
-    list_scope_raw = request.form.get("list_scope", "")
-    try:
-        list_scope = ListScope(list_scope_raw) if list_scope_raw else None
-    except ValueError:
-        list_scope = None
+    list_scope = {
+        ListType.OWN: ListScope.OWN,
+        ListType.GS: ListScope.GESCHAEFTSSTELLE,
+    }.get(list_type)
 
     current_app.logger.info(
-        "document.upload.accepted tenant_id=%s user_id=%s filename=%s bytes=%s list_scope=%s",
+        "document.upload.accepted tenant_id=%s user_id=%s filename=%s bytes=%s list_type=%s list_scope=%s",
         current_user.tenant_id,
         current_user.id,
         file.filename,
         len(file_bytes),
+        list_type.value,
         list_scope.value if list_scope else "auto",
     )
     stored_filename, file_path = save_pdf(file_bytes)
@@ -59,6 +63,7 @@ def upload_document():
         tenant_id=current_user.tenant_id,
         uploaded_by_user_id=current_user.id,
         list_scope=list_scope,
+        list_type=list_type,
     )
     current_app.logger.info(
         "document.upload.stored tenant_id=%s user_id=%s document_id=%s path=%s",

@@ -1,6 +1,7 @@
 from app.extensions import db
-from app.models import Customer, DocStatus, Document, DocumentCustomer
-from app.models.enums import DocType, ListScope, TimelineEventType
+from app.models import DocStatus, Document, DocumentCustomer
+from app.models.enums import DocType, ListScope, ListType, TimelineEventType
+from app.services.customers import CustomerMatcher
 from app.services.analysis.business_rules import (
     count_offer_occurrences,
     create_advanced_recommendations,
@@ -12,7 +13,6 @@ from app.services.llm.recommendations import create_recommendations
 from app.services.llm.schemas import DocumentExtraction, ExtractedCustomer, LeipzigerListeExtraction
 from app.services.tasks import create_flag_based_tasks, create_tasks_from_recommendations
 from app.services.timeline import log_timeline_event
-from app.tenancy import get_current_tenant_id
 
 
 def create_document(
@@ -22,6 +22,7 @@ def create_document(
     tenant_id: int,
     uploaded_by_user_id: int | None = None,
     list_scope: ListScope | None = None,
+    list_type: ListType | None = None,
 ) -> Document:
     document = Document(
         filename=stored_filename,
@@ -33,29 +34,24 @@ def create_document(
         # M13: manuell gewaehlter Listentyp, falls beim Upload angegeben - die automatische
         # Erkennung in der Pipeline greift dann nicht mehr (siehe document_tasks.py).
         list_scope=list_scope,
+        list_type=list_type,
     )
     db.session.add(document)
     db.session.commit()
     return document
 
 
-def find_or_create_customer(data: ExtractedCustomer, uploaded_by_user_id: int | None = None) -> Customer:
-    customer = Customer.query.filter_by(name=data.name).first()
-    if customer is None:
-        # M11: Bestandszuordnung wird nur beim erstmaligen Anlegen gesetzt und danach nie
-        # ueberschrieben - "Mein Bestand" soll nicht durch spaetere Uploads eines anderen
-        # Vermittlers fuer denselben Kunden umverteilt werden.
-        customer = Customer(name=data.name, tenant_id=get_current_tenant_id(), assigned_user_id=uploaded_by_user_id)
-        db.session.add(customer)
-
-    customer.address = data.address or customer.address
-    customer.city = data.city or customer.city
-    customer.postal_code = data.postal_code or customer.postal_code
-    customer.date_of_birth = data.date_of_birth or customer.date_of_birth
-    return customer
+def find_or_create_customer(
+    data: ExtractedCustomer,
+    uploaded_by_user_id: int | None = None,
+    matcher: CustomerMatcher | None = None,
+):
+    active_matcher = matcher or CustomerMatcher()
+    return active_matcher.get_or_create(data, uploaded_by_user_id=uploaded_by_user_id)
 
 
 def apply_extraction(document: Document, extraction: DocumentExtraction) -> None:
+    matcher = CustomerMatcher()
     document.doc_type = extraction.doc_type
     document.vehicle = extraction.vehicle
     document.license_plate = extraction.license_plate
@@ -78,7 +74,9 @@ def apply_extraction(document: Document, extraction: DocumentExtraction) -> None
 
     if extraction.customer is not None:
         document.customer = find_or_create_customer(
-            extraction.customer, uploaded_by_user_id=document.uploaded_by_user_id
+            extraction.customer,
+            uploaded_by_user_id=document.uploaded_by_user_id,
+            matcher=matcher,
         )
         log_timeline_event(
             document.customer,
@@ -98,6 +96,7 @@ def apply_extraction(document: Document, extraction: DocumentExtraction) -> None
 
 
 def apply_leipziger_liste_extraction(document: Document, extraction: LeipzigerListeExtraction) -> None:
+    matcher = CustomerMatcher()
     document.doc_type = DocType.LEIPZIGER_LISTE
     document.raw_json = extraction.model_dump(mode="json")
 
@@ -106,7 +105,11 @@ def apply_leipziger_liste_extraction(document: Document, extraction: LeipzigerLi
 
     document_customers_by_id: dict[int, DocumentCustomer] = {}
     for index, row in enumerate(extraction.rows):
-        row_customer = find_or_create_customer(row.customer, uploaded_by_user_id=document.uploaded_by_user_id)
+        row_customer = find_or_create_customer(
+            row.customer,
+            uploaded_by_user_id=document.uploaded_by_user_id,
+            matcher=matcher,
+        )
         db.session.flush()  # Kunden-ID fuer den Abgleich mehrfacher Zeilen bereitstellen
 
         row_dict = row.model_dump(mode="json")

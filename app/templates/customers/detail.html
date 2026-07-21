@@ -1,69 +1,254 @@
 {% extends "base.html" %}
 {% from "ui/icons.html" import icon %}
-{% from "ui/display.html" import card, page_header %}
+{% from "ui/display.html" import badge, card, empty_state %}
 {% from "ui/forms.html" import button %}
 {% block title %}{{ customer.name }} - Zentriq Documents{% endblock %}
 {% block content %}
+{% set summary = customer_summary %}
+{% set doc_links = customer_view["document_customers"] %}
+
 <div class="page-shell">
-  {% call page_header(customer.name, 'Dokumente, Historie und offene Punkte fuer diesen Kunden in einer fokussierten Detailansicht.', 'Customer detail') %}
-    {{ button('Alle Kunden', href=url_for('customers.list_customers'), variant='secondary', icon_name='arrow-left') }}
-  {% endcall %}
+  <section class="ops-page-header">
+    <div>
+      <p class="ops-page-kicker">Kundenakte</p>
+      <h1 class="ops-page-title">{{ customer.name }}</h1>
+      <p class="ops-page-copy">Stammdaten, zugeordnete Dokumente und alle erkannten Leipziger-Vorgaenge in einer kompakten Akte.</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-3">
+      {{ button('Alle Kunden', href=url_for('customers.list_customers'), variant='secondary', icon_name='arrow-left') }}
+    </div>
+  </section>
 
-  <div class="grid gap-6 xl:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)]">
-    {% call card(padding='p-6 sm:p-7', tone='strong') %}
-      <div class="flex items-start gap-4">
-        <span class="avatar-chip h-16 w-16 shrink-0 rounded-[1.35rem] text-lg">{{ customer.name[0] | upper }}</span>
-        <div class="min-w-0">
-          <h2 class="text-2xl font-semibold tracking-tight text-text">{{ customer.name }}</h2>
-          <div class="mt-4 flex flex-wrap gap-2">
-            {% if customer.city or customer.postal_code %}<span class="meta-chip">{{ customer.city or '-' }}{% if customer.postal_code %} · {{ customer.postal_code }}{% endif %}</span>{% endif %}
-            {% if customer.email %}<span class="meta-chip">{{ customer.email }}</span>{% endif %}
-            {% if customer.phone %}<span class="meta-chip">{{ customer.phone }}</span>{% endif %}
-          </div>
-        </div>
-      </div>
-    {% endcall %}
+  <div class="chip-bar">
+    {% if customer.date_of_birth %}
+      <span class="meta-chip">{{ icon('calendar-days', class='h-3.5 w-3.5') }}{{ customer.date_of_birth.strftime('%d.%m.%Y') }}</span>
+    {% endif %}
+    {% if customer.city or customer.postal_code %}
+      <span class="meta-chip">{{ icon('map-pin', class='h-3.5 w-3.5') }}{{ customer.city or '-' }}{% if customer.postal_code %} / {{ customer.postal_code }}{% endif %}</span>
+    {% endif %}
+    {% if customer.email %}
+      <span class="meta-chip">{{ icon('mail', class='h-3.5 w-3.5') }}{{ customer.email }}</span>
+    {% endif %}
+    {% if customer.phone %}
+      <span class="meta-chip">{{ icon('phone', class='h-3.5 w-3.5') }}{{ customer.phone }}</span>
+    {% endif %}
+    {% if customer.date_of_birth and customer.postal_code %}
+      {{ badge('Stabile Zuordnung', variant='success') }}
+    {% elif customer.date_of_birth or customer.postal_code %}
+      {{ badge('Teilweise abgesichert', variant='warning') }}
+    {% else %}
+      {{ badge('Nur Namensabgleich', variant='muted') }}
+    {% endif %}
+    {% if possible_duplicates %}
+      {{ badge('Moegliche Dublette', variant='warning') }}
+    {% endif %}
+  </div>
 
-    {% call card(padding='p-6 sm:p-7') %}
+  <div class="ops-stat-grid">
+    <article class="ops-stat-card">
+      <span class="ops-stat-label">Dokumente</span>
+      <strong class="ops-stat-value">{{ summary.documents }}</strong>
+    </article>
+    <article class="ops-stat-card">
+      <span class="ops-stat-label">Vorgaenge</span>
+      <strong class="ops-stat-value">{{ summary.cases }}</strong>
+    </article>
+    <article class="ops-stat-card">
+      <span class="ops-stat-label">Angebote</span>
+      <strong class="ops-stat-value">{{ summary.offers }}</strong>
+    </article>
+    <article class="ops-stat-card">
+      <span class="ops-stat-label">Abschluesse</span>
+      <strong class="ops-stat-value">{{ summary.closures }}</strong>
+    </article>
+    <article class="ops-stat-card">
+      <span class="ops-stat-label">Offene Vorgaenge</span>
+      <strong class="ops-stat-value">{{ summary.open_cases }}</strong>
+    </article>
+    <article class="ops-stat-card">
+      <span class="ops-stat-label">Stornos</span>
+      <strong class="ops-stat-value">{{ summary.stornos }}</strong>
+    </article>
+  </div>
+
+  <div class="grid gap-5 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+    {% call card(padding='p-5 sm:p-6') %}
       <div class="section-heading">
         <div>
-          <h2 class="section-title">Offene Aufgaben</h2>
-          <p class="section-copy">Was fuer diesen Kunden aktuell in Arbeit ist.</p>
+          <h2 class="section-title">Stammdaten</h2>
+          <p class="section-copy">Die Akte bleibt bewusst schlank und nutzt nur vorhandene Daten.</p>
         </div>
-        <a href="{{ url_for('tasks.list_tasks') }}" class="text-sm font-semibold text-primary transition duration-200 hover:text-primary-hover">Aufgaben oeffnen</a>
       </div>
-      {% if open_tasks %}
-        <div class="list-stack mt-6">
-          {% for task in open_tasks %}
-            <div class="list-row-card p-4">
-              <div class="flex items-center justify-between gap-3">
-                <span class="truncate text-sm font-semibold text-text">{{ task.title }}</span>
-                {% if task.due_date %}
-                  <span class="meta-chip">{{ task.due_date.strftime('%d.%m.%Y') }}</span>
-                {% endif %}
+      <dl class="info-grid mt-5">
+        <div class="info-item">
+          <dt>Name</dt>
+          <dd>{{ customer.name }}</dd>
+        </div>
+        <div class="info-item">
+          <dt>Geburtsdatum</dt>
+          <dd>{{ customer.date_of_birth.strftime('%d.%m.%Y') if customer.date_of_birth else '-' }}</dd>
+        </div>
+        <div class="info-item">
+          <dt>Ort / PLZ</dt>
+          <dd>{{ customer.city or '-' }}{% if customer.postal_code %} / {{ customer.postal_code }}{% endif %}</dd>
+        </div>
+        <div class="info-item">
+          <dt>Dokumente</dt>
+          <dd>{{ summary.documents }}</dd>
+        </div>
+      </dl>
+    {% endcall %}
+
+    {% call card(padding='p-5 sm:p-6', tone='strong') %}
+      <div class="section-heading">
+        <div>
+          <h2 class="section-title">Akte auf einen Blick</h2>
+          <p class="section-copy">Relevante Folgesignale aus Listen, Dokumenten und offenen Aufgaben.</p>
+        </div>
+      </div>
+      <div class="grid gap-3 sm:grid-cols-2 mt-5">
+        <div class="ops-meta-item">
+          <span class="ops-meta-label">Offene Aufgaben</span>
+          <span class="ops-meta-value">{{ open_tasks | length }}</span>
+        </div>
+        <div class="ops-meta-item">
+          <span class="ops-meta-label">Timeline-Ereignisse</span>
+          <span class="ops-meta-value">{{ timeline_events | length }}</span>
+        </div>
+        <div class="ops-meta-item">
+          <span class="ops-meta-label">Dokumentverknuepfungen</span>
+          <span class="ops-meta-value">{{ doc_links | length }}</span>
+        </div>
+        <div class="ops-meta-item">
+          <span class="ops-meta-label">Letzte Aenderung</span>
+          <span class="ops-meta-value">{{ customer.updated_at.strftime('%d.%m.%Y %H:%M') if customer.updated_at else '-' }}</span>
+        </div>
+      </div>
+      {% if possible_duplicates %}
+        <div class="mt-5 flex flex-col gap-2">
+          {% for duplicate in possible_duplicates %}
+            <a href="{{ url_for('customers.detail', customer_id=duplicate.id) }}" class="ops-inline-link-row">
+              <div class="min-w-0">
+                <p class="truncate text-sm font-semibold text-text">{{ duplicate.name }}</p>
+                <p class="mt-1 text-xs text-text-soft">
+                  {{ duplicate.date_of_birth.strftime('%d.%m.%Y') if duplicate.date_of_birth else 'Kein Geburtsdatum' }}
+                  {% if duplicate.postal_code %} | {{ duplicate.postal_code }}{% endif %}
+                </p>
               </div>
+              <span class="text-xs text-warning">Pruefen</span>
+            </a>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% if open_tasks %}
+        <div class="mt-5 flex flex-col gap-2">
+          {% for task in open_tasks[:4] %}
+            <div class="ops-inline-row">
+              <span class="truncate text-sm font-medium text-text">{{ task.title }}</span>
+              <span class="text-xs text-text-soft">{{ task.due_date.strftime('%d.%m.%Y') if task.due_date else 'offen' }}</span>
             </div>
           {% endfor %}
         </div>
-      {% else %}
-        <p class="mt-6 text-sm leading-7 text-text-muted">Keine offenen Aufgaben fuer diesen Kunden.</p>
       {% endif %}
     {% endcall %}
   </div>
 
-  <div class="grid gap-6 xl:grid-cols-2">
-    {% call card(padding='p-6 sm:p-7') %}
+  {% if case_rows %}
+    {% call card(padding='p-5 sm:p-6') %}
       <div class="section-heading">
         <div>
-          <h2 class="section-title">Chronologie</h2>
-          <p class="section-copy">Die wichtigsten Ereignisse im zeitlichen Verlauf.</p>
+          <h2 class="section-title">Zugeordnete Vorgange</h2>
+          <p class="section-copy">Jede persistierte Listenzeile bleibt mit Dokumentbezug, Status und Rohdaten nachvollziehbar.</p>
         </div>
-        <span class="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-          {{ icon('history', class='w-5 h-5') }}
-        </span>
+      </div>
+      <div class="ops-table-shell mt-5">
+        <table class="ops-table">
+          <thead>
+            <tr>
+              <th>Datum</th>
+              <th>Dokument</th>
+              <th>Status</th>
+              <th>Vertragsnummer</th>
+              <th>Sparte</th>
+              <th>VM-Nummer</th>
+              <th>Ergebnis</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in case_rows %}
+              <tr>
+                <td class="text-text-muted">{{ row.document_uploaded_at.strftime('%d.%m.%Y') if row.document_uploaded_at else '-' }}</td>
+                <td>
+                  <a href="{{ url_for('documents.detail', document_id=row.document_id) }}" class="ops-table-link">
+                    {{ row.document_name }}
+                  </a>
+                </td>
+                <td>{{ badge(row.status_label, variant=row.status_variant) }}</td>
+                <td class="text-text-muted">{{ row.contract_number }}</td>
+                <td class="text-text-muted">{{ row.product_line }}</td>
+                <td class="text-text-muted">{{ row.broker_number }}</td>
+                <td>
+                  <div class="ops-result-cell">
+                    <span class="font-medium text-text">{{ row.result_label }}</span>
+                    <span class="ops-result-note">{{ row.reason }}</span>
+                  </div>
+                </td>
+              </tr>
+              <tr class="ops-table-detail-row">
+                <td colspan="7">
+                  <details class="ops-inline-details">
+                    <summary>Rohdaten einblenden</summary>
+                    <pre class="ops-json-block">{{ row.raw_row | tojson(indent=2) }}</pre>
+                  </details>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endcall %}
+  {% else %}
+    {% call empty_state('Keine zugeordneten Vorgange', 'Dieser Kunde wurde noch in keiner Leipziger Liste erfasst.', 'file-text') %}{% endcall %}
+  {% endif %}
+
+  <div class="grid gap-5 xl:grid-cols-2">
+    {% call card(padding='p-5 sm:p-6') %}
+      <div class="section-heading">
+        <div>
+          <h2 class="section-title">Dokumente</h2>
+          <p class="section-copy">Direkte Spruenge in die zugehoerigen Uploads.</p>
+        </div>
+      </div>
+      {% if doc_links %}
+        <div class="list-stack mt-5">
+          {% set seen_ids = namespace(values=[]) %}
+          {% for doc_customer in doc_links %}
+            {% if doc_customer.document_id not in seen_ids.values %}
+              {% set seen_ids.values = seen_ids.values + [doc_customer.document_id] %}
+              <a href="{{ url_for('documents.detail', document_id=doc_customer.document_id) }}" class="ops-inline-link-row">
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-semibold text-text">{{ doc_customer.document.original_filename }}</p>
+                  <p class="mt-1 text-xs text-text-soft">{{ doc_customer.document.uploaded_at.strftime('%d.%m.%Y %H:%M') if doc_customer.document.uploaded_at else '-' }}</p>
+                </div>
+                <span class="text-xs text-primary">Oeffnen</span>
+              </a>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="mt-5 text-sm text-text-muted">Keine direkt verknuepften Dokumente vorhanden.</p>
+      {% endif %}
+    {% endcall %}
+
+    {% call card(padding='p-5 sm:p-6') %}
+      <div class="section-heading">
+        <div>
+          <h2 class="section-title">Verlauf</h2>
+          <p class="section-copy">Zeitliche Reihenfolge der vorhandenen Kundenereignisse.</p>
+        </div>
       </div>
       {% if timeline_events %}
-        <ol class="timeline-list mt-6">
+        <ol class="timeline-list mt-5">
           {% for event in timeline_events %}
             <li class="timeline-item">
               <span class="timeline-date">{{ event.occurred_at.strftime('%d.%m.') }}</span>
@@ -72,48 +257,7 @@
           {% endfor %}
         </ol>
       {% else %}
-        <p class="mt-6 text-sm leading-7 text-text-muted">Noch keine Ereignisse erfasst.</p>
-      {% endif %}
-    {% endcall %}
-
-    {% call card(padding='p-6 sm:p-7') %}
-      <div class="section-heading">
-        <div>
-          <h2 class="section-title">Leipziger-Liste-Verlauf</h2>
-          <p class="section-copy">Wann dieser Kunde in den Listen aufgetaucht ist und mit welchem Ergebnis.</p>
-        </div>
-        <span class="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-          {{ icon('file-text', class='w-5 h-5') }}
-        </span>
-      </div>
-      {% if document_customers %}
-        <div class="table-shell mt-6 overflow-x-auto">
-          <table class="text-left text-sm">
-            <thead>
-              <tr>
-                <th>Datum</th>
-                <th>Dokument</th>
-                <th>Angebot</th>
-                <th>Neugeschaeft</th>
-                <th>Storno</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for dc in document_customers %}
-                {% set rows = dc.row_data or [] %}
-                <tr>
-                  <td class="text-text-muted">{{ dc.document.uploaded_at.strftime('%d.%m.%Y') if dc.document.uploaded_at else '-' }}</td>
-                  <td><a href="{{ url_for('documents.detail', document_id=dc.document_id) }}" class="font-semibold text-primary transition duration-200 hover:text-primary-hover">{{ dc.document.original_filename }}</a></td>
-                  <td>{{ 'Ja' if rows | selectattr('is_angebot') | list else '-' }}</td>
-                  <td>{{ 'Ja' if rows | selectattr('is_neugeschaeft') | list else '-' }}</td>
-                  <td>{{ 'Ja' if rows | selectattr('is_storno') | list else '-' }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        <p class="mt-6 text-sm leading-7 text-text-muted">Dieser Kunde wurde noch in keiner Leipziger Liste erfasst.</p>
+        <p class="mt-5 text-sm text-text-muted">Noch keine Ereignisse erfasst.</p>
       {% endif %}
     {% endcall %}
   </div>

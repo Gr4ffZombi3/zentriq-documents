@@ -6,20 +6,20 @@ set -euo pipefail
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$APP_DIR"
 
-echo "==> [1/5] Hole neuesten Code..."
+echo "==> [1/6] Hole neuesten Code..."
 git pull
 
-echo "==> [2/5] Aktiviere virtuelle Umgebung & installiere Abhaengigkeiten..."
+echo "==> [2/6] Aktiviere virtuelle Umgebung & installiere Abhaengigkeiten..."
 source .venv/bin/activate
 pip install -q -r requirements.txt
 
-echo "==> [3/5] Wende Datenbank-Migrationen an..."
+echo "==> [3/6] Wende Datenbank-Migrationen an..."
 set -a
 source .env
 set +a
 flask db upgrade
 
-echo "==> [4/5] Statische Assets..."
+echo "==> [4/6] Statische Assets..."
 CSS_FILE="app/static/css/app.css"
 if [ ! -f "$CSS_FILE" ]; then
     echo "    FEHLER: $CSS_FILE fehlt." >&2
@@ -40,7 +40,10 @@ if ! grep -q ".auth-shell" "$CSS_FILE"; then
 fi
 echo "    app.css vorhanden und plausibel (${CSS_BYTES} Bytes)."
 
-echo "==> [5/5] Starte Dienste neu..."
+echo "==> [5/6] Repariere nginx-Konfiguration..."
+"$APP_DIR/deploy/repair-nginx.sh"
+
+echo "==> [6/6] Starte Dienste neu..."
 sudo systemctl restart zentriq-api
 sudo systemctl restart zentriq-worker
 

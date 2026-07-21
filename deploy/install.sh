@@ -19,12 +19,19 @@ fi
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$APP_DIR"
 
+# shellcheck disable=SC1091
+source "$APP_DIR/deploy/lib.sh"
+
 DB_NAME="zentriq_documents"
 DB_USER="zentriq"
 DEFAULT_DOMAIN="www.zentriqai.de"
 
-read -rp "Domain fuer nginx/SSL [${DEFAULT_DOMAIN}, leer = kein SSL]: " DOMAIN_INPUT || true
-DOMAIN="${DOMAIN_INPUT:-$DEFAULT_DOMAIN}"
+read -rp "Domain fuer nginx/SSL [${DEFAULT_DOMAIN}, '-' = kein SSL]: " DOMAIN_INPUT || true
+if [ "${DOMAIN_INPUT:-}" = "-" ]; then
+    DOMAIN=""
+else
+    DOMAIN="${DOMAIN_INPUT:-$DEFAULT_DOMAIN}"
+fi
 
 echo ""
 echo "==> [1/10] System-Pakete installieren..."
@@ -69,6 +76,9 @@ if [ ! -f ".env" ]; then
     sed -i "s#^MARIADB_PASSWORD=.*#MARIADB_PASSWORD=${DB_PASSWORD}#" .env
     sed -i "s#^FLASK_ENV=.*#FLASK_ENV=production#" .env
     sed -i "s#^SESSION_COOKIE_SECURE=.*#SESSION_COOKIE_SECURE=false#" .env
+    if [ -n "$DOMAIN" ]; then
+        printf '\nPUBLIC_HOST=%s\nPUBLIC_URL=http://%s\n' "$DOMAIN" "$DOMAIN" >> .env
+    fi
 
     echo "    .env erzeugt (SECRET_KEY und Datenbank-Zugangsdaten automatisch gesetzt)."
     echo "    WICHTIG: OPENAI_API_KEY ist noch leer - fuer KI-Auswertung in .env eintragen,"
@@ -94,18 +104,19 @@ sed -e "s#__APP_DIR__#${APP_DIR}#g" \
     "${APP_DIR}/deploy/systemd/zentriq-api.service.template" > /etc/systemd/system/zentriq-api.service
 sed -e "s#__APP_DIR__#${APP_DIR}#g" \
     "${APP_DIR}/deploy/systemd/zentriq-worker.service.template" > /etc/systemd/system/zentriq-worker.service
-chmod +x "${APP_DIR}/deploy/pre-start.sh" "${APP_DIR}/deploy/post-deploy.sh" "${APP_DIR}/deploy/update.sh"
+chmod +x "${APP_DIR}/deploy/pre-start.sh" "${APP_DIR}/deploy/post-deploy.sh" "${APP_DIR}/deploy/repair-nginx.sh" "${APP_DIR}/deploy/update.sh"
 systemctl daemon-reload
 systemctl enable zentriq-api zentriq-worker
 systemctl restart zentriq-api zentriq-worker
 
 echo "==> [8/10] nginx einrichten..."
-sed -e "s#__APP_DIR__#${APP_DIR}#g" -e "s#__DOMAIN__#${DOMAIN:-_}#g" \
-    "${APP_DIR}/deploy/nginx/zentriq.conf.template" > /etc/nginx/sites-available/zentriq
+if [ ! -f /etc/nginx/sites-available/zentriq ]; then
+    sed -e "s#__APP_DIR__#${APP_DIR}#g" -e "s#__DOMAIN__#${DOMAIN:-_}#g" \
+        "${APP_DIR}/deploy/nginx/zentriq.conf.template" > /etc/nginx/sites-available/zentriq
+fi
 ln -sf /etc/nginx/sites-available/zentriq /etc/nginx/sites-enabled/zentriq
 rm -f /etc/nginx/sites-enabled/default
-nginx -t
-systemctl reload nginx
+"${APP_DIR}/deploy/repair-nginx.sh"
 
 echo "==> [9/10] Firewall..."
 ufw allow OpenSSH >/dev/null
@@ -121,6 +132,11 @@ if [ -n "$DOMAIN" ]; then
         # ein Login unmoeglich, falls certbot z.B. mangels DNS-Propagation fehlschlaegt und
         # die Seite vorerst nur ueber HTTP erreichbar bleibt.
         sed -i "s#^SESSION_COOKIE_SECURE=.*#SESSION_COOKIE_SECURE=true#" .env
+        if grep -q '^PUBLIC_URL=' .env; then
+            sed -i "s#^PUBLIC_URL=.*#PUBLIC_URL=https://${DOMAIN}#" .env
+        else
+            printf '\nPUBLIC_URL=https://%s\n' "$DOMAIN" >> .env
+        fi
         systemctl restart zentriq-api zentriq-worker
         echo "    SSL aktiv, SESSION_COOKIE_SECURE=true gesetzt."
     else

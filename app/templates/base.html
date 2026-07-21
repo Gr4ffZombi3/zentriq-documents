@@ -6,13 +6,12 @@
   {% block head %}{% endblock %}
 </head>
 <body
-  x-data="{ sidebarOpen: false, railCollapsed: localStorage.getItem('zentriq-sidebar-collapsed') === '1' }"
-  x-init="$watch('railCollapsed', (value) => localStorage.setItem('zentriq-sidebar-collapsed', value ? '1' : '0'))"
+  x-data="{ sidebarOpen: false }"
   class="bg-bg text-text antialiased overflow-hidden"
 >
   <div class="app-frame">
     {% include "components/sidebar.html" %}
-    <div class="app-main" :class="{ 'app-main-collapsed': railCollapsed }">
+    <div class="app-main">
       <div class="app-main-inner">
         {% include "components/topbar.html" %}
         <main class="app-content-area">

@@ -1,110 +1,141 @@
 {% extends "base.html" %}
-{% from "ui/display.html" import badge, card, empty_state, page_header, stat_card %}
+{% from "ui/display.html" import badge, empty_state, status_badge %}
 {% from "ui/forms.html" import button %}
 {% block title %}Uebersicht - Zentriq Documents{% endblock %}
 {% block content %}
-<div class="page-shell">
-  {% call page_header(
-    "Operations-Uebersicht" ~ (" fuer " ~ current_user.email.split("@")[0] if current_user.is_authenticated else ""),
-    "Ein breiter Desktop-Workspace fuer Dokumenten-Intake, Analyse, Empfehlungen und die taegliche Steuerung des Arbeitsflusses.",
-    "Dashboard"
-  ) %}
-    {{ button('Dokumente oeffnen', href=url_for('documents.list_documents'), variant='secondary', icon_name='file-text') }}
-    {{ button('Upload starten', href=url_for('documents.list_documents') ~ '#upload-widget', variant='primary', icon_name='upload') }}
-  {% endcall %}
-
-  {% call card(padding='px-5 py-4 sm:px-6', tone='muted') %}
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div class="chip-bar">
-        {{ badge('Queue live', variant='info') }}
-        <span class="meta-chip">{{ stats.total_documents }} Dokumente im Workspace</span>
-        <span class="meta-chip">{{ stats.done_count }} Analysen bereit</span>
-        <span class="meta-chip">{{ stats.failed_count }} Faelle mit Nacharbeit</span>
-      </div>
-      <p class="text-sm text-text-muted">Desktop-first Steuerung mit einer ruhigen, breiten Arbeitsflaeche.</p>
+<div class="page-shell dashboard-shell">
+  <section class="dashboard-header">
+    <div class="min-w-0">
+      <h1 class="dashboard-title">{{ dashboard.headline }}</h1>
+      <p class="dashboard-subtitle">{{ dashboard.subheadline }}</p>
+      <p class="dashboard-scope-note">{{ dashboard.scope_note }}</p>
     </div>
-  {% endcall %}
+    <div class="dashboard-header-actions">
+      {{ button('Dokument hochladen', href=url_for('documents.list_documents') ~ '#upload-widget', variant='primary', icon_name='upload') }}
+    </div>
+  </section>
 
-  <div class="stat-grid stat-grid-4">
-    {{ stat_card('Dokumente gesamt', stats.total_documents, icon_name='file-text', variant='info', meta='Aktiver Bestand im System') }}
-    {{ stat_card('Neu in 24 Stunden', stats.new_documents, icon_name='upload', variant='info', meta='Frische Eingänge fuer den Intake') }}
-    {{ stat_card('Analyse fertig', stats.done_count, icon_name='check-circle', variant='success', meta='Direkt bereit fuer Review und Folgearbeit') }}
-    {{ stat_card('Nacharbeit offen', stats.failed_count, icon_name='alert-circle', variant='danger', meta='Dokumente mit Fehlern oder fehlenden Angaben') }}
-  </div>
+  {% if dashboard.has_data %}
+    <section class="dashboard-metric-grid" aria-label="Kennzahlen">
+      {% for metric in dashboard.metrics %}
+        <article class="dashboard-metric-card">
+          <span class="dashboard-metric-label">{{ metric.label }}</span>
+          <strong class="dashboard-metric-value">{{ metric.value }}</strong>
+          <span class="dashboard-metric-accent dashboard-metric-accent-{{ metric.tone }}"></span>
+        </article>
+      {% endfor %}
+    </section>
 
-  <div class="grid gap-6 2xl:grid-cols-[minmax(0,1.18fr)_minmax(420px,0.82fr)]">
-    {% if stats.doc_type_counts %}
-      {% call card(padding='p-5 sm:p-6') %}
-        <div class="section-heading">
+    <div class="dashboard-grid">
+      <section class="dashboard-panel">
+        <div class="dashboard-section-heading">
           <div>
-            <h2 class="section-title">Dokumenttypen im Fokus</h2>
-            <p class="section-copy">Welche Dokumentarten aktuell den Arbeitsalltag praegen und wie gross ihr Anteil im Bestand ist.</p>
+            <h2 class="dashboard-section-title">Aktuelle Vorgaenge</h2>
+            <p class="dashboard-section-copy">Belegbare Leipziger-Faelle aus den zuletzt ausgewerteten Listen.</p>
           </div>
-          <span class="meta-chip">{{ stats.total_documents }} gesamt</span>
+          <span class="meta-chip">{{ dashboard.cases|length }} sichtbar</span>
         </div>
-        <div class="table-shell mt-5">
-          <table>
-            <thead>
-              <tr>
-                <th class="text-left">Dokumenttyp</th>
-                <th class="text-right">Anzahl</th>
-                <th class="text-right">Anteil</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for doc_type, count in stats.doc_type_counts.items() %}
-                {% set share = ((count / stats.total_documents) * 100) if stats.total_documents else 0 %}
-                <tr>
-                  <td>
-                    <div>
-                      <p class="text-sm font-semibold text-text">{{ doc_type.value }}</p>
-                      <p class="mt-1 text-xs text-text-muted">Aktiver Dokumenttyp im Workspace</p>
-                    </div>
-                  </td>
-                  <td class="text-right text-sm font-semibold text-text">{{ count }}</td>
-                  <td class="text-right text-sm text-text-muted">{{ '%.0f'|format(share) }} %</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% endcall %}
-    {% else %}
-      {% call empty_state('Noch keine Typverteilung', 'Sobald Dokumente analysiert wurden, erscheint hier eine saubere Verteilung der erkannten Dokumentarten.', 'file-text') %}{% endcall %}
-    {% endif %}
 
-    {% call card(padding='p-5 sm:p-6', tone='strong') %}
-      <div class="section-heading">
-        <div>
-          <h2 class="section-title">Offene Empfehlungen</h2>
-          <p class="section-copy">Priorisierte naechste Schritte fuer die aktuelle Queue und ihre wichtigsten Folgeaktionen.</p>
+        {% if dashboard.cases %}
+          <div class="dashboard-table-shell">
+            <table class="dashboard-table">
+              <thead>
+                <tr>
+                  <th>Kunde</th>
+                  <th>Sparte</th>
+                  <th>Status</th>
+                  <th>Beginn</th>
+                  <th>Ergebnis</th>
+                  <th>Aktion</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in dashboard.cases %}
+                  <tr>
+                    <td>
+                      {% if item.customer_href %}
+                        <a href="{{ item.customer_href }}" class="dashboard-customer-link">{{ item.customer_name }}</a>
+                      {% else %}
+                        <span class="dashboard-customer-link">{{ item.customer_name }}</span>
+                      {% endif %}
+                    </td>
+                    <td class="dashboard-table-muted">{{ item.product_line }}</td>
+                    <td>
+                      <div class="flex flex-wrap items-center gap-2">
+                        {{ badge(item.status_label, variant=item.status_variant) }}
+                        {% if item.is_uncertain %}
+                          {{ badge('Unsicher', variant='muted') }}
+                        {% endif %}
+                      </div>
+                    </td>
+                    <td class="dashboard-table-muted">{{ item.start_date_label }}</td>
+                    <td>
+                      <div class="dashboard-result-cell">
+                        <span>{{ item.result_label }}</span>
+                        {% if item.uncertainty_label %}
+                          <span class="dashboard-result-note">{{ item.uncertainty_label }}</span>
+                        {% endif %}
+                      </div>
+                    </td>
+                    <td>
+                      <a href="{{ item.document_href }}" class="dashboard-action-link">Dokument</a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          {% call empty_state('Noch keine Vorgaenge', 'Sobald Leipziger-Listen-Zeilen erkannt wurden, erscheinen hier die relevantesten Faelle.', 'file-text') %}{% endcall %}
+        {% endif %}
+      </section>
+
+      <section class="dashboard-panel">
+        <div class="dashboard-section-heading">
+          <div>
+            <h2 class="dashboard-section-title">Letzte Dokumente</h2>
+            <p class="dashboard-section-copy">Die zuletzt hochgeladenen Leipziger Listen mit Analyse-Status und erkannten Vorgaengen.</p>
+          </div>
+          <a href="{{ url_for('documents.list_documents') }}" class="dashboard-inline-link">Alle Dokumente</a>
         </div>
-        <a href="{{ url_for('recommendations.list_recommendations') }}" class="text-sm font-medium text-primary hover:text-primary-hover">Alle anzeigen</a>
-      </div>
-      {% if recommendations %}
-        <div class="list-stack mt-5">
-          {% for rec in recommendations %}
-            {% set priority_variant = {'high': 'danger', 'medium': 'warning', 'low': 'muted'}.get(rec.priority.value, 'muted') %}
-            <div class="list-row-card px-4 py-4">
-              <div class="flex items-start justify-between gap-4">
-                <div class="min-w-0">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <p class="truncate text-sm font-semibold text-text">{{ rec.label }}</p>
-                    {{ badge(rec.priority.value | capitalize, variant=priority_variant) }}
-                  </div>
-                  <p class="mt-2 text-sm text-text-muted">
-                    {{ rec.customer.name if rec.customer else "Kein Kunde" }}
-                    {% if rec.document_id %} / <a href="{{ url_for('documents.detail', document_id=rec.document_id) }}" class="text-primary hover:text-primary-hover">Dokument oeffnen</a>{% endif %}
-                  </p>
-                </div>
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        {% call empty_state('Keine offenen Empfehlungen', 'Neue Empfehlungen erscheinen automatisch nach der Dokumentenauswertung.', 'list-checks') %}{% endcall %}
-      {% endif %}
+
+        {% if dashboard.recent_documents %}
+          <div class="dashboard-table-shell">
+            <table class="dashboard-table">
+              <thead>
+                <tr>
+                  <th>Dateiname</th>
+                  <th>Upload</th>
+                  <th>Analyse-Status</th>
+                  <th>Vorgaenge</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for document in dashboard.recent_documents %}
+                  <tr>
+                    <td>
+                      <a href="{{ document.href }}" class="dashboard-customer-link">{{ document.name }}</a>
+                    </td>
+                    <td class="dashboard-table-muted">{{ document.uploaded_at_label }}</td>
+                    <td>{{ status_badge(document.status) }}</td>
+                    <td class="dashboard-table-count">{{ document.recognized_count }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          {% call empty_state('Noch keine Leipziger Listen', 'Lade dein erstes Dokument hoch, um echte Kennzahlen und Vorgaenge auf der Uebersicht zu sehen.', 'upload') %}
+            {{ button('Zur Dokumentenliste', href=url_for('documents.list_documents'), variant='secondary', icon_name='file-text') }}
+          {% endcall %}
+        {% endif %}
+      </section>
+    </div>
+  {% else %}
+    {% call empty_state('Noch keine Leipziger Listen im System', 'Lade ein Dokument hoch. Sobald die Analyse durchgelaufen ist, erscheinen hier nur echte Leipziger-Kennzahlen und die zugehoerigen Vorgaenge.', 'upload') %}
+      {{ button('Dokument hochladen', href=url_for('documents.list_documents') ~ '#upload-widget', variant='primary', icon_name='upload') }}
+      {{ button('Dokumente oeffnen', href=url_for('documents.list_documents'), variant='secondary', icon_name='file-text') }}
     {% endcall %}
-  </div>
+  {% endif %}
 </div>
 {% endblock %}

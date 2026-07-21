@@ -9,113 +9,71 @@
 ></div>
 
 <aside
-  :class="{
-    'translate-x-0': sidebarOpen,
-    '-translate-x-full lg:translate-x-0': !sidebarOpen,
-    'sidebar-shell-collapsed': railCollapsed,
-  }"
-  class="sidebar-shell fixed inset-y-0 left-0 z-40 flex flex-col transition-[width,transform] duration-200 ease-in-out"
+  :class="{ 'translate-x-0': sidebarOpen, '-translate-x-full lg:translate-x-0': !sidebarOpen }"
+  class="sidebar-shell fixed inset-y-0 left-0 z-40 flex flex-col transition-transform duration-200 ease-in-out"
 >
-  <div class="border-b border-border/80 px-4 py-4 pb-3">
-    <div class="flex items-start gap-3">
-      <a href="{{ url_for('dashboard.index') }}" class="sidebar-brand min-w-0 flex-1">
-        <span class="sidebar-brand-mark text-sm font-bold">Z</span>
-        <span x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="sidebar-brand-copy">
-          <span class="sidebar-brand-title">Zentriq Documents</span>
-          <span class="sidebar-brand-subtitle">Premium workspace for insurance operations</span>
+  <div class="sidebar-header">
+    <a href="{{ url_for('dashboard.index') }}" class="sidebar-brand">
+      <span class="sidebar-brand-mark">Z</span>
+      <span class="sidebar-brand-copy">
+        <span class="sidebar-brand-title">Zentriq</span>
+        <span class="sidebar-brand-subtitle">Leipziger Listen</span>
+      </span>
+    </a>
+  </div>
+
+  {% set nav_items = [
+    ('dashboard.index', 'layout-dashboard', 'Uebersicht', ['dashboard.']),
+    ('documents.list_documents', 'file-text', 'Dokumente', ['documents.', 'upload.']),
+    ('potenziale.index', 'list-checks', 'Auswertungen', ['potenziale.', 'customers.', 'recommendations.', 'tasks.', 'bestand.', 'cockpit.']),
+    ('settings.index', 'settings', 'Einstellungen', ['settings.']),
+  ] %}
+
+  <nav class="sidebar-nav" aria-label="Hauptnavigation">
+    {% for endpoint, icon_name, label, prefixes in nav_items %}
+      {% set active = namespace(value=false) %}
+      {% if request.endpoint %}
+        {% for prefix in prefixes %}
+          {% if request.endpoint.startswith(prefix) %}
+            {% set active.value = true %}
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+      <a href="{{ url_for(endpoint) }}" class="nav-link {{ 'nav-link-active' if active.value else '' }}">
+        <span class="nav-icon">
+          {{ icon(icon_name, class='w-[1.05rem] h-[1.05rem]') }}
         </span>
+        <span class="min-w-0 flex-1 truncate text-[0.95rem] font-medium">{{ label }}</span>
       </a>
-      <button
-        type="button"
-        x-on:click="railCollapsed = !railCollapsed"
-        class="topbar-icon-button sidebar-rail-toggle hidden shrink-0 lg:inline-flex"
-        aria-label="Sidebar ein-/ausklappen"
-      >
-        {{ icon('panel-left', class='w-4 h-4') }}
-      </button>
-    </div>
+    {% endfor %}
+  </nav>
 
-    <div x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="sidebar-command-panel mt-4">
-      <div class="flex items-start justify-between gap-3">
-        <div>
-          <p class="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-text-soft">Operations</p>
-          <p class="mt-2 text-sm font-medium leading-6 text-text">
-            Eine breite Desktop-Shell fuer Queue, Analyse und konzentrierte Folgearbeit.
-          </p>
-        </div>
-        <span class="sidebar-command-dot"></span>
-      </div>
-      <div class="chip-bar mt-4">
-        <span class="meta-chip">Desktop SaaS</span>
-        <span class="meta-chip">Single canvas</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="flex min-h-0 flex-1 flex-col px-3 py-4">
-    {% set nav_groups = [
-      ('Workspace', [
-        ('dashboard.index', 'layout-dashboard', 'Dashboard', ''),
-        ('cockpit.index', 'flame', 'Tagescockpit', ''),
-        ('documents.list_documents', 'file-text', 'Dokumente', ''),
-        ('documents.list_documents', 'upload', 'Upload', '#upload-widget'),
-        ('search.search', 'search', 'KI-Suche', ''),
-      ]),
-      ('Beziehungen & Chancen', [
-        ('customers.list_customers', 'users', 'Kunden', ''),
-        ('potenziale.index', 'target', 'Potenziale', ''),
-        ('potenziale.vergleich', 'git-compare', 'Listenvergleich', ''),
-        ('recommendations.list_recommendations', 'list-checks', 'Empfehlungen', ''),
-        ('tasks.list_tasks', 'list-todo', 'Aufgaben', ''),
-        ('bestand.index', 'briefcase', 'Mein Bestand', ''),
-      ]),
-      ('System', [
-        ('settings.users', 'user-cog', 'Benutzer', ''),
-        ('settings.index', 'settings', 'Einstellungen', ''),
-      ]),
-    ] %}
-
-    <nav class="sidebar-nav">
-      {% for group_label, nav_items in nav_groups %}
-        <div class="space-y-1.5">
-          <p x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="sidebar-section-label">
-            {{ group_label }}
-          </p>
-          {% for endpoint, icon_name, label, anchor in nav_items %}
-            {% set is_active = request.endpoint == endpoint and not anchor %}
-            <a
-              href="{{ url_for(endpoint) }}{{ anchor }}"
-              class="nav-link {{ 'nav-link-active' if is_active else '' }}"
-            >
-              <span class="nav-icon">
-                {{ icon(icon_name, class='w-[1.05rem] h-[1.05rem]') }}
-              </span>
-              <span x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="min-w-0 flex-1 truncate text-[0.95rem] font-medium">
-                {{ label }}
-              </span>
-            </a>
-          {% endfor %}
-        </div>
-      {% endfor %}
-    </nav>
-  </div>
-
-  <div class="border-t border-border/80 p-3 pt-2">
+  <div class="sidebar-footer">
     <div class="sidebar-user-panel">
       <div class="flex items-center gap-3">
         <span class="avatar-chip">
           {{ current_user.email[0] | upper if current_user and current_user.is_authenticated else 'Z' }}
         </span>
-        <div x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms class="min-w-0">
-          <p class="truncate text-sm font-semibold text-text">{{ current_user.email if current_user and current_user.is_authenticated else 'Workspace' }}</p>
-          <p class="truncate text-xs text-text-muted">Secure workspace access</p>
+        <div class="min-w-0">
+          <p class="truncate text-sm font-semibold text-text">
+            {{ current_user.email if current_user and current_user.is_authenticated else 'Zentriq' }}
+          </p>
+          <p class="truncate text-xs text-text-muted">
+            {{ current_user.vermittlernummer if current_user and current_user.is_authenticated and current_user.vermittlernummer else 'Einstellungen und Zugriff' }}
+          </p>
         </div>
       </div>
-      <form method="post" action="{{ url_for('auth.logout') }}" class="mt-4">
+
+      <a href="{{ url_for('settings.profile') }}" class="dropdown-link mt-4">
+        {{ icon('user-cog', class='w-4 h-4') }}
+        Profil &amp; Einstellungen
+      </a>
+
+      <form method="post" action="{{ url_for('auth.logout') }}" class="mt-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="dropdown-link sidebar-logout-button w-full justify-center font-medium">
           {{ icon('log-out', class='w-4 h-4') }}
-          <span x-show="!railCollapsed" x-cloak x-transition.opacity.duration.150ms>Abmelden</span>
+          Abmelden
         </button>
       </form>
     </div>

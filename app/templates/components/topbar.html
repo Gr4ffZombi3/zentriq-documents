@@ -1,6 +1,6 @@
 {% from "ui/icons.html" import icon %}
 
-<header class="topbar-panel sticky top-0 z-20">
+<header class="topbar-panel">
   <button
     type="button"
     x-on:click="sidebarOpen = true"
@@ -10,11 +10,13 @@
     {{ icon('menu', class='w-5 h-5') }}
   </button>
 
-  <div class="topbar-copy hidden min-w-0 xl:block">
-    <p class="topbar-kicker">Operations Workspace</p>
+  <div class="topbar-copy min-w-0">
+    <p class="topbar-kicker">Zentriq</p>
     <div class="mt-1 flex items-center gap-2">
-      <p class="topbar-title">Zentriq Command</p>
-      <span class="topbar-status-pill">Live</span>
+      <p class="topbar-title">Leipziger Listen</p>
+      {% if current_user.is_authenticated and current_user.vermittlernummer %}
+        <span class="topbar-status-pill">{{ current_user.vermittlernummer }}</span>
+      {% endif %}
     </div>
   </div>
 
@@ -26,11 +28,10 @@
       <input
         type="text"
         name="q"
-        aria-label="KI-Suche"
-        placeholder="Dokumente, Kunden, Aufgaben oder Fragen durchsuchen"
+        aria-label="Suche"
+        placeholder="Dokumente, Kunden oder Vorgaenge durchsuchen"
         class="topbar-search-input"
       >
-      <span class="meta-chip hidden lg:inline-flex">/</span>
     </label>
   </form>
 
@@ -45,46 +46,5 @@
       <template x-if="!dark">{{ icon('moon', class='w-[1.05rem] h-[1.05rem]') }}</template>
       <template x-if="dark">{{ icon('sun', class='w-[1.05rem] h-[1.05rem]') }}</template>
     </button>
-
-    <button type="button" class="topbar-icon-button" aria-label="Benachrichtigungen">
-      {{ icon('bell', class='w-[1.05rem] h-[1.05rem]') }}
-    </button>
-
-    <div x-data="{ open: false }" x-on:click.outside="open = false" class="relative">
-      <button
-        type="button"
-        x-on:click="open = !open"
-        class="topbar-profile"
-      >
-        <span class="avatar-chip">{{ current_user.email[0] | upper }}</span>
-        <span class="hidden min-w-0 text-left xl:block">
-          <span class="block max-w-[190px] truncate text-sm font-semibold text-text">{{ current_user.email }}</span>
-          <span class="block text-xs text-text-muted">Profil &amp; Einstellungen</span>
-        </span>
-        {{ icon('chevron-down', class='w-4 h-4 text-text-soft') }}
-      </button>
-      <div
-        x-show="open"
-        x-cloak
-        x-transition
-        class="dropdown-panel absolute right-0 mt-3 w-64"
-      >
-        <a href="{{ url_for('settings.profile') }}" class="dropdown-link">
-          {{ icon('user-cog', class='w-4 h-4') }}
-          Profil
-        </a>
-        <a href="{{ url_for('settings.index') }}" class="dropdown-link">
-          {{ icon('settings', class='w-4 h-4') }}
-          Einstellungen
-        </a>
-        <form method="post" action="{{ url_for('auth.logout') }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="dropdown-link w-full text-left">
-            {{ icon('log-out', class='w-4 h-4') }}
-            Abmelden
-          </button>
-        </form>
-      </div>
-    </div>
   </div>
 </header>

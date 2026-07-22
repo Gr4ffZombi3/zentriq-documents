@@ -1,8 +1,10 @@
 from flask import Blueprint, abort, jsonify, redirect, render_template, send_file, url_for
-from flask_login import login_required
+from flask_login import current_user, login_required
 
 from app.extensions import db
 from app.models import AnalysisRun, DocStatus, Document, ListComparison
+from app.models.enums import DocType
+from app.services.analysis.leipziger_liste_view import build_document_analysis
 from app.services.storage import resolve_document_path
 from app.tasks.document_tasks import process_document
 from app.tenancy import get_or_404_scoped
@@ -22,7 +24,19 @@ def list_documents():
 def detail(document_id):
     document = get_or_404_scoped(Document, document_id)
     list_comparison = ListComparison.query.filter_by(document_id=document.id).first()
-    return render_template("documents/detail.html", document=document, list_comparison=list_comparison)
+    document_analysis = None
+    if document.doc_type == DocType.LEIPZIGER_LISTE:
+        document_analysis = build_document_analysis(
+            document_id=document.id,
+            current_broker_number=getattr(current_user, "vermittlernummer", None),
+            group_by_customer=True,
+        )
+    return render_template(
+        "documents/detail.html",
+        document=document,
+        list_comparison=list_comparison,
+        document_analysis=document_analysis,
+    )
 
 
 @documents_bp.route("/<int:document_id>/row")

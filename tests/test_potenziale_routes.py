@@ -82,6 +82,20 @@ def test_potenziale_status_filter_shows_only_matching_rows(auth_client, db, tena
     assert 'value="neugeschaeft"' in body
 
 
+def test_potenziale_render_does_not_trigger_llm_calls(auth_client, db, tenant, monkeypatch):
+    document = make_document(db, tenant.id)
+    make_doc_customer(db, tenant.id, document, "Angebot Kunde", {"is_angebot": True, "broker_number": "VM-1001"})
+
+    def fail_if_called():
+        raise AssertionError("LLM must not be called while rendering /potenziale")
+
+    monkeypatch.setattr("app.services.llm.client.get_openai_client", fail_if_called)
+
+    resp = auth_client.get(f"/potenziale?document_id={document.id}")
+    assert resp.status_code == 200
+    assert "Angebot Kunde" in resp.get_data(as_text=True)
+
+
 def test_potenziale_tenant_isolation(auth_client, db, tenant):
     document = make_document(db, tenant.id)
     make_doc_customer(db, tenant.id, document, "Eigener Kunde", {"is_angebot": True, "broker_number": "VM-1001"})

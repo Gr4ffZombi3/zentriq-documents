@@ -82,7 +82,8 @@ def test_apply_extraction_maps_fields_and_upserts_customer(app, db, tenant):
     assert document.premium == "123,45 EUR"
     assert document.tariff == "Komfort"
 
-    # Zweites Dokument mit gleichem Kundennamen soll den bestehenden Kunden wiederverwenden.
+    # Ohne starken Schluessel (DOB oder PLZ) wird ein gleichnamiger Kunde nicht blind
+    # zusammengefuehrt.
     document2 = Document(
         filename="y.pdf", original_filename="y.pdf", file_path="/tmp/y.pdf", tenant_id=tenant.id
     )
@@ -95,8 +96,8 @@ def test_apply_extraction_maps_fields_and_upserts_customer(app, db, tenant):
     apply_extraction(document2, extraction2)
     db.session.commit()
 
-    assert Customer.query.count() == 1
-    assert document2.customer_id == document.customer_id
+    assert Customer.query.count() == 2
+    assert document2.customer_id != document.customer_id
 
 
 def test_customer_assignment_is_sticky_to_first_uploader(app, db, tenant):

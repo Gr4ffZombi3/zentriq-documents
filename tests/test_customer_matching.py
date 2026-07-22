@@ -103,4 +103,5 @@ def test_customer_detail_context_shows_multiple_cases_for_same_customer(db, tena
     assert detail["summary"]["cases"] == 2
     assert detail["summary"]["offers"] == 1
     assert detail["summary"]["closures"] == 1
-    assert {row["status_label"] for row in detail["case_rows"]} == {"Angebot", "Abgeschlossen"}
+    assert {row["status_label"] for row in detail["case_rows"]} == {"Angebot", "Unklar"}
+    assert {row["completion_label"] for row in detail["case_rows"]} == {"Offen", "Abgeschlossen"}

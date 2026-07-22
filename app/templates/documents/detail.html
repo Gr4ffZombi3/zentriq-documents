@@ -4,6 +4,7 @@
 {% from "ui/forms.html" import button %}
 {% block title %}{{ document.original_filename }} - Zentriq Documents{% endblock %}
 {% block content %}
+{% set has_leipziger_analysis = document_analysis and document_analysis.selected_document %}
 <div class="page-shell"
      {% if document.status.value in ['pending', 'ocr_processing', 'ocr_done', 'ai_processing'] %}
      data-analysis-monitor
@@ -36,7 +37,19 @@
         {{ status_badge(document.status) }}
       </div>
 
-      {% if document.status.value == 'done' %}
+      {% if document.status.value == 'done' or has_leipziger_analysis %}
+        {% if document.status.value == 'failed' %}
+          <div class="mt-6 rounded-[1.35rem] border border-warning/20 bg-warning/8 p-5">
+            <div class="flex flex-wrap items-center gap-3 text-sm text-warning-text">
+              {{ icon('alert-triangle', class='w-4 h-4') }}
+              <span class="font-semibold">{{ document.error_message or 'Analyse nur teilweise abgeschlossen.' }}</span>
+            </div>
+            <form method="post" action="{{ url_for('documents.retry', document_id=document.id) }}" class="mt-4">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              {{ button('Erneut analysieren', type='submit', icon_name='refresh-cw', variant='secondary') }}
+            </form>
+          </div>
+        {% endif %}
         <div class="mt-6">
           {% if document.doc_type and document.doc_type.value == 'leipziger_liste' %}
             {% include "documents/_leipziger_liste_analysis.html" %}

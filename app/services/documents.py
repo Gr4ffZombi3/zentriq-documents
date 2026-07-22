@@ -1,7 +1,9 @@
+from datetime import date
+
 from app.extensions import db
 from app.models import DocStatus, Document, DocumentCustomer
 from app.models.enums import DocType, ListScope, ListType, TimelineEventType
-from app.services.customers import CustomerMatcher
+from app.services.customers import CustomerMatcher, normalize_customer_name
 from app.services.analysis.business_rules import (
     count_offer_occurrences,
     create_advanced_recommendations,
@@ -95,16 +97,21 @@ def apply_extraction(document: Document, extraction: DocumentExtraction) -> None
     create_tasks_from_recommendations(document, document.customer, recommendations)
 
 
-def apply_leipziger_liste_extraction(document: Document, extraction: LeipzigerListeExtraction) -> None:
+def apply_leipziger_liste_extraction(document: Document, extraction: LeipzigerListeExtraction) -> dict:
     matcher = CustomerMatcher()
     document.doc_type = DocType.LEIPZIGER_LISTE
     document.raw_json = extraction.model_dump(mode="json")
 
-    for key, value in compute_document_flags(extraction).items():
+    prepared_rows, duplicate_count = _deduplicate_leipziger_rows(extraction.rows)
+    prepared_extraction = LeipzigerListeExtraction(rows=prepared_rows, analysis_meta=extraction.analysis_meta)
+
+    for key, value in compute_document_flags(prepared_extraction).items():
         setattr(document, key, value)
 
     document_customers_by_id: dict[int, DocumentCustomer] = {}
-    for index, row in enumerate(extraction.rows):
+    stored_rows = 0
+    uncertain_rows = 0
+    for index, row in enumerate(prepared_rows):
         row_customer = find_or_create_customer(
             row.customer,
             uploaded_by_user_id=document.uploaded_by_user_id,
@@ -114,6 +121,9 @@ def apply_leipziger_liste_extraction(document: Document, extraction: LeipzigerLi
 
         row_dict = row.model_dump(mode="json")
         row_confidence = score_leipziger_liste_row(row, document.raw_text or "")
+        stored_rows += 1
+        if any(entry.get("uncertain") for entry in row_confidence.values()):
+            uncertain_rows += 1
         existing = document_customers_by_id.get(row_customer.id)
         if existing is None:
             doc_customer = DocumentCustomer(
@@ -175,3 +185,105 @@ def apply_leipziger_liste_extraction(document: Document, extraction: LeipzigerLi
             has_closed=customer_has_ever_closed(row_customer.id),
         )
         create_tasks_from_recommendations(document, row_customer, advanced_recommendations)
+
+    return {
+        "stored_rows": stored_rows,
+        "discarded_duplicates": duplicate_count,
+        "uncertain_rows": uncertain_rows,
+        "customer_count": len(document_customers_by_id),
+    }
+
+
+def _deduplicate_leipziger_rows(rows) -> tuple[list, int]:
+    deduplicated = []
+    by_key = {}
+    duplicate_count = 0
+
+    for row in rows:
+        key = _leipziger_row_key(row)
+        existing = by_key.get(key)
+        if existing is None:
+            by_key[key] = row
+            deduplicated.append(row)
+            continue
+        duplicate_count += 1
+        _merge_leipziger_rows(existing, row)
+
+    return deduplicated, duplicate_count
+
+
+def _leipziger_row_key(row) -> tuple:
+    contract_number = _normalized_text(row.contract_number)
+    status_code = _row_status_code(row)
+    product_line = _normalized_text(row.product_line)
+    start_value = row.contract_start_date.isoformat() if isinstance(row.contract_start_date, date) else str(row.contract_start_date or "")
+    source_page = row.source_page or 0
+    source_row = row.source_row or 0
+
+    if contract_number:
+        return ("contract", contract_number, status_code, product_line, start_value)
+
+    products = tuple(sorted(_normalized_text(product) for product in row.products if product))
+    customer_key = normalize_customer_name(row.customer.name)
+    return (
+        "position",
+        customer_key,
+        status_code,
+        product_line,
+        start_value,
+        products,
+        source_page,
+        source_row,
+    )
+
+
+def _merge_leipziger_rows(existing, incoming) -> None:
+    for field_name in (
+        "vehicle",
+        "license_plate",
+        "insurer",
+        "contract_number",
+        "recommended_next_action",
+        "special_notes",
+        "broker_number",
+        "product_line",
+        "premium",
+        "tariff",
+        "contract_start_date",
+        "status_code",
+    ):
+        if getattr(existing, field_name) in (None, "", []) and getattr(incoming, field_name) not in (None, "", []):
+            setattr(existing, field_name, getattr(incoming, field_name))
+
+    existing.products = sorted({*(existing.products or []), *(incoming.products or [])})
+    existing.is_neugeschaeft = existing.is_neugeschaeft or incoming.is_neugeschaeft
+    existing.is_fahrzeugwechsel = existing.is_fahrzeugwechsel or incoming.is_fahrzeugwechsel
+    existing.is_angebot = existing.is_angebot or incoming.is_angebot
+    existing.is_storno = existing.is_storno or incoming.is_storno
+    existing.cross_sell_opportunity = existing.cross_sell_opportunity or incoming.cross_sell_opportunity
+    existing.has_multiple_products = existing.has_multiple_products or incoming.has_multiple_products
+    existing.has_antrag = existing.has_antrag or incoming.has_antrag
+    source_pages = [value for value in (existing.source_page, incoming.source_page) if value is not None]
+    if source_pages:
+        existing.source_page = min(source_pages)
+    source_rows = [value for value in (existing.source_row, incoming.source_row) if value is not None]
+    if source_rows:
+        existing.source_row = min(source_rows)
+
+
+def _row_status_code(row) -> str:
+    if row.status_code:
+        return _normalized_text(row.status_code)
+    if row.is_storno:
+        return "storno"
+    if row.is_fahrzeugwechsel:
+        return "fzw"
+    if row.is_neugeschaeft:
+        return "neu"
+    if row.is_angebot:
+        return "ang"
+    return ""
+
+
+def _normalized_text(value) -> str:
+    return str(value or "").strip().lower()

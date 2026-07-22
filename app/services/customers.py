@@ -160,11 +160,11 @@ def build_customer_detail_context(customer: Customer) -> dict:
             case_rows.append(row_view)
             if row_view["status_key"] == "angebot":
                 offers += 1
-            if row_view["status_key"] == "abgeschlossen":
+            if row_view["has_start_date"]:
                 closures += 1
             if row_view["status_key"] == "storno":
                 stornos += 1
-            if row_view["status_key"] in {"angebot", "neugeschaeft", "fahrzeugwechsel"}:
+            if not row_view["has_start_date"] and row_view["status_key"] != "storno":
                 open_cases += 1
 
     duplicate_map = build_possible_duplicate_map(Customer.query.order_by(Customer.id.asc()).all())

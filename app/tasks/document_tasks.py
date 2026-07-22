@@ -58,6 +58,10 @@ def _run_pipeline(document: Document) -> None:
     document.recommendations = []
     document.document_customers = []
     document.tasks = []
+    document.customer = None
+    document.raw_json = None
+    document.extra_data = None
+    document.processed_at = None
     document.status = DocStatus.OCR_PROCESSING
     db.session.commit()
     current_app.logger.info(
@@ -151,20 +155,26 @@ def _run_pipeline(document: Document) -> None:
     try:
         extraction = extract_document_data(raw_text)
         if extraction.doc_type == DocType.LEIPZIGER_LISTE:
-            leipziger_extraction = extract_leipziger_liste_rows(raw_text)
-            apply_leipziger_liste_extraction(document, leipziger_extraction)
+            leipziger_extraction = extract_leipziger_liste_rows(page_texts)
+            apply_stats = apply_leipziger_liste_extraction(document, leipziger_extraction)
+            analysis_meta = _build_leipziger_analysis_meta(page_texts, leipziger_extraction, apply_stats)
+            document.extra_data = {
+                **(document.extra_data or {}),
+                "leipziger_analysis": analysis_meta,
+            }
             db.session.flush()  # document_customers-IDs fuer den Listenvergleich bereitstellen
-            compare_leipziger_liste(document)
-            # M13: nur automatisch erkennen, wenn beim Upload keine manuelle Auswahl getroffen wurde.
-            if document.list_scope is None:
-                document.list_scope = detect_list_scope(document)
-            # M13: zusaetzlicher Vergleich Eigene Liste <-> GS-Liste, neben dem obigen
-            # immer laufenden zeitbasierten Vergleich - nur wenn ein Gegenstueck existiert.
-            paired_document = find_paired_gs_or_own_document(document)
-            if paired_document is not None:
-                compare_leipziger_liste(
-                    document, previous_document=paired_document, comparison_kind=ComparisonKind.OWN_VS_GS
-                )
+            if analysis_meta["is_complete"]:
+                compare_leipziger_liste(document)
+                # M13: nur automatisch erkennen, wenn beim Upload keine manuelle Auswahl getroffen wurde.
+                if document.list_scope is None:
+                    document.list_scope = detect_list_scope(document)
+                # M13: zusaetzlicher Vergleich Eigene Liste <-> GS-Liste, neben dem obigen
+                # immer laufenden zeitbasierten Vergleich - nur wenn ein Gegenstueck existiert.
+                paired_document = find_paired_gs_or_own_document(document)
+                if paired_document is not None:
+                    compare_leipziger_liste(
+                        document, previous_document=paired_document, comparison_kind=ComparisonKind.OWN_VS_GS
+                    )
         else:
             apply_extraction(document, extraction)
     except Exception as exc:
@@ -182,7 +192,13 @@ def _run_pipeline(document: Document) -> None:
         return
     stage_durations["extraction_and_rules"] = round((time.monotonic() - stage_start) * 1000, 1)
 
-    document.status = DocStatus.DONE
+    leipziger_meta = (document.extra_data or {}).get("leipziger_analysis")
+    if leipziger_meta and not leipziger_meta["is_complete"]:
+        document.status = DocStatus.FAILED
+        document.error_message = str(leipziger_meta["completion_label"]).replace("â€“", "-").replace("–", "-")
+    else:
+        document.status = DocStatus.DONE
+        document.error_message = None
     document.processed_at = datetime.now(timezone.utc)
     db.session.commit()
     current_app.logger.info(
@@ -205,7 +221,41 @@ def _run_pipeline(document: Document) -> None:
                 "table_row_count": table_info.table_row_count,
                 "table_block_count": table_info.table_block_count,
             },
+            "leipziger_analysis": (document.extra_data or {}).get("leipziger_analysis"),
             **build_analysis_report(document),
         },
         overall_confidence=_compute_overall_confidence(document),
     )
+
+
+def _build_leipziger_analysis_meta(page_texts: list[str], extraction, apply_stats: dict) -> dict:
+    analysis_meta = getattr(extraction, "analysis_meta", {}) or {}
+    total_pages = len(page_texts)
+    processed_pages = int(analysis_meta.get("processed_pages", total_pages))
+    failed_pages = list(analysis_meta.get("failed_pages", []))
+    processed_page_numbers = list(analysis_meta.get("processed_page_numbers", list(range(1, total_pages + 1))))
+    stored_rows = int(apply_stats.get("stored_rows", len(getattr(extraction, "rows", []))))
+    discarded_duplicates = int(apply_stats.get("discarded_duplicates", 0))
+    uncertain_rows = int(apply_stats.get("uncertain_rows", 0))
+    raw_row_count = int(analysis_meta.get("raw_row_count", len(getattr(extraction, "rows", []))))
+    is_complete = processed_pages == total_pages and not failed_pages
+
+    if is_complete:
+        completion_label = f"Vollstaendig ausgewertet – {processed_pages} von {total_pages} Seiten verarbeitet"
+    else:
+        completion_label = f"Teilweise ausgewertet – {processed_pages} von {total_pages} Seiten verarbeitet"
+
+    return {
+        "total_pages": total_pages,
+        "processed_pages": processed_pages,
+        "processed_page_numbers": processed_page_numbers,
+        "failed_pages": failed_pages,
+        "failed_page_count": len(failed_pages),
+        "raw_row_count": raw_row_count,
+        "stored_row_count": stored_rows,
+        "discarded_duplicate_count": discarded_duplicates,
+        "uncertain_row_count": uncertain_rows,
+        "is_complete": is_complete,
+        "completion_label": completion_label,
+        "page_batch_size": int(analysis_meta.get("batch_size", 1)),
+    }

@@ -1,21 +1,27 @@
 {% extends "base.html" %}
 {% from "ui/display.html" import badge, empty_state, status_badge %}
 {% from "ui/forms.html" import button %}
+{% from "ui/icons.html" import icon %}
 {% block title %}Auswertungen - Zentriq Documents{% endblock %}
 {% block content %}
 {% set selected_document = analysis.selected_document %}
 {% set document_options = analysis.document_options %}
 {% set summary = analysis.summary %}
 {% set rows = analysis.rows %}
+{% set grouped_customers = analysis.grouped_customers %}
 {% set status_filter = analysis.status_filter %}
 {% set status_filters = analysis.status_filters %}
+{% set search_query = analysis.search_query %}
+{% set product_line_filter = analysis.product_line_filter %}
+{% set product_line_options = analysis.product_line_options %}
+{% set group_by_customer = analysis.group_by_customer %}
 
 <div class="page-shell">
   <section class="ops-page-header">
     <div>
       <p class="ops-page-kicker">Analysearbeitsplatz</p>
       <h1 class="ops-page-title">Auswertungen</h1>
-      <p class="ops-page-copy">Ein Dokument im Fokus, eine kompakte Kennzahlenzeile und darunter die echte Leipziger-Liste als Arbeitsansicht.</p>
+      <p class="ops-page-copy">Leipziger Listen werden dokumentzentriert ausgewertet, nach Kunden gruppiert und pro Vertragszeile nachvollziehbar aufgeloest.</p>
     </div>
     <div class="flex flex-wrap items-center gap-3">
       {{ button('Listenvergleich', href=url_for('potenziale.vergleich'), variant='secondary', icon_name='git-compare') }}
@@ -24,11 +30,10 @@
 
   {% if document_options %}
     <section class="ops-toolbar-panel">
-      <form method="get" class="ops-toolbar-grid">
-        <div class="ops-toolbar-span-3">
+      <form method="get" class="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(16rem,1fr)_minmax(13rem,0.8fr)_minmax(13rem,0.8fr)_auto]">
+        <div class="flex min-w-0 flex-col gap-2">
           <label for="analysis-document-id" class="field-label">Leipziger Liste auswaehlen</label>
           <select id="analysis-document-id" name="document_id" class="field-surface text-sm">
-            <option value="">Bitte Dokument auswaehlen</option>
             {% for option in document_options %}
               <option value="{{ option.id }}" {{ 'selected' if selected_document and selected_document.id == option.id else '' }}>
                 {{ option.name }} | {{ option.uploaded_at_label }} | {{ option.list_type_label }}
@@ -36,22 +41,38 @@
             {% endfor %}
           </select>
         </div>
-        {% if selected_document %}
-          <div class="ops-toolbar-meta">
-            <span class="ops-toolbar-meta-label">Listentyp</span>
-            <span class="ops-toolbar-meta-value">{{ selected_document.list_type_label }}</span>
+        <div class="flex min-w-0 flex-col gap-2">
+          <label for="analysis-search" class="field-label">Suche</label>
+          <div class="topbar-search min-h-[3rem]">
+            {{ icon('search', class='h-4 w-4 text-text-soft') }}
+            <input id="analysis-search" name="search" value="{{ search_query }}" placeholder="Kunde oder Vertragsnummer" class="topbar-search-input">
           </div>
-          <div class="ops-toolbar-meta">
-            <span class="ops-toolbar-meta-label">Upload</span>
-            <span class="ops-toolbar-meta-value">{{ selected_document.uploaded_at_label }}</span>
-          </div>
-          <div class="ops-toolbar-meta">
-            <span class="ops-toolbar-meta-label">VM-Nr.</span>
-            <span class="ops-toolbar-meta-value">{{ selected_document.vm_number_label }}</span>
-          </div>
-        {% endif %}
-        <div class="flex items-end">
-          {{ button('Dokument laden', type='submit', icon_name='file-text') }}
+        </div>
+        <div class="flex min-w-0 flex-col gap-2">
+          <label for="analysis-status-filter" class="field-label">Status</label>
+          <select id="analysis-status-filter" name="status_filter" class="field-surface text-sm">
+            {% for filter_value, filter_label in status_filters %}
+              <option value="{{ filter_value }}" {{ 'selected' if status_filter == filter_value else '' }}>{{ filter_label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="flex min-w-0 flex-col gap-2">
+          <label for="analysis-product-line" class="field-label">Sparte</label>
+          <select id="analysis-product-line" name="product_line" class="field-surface text-sm">
+            <option value="">Alle Sparten</option>
+            {% for option in product_line_options %}
+              <option value="{{ option }}" {{ 'selected' if product_line_filter == option else '' }}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="flex flex-wrap items-end gap-3">
+          <input type="hidden" name="group_by" value="0">
+          <label class="inline-flex min-h-10 items-center gap-3 rounded-[1rem] border border-border bg-surface px-4 py-2 text-sm font-medium text-text">
+            <input type="checkbox" name="group_by" value="1" class="h-4 w-4 rounded border-border text-primary focus:ring-primary" {{ 'checked' if group_by_customer else '' }}>
+            Nach Kunden gruppieren
+          </label>
+          {{ button('Anwenden', type='submit', icon_name='search') }}
+          {{ button('Zuruecksetzen', href=url_for('potenziale.index', document_id=selected_document.id if selected_document else None), variant='secondary', icon_name='x') }}
         </div>
       </form>
     </section>
@@ -59,75 +80,204 @@
 
   {% if selected_document %}
     <section class="ops-meta-panel">
-      <div class="ops-meta-grid">
-        <div class="ops-meta-item">
-          <span class="ops-meta-label">Dateiname</span>
-          <span class="ops-meta-value">{{ selected_document.name }}</span>
-        </div>
-        <div class="ops-meta-item">
-          <span class="ops-meta-label">Typ der Leipziger Liste</span>
-          <span class="ops-meta-value">{{ selected_document.list_type_label }}</span>
-        </div>
-        <div class="ops-meta-item">
-          <span class="ops-meta-label">Upload-Datum</span>
+      <div class="grid gap-3 xl:grid-cols-[minmax(0,1.7fr)_repeat(6,minmax(0,1fr))]">
+        <article class="rounded-[1rem] border border-border bg-surface/80 px-4 py-3">
+          <p class="ops-meta-label">Dokument</p>
+          <p class="mt-2 truncate text-sm font-semibold text-text">{{ selected_document.name }}</p>
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            {{ badge(selected_document.list_type_label, variant='info') }}
+            {{ badge(selected_document.completion_label, variant='success' if selected_document.is_complete else 'warning') }}
+          </div>
+        </article>
+        <article class="ops-meta-item">
+          <span class="ops-meta-label">Upload</span>
           <span class="ops-meta-value">{{ selected_document.uploaded_at_label }}</span>
-        </div>
-        <div class="ops-meta-item">
+        </article>
+        <article class="ops-meta-item">
           <span class="ops-meta-label">VM-Nummer</span>
           <span class="ops-meta-value">{{ selected_document.vm_number_label }}</span>
-        </div>
-        <div class="ops-meta-item">
-          <span class="ops-meta-label">Erkannte Zeilen</span>
+        </article>
+        <article class="ops-meta-item">
+          <span class="ops-meta-label">Seiten</span>
+          <span class="ops-meta-value">{{ selected_document.processed_pages }} / {{ selected_document.page_count }}</span>
+        </article>
+        <article class="ops-meta-item">
+          <span class="ops-meta-label">Vertragszeilen</span>
           <span class="ops-meta-value">{{ selected_document.row_count }}</span>
-        </div>
-        <div class="ops-meta-item">
-          <span class="ops-meta-label">Analyse-Status</span>
+        </article>
+        <article class="ops-meta-item">
+          <span class="ops-meta-label">Kunden</span>
+          <span class="ops-meta-value">{{ selected_document.customer_count }}</span>
+        </article>
+        <article class="ops-meta-item">
+          <span class="ops-meta-label">Status</span>
           <span class="ops-meta-value">{{ status_badge(selected_document.status) }}</span>
-        </div>
+        </article>
+      </div>
+      <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-text-soft">
+        <span>Rohzeilen: {{ selected_document.raw_row_count }}</span>
+        <span>Gespeichert: {{ selected_document.row_count }}</span>
+        <span>Verworfene Dubletten: {{ selected_document.discarded_duplicate_count }}</span>
+        <span>Unsichere Zeilen: {{ selected_document.uncertain_row_count }}</span>
+        {% if selected_document.failed_page_count %}
+          <span>Fehlgeschlagene Seiten: {{ selected_document.failed_pages | join(', ') }}</span>
+        {% endif %}
       </div>
     </section>
 
-    <div class="ops-stat-grid">
+    {% if not selected_document.is_complete %}
+      <section class="rounded-[1.25rem] border border-warning/20 bg-warning/8 px-4 py-4 text-sm text-warning-text">
+        <div class="flex flex-wrap items-center gap-3">
+          {{ icon('alert-triangle', class='h-4 w-4') }}
+          <span class="font-semibold">{{ selected_document.completion_label }}</span>
+          <a href="{{ url_for('documents.detail', document_id=selected_document.id) }}" class="font-semibold text-text transition hover:text-primary">Zur Dokumentenansicht</a>
+        </div>
+      </section>
+    {% endif %}
+
+    <div class="grid gap-3 xl:grid-cols-6">
       <article class="ops-stat-card">
-        <span class="ops-stat-label">Datensaetze</span>
-        <strong class="ops-stat-value">{{ summary.total_records }}</strong>
+        <span class="ops-stat-label">Kunden</span>
+        <strong class="ops-stat-value">{{ summary.customers }}</strong>
       </article>
       <article class="ops-stat-card">
-        <span class="ops-stat-label">Abschluesse</span>
-        <strong class="ops-stat-value">{{ summary.abgeschlossen }}</strong>
+        <span class="ops-stat-label">Vertragszeilen</span>
+        <strong class="ops-stat-value">{{ summary.contract_rows }}</strong>
       </article>
       <article class="ops-stat-card">
         <span class="ops-stat-label">Angebote</span>
         <strong class="ops-stat-value">{{ summary.angebote }}</strong>
       </article>
       <article class="ops-stat-card">
+        <span class="ops-stat-label">Neugeschaeft</span>
+        <strong class="ops-stat-value">{{ summary.neugeschaeft }}</strong>
+      </article>
+      <article class="ops-stat-card">
+        <span class="ops-stat-label">Fahrzeugwechsel</span>
+        <strong class="ops-stat-value">{{ summary.fahrzeugwechsel }}</strong>
+      </article>
+      <article class="ops-stat-card">
+        <span class="ops-stat-label">Abschluesse</span>
+        <strong class="ops-stat-value">{{ summary.abgeschlossen }}</strong>
+      </article>
+    </div>
+
+    <div class="grid gap-3 xl:grid-cols-4">
+      <article class="ops-stat-card min-h-[5.35rem]">
         <span class="ops-stat-label">Offene Vorgaenge</span>
-        <strong class="ops-stat-value">{{ summary.offene_vorgaenge }}</strong>
+        <strong class="ops-stat-value text-[1.65rem]">{{ summary.offene_vorgaenge }}</strong>
       </article>
-      <article class="ops-stat-card">
+      <article class="ops-stat-card min-h-[5.35rem]">
         <span class="ops-stat-label">Ohne Beginn</span>
-        <strong class="ops-stat-value">{{ summary.ohne_beginn }}</strong>
+        <strong class="ops-stat-value text-[1.65rem]">{{ summary.ohne_beginn }}</strong>
       </article>
-      <article class="ops-stat-card">
+      <article class="ops-stat-card min-h-[5.35rem]">
         <span class="ops-stat-label">Stornos</span>
-        <strong class="ops-stat-value">{{ summary.stornos }}</strong>
+        <strong class="ops-stat-value text-[1.65rem]">{{ summary.stornos }}</strong>
+      </article>
+      <article class="ops-stat-card min-h-[5.35rem]">
+        <span class="ops-stat-label">Unklare Eintraege</span>
+        <strong class="ops-stat-value text-[1.65rem]">{{ summary.unklar }}</strong>
       </article>
     </div>
 
     {% if selected_document.show_ohne_antrag %}
-      <p class="ops-subtle-note">Ohne Antrag wird nur bei fachlich sicher erkannten Angaben ausgewiesen: {{ summary.ohne_antrag }}</p>
+      <p class="ops-subtle-note">"Ohne Antrag" wird nur bei fachlich sicher erkannten Angaben beruecksichtigt: {{ summary.ohne_antrag }}</p>
     {% endif %}
 
-    <form method="get" class="ops-filter-bar">
-      <input type="hidden" name="document_id" value="{{ selected_document.id }}">
-      {% for filter_value, filter_label in status_filters %}
-        <button type="submit" name="status_filter" value="{{ filter_value }}" class="ops-filter-pill {{ 'is-active' if status_filter == filter_value else '' }}">
-          {{ filter_label }}
-        </button>
-      {% endfor %}
-    </form>
-
-    {% if rows %}
+    {% if group_by_customer and grouped_customers %}
+      <section class="space-y-3">
+        {% for group in grouped_customers %}
+          <details class="group overflow-hidden rounded-[1.25rem] border border-border bg-surface/85 shadow-soft" {{ 'open' if loop.first else '' }}>
+            <summary class="grid cursor-pointer list-none gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1.6fr)_repeat(4,minmax(0,0.72fr))_auto]">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  {% if group.customer_id %}
+                    <a href="{{ url_for('customers.detail', customer_id=group.customer_id) }}" class="truncate text-sm font-semibold text-text transition hover:text-primary">
+                      {{ group.customer_name }}
+                    </a>
+                  {% else %}
+                    <span class="truncate text-sm font-semibold text-text">{{ group.customer_name }}</span>
+                  {% endif %}
+                  {% if group.possible_duplicate %}
+                    {{ badge('Moegliche Dublette', variant='warning') }}
+                  {% endif %}
+                </div>
+                <p class="mt-2 text-xs text-text-soft">
+                  {{ group.customer_date_of_birth_label }}{% if group.customer_city != '-' %} | {{ group.customer_city }}{% endif %}{% if group.customer_postal_code != '-' %} | {{ group.customer_postal_code }}{% endif %}
+                </p>
+              </div>
+              <div>
+                <p class="ops-meta-label">Vorgaenge</p>
+                <p class="mt-2 text-sm font-semibold text-text">{{ group.record_count }}</p>
+              </div>
+              <div>
+                <p class="ops-meta-label">Angebote</p>
+                <p class="mt-2 text-sm font-semibold text-text">{{ group.offer_count }}</p>
+              </div>
+              <div>
+                <p class="ops-meta-label">Abschluesse</p>
+                <p class="mt-2 text-sm font-semibold text-text">{{ group.closure_count }}</p>
+              </div>
+              <div>
+                <p class="ops-meta-label">Offen</p>
+                <p class="mt-2 text-sm font-semibold text-text">{{ group.open_count }}</p>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                {{ badge(group.overall_status_label, variant=group.overall_status_variant) }}
+                <span class="text-text-soft transition duration-200 group-open:rotate-90">{{ icon('chevron-right', class='h-4 w-4') }}</span>
+              </div>
+            </summary>
+            <div class="border-t border-border/80 px-4 py-4">
+              <div class="overflow-x-auto rounded-[1rem] border border-border bg-surface-muted/80">
+                <table class="min-w-full divide-y divide-border text-sm">
+                  <thead class="bg-surface/70 text-left text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-text-soft">
+                    <tr>
+                      <th class="px-4 py-3">Vertrag</th>
+                      <th class="px-4 py-3">Status</th>
+                      <th class="px-4 py-3">Sparte</th>
+                      <th class="px-4 py-3">Beginn</th>
+                      <th class="px-4 py-3">VM-Nr.</th>
+                      <th class="px-4 py-3">Ergebnis</th>
+                      <th class="px-4 py-3">Sicherheit</th>
+                      <th class="px-4 py-3">Quelle</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-border/80">
+                    {% for row in group.rows %}
+                      <tr class="align-top text-text">
+                        <td class="px-4 py-3">
+                          <div class="flex flex-col gap-1">
+                            <span class="font-medium">{{ row.contract_number }}</span>
+                            {% if row.status_code %}
+                              <span class="text-xs text-text-soft">Code {{ row.status_code }}</span>
+                            {% endif %}
+                          </div>
+                        </td>
+                        <td class="px-4 py-3">{{ badge(row.status_label, variant=row.status_variant) }}</td>
+                        <td class="px-4 py-3 text-text-muted">{{ row.product_line }}</td>
+                        <td class="px-4 py-3 text-text-muted">{{ row.start_date_label }}</td>
+                        <td class="px-4 py-3 text-text-muted">{{ row.broker_number }}</td>
+                        <td class="px-4 py-3">
+                          <div class="flex flex-col gap-1">
+                            <span class="font-medium">{{ row.completion_label }}</span>
+                            <span class="text-xs text-text-soft">{{ row.result_label }}</span>
+                          </div>
+                        </td>
+                        <td class="px-4 py-3">{{ badge(row.safety_label, variant=row.safety_variant) }}</td>
+                        <td class="px-4 py-3 text-text-muted">
+                          {{ row.source_page_label }}{% if row.source_row %} | Zeile {{ row.source_row }}{% endif %}
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </details>
+        {% endfor %}
+      </section>
+    {% elif rows %}
       <div class="ops-table-shell">
         <table class="ops-table">
           <thead>
@@ -140,6 +290,7 @@
               <th>VM-Nummer</th>
               <th>Ergebnis</th>
               <th>Sicherheit</th>
+              <th>Quelle</th>
             </tr>
           </thead>
           <tbody>
@@ -148,13 +299,11 @@
                 <td>
                   <div class="ops-cell-stack">
                     {% if row.customer_id %}
-                      <a href="{{ url_for('customers.detail', customer_id=row.customer_id) }}" class="ops-table-link">
-                        {{ row.customer_name }}
-                      </a>
+                      <a href="{{ url_for('customers.detail', customer_id=row.customer_id) }}" class="ops-table-link">{{ row.customer_name }}</a>
                     {% else %}
                       <span class="font-medium text-text">{{ row.customer_name }}</span>
                     {% endif %}
-                    <span class="text-xs text-text-soft">{{ row.document_name }}</span>
+                    <span class="text-xs text-text-soft">{{ row.customer_date_of_birth_label }} | {{ row.customer_city }}</span>
                   </div>
                 </td>
                 <td class="text-text-muted">{{ row.contract_number }}</td>
@@ -164,29 +313,22 @@
                 <td class="text-text-muted">{{ row.broker_number }}</td>
                 <td>
                   <div class="ops-result-cell">
-                    <span class="font-medium text-text">{{ row.result_label }}</span>
-                    <span class="ops-result-note">{{ row.reason }}</span>
+                    <span class="font-medium text-text">{{ row.completion_label }}</span>
+                    <span class="ops-result-note">{{ row.result_label }}</span>
                   </div>
                 </td>
                 <td>{{ badge(row.safety_label, variant=row.safety_variant) }}</td>
-              </tr>
-              <tr class="ops-table-detail-row">
-                <td colspan="8">
-                  <details class="ops-inline-details">
-                    <summary>Rohdaten einblenden</summary>
-                    <pre class="ops-json-block">{{ row.raw_row | tojson(indent=2) }}</pre>
-                  </details>
-                </td>
+                <td class="text-text-muted">{{ row.source_page_label }}</td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
     {% else %}
-      {% call empty_state('Keine passenden Datensaetze', 'Passe den Statusfilter an oder waehle eine andere Leipziger Liste.', 'list-checks') %}{% endcall %}
+      {% call empty_state('Keine passenden Datensaetze', 'Passe Filter oder Dokumentauswahl an, um erkannte Vertragszeilen anzuzeigen.', 'list-checks') %}{% endcall %}
     {% endif %}
   {% else %}
-    {% call empty_state('Noch keine Leipziger Listen', 'Lade zuerst ein Leipziger-Listen-Dokument hoch. Danach erscheint hier automatisch die kompakte Auswertung pro Dokument.', 'file-text') %}
+    {% call empty_state('Noch keine Leipziger Listen', 'Lade zuerst ein Leipziger-Listen-Dokument hoch. Danach erscheint hier automatisch die gruppierte Auswertung pro Dokument.', 'file-text') %}
       {{ button('Zu den Dokumenten', href=url_for('documents.list_documents'), variant='secondary', icon_name='arrow-right') }}
     {% endcall %}
   {% endif %}

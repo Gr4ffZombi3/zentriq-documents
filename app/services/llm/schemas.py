@@ -61,7 +61,11 @@ class LeipzigerListeRow(BaseModel):
     # ein reines Angebot, aber noch kein Abschluss ohne Beginn-Datum.
     contract_start_date: date | None = None
     has_antrag: bool = False
+    source_page: int | None = None
+    source_row: int | None = None
+    status_code: str | None = None
 
 
 class LeipzigerListeExtraction(BaseModel):
     rows: list[LeipzigerListeRow] = Field(default_factory=list)
+    analysis_meta: dict = Field(default_factory=dict)

@@ -30,7 +30,7 @@ DOCUMENT_EXTRACTION_FIELDS = (
 )
 LEIPZIGER_LISTE_ROW_FIELDS = (
     "vehicle", "license_plate", "insurer", "contract_number", "products", "special_notes",
-    "broker_number", "product_line", "premium", "tariff",
+    "broker_number", "product_line", "premium", "tariff", "contract_start_date", "status_code",
 )
 
 

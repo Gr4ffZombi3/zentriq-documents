@@ -127,7 +127,7 @@ def test_get_analysis_summary_counts_all_seven_metrics(app, db, tenant):
     assert summary["angebote"] == 1
     assert summary["offene_vorgaenge"] == 3  # Angebot, Antrag, Offen (nicht abgeschlossen/storniert)
     assert summary["ohne_beginn"] == 4
-    assert summary["ohne_antrag"] == 4
+    assert summary["ohne_antrag"] == 0
 
 
 def test_get_analysis_summary_scoped_to_single_document(app, db, tenant):

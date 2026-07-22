@@ -13,10 +13,16 @@ potenziale_bp = Blueprint("potenziale", __name__, url_prefix="/potenziale")
 def index():
     document_id = request.args.get("document_id", type=int)
     status_filter = request.args.get("status_filter", "alle")
+    search_query = request.args.get("search", "").strip() or None
+    product_line_filter = request.args.get("product_line", "").strip() or None
+    group_by_customer = request.args.get("group_by", "1") != "0"
     analysis = build_document_analysis(
         document_id=document_id,
         status_filter=status_filter,
         current_broker_number=getattr(current_user, "vermittlernummer", None),
+        search_query=search_query,
+        product_line_filter=product_line_filter,
+        group_by_customer=group_by_customer,
     )
     return render_template(
         "potenziale/index.html",

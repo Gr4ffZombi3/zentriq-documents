@@ -22,7 +22,7 @@
     {% if query %}
       <div class="mt-6">
         <p class="text-sm text-text-muted">
-          {{ documents | length }} Ergebnis(se) fuer "{{ query }}"
+          {{ documents | length }} Ergebnis(se) für "{{ query }}"
           {% if used_fallback %}
             <span class="ml-2 inline-flex items-center gap-1 text-warning">{{ icon('info', class='w-3.5 h-3.5') }}einfache Textsuche, kein KI-Filter erkannt</span>
           {% endif %}

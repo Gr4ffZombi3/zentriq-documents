@@ -204,5 +204,5 @@ def _build_customer_summary(customer: Customer, possible_duplicates: list[Custom
         "latest_row": latest_row,
         "latest_uploaded_at": latest_uploaded_at,
         "possible_duplicates": possible_duplicates,
-        "status_label": latest_row["result_label"] if latest_row else "Noch keine Vorgaenge",
+        "status_label": latest_row["result_label"] if latest_row else "Noch keine Vorgänge",
     }

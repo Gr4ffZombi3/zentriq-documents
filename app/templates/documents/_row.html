@@ -11,52 +11,58 @@
 {% set list_scope_key = document.list_type.value if document.list_type else (document.list_scope.value if document.list_scope else '') %}
 <div
   id="doc-row-{{ document.id }}"
-  class="list-row-card cursor-pointer px-4 py-4 sm:px-5 sm:py-5"
+  class="document-list-row cursor-pointer"
   data-document-row
   data-document-id="{{ document.id }}"
   data-document-status="{{ document.status.value }}"
   data-document-active="{{ '1' if is_active else '0' }}"
   onclick="window.location='{{ url_for('documents.detail', document_id=document.id) }}'"
 >
-  <div class="flex flex-wrap items-start justify-between gap-4">
-    <div class="flex min-w-0 flex-1 items-start gap-4">
-      <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+  <div class="document-row-grid">
+    <div class="document-row-main">
+      <span class="document-row-icon">
         {{ icon('file-text', class='w-5 h-5') }}
       </span>
-      <div class="min-w-0 flex-1">
+      <div class="min-w-0">
         <div class="flex flex-wrap items-center gap-2">
-          <p class="truncate text-base font-semibold tracking-tight text-text">{{ document.original_filename }}</p>
+          <p class="document-row-title">{{ document.original_filename }}</p>
           {% if is_active %}{{ badge('Live', variant='info', icon_name='loader-circle') }}{% endif %}
         </div>
-        <div class="chip-bar mt-3">
-          <span class="meta-chip">{{ document.customer.name if document.customer else 'Kein Kunde' }}</span>
-          {% if list_scope_key %}<span class="meta-chip">{{ list_scope_labels.get(list_scope_key, list_scope_key) }}</span>{% endif %}
-          {% if document.doc_type %}<span class="meta-chip">{{ document.doc_type.value }}</span>{% endif %}
-          <span class="meta-chip">{{ document.uploaded_at.strftime('%d.%m.%Y %H:%M') if document.uploaded_at else '-' }}</span>
-        </div>
-
-        {% if is_active %}
-          <div class="doc-row-live">
-            <div class="doc-row-live-header">
-              <p class="doc-row-live-title">{{ progress.headline }}</p>
-              <span class="doc-row-live-percent">{{ progress.percent }}%</span>
-            </div>
-            <div class="doc-row-live-bar" aria-hidden="true">
-              <span style="width: {{ progress.percent }}%"></span>
-            </div>
-            {% if progress.detail %}
-              <p class="doc-row-live-copy">{{ progress.detail }}</p>
-            {% endif %}
-          </div>
-        {% endif %}
+        <p class="document-row-subtitle">{{ document.customer.name if document.customer else 'Kein Kunde zugeordnet' }}</p>
       </div>
     </div>
-    <div class="flex shrink-0 flex-wrap items-center gap-3">
-      {{ status_badge(document.status) }}
-      <a href="{{ url_for('documents.detail', document_id=document.id) }}"
-         onclick="event.stopPropagation()"
-         class="btn btn-secondary px-4 py-2 text-sm">
-        Oeffnen
+
+    <div class="document-row-stat">
+      <span class="document-row-label">Typ</span>
+      <span class="document-row-value">{{ list_scope_labels.get(list_scope_key, 'Allgemein') }}</span>
+    </div>
+
+    <div class="document-row-stat">
+      <span class="document-row-label">Hochgeladen</span>
+      <span class="document-row-value">{{ document.uploaded_at.strftime('%d.%m.%Y %H:%M') if document.uploaded_at else '-' }}</span>
+    </div>
+
+    <div class="document-row-stat">
+      <span class="document-row-label">Status</span>
+      <span class="document-row-value">{{ status_badge(document.status) }}</span>
+    </div>
+
+    <div class="document-row-progress">
+      <div class="doc-row-live-header">
+        <p class="doc-row-live-title">{{ progress.headline }}</p>
+        <span class="doc-row-live-percent">{{ progress.percent }}%</span>
+      </div>
+      <div class="doc-row-live-bar" aria-hidden="true">
+        <span style="width: {{ progress.percent }}%"></span>
+      </div>
+      {% if progress.detail %}
+        <p class="doc-row-live-copy">{{ progress.detail }}</p>
+      {% endif %}
+    </div>
+
+    <div class="document-row-action">
+      <a href="{{ url_for('documents.detail', document_id=document.id) }}" onclick="event.stopPropagation()" class="btn btn-secondary px-4 py-2 text-sm">
+        Öffnen
         {{ icon('chevron-right', class='w-4 h-4') }}
       </a>
     </div>

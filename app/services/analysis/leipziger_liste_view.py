@@ -22,7 +22,7 @@ from app.services.analysis.potential_classification import classify_row, explain
 STATUS_FILTER_OPTIONS = [
     ("alle", "Alle"),
     ("angebote", "Angebote"),
-    ("neugeschaeft", "Neugeschaeft"),
+    ("neugeschaeft", "Neugeschäft"),
     ("fahrzeugwechsel", "Fahrzeugwechsel"),
     ("abgeschlossen", "Abgeschlossen"),
     ("ohne_beginn", "Ohne Beginn"),
@@ -32,7 +32,7 @@ STATUS_FILTER_OPTIONS = [
 
 STATUS_PRESENTATION = {
     "angebot": ("Angebot", "warning"),
-    "neugeschaeft": ("Neugeschaeft", "info"),
+    "neugeschaeft": ("Neugeschäft", "info"),
     "fahrzeugwechsel": ("Fahrzeugwechsel", "info"),
     "storno": ("Storno", "danger"),
     "unklar": ("Unklar", "muted"),
@@ -444,12 +444,12 @@ def _row_result_label(row: dict, status_key: str) -> str:
     if status_key == "angebot":
         return "Angebot offen"
     if status_key == "neugeschaeft":
-        return "Neugeschaeft ohne Beginn"
+        return "Neugeschäft ohne Beginn"
     if status_key == "fahrzeugwechsel":
         return "Fahrzeugwechsel offen"
     if status_key == "storno":
         return "Storno erkannt"
-    return "Manuelle Pruefung"
+    return "Manuelle Prüfung"
 
 
 def _row_completion_label(row: dict, status_key: str) -> str:
@@ -482,7 +482,7 @@ def _group_status(group: dict) -> tuple[str, str]:
     if any(row["status_key"] == "fahrzeugwechsel" for row in rows):
         return "Fahrzeugwechsel", "info"
     if any(row["status_key"] == "neugeschaeft" for row in rows):
-        return "Neugeschaeft", "info"
+        return "Neugeschäft", "info"
     if group["storno_count"] == group["record_count"]:
         return "Storno", "danger"
     return "Offen", "muted"
@@ -568,3 +568,4 @@ def _empty_summary() -> dict:
         "unklar": 0,
         "ohne_antrag": 0,
     }
+

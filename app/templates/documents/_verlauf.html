@@ -2,7 +2,7 @@
 {% from "ui/display.html" import card, status_badge %}
 {% set progress = build_document_progress(document) %}
 {% set timings = progress.stage_durations or {} %}
-{% call card(padding='p-6 sm:p-7') %}
+{% call card(padding='p-6 sm:p-7', tone='muted') %}
   <div class="section-heading">
     <div>
       <h2 class="section-title">Dokumentenverlauf</h2>
@@ -12,7 +12,8 @@
       {{ icon('history', class='w-5 h-5') }}
     </span>
   </div>
-  <dl class="info-grid mt-6 sm:grid-cols-2">
+
+  <dl class="info-grid info-grid-compact mt-6 sm:grid-cols-2 lg:grid-cols-4">
     <div class="info-item">
       <dt>Upload</dt>
       <dd>{{ document.uploaded_at.strftime('%d.%m.%Y %H:%M') if document.uploaded_at else '-' }}</dd>
@@ -26,14 +27,6 @@
       <dd>{{ status_badge(document.status) }}</dd>
     </div>
     <div class="info-item">
-      <dt>OCR-Engine</dt>
-      <dd>{{ document.ocr_engine_used.value if document.ocr_engine_used else '-' }}</dd>
-    </div>
-    <div class="info-item">
-      <dt>Confidence Score</dt>
-      <dd>{{ (document.ocr_confidence | round(1)) if document.ocr_confidence is not none else '-' }}{{ '%' if document.ocr_confidence is not none else '' }}</dd>
-    </div>
-    <div class="info-item">
       <dt>Hochgeladen von</dt>
       <dd>{{ document.uploaded_by.email if document.uploaded_by else '-' }}</dd>
     </div>
@@ -45,17 +38,35 @@
     {% endif %}
   </dl>
 
-  {% if timings %}
-    <div class="mt-6">
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-soft">Pipeline-Zeiten</p>
-      <div class="chip-bar mt-3">
-        {% if timings.get('ocr') %}<span class="meta-chip">OCR {{ '%.1fs'|format(timings.get('ocr', 0) / 1000) }}</span>{% endif %}
-        {% if timings.get('parsing') %}<span class="meta-chip">Parser {{ '%.1fs'|format(timings.get('parsing', 0) / 1000) }}</span>{% endif %}
-        {% if timings.get('ai') %}<span class="meta-chip">KI {{ '%.1fs'|format(timings.get('ai', 0) / 1000) }}</span>{% endif %}
-        {% if timings.get('post_processing') %}<span class="meta-chip">Nachbereitung {{ '%.1fs'|format(timings.get('post_processing', 0) / 1000) }}</span>{% endif %}
-        {% if timings.get('db') %}<span class="meta-chip">DB {{ '%.1fs'|format(timings.get('db', 0) / 1000) }}</span>{% endif %}
-        {% if timings.get('total') %}<span class="meta-chip">Gesamt {{ '%.1fs'|format(timings.get('total', 0) / 1000) }}</span>{% endif %}
+  {% if timings or document.ocr_engine_used or document.ocr_confidence is not none %}
+    <details class="technical-details mt-6">
+      <summary>
+        <span>Technische Details</span>
+        <span class="technical-details-toggle">{{ icon('chevron-right', class='w-4 h-4') }}</span>
+      </summary>
+      <div class="technical-details-body">
+        <div class="technical-details-grid">
+          <div class="info-item">
+            <dt>OCR-Engine</dt>
+            <dd>{{ document.ocr_engine_used.value if document.ocr_engine_used else '-' }}</dd>
+          </div>
+          <div class="info-item">
+            <dt>OCR-Sicherheit</dt>
+            <dd>{{ (document.ocr_confidence | round(1)) if document.ocr_confidence is not none else '-' }}{{ '%' if document.ocr_confidence is not none else '' }}</dd>
+          </div>
+        </div>
+
+        {% if timings %}
+          <div class="analysis-timing-chips mt-5">
+            {% if timings.get('ocr') %}<span class="meta-chip">OCR {{ '%.1fs'|format(timings.get('ocr', 0) / 1000) }}</span>{% endif %}
+            {% if timings.get('parsing') %}<span class="meta-chip">Parser {{ '%.1fs'|format(timings.get('parsing', 0) / 1000) }}</span>{% endif %}
+            {% if timings.get('ai') %}<span class="meta-chip">KI {{ '%.1fs'|format(timings.get('ai', 0) / 1000) }}</span>{% endif %}
+            {% if timings.get('post_processing') %}<span class="meta-chip">Nachbereitung {{ '%.1fs'|format(timings.get('post_processing', 0) / 1000) }}</span>{% endif %}
+            {% if timings.get('db') %}<span class="meta-chip">DB {{ '%.1fs'|format(timings.get('db', 0) / 1000) }}</span>{% endif %}
+            {% if timings.get('total') %}<span class="meta-chip">Gesamt {{ '%.1fs'|format(timings.get('total', 0) / 1000) }}</span>{% endif %}
+          </div>
+        {% endif %}
       </div>
-    </div>
+    </details>
   {% endif %}
 {% endcall %}

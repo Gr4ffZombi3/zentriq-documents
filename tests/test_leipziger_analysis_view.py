@@ -47,7 +47,7 @@ def test_build_document_analysis_translates_offer_new_business_and_vehicle_chang
     labels = {row["customer_name"]: row["status_label"] for row in analysis["rows"]}
 
     assert labels["Anna Angebot"] == "Angebot"
-    assert labels["Nina Neu"] == "Neugeschaeft"
+    assert labels["Nina Neu"] == "Neugeschäft"
     assert labels["Fritz Wechsel"] == "Fahrzeugwechsel"
 
 

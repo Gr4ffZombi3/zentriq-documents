@@ -4,7 +4,7 @@
 {% block title %}Empfehlungen - Zentriq Documents{% endblock %}
 {% block content %}
 <div class="page-shell">
-  {% call page_header('Empfehlungen', 'Von der KI erkannte Handlungsschritte, priorisiert fuer einen klaren naechsten Move.', 'AI recommendations') %}{% endcall %}
+  {% call page_header('Empfehlungen', 'Von der KI erkannte Handlungsschritte, priorisiert für einen klaren nächsten Move.', 'AI recommendations') %}{% endcall %}
 
   {% if recommendations %}
     <div class="list-stack">
@@ -21,7 +21,7 @@
                 <div class="mt-3 flex flex-wrap gap-2">
                   <span class="meta-chip">{{ rec.customer.name if rec.customer else 'Kein Kunde' }}</span>
                   {% if rec.document_id %}
-                    <a href="{{ url_for('documents.detail', document_id=rec.document_id) }}" class="meta-chip text-primary transition duration-200 hover:text-primary-hover">Dokument oeffnen</a>
+                    <a href="{{ url_for('documents.detail', document_id=rec.document_id) }}" class="meta-chip text-primary transition duration-200 hover:text-primary-hover">Dokument öffnen</a>
                   {% endif %}
                 </div>
               </div>

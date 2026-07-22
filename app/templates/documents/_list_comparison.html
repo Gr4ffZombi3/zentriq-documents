@@ -17,9 +17,9 @@
   <div class="chip-bar mt-5">
     {% set counter_badges = [
       ('Neue Kunden', list_comparison.new_customer_count, 'success'),
-      ('Neue Vertraege', list_comparison.new_contract_count, 'success'),
+      ('Neue Verträge', list_comparison.new_contract_count, 'success'),
       ('Neue Angebote', list_comparison.new_offer_count, 'info'),
-      ('Statusaenderungen', list_comparison.status_change_count, 'warning'),
+      ('Statusänderungen', list_comparison.status_change_count, 'warning'),
       ('Stornos', list_comparison.storno_count, 'danger'),
       ('Entfernte Kunden', list_comparison.removed_customer_count, 'muted'),
     ] %}
@@ -32,7 +32,7 @@
     <div class="list-stack mt-5">
       {% set change_labels = {
         'new_customer': 'Neuer Kunde', 'new_contract': 'Neuer Vertrag', 'new_offer': 'Neues Angebot',
-        'status_change': 'Statusaenderung', 'storno': 'Storno', 'removed_customer': 'Entfernt',
+        'status_change': 'Statusänderung', 'storno': 'Storno', 'removed_customer': 'Entfernt',
       } %}
       {% set change_variants = {
         'new_customer': 'success', 'new_contract': 'success', 'new_offer': 'info',

@@ -1,14 +1,16 @@
 {% extends "base.html" %}
 {% from "ui/display.html" import empty_state, page_header %}
 {% from "ui/forms.html" import button %}
+{% from "ui/icons.html" import icon %}
 {% block title %}Dokumente - Zentriq Documents{% endblock %}
 {% block content %}
-<div class="page-shell" data-documents-page data-live-url="{{ url_for('documents.live_documents') }}">
+<div class="page-shell page-shell-wide" data-documents-page data-live-url="{{ url_for('documents.live_documents') }}">
   {% call page_header(
     "Dokumente",
-    "Die zentrale Arbeitsqueue fuer Uploads, Live-Analysestatus und den direkten Einstieg in jeden Detail-Workspace.",
-    "Document Queue"
+    "Die zentrale Arbeitsfläche für Uploads, Live-Status und den direkten Einstieg in jeden Dokumentvorgang.",
+    "Dokumenten-Workspace"
   ) %}
+    {{ button('Zum Upload', href='#upload-widget', variant='primary', icon_name='upload') }}
     {{ button('KI-Suche', href=url_for('search.search'), variant='secondary', icon_name='search') }}
   {% endcall %}
 
@@ -18,14 +20,64 @@
 
   {% include "components/upload_widget.html" %}
 
+  <section class="document-list-toolbar" aria-label="Dokumentenliste filtern">
+    <label class="topbar-search document-toolbar-search">
+      <span class="text-text-soft">
+        {{ icon('search', class='w-4 h-4') }}
+      </span>
+      <input
+        type="search"
+        class="topbar-search-input"
+        data-document-search
+        placeholder="Dokumente, Kunden oder Typ filtern"
+        aria-label="Dokumente filtern"
+      >
+    </label>
+    <label class="document-toolbar-select-wrap">
+      <span class="document-toolbar-label">Status</span>
+      <select class="field-surface document-toolbar-filter" data-document-filter aria-label="Status filtern">
+        <option value="">Alle Status</option>
+        <option value="pending">Ausstehend</option>
+        <option value="ocr_processing">OCR läuft</option>
+        <option value="ocr_done">OCR fertig</option>
+        <option value="ai_processing">KI-Analyse läuft</option>
+        <option value="done">Fertig</option>
+        <option value="failed">Fehlgeschlagen</option>
+      </select>
+    </label>
+    <p class="document-toolbar-note">Upload startet sofort, neue Dokumente erscheinen direkt in der Liste und bleiben live aktualisiert.</p>
+  </section>
+
   {% if documents %}
-    <div id="document-list" class="list-stack" data-document-list>
-      {% for document in documents %}
-        {% include "documents/_row.html" %}
-      {% endfor %}
-    </div>
+    <section id="document-list-shell" class="document-list-shell">
+      <div class="document-list-head" aria-hidden="true">
+        <span>Dokument</span>
+        <span>Typ</span>
+        <span>Hochgeladen</span>
+        <span>Status</span>
+        <span>Fortschritt</span>
+        <span class="text-right">Aktion</span>
+      </div>
+      <div id="document-list" class="document-list-body" data-document-list>
+        {% for document in documents %}
+          {% include "documents/_row.html" %}
+        {% endfor %}
+      </div>
+      <p id="document-filter-empty" class="document-filter-empty hidden">Keine Dokumente passen zu diesem Filter.</p>
+    </section>
   {% else %}
-    <div id="document-list" class="list-stack hidden" data-document-list></div>
+    <section id="document-list-shell" class="document-list-shell hidden">
+      <div class="document-list-head" aria-hidden="true">
+        <span>Dokument</span>
+        <span>Typ</span>
+        <span>Hochgeladen</span>
+        <span>Status</span>
+        <span>Fortschritt</span>
+        <span class="text-right">Aktion</span>
+      </div>
+      <div id="document-list" class="document-list-body hidden" data-document-list></div>
+      <p id="document-filter-empty" class="document-filter-empty hidden">Keine Dokumente passen zu diesem Filter.</p>
+    </section>
     <div id="document-empty-state">
       {% call empty_state('Noch keine Dokumente hochgeladen', 'Lade oben eine PDF-Datei hoch, um mit OCR, Analyse und den daraus entstehenden Empfehlungen zu starten.', 'file-text') %}{% endcall %}
     </div>

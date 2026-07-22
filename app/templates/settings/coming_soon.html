@@ -5,11 +5,11 @@
 {% block content %}
 <div class="page-shell">
   {% call page_header(title, description, 'Settings') %}
-    {{ button('Zurueck zum Dashboard', href=url_for('dashboard.index'), variant='secondary', icon_name='arrow-left') }}
+    {{ button('Zurück zum Dashboard', href=url_for('dashboard.index'), variant='secondary', icon_name='arrow-left') }}
   {% endcall %}
 
   {% call empty_state('Dieser Bereich ist vorbereitet', description, 'clock') %}
-    {{ button('Dashboard oeffnen', href=url_for('dashboard.index'), variant='primary', icon_name='layout-dashboard') }}
+    {{ button('Dashboard öffnen', href=url_for('dashboard.index'), variant='primary', icon_name='layout-dashboard') }}
   {% endcall %}
 </div>
 {% endblock %}

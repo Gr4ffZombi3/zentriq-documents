@@ -7,22 +7,22 @@
 <div class="page-shell">
   {% call page_header(
     "Tagescockpit",
-    "Das Wichtigste fuer heute in einer konzentrierten Arbeitsansicht: Prioritaeten, Rueckrufe, Potenziale und Kennzahlen.",
+    "Das Wichtigste für heute in einer konzentrierten Arbeitsansicht: Prioritäten, Rückrufe, Potenziale und Kennzahlen.",
     "Daily Focus"
   ) %}
     {{ button('Zu den Aufgaben', href=url_for('tasks.list_tasks'), variant='secondary', icon_name='list-todo') }}
-    {{ button('Dokumente oeffnen', href=url_for('documents.list_documents'), variant='ghost', icon_name='file-text') }}
+    {{ button('Dokumente öffnen', href=url_for('documents.list_documents'), variant='ghost', icon_name='file-text') }}
   {% endcall %}
 
   <div class="stat-grid stat-grid-3">
-    {{ stat_card('Ueberfaellige Vorgaenge', cockpit.overdue_tasks_count, icon_name='alert-triangle', variant='warning', meta='Faelle mit unmittelbarem Nachfassbedarf', tone='strong') }}
+    {{ stat_card('Überfällige Vorgänge', cockpit.overdue_tasks_count, icon_name='alert-triangle', variant='warning', meta='Fälle mit unmittelbarem Nachfassbedarf', tone='strong') }}
     {{ stat_card('Neue Dokumente', cockpit.new_documents_count, icon_name='file-text', variant='info', meta='Neue Uploads der letzten 24 Stunden') }}
-    {{ stat_card('Abschlussquote', cockpit.abschlussquote_percent ~ '%', icon_name='trending-up', variant='success', meta='Persoenliche Abschlussquote') }}
+    {{ stat_card('Abschlussquote', cockpit.abschlussquote_percent ~ '%', icon_name='trending-up', variant='success', meta='Persönliche Abschlussquote') }}
   </div>
 
   <div class="grid gap-6 xl:grid-cols-3">
     {% call card(padding='p-6', hover=True) %}
-      <p class="stat-label">Hoechste Prioritaet</p>
+      <p class="stat-label">Höchste Priorität</p>
       {% if cockpit.top_priority_task %}
         <div class="mt-4 space-y-4">
           <div>
@@ -34,7 +34,7 @@
           </a>
         </div>
       {% else %}
-        {% call empty_state('Keine offene Prioritaet', 'Aktuell gibt es keine Aufgabe mit besonderem Vorrang.', 'list-todo') %}{% endcall %}
+        {% call empty_state('Keine offene Priorität', 'Aktuell gibt es keine Aufgabe mit besonderem Vorrang.', 'list-todo') %}{% endcall %}
       {% endif %}
     {% endcall %}
 
@@ -50,12 +50,12 @@
           {% endfor %}
         </div>
       {% else %}
-        {% call empty_state('Keine Rueckrufe geplant', 'Fuer heute sind aktuell keine Rueckrufe vorgemerkt.', 'phone') %}{% endcall %}
+        {% call empty_state('Keine Rückrufe geplant', 'Für heute sind aktuell keine Rückrufe vorgemerkt.', 'phone') %}{% endcall %}
       {% endif %}
     {% endcall %}
 
     {% call card(padding='p-6', hover=True) %}
-      <p class="stat-label">Hoechstes Potenzial</p>
+      <p class="stat-label">Höchstes Potenzial</p>
       {% if cockpit.top_potential %}
         <div class="mt-4 space-y-4">
           <div>
@@ -67,7 +67,7 @@
           </a>
         </div>
       {% else %}
-        {% call empty_state('Noch kein Potenzial erfasst', 'Sobald passende Listen analysiert wurden, erscheint hier dein staerkster naechster Hebel.', 'target') %}{% endcall %}
+        {% call empty_state('Noch kein Potenzial erfasst', 'Sobald passende Listen analysiert wurden, erscheint hier dein stärkster nächster Hebel.', 'target') %}{% endcall %}
       {% endif %}
     {% endcall %}
   </div>

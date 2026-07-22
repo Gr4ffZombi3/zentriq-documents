@@ -1,8 +1,22 @@
-{% from "ui/display.html" import stat_card %}
-
-<div class="stat-grid stat-grid-4">
-  {{ stat_card('Gesamt', summary.total, icon_name='file-text', variant='info', meta='Dokumente in dieser Ansicht', tone='strong') }}
-  {{ stat_card('In Arbeit', summary.active, icon_name='loader-circle', variant='info', meta='OCR oder KI laufen') }}
-  {{ stat_card('Bereit', summary.done, icon_name='check-circle', variant='success', meta='Fuer Review und Folgearbeit') }}
-  {{ stat_card('Fehler', summary.failed, icon_name='alert-circle', variant='danger', meta='Brauchen Nacharbeit') }}
-</div>
+<section class="summary-strip summary-strip-4" aria-label="Dokumentenstatus">
+  <article class="summary-metric summary-metric-info">
+    <span class="summary-metric-label">Gesamt</span>
+    <strong class="summary-metric-value">{{ summary.total }}</strong>
+    <p class="summary-metric-copy">Dokumente in dieser Ansicht</p>
+  </article>
+  <article class="summary-metric summary-metric-info">
+    <span class="summary-metric-label">In Arbeit</span>
+    <strong class="summary-metric-value">{{ summary.active }}</strong>
+    <p class="summary-metric-copy">OCR oder KI laufen noch</p>
+  </article>
+  <article class="summary-metric summary-metric-success">
+    <span class="summary-metric-label">Bereit</span>
+    <strong class="summary-metric-value">{{ summary.done }}</strong>
+    <p class="summary-metric-copy">Zur Prüfung und Folgearbeit</p>
+  </article>
+  <article class="summary-metric summary-metric-danger">
+    <span class="summary-metric-label">Fehler</span>
+    <strong class="summary-metric-value">{{ summary.failed }}</strong>
+    <p class="summary-metric-copy">Benötigen Nacharbeit</p>
+  </article>
+</section>

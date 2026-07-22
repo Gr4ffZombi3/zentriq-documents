@@ -3,17 +3,17 @@
 {% from "ui/display.html" import badge, empty_state, page_header, card %}
 {% block title %}Eigene Liste vs. GS-Liste - Zentriq Documents{% endblock %}
 {% block content %}
-<div class="page-shell">
-  {% call page_header('Eigene Liste vs. GS-Liste', 'Vergleiche deine eigene Kundenliste mit der vollstaendigen Geschaeftsstellen-Liste in einer klaren Split-View fuer Unterschiede.', 'List comparison') %}{% endcall %}
+<div class="page-shell page-shell-wide">
+  {% call page_header('Eigene Liste vs. GS-Liste', 'Vergleiche deine eigene Kundenliste mit der vollständigen Geschäftsstellen-Liste in einer klaren Split-View für Unterschiede.', 'Listenvergleich') %}{% endcall %}
 
   {% if not comparisons %}
-    {% call empty_state('Noch kein Vergleich vorhanden', 'Lade sowohl eine eigene Liste als auch eine GS-Liste hoch, um Unterschiede sauber gegenueberzustellen.', 'git-compare') %}{% endcall %}
+    {% call empty_state('Noch kein Vergleich vorhanden', 'Lade sowohl eine eigene Liste als auch eine GS-Liste hoch, um Unterschiede sauber gegenüberzustellen.', 'git-compare') %}{% endcall %}
   {% else %}
     {% if comparisons|length > 1 %}
       <section class="filter-panel">
         <div class="flex flex-col gap-2">
           <label for="filter-document" class="field-label">GS-Liste</label>
-          <select id="filter-document" name="document_id" onchange="this.form.submit()" form="comparison-filter" class="field-surface max-w-md text-sm">
+          <select id="filter-document" name="document_id" onchange="this.form.submit()" form="comparison-filter" class="field-surface w-full max-w-md text-sm">
             {% for comparison in comparisons %}
               <option value="{{ comparison.document_id }}" {{ 'selected' if selected and selected.id == comparison.id else '' }}>
                 {{ comparison.document.original_filename }} ({{ comparison.compared_at.strftime('%d.%m.%Y') }})
@@ -44,10 +44,10 @@
         <div class="chip-bar mt-5">
           {% set counter_badges = [
             ('Neue Kunden', selected.new_customer_count, 'success'),
-            ('Neue Vertraege', selected.new_contract_count, 'success'),
+            ('Neue Verträge', selected.new_contract_count, 'success'),
             ('Neue Angebote', selected.new_offer_count, 'info'),
             ('Neue Sparten', selected.new_product_line_count, 'info'),
-            ('Statusaenderungen', selected.status_change_count, 'warning'),
+            ('Statusänderungen', selected.status_change_count, 'warning'),
             ('Stornos', selected.storno_count, 'danger'),
             ('Entfernte Kunden', selected.removed_customer_count, 'muted'),
           ] %}
@@ -63,7 +63,7 @@
           <div class="list-stack mt-6">
             {% set change_labels = {
               'new_customer': 'Neuer Kunde', 'new_contract': 'Neuer Vertrag', 'new_offer': 'Neues Angebot',
-              'status_change': 'Statusaenderung', 'storno': 'Storno', 'removed_customer': 'Fehlt in GS-Liste',
+              'status_change': 'Statusänderung', 'storno': 'Storno', 'removed_customer': 'Fehlt in GS-Liste',
               'new_product_line': 'Neue Sparte',
             } %}
             {% set change_variants = {
@@ -86,3 +86,4 @@
   {% endif %}
 </div>
 {% endblock %}
+

@@ -34,7 +34,7 @@ STEP_DEFINITIONS = [
     {
         "key": "done",
         "label": "Fertig",
-        "description": "Die Ergebnisse stehen in der Oberflaeche bereit.",
+        "description": "Die Ergebnisse stehen in der Oberfläche bereit.",
     },
 ]
 
@@ -153,7 +153,7 @@ def _fallback_progress(document) -> dict[str, Any]:
             completed=["uploaded"],
             active="ocr",
             percent=28,
-            headline="OCR laeuft",
+            headline="OCR läuft",
             detail="Der Dokumenttext wird gerade erkannt.",
         )
     if status == DocStatus.OCR_DONE.value:
@@ -169,7 +169,7 @@ def _fallback_progress(document) -> dict[str, Any]:
             completed=["uploaded", "ocr", "parser"],
             active="ai",
             percent=76,
-            headline="KI-Auswertung laeuft",
+            headline="KI-Auswertung läuft",
             detail="Felder, Kunden und Signale werden extrahiert.",
         )
     if status == DocStatus.FAILED.value:
@@ -185,7 +185,7 @@ def _fallback_progress(document) -> dict[str, Any]:
         completed=STEP_KEYS,
         percent=100,
         headline="Analyse abgeschlossen",
-        detail="Das Dokument steht fuer Review und Folgearbeit bereit.",
+        detail="Das Dokument steht für Review und Folgearbeit bereit.",
         state="done",
         stage_durations=((document.extra_data or {}).get("analysis_progress") or {}).get("stage_durations"),
     )

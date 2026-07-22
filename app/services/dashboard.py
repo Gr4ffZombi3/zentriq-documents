@@ -22,7 +22,7 @@ def build_dashboard_view(user) -> dict:
     scoped_rows = broker_matches or row_entries
 
     return {
-        "headline": "Uebersicht",
+        "headline": "Übersicht",
         "subheadline": "Auswertung deiner Leipziger Listen",
         "scope_note": _build_scope_note(preferred_broker_number, broker_matches, row_entries),
         "has_data": bool(row_entries),
@@ -87,12 +87,12 @@ def _build_scope_note(preferred_broker_number: str | None, broker_matches: list[
         return f"Fokus auf Vermittlernummer {preferred_broker_number}."
     if preferred_broker_number and row_entries:
         return (
-            f"Keine direkte Zuordnung fuer Vermittlernummer {preferred_broker_number} gefunden. "
-            "Die Uebersicht zeigt daher alle Leipziger-Vorgaenge."
+            f"Keine direkte Zuordnung für Vermittlernummer {preferred_broker_number} gefunden. "
+            "Die Übersicht zeigt daher alle Leipziger-Vorgänge."
         )
     if row_entries:
-        return "Die Uebersicht basiert auf allen gespeicherten Leipziger-Listen."
-    return "Sobald Leipziger Listen analysiert wurden, erscheinen hier belegbare Vorgaenge."
+        return "Die Übersicht basiert auf allen gespeicherten Leipziger-Listen."
+    return "Sobald Leipziger Listen analysiert wurden, erscheinen hier belegbare Vorgänge."
 
 
 def _build_metrics(row_entries: list[dict]) -> list[dict]:
@@ -114,7 +114,7 @@ def _build_metrics(row_entries: list[dict]) -> list[dict]:
             counters["follow_up"] += 1
 
     return [
-        {"label": "Antraege eingereicht", "value": counters["application"], "tone": "info"},
+        {"label": "Anträge eingereicht", "value": counters["application"], "tone": "info"},
         {"label": "Angebote offen", "value": counters["offer"], "tone": "warning"},
         {"label": "Beginn vorhanden", "value": counters["closed"], "tone": "success"},
         {"label": "Nacharbeit erforderlich", "value": counters["follow_up"], "tone": "danger"},
@@ -196,7 +196,7 @@ def _status_label(status_key: str) -> str:
         "closed": "Abgeschlossen",
         "application": "Antrag eingereicht",
         "offer": "Angebot",
-        "follow_up": "Nacharbeit noetig",
+        "follow_up": "Nacharbeit nötig",
         "unclear": "Unklar",
     }[status_key]
 
@@ -219,7 +219,7 @@ def _result_label(status_key: str, start_date: date | None) -> str:
     if status_key == "offer":
         return "Angebot offen"
     if status_key == "follow_up":
-        return "Bitte pruefen"
+        return "Bitte prüfen"
     return "Angaben fehlen"
 
 
@@ -273,7 +273,7 @@ def _uncertainty_label(category, confidence: dict) -> str | None:
         return "Angebotssignal unsicher"
     if category.value == "storniert":
         return "Storno-Signal unsicher"
-    return "Pruefung empfohlen"
+    return "Prüfung empfohlen"
 
 
 def _row_has_signal_uncertainty(confidence: dict) -> bool:

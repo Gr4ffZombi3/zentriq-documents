@@ -18,7 +18,7 @@
         <p class="text-base font-semibold tracking-tight text-text">{{ task.title }}</p>
         <div class="mt-3 flex flex-wrap gap-2">
           <span class="meta-chip">{{ task.customer.name if task.customer else 'Kein Kunde' }}</span>
-          {% if task.document_id %}<a href="{{ url_for('documents.detail', document_id=task.document_id) }}" class="meta-chip text-primary transition duration-200 hover:text-primary-hover">Quelle oeffnen</a>{% endif %}
+          {% if task.document_id %}<a href="{{ url_for('documents.detail', document_id=task.document_id) }}" class="meta-chip text-primary transition duration-200 hover:text-primary-hover">Quelle öffnen</a>{% endif %}
           {% if task.due_date %}<span class="meta-chip">{{ icon('calendar', class='w-3.5 h-3.5') }}{{ task.due_date.strftime('%d.%m.%Y') }}</span>{% endif %}
         </div>
         {% if task.notes %}<p class="mt-3 text-sm leading-7 text-text-muted">{{ task.notes }}</p>{% endif %}
@@ -52,7 +52,7 @@
       <input type="hidden" name="status" value="open">
       <button type="submit" class="btn btn-secondary px-4 py-2.5 text-sm">
         {{ icon('refresh-cw', class='w-4 h-4') }}
-        Wieder oeffnen
+        Wieder öffnen
       </button>
     </form>
   {% endif %}

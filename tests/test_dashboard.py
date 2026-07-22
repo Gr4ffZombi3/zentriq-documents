@@ -88,7 +88,7 @@ def test_build_dashboard_view_uses_real_leipziger_fields_and_vm_scope(db, tenant
 
     assert view["scope_note"] == "Fokus auf Vermittlernummer VM-1001."
     assert metric_map(view) == {
-        "Antraege eingereicht": 1,
+        "Anträge eingereicht": 1,
         "Angebote offen": 1,
         "Beginn vorhanden": 1,
         "Nacharbeit erforderlich": 1,
@@ -121,7 +121,7 @@ def test_build_dashboard_view_falls_back_to_all_rows_without_vm_match(db, tenant
 
     view = build_dashboard_view(user)
 
-    assert "Keine direkte Zuordnung fuer Vermittlernummer 08/0950-T gefunden." in view["scope_note"]
+    assert "Keine direkte Zuordnung für Vermittlernummer 08/0950-T gefunden." in view["scope_note"]
     assert metric_map(view)["Angebote offen"] == 1
     assert view["cases"][0]["customer_name"] == "Geschaeftsstelle Angebot"
 
@@ -147,8 +147,11 @@ def test_dashboard_route_renders_focused_sections(auth_client, db, tenant):
 
     assert response.status_code == 200
     assert "Auswertung deiner Leipziger Listen" in html
-    assert "Aktuelle Vorgaenge" in html
+    assert "Übersicht" in html
+    assert "Aktuelle Vorgänge" in html
     assert "Letzte Dokumente" in html
     assert "/documents#upload-widget" in html
+    assert "Uebersicht" not in html
+    assert "Vorgaenge" not in html
     assert "Operations Workspace" not in html
     assert "Queue live" not in html

@@ -53,8 +53,8 @@ def upload_document():
             current_user.id,
         )
         if _is_async_request():
-            return jsonify({"error": "Bitte eine PDF-Datei auswaehlen."}), 400
-        return render_template("components/upload_widget.html", error="Bitte eine PDF-Datei auswaehlen."), 400
+            return jsonify({"error": "Bitte eine PDF-Datei auswählen."}), 400
+        return render_template("components/upload_widget.html", error="Bitte eine PDF-Datei auswählen."), 400
 
     file_bytes = file.read()
     try:

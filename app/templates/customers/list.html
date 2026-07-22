@@ -1,25 +1,19 @@
 {% extends "base.html" %}
-{% from "ui/display.html" import badge, empty_state %}
+{% from "ui/display.html" import badge, empty_state, page_header %}
 {% from "ui/forms.html" import button %}
 {% block title %}Kunden - Zentriq Documents{% endblock %}
 {% block content %}
 {% set items = customer_directory["items"] %}
 {% set pagination = customer_directory["pagination"] %}
 {% set current_per_page = request.args.get('per_page', '25') | int %}
-<div class="page-shell">
-  <section class="ops-page-header">
-    <div>
-      <p class="ops-page-kicker">Kundenakte</p>
-      <h1 class="ops-page-title">Kunden</h1>
-      <p class="ops-page-copy">Leichtgewichtige Dossiers aus bereits analysierten Listen. Kein CRM, sondern ein klarer Blick auf Personen, Dokumente und wiederkehrende Vorgange.</p>
-    </div>
-  </section>
+<div class="page-shell page-shell-wide">
+  {% call page_header('Kunden', 'Leichtgewichtige Dossiers aus bereits analysierten Listen. Kein CRM, sondern ein klarer Blick auf Personen, Dokumente und wiederkehrende Vorgänge.', 'Kundenakte') %}{% endcall %}
 
   {% if items %}
     <section class="ops-toolbar-panel">
       <form method="get" class="ops-toolbar-grid">
         <div>
-          <label for="customers-per-page" class="field-label">Eintraege pro Seite</label>
+          <label for="customers-per-page" class="field-label">Einträge pro Seite</label>
           <select id="customers-per-page" name="per_page" class="field-surface text-sm">
             <option value="25" {{ 'selected' if current_per_page == 25 else '' }}>25</option>
             <option value="50" {{ 'selected' if current_per_page == 50 else '' }}>50</option>
@@ -46,7 +40,7 @@
             <th>Kunde</th>
             <th>Geburtsdatum</th>
             <th>Ort / PLZ</th>
-            <th>Vorgaenge</th>
+            <th>Vorgänge</th>
             <th>Letzter Vorgang</th>
             <th>Status</th>
             <th></th>
@@ -64,7 +58,7 @@
                   </a>
                   <div class="flex flex-wrap gap-2 text-xs text-text-soft">
                     {% if item.possible_duplicates %}
-                      {{ badge('Moegliche Dublette', variant='warning') }}
+                      {{ badge('Mögliche Dublette', variant='warning') }}
                     {% endif %}
                     {% if latest_row %}
                       <span>{{ latest_row.document_name }}</span>
@@ -82,9 +76,7 @@
               <td class="text-text-muted">
                 {{ customer.city or '-' }}{% if customer.postal_code %} / {{ customer.postal_code }}{% endif %}
               </td>
-              <td class="text-text-muted">
-                {{ item.record_count }}
-              </td>
+              <td class="text-text-muted">{{ item.record_count }}</td>
               <td class="text-text-muted">
                 {% if item.latest_uploaded_at %}
                   {{ item.latest_uploaded_at.strftime('%d.%m.%Y %H:%M') }}
@@ -96,14 +88,14 @@
                 {% if latest_row %}
                   {{ badge(latest_row.status_label, variant=latest_row.status_variant) }}
                 {% elif item.possible_duplicates %}
-                  {{ badge('Moegliche Dublette', variant='warning') }}
+                  {{ badge('Mögliche Dublette', variant='warning') }}
                 {% else %}
-                  {{ badge('Noch keine Vorgaenge', variant='muted') }}
+                  {{ badge('Noch keine Vorgänge', variant='muted') }}
                 {% endif %}
               </td>
               <td class="text-right">
                 <a href="{{ url_for('customers.detail', customer_id=customer.id) }}" class="btn btn-secondary px-4 py-2 text-sm">
-                  Kundenakte oeffnen
+                  Kundenakte öffnen
                 </a>
               </td>
             </tr>
@@ -117,7 +109,7 @@
         <div class="text-sm text-text-muted">Seite {{ pagination.page }} von {{ pagination.pages }}</div>
         <div class="flex flex-wrap gap-3">
           {% if pagination.has_prev %}
-            {{ button('Zurueck', href=url_for('customers.list_customers', page=pagination.prev_num, per_page=current_per_page), variant='secondary', icon_name='arrow-left') }}
+            {{ button('Zurück', href=url_for('customers.list_customers', page=pagination.prev_num, per_page=current_per_page), variant='secondary', icon_name='arrow-left') }}
           {% endif %}
           {% if pagination.has_next %}
             {{ button('Weiter', href=url_for('customers.list_customers', page=pagination.next_num, per_page=current_per_page), variant='secondary', icon_name='arrow-right') }}

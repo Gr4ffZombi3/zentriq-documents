@@ -15,36 +15,36 @@
         <div class="max-w-2xl">
           <span class="page-eyebrow">Dokument-Upload</span>
           <h2 class="upload-widget-title">Leipziger Liste hochladen</h2>
-          <p class="upload-widget-copy">Datei auswaehlen, sofort hochladen und den Live-Status direkt in der Queue verfolgen - ohne extra Detail- oder Warteseite.</p>
+          <p class="upload-widget-copy">PDF auswählen, direkt in die Queue stellen und den Status live verfolgen. Alles bleibt in derselben Arbeitsfläche sichtbar.</p>
         </div>
 
         <div class="upload-widget-aside">
           <div class="flex flex-col gap-2">
-            <label for="upload-list-type" class="field-label">Welche Leipziger Liste wird hochgeladen?</label>
+            <label for="upload-list-type" class="field-label">Welche Liste wird hochgeladen?</label>
             <select id="upload-list-type" name="list_type" required class="field-surface upload-list-type-select">
-              <option value="">Bitte auswaehlen</option>
+              <option value="">Bitte auswählen</option>
               <option value="own" {{ 'selected' if selected_list_type == 'own' else '' }}>Eigene Leipziger Liste</option>
               <option value="gs" {{ 'selected' if selected_list_type == 'gs' else '' }}>GS-Liste</option>
               <option value="comparison" {{ 'selected' if selected_list_type == 'comparison' else '' }}>Vergleichsliste</option>
               <option value="other" {{ 'selected' if selected_list_type == 'other' else '' }}>Sonstige Leipziger Liste</option>
             </select>
-            <p class="text-xs leading-6 text-text-soft">Die Auswahl wird fuer die fachliche Einordnung des Dokuments mitgegeben.</p>
+            <p class="text-xs leading-6 text-text-soft">Die Auswahl steuert nur die fachliche Einordnung des Dokuments im Workspace.</p>
           </div>
         </div>
       </div>
 
       <label for="file-input" class="cursor-pointer" data-upload-label>
-        <div class="surface-card surface-card-strong upload-drop-target text-center">
+        <div class="upload-drop-target text-center">
           <span class="upload-drop-icon" data-upload-icon>
             {{ icon('upload', class='h-8 w-8') }}
           </span>
           <div>
-            <p class="text-base font-semibold tracking-tight text-text sm:text-lg">PDF hierher ziehen oder Datei auswaehlen</p>
-            <p class="mt-2 text-sm leading-7 text-text-muted">Nach der Auswahl startet der Upload sofort. Das Dokument landet direkt in der Liste und die Analyse laeuft im Hintergrund weiter.</p>
+            <p class="text-base font-semibold tracking-tight text-text sm:text-lg">PDF hierher ziehen oder Datei auswählen</p>
+            <p class="mt-2 text-sm leading-7 text-text-muted">Nach der Auswahl startet der Upload sofort. Das Dokument erscheint direkt in der Liste und die Analyse läuft im Hintergrund weiter.</p>
           </div>
           <div class="chip-bar justify-center">
-            <span class="meta-chip">Nur PDF-Dateien</span>
-            <span class="meta-chip">Kein Seitenreload</span>
+            <span class="meta-chip">Nur PDF</span>
+            <span class="meta-chip">Sofortstart</span>
             <span class="meta-chip">Live-Status</span>
           </div>
         </div>
@@ -54,8 +54,8 @@
 
       <div class="upload-submit-row">
         <div class="min-w-0 flex-1">
-          <p class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-text-soft">Ausgewaehlte Datei</p>
-          <p class="mt-2 truncate text-sm font-medium text-text" data-upload-filename>Noch keine Datei ausgewaehlt.</p>
+          <p class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-text-soft">Ausgewählte Datei</p>
+          <p class="mt-2 truncate text-sm font-medium text-text" data-upload-filename>Noch keine Datei ausgewählt.</p>
         </div>
         <div class="chip-bar">
           <span class="meta-chip">{{ icon('search', class='h-3.5 w-3.5') }}OCR + KI</span>
@@ -88,7 +88,7 @@
       <div class="grid gap-2 text-sm text-text-muted sm:grid-cols-3">
         <span class="upload-step-chip">1. Upload startet sofort</span>
         <span class="upload-step-chip">2. Dokument erscheint direkt in der Liste</span>
-        <span class="upload-step-chip">3. Analyse laeuft im Hintergrund weiter</span>
+        <span class="upload-step-chip">3. Analyse läuft im Hintergrund weiter</span>
       </div>
     </div>
   </form>

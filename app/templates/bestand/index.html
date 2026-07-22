@@ -4,12 +4,12 @@
 {% block title %}Mein Bestand - Zentriq Documents{% endblock %}
 {% block content %}
 <div class="page-shell">
-  {% call page_header('Mein Bestand', 'Nur deine eigenen Kunden, offenen Aufgaben und Kennzahlen in einer persoenlichen Arbeitsansicht.', 'Personal book') %}{% endcall %}
+  {% call page_header('Mein Bestand', 'Nur deine eigenen Kunden, offenen Aufgaben und Kennzahlen in einer persönlichen Arbeitsansicht.', 'Personal book') %}{% endcall %}
 
   <div class="stat-grid stat-grid-4">
-    {{ stat_card('Abschlussquote', bestand.kpis.abschlussquote_percent ~ '%', icon_name='trending-up', variant='success', meta='Persoenliche Conversion') }}
+    {{ stat_card('Abschlussquote', bestand.kpis.abschlussquote_percent ~ '%', icon_name='trending-up', variant='success', meta='Persönliche Conversion') }}
     {{ stat_card('Offene Angebote', bestand.kpis.open_offers_count, icon_name='mail', variant='info', meta='Zur Nachverfolgung bereit') }}
-    {{ stat_card('Ohne Rueckmeldung', bestand.kpis.offers_without_response_count, icon_name='alert-triangle', variant='warning', meta='Brauchen einen Follow-up') }}
+    {{ stat_card('Ohne Rückmeldung', bestand.kpis.offers_without_response_count, icon_name='alert-triangle', variant='warning', meta='Brauchen einen Follow-up') }}
     {{ stat_card('Cross-Selling', bestand.kpis.cross_sell_potential_count, icon_name='target', variant='info', meta='Relevante Chancen im Bestand') }}
   </div>
 
@@ -41,7 +41,7 @@
       <div class="section-heading">
         <div>
           <h2 class="section-title">Eigene Wiedervorlagen und Aufgaben</h2>
-          <p class="section-copy">Persoenliche Follow-ups und naechste Schritte aus deinem Buch.</p>
+          <p class="section-copy">Persönliche Follow-ups und nächste Schritte aus deinem Buch.</p>
         </div>
       </div>
       {% if bestand.open_tasks %}

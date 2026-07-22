@@ -1,21 +1,34 @@
 {% extends "base.html" %}
-{% from "ui/display.html" import card, page_header, status_badge %}
+{% from "ui/display.html" import page_header, status_badge %}
 {% from "ui/forms.html" import button %}
 {% block title %}{{ document.original_filename }} - Zentriq Documents{% endblock %}
 {% block content %}
+{% set list_type_labels = {
+  'own': 'Eigene Leipziger Liste',
+  'gs': 'GS-Liste',
+  'comparison': 'Vergleichsliste',
+  'other': 'Sonstige Leipziger Liste',
+} %}
 <div
-  class="page-shell"
+  class="page-shell page-shell-wide"
   data-document-detail-page
   data-live-url="{{ url_for('documents.live_detail', document_id=document.id) }}"
   data-document-status="{{ document.status.value }}"
 >
-  {% call page_header(document.original_filename, 'Dokument, Analyse, Verlauf und Folgeaktionen in einem gemeinsamen Review-Workspace.', 'Document review') %}
+  {% call page_header(document.original_filename, 'Dokument, Analyse und Folgehinweise in einer klaren gemeinsamen Arbeitsfläche.', 'Dokumentenprüfung') %}
     {{ status_badge(document.status) }}
     {{ button('Zur Dokumentenliste', href=url_for('documents.list_documents'), variant='secondary', icon_name='arrow-left') }}
   {% endcall %}
 
-  <div class="split-workspace">
-    <div class="doc-preview-card sticky-side">
+  <div class="document-head-meta">
+    <span class="meta-chip">Upload {{ document.uploaded_at.strftime('%d.%m.%Y %H:%M') if document.uploaded_at else '-' }}</span>
+    {% if document.customer %}<span class="meta-chip">Kunde {{ document.customer.name }}</span>{% endif %}
+    {% if document.list_type %}<span class="meta-chip">{{ list_type_labels.get(document.list_type.value, document.list_type.value) }}</span>{% endif %}
+    <span class="meta-chip">PDF</span>
+  </div>
+
+  <div class="split-workspace split-workspace-document">
+    <section class="doc-preview-card sticky-side">
       <div class="flex items-center justify-between border-b border-border px-5 py-4">
         <div>
           <p class="text-sm font-semibold text-text">Originaldokument</p>
@@ -24,24 +37,24 @@
         <span class="meta-chip">PDF</span>
       </div>
       <embed src="{{ url_for('documents.file', document_id=document.id) }}" type="application/pdf" class="h-[78vh] w-full">
-    </div>
+    </section>
 
-    {% call card(padding='p-6 sm:p-7', tone='strong', extra_class='sticky-side') %}
+    <section class="doc-analysis-surface">
       <div id="document-analysis-panel">
         {% include "documents/_analysis_panel.html" %}
       </div>
-    {% endcall %}
+    </section>
   </div>
 
-  <div class="grid gap-6 xl:grid-cols-2">
-    <div id="document-history-panel">
+  <div class="document-secondary-grid">
+    <section id="document-history-panel">
       {% include "documents/_verlauf.html" %}
-    </div>
-    <div id="document-comparison-panel">
+    </section>
+    <section id="document-comparison-panel">
       {% if list_comparison %}
         {% include "documents/_list_comparison.html" %}
       {% endif %}
-    </div>
+    </section>
   </div>
 </div>
 {% endblock %}

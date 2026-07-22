@@ -57,7 +57,7 @@
       <strong class="ops-stat-value">{{ summary.angebote }}</strong>
     </article>
     <article class="ops-stat-card">
-      <span class="ops-stat-label">Neugeschaeft</span>
+      <span class="ops-stat-label">Neugeschäft</span>
       <strong class="ops-stat-value">{{ summary.neugeschaeft }}</strong>
     </article>
     <article class="ops-stat-card">
@@ -65,7 +65,7 @@
       <strong class="ops-stat-value">{{ summary.fahrzeugwechsel }}</strong>
     </article>
     <article class="ops-stat-card">
-      <span class="ops-stat-label">Abschluesse</span>
+      <span class="ops-stat-label">Abschlüsse</span>
       <strong class="ops-stat-value">{{ summary.abgeschlossen }}</strong>
     </article>
   </div>
@@ -92,7 +92,7 @@
                   <span class="truncate text-sm font-semibold text-text">{{ group.customer_name }}</span>
                 {% endif %}
                 {% if group.possible_duplicate %}
-                  {{ badge('Moegliche Dublette', variant='warning') }}
+                  {{ badge('Mögliche Dublette', variant='warning') }}
                 {% endif %}
               </div>
               <p class="mt-2 text-xs text-text-soft">
@@ -100,7 +100,7 @@
               </p>
             </div>
             <div>
-              <p class="ops-meta-label">Vorgaenge</p>
+              <p class="ops-meta-label">Vorgänge</p>
               <p class="mt-2 text-sm font-semibold text-text">{{ group.record_count }}</p>
             </div>
             <div>
@@ -108,7 +108,7 @@
               <p class="mt-2 text-sm font-semibold text-text">{{ group.offer_count }}</p>
             </div>
             <div>
-              <p class="ops-meta-label">Abschluesse</p>
+              <p class="ops-meta-label">Abschlüsse</p>
               <p class="mt-2 text-sm font-semibold text-text">{{ group.closure_count }}</p>
             </div>
             <div>
@@ -218,3 +218,4 @@
     </div>
   {% endif %}
 {% endif %}
+

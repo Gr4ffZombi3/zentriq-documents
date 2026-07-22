@@ -5,7 +5,7 @@
     type="button"
     x-on:click="sidebarOpen = true"
     class="topbar-icon-button lg:hidden"
-    aria-label="Menue oeffnen"
+    aria-label="Menü öffnen"
   >
     {{ icon('menu', class='w-5 h-5') }}
   </button>
@@ -13,7 +13,7 @@
   <div class="topbar-copy min-w-0">
     <p class="topbar-kicker">Zentriq</p>
     <div class="mt-1 flex items-center gap-2">
-      <p class="topbar-title">Leipziger Listen</p>
+      <p class="topbar-title">Dokumenten-Workspace</p>
       {% if current_user.is_authenticated and current_user.vermittlernummer %}
         <span class="topbar-status-pill">{{ current_user.vermittlernummer }}</span>
       {% endif %}
@@ -29,7 +29,7 @@
         type="text"
         name="q"
         aria-label="Suche"
-        placeholder="Dokumente, Kunden oder Vorgaenge durchsuchen"
+        placeholder="Dokumente, Kunden oder Vorgänge durchsuchen"
         class="topbar-search-input"
       >
     </label>

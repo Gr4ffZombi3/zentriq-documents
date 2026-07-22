@@ -1,17 +1,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
-  // Dark Mode so frueh wie moeglich setzen (vor dem CSS-Load), um ein Aufblitzen des
+  // Dark Mode so früh wie möglich setzen (vor dem CSS-Load), um ein Aufblitzen des
   // falschen Themes zu vermeiden. localStorage hat Vorrang vor prefers-color-scheme,
-  // damit ein manueller Toggle (siehe sidebar.html) ueber Reloads hinweg bestehen bleibt.
+  // damit ein manueller Toggle über Reloads hinweg bestehen bleibt.
   (function () {
     var stored = localStorage.getItem("zentriq-theme");
-    var dark = stored ? stored === "dark" : true;
+    var dark = stored ? stored === "dark" : false;
     document.documentElement.classList.toggle("dark", dark);
   })();
 </script>
 <meta name="csrf-token" content="{{ csrf_token() }}">
-{% set asset_rev = '20260722-ux-live-queue-1' %}
+{% set asset_rev = '20260722-design-system-2' %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=asset_rev) }}">
 <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 <script defer src="https://unpkg.com/alpinejs@3.14.9/dist/cdn.min.js"></script>

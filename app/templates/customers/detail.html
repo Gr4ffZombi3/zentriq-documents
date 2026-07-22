@@ -1,23 +1,16 @@
 {% extends "base.html" %}
 {% from "ui/icons.html" import icon %}
-{% from "ui/display.html" import badge, card, empty_state %}
+{% from "ui/display.html" import badge, card, empty_state, page_header %}
 {% from "ui/forms.html" import button %}
 {% block title %}{{ customer.name }} - Zentriq Documents{% endblock %}
 {% block content %}
 {% set summary = customer_summary %}
 {% set doc_links = customer_view["document_customers"] %}
 
-<div class="page-shell">
-  <section class="ops-page-header">
-    <div>
-      <p class="ops-page-kicker">Kundenakte</p>
-      <h1 class="ops-page-title">{{ customer.name }}</h1>
-      <p class="ops-page-copy">Stammdaten, zugeordnete Dokumente und alle erkannten Leipziger-Vorgaenge in einer kompakten Akte.</p>
-    </div>
-    <div class="flex flex-wrap items-center gap-3">
-      {{ button('Alle Kunden', href=url_for('customers.list_customers'), variant='secondary', icon_name='arrow-left') }}
-    </div>
-  </section>
+<div class="page-shell page-shell-wide">
+  {% call page_header(customer.name, 'Stammdaten, zugeordnete Dokumente und alle erkannten Leipziger-Vorgänge in einer kompakten Akte.', 'Kundenakte') %}
+    {{ button('Alle Kunden', href=url_for('customers.list_customers'), variant='secondary', icon_name='arrow-left') }}
+  {% endcall %}
 
   <div class="chip-bar">
     {% if customer.date_of_birth %}
@@ -40,36 +33,42 @@
       {{ badge('Nur Namensabgleich', variant='muted') }}
     {% endif %}
     {% if possible_duplicates %}
-      {{ badge('Moegliche Dublette', variant='warning') }}
+      {{ badge('Mögliche Dublette', variant='warning') }}
     {% endif %}
   </div>
 
-  <div class="ops-stat-grid">
-    <article class="ops-stat-card">
-      <span class="ops-stat-label">Dokumente</span>
-      <strong class="ops-stat-value">{{ summary.documents }}</strong>
+  <section class="summary-strip summary-strip-6" aria-label="Kundenzusammenfassung">
+    <article class="summary-metric">
+      <span class="summary-metric-label">Dokumente</span>
+      <strong class="summary-metric-value">{{ summary.documents }}</strong>
+      <p class="summary-metric-copy">Verknüpfte Uploads</p>
     </article>
-    <article class="ops-stat-card">
-      <span class="ops-stat-label">Vorgaenge</span>
-      <strong class="ops-stat-value">{{ summary.cases }}</strong>
+    <article class="summary-metric">
+      <span class="summary-metric-label">Vorgänge</span>
+      <strong class="summary-metric-value">{{ summary.cases }}</strong>
+      <p class="summary-metric-copy">Erkannte Listenzeilen</p>
     </article>
-    <article class="ops-stat-card">
-      <span class="ops-stat-label">Angebote</span>
-      <strong class="ops-stat-value">{{ summary.offers }}</strong>
+    <article class="summary-metric">
+      <span class="summary-metric-label">Angebote</span>
+      <strong class="summary-metric-value">{{ summary.offers }}</strong>
+      <p class="summary-metric-copy">Offene Angebotsfälle</p>
     </article>
-    <article class="ops-stat-card">
-      <span class="ops-stat-label">Abschluesse</span>
-      <strong class="ops-stat-value">{{ summary.closures }}</strong>
+    <article class="summary-metric">
+      <span class="summary-metric-label">Abschlüsse</span>
+      <strong class="summary-metric-value">{{ summary.closures }}</strong>
+      <p class="summary-metric-copy">Mit dokumentiertem Beginn</p>
     </article>
-    <article class="ops-stat-card">
-      <span class="ops-stat-label">Offene Vorgaenge</span>
-      <strong class="ops-stat-value">{{ summary.open_cases }}</strong>
+    <article class="summary-metric">
+      <span class="summary-metric-label">Offene Vorgänge</span>
+      <strong class="summary-metric-value">{{ summary.open_cases }}</strong>
+      <p class="summary-metric-copy">Mit Folgebedarf</p>
     </article>
-    <article class="ops-stat-card">
-      <span class="ops-stat-label">Stornos</span>
-      <strong class="ops-stat-value">{{ summary.stornos }}</strong>
+    <article class="summary-metric">
+      <span class="summary-metric-label">Stornos</span>
+      <strong class="summary-metric-value">{{ summary.stornos }}</strong>
+      <p class="summary-metric-copy">Erkannte Abgänge</p>
     </article>
-  </div>
+  </section>
 
   <div class="grid gap-5 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
     {% call card(padding='p-5 sm:p-6') %}
@@ -116,11 +115,11 @@
           <span class="ops-meta-value">{{ timeline_events | length }}</span>
         </div>
         <div class="ops-meta-item">
-          <span class="ops-meta-label">Dokumentverknuepfungen</span>
+          <span class="ops-meta-label">Dokumentverknüpfungen</span>
           <span class="ops-meta-value">{{ doc_links | length }}</span>
         </div>
         <div class="ops-meta-item">
-          <span class="ops-meta-label">Letzte Aenderung</span>
+          <span class="ops-meta-label">Letzte Änderung</span>
           <span class="ops-meta-value">{{ customer.updated_at.strftime('%d.%m.%Y %H:%M') if customer.updated_at else '-' }}</span>
         </div>
       </div>
@@ -135,7 +134,7 @@
                   {% if duplicate.postal_code %} | {{ duplicate.postal_code }}{% endif %}
                 </p>
               </div>
-              <span class="text-xs text-warning">Pruefen</span>
+              <span class="text-xs text-warning">Prüfen</span>
             </a>
           {% endfor %}
         </div>
@@ -157,7 +156,7 @@
     {% call card(padding='p-5 sm:p-6') %}
       <div class="section-heading">
         <div>
-          <h2 class="section-title">Zugeordnete Vorgange</h2>
+          <h2 class="section-title">Zugeordnete Vorgänge</h2>
           <p class="section-copy">Jede persistierte Listenzeile bleibt mit Dokumentbezug, Status und Rohdaten nachvollziehbar.</p>
         </div>
       </div>
@@ -208,7 +207,7 @@
       </div>
     {% endcall %}
   {% else %}
-    {% call empty_state('Keine zugeordneten Vorgange', 'Dieser Kunde wurde noch in keiner Leipziger Liste erfasst.', 'file-text') %}{% endcall %}
+    {% call empty_state('Keine zugeordneten Vorgänge', 'Dieser Kunde wurde noch in keiner Leipziger Liste erfasst.', 'file-text') %}{% endcall %}
   {% endif %}
 
   <div class="grid gap-5 xl:grid-cols-2">
@@ -216,7 +215,7 @@
       <div class="section-heading">
         <div>
           <h2 class="section-title">Dokumente</h2>
-          <p class="section-copy">Direkte Spruenge in die zugehoerigen Uploads.</p>
+          <p class="section-copy">Direkte Sprünge in die zugehörigen Uploads.</p>
         </div>
       </div>
       {% if doc_links %}
@@ -230,13 +229,13 @@
                   <p class="truncate text-sm font-semibold text-text">{{ doc_customer.document.original_filename }}</p>
                   <p class="mt-1 text-xs text-text-soft">{{ doc_customer.document.uploaded_at.strftime('%d.%m.%Y %H:%M') if doc_customer.document.uploaded_at else '-' }}</p>
                 </div>
-                <span class="text-xs text-primary">Oeffnen</span>
+                <span class="text-xs text-primary">Öffnen</span>
               </a>
             {% endif %}
           {% endfor %}
         </div>
       {% else %}
-        <p class="mt-5 text-sm text-text-muted">Keine direkt verknuepften Dokumente vorhanden.</p>
+        <p class="mt-5 text-sm text-text-muted">Keine direkt verknüpften Dokumente vorhanden.</p>
       {% endif %}
     {% endcall %}
 

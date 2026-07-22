@@ -2,7 +2,7 @@
 protokolliert Aenderungen pro Kunde dauerhaft (ListComparison + ListComparisonEntry). Zwei
 Vergleichsarten (siehe ComparisonKind): TEMPORAL (Default, bisheriges Verhalten - zeitbasiert
 gegen das zuletzt verarbeitete Leipziger-Liste-Dokument desselben Tenants) und OWN_VS_GS (M13 -
-Eigene Liste gegen Geschaeftsstellen-Liste, expliziter previous_document-Override). Rein
+Eigene Liste gegen Geschäftsstellen-Liste, expliziter previous_document-Override). Rein
 additiv - beruehrt weder die Extraktion noch die Recommendation-/Task-Erzeugung."""
 
 from app.extensions import db
@@ -222,3 +222,4 @@ def compare_leipziger_liste(
         setattr(comparison, field, value)
 
     return comparison
+

@@ -165,5 +165,8 @@ def test_document_list_renders_upload_form_with_standard_post_fallback(auth_clie
     assert 'enctype="multipart/form-data"' in html
     assert 'name="csrf_token"' in html
     assert 'name="list_type"' in html
-    assert "Welche Leipziger Liste wird hochgeladen?" in html
+    assert "Welche Liste wird hochgeladen?" in html
     assert "Dokumente einreichen" in html
+    assert "Bitte auswählen" in html
+    assert "PDF hierher ziehen oder Datei auswählen" in html
+    assert "auswaehlen" not in html

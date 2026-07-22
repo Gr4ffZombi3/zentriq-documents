@@ -49,7 +49,7 @@
     }
 
     var file = input && input.files && input.files[0];
-    target.textContent = file ? file.name : "Noch keine Datei ausgewaehlt.";
+    target.textContent = file ? file.name : "Noch keine Datei ausgewählt.";
   }
 
   function toggleDropzone(widget, active) {
@@ -127,14 +127,57 @@
 
   function ensureDocumentListVisible() {
     var list = document.getElementById("document-list");
+    var shell = document.getElementById("document-list-shell");
     var empty = document.getElementById("document-empty-state");
 
     if (list) {
       list.classList.remove("hidden");
     }
 
+    if (shell) {
+      shell.classList.remove("hidden");
+    }
+
     if (empty) {
       empty.remove();
+    }
+  }
+
+  function applyDocumentFilters() {
+    var page = document.querySelector("[data-documents-page]");
+    var searchInput;
+    var filterInput;
+    var emptyState;
+    var rows;
+    var visibleCount = 0;
+    var searchValue;
+    var filterValue;
+
+    if (!page) {
+      return;
+    }
+
+    searchInput = page.querySelector("[data-document-search]");
+    filterInput = page.querySelector("[data-document-filter]");
+    emptyState = document.getElementById("document-filter-empty");
+    rows = page.querySelectorAll("[data-document-row]");
+    searchValue = ((searchInput && searchInput.value) || "").trim().toLocaleLowerCase();
+    filterValue = ((filterInput && filterInput.value) || "").trim();
+
+    Array.prototype.forEach.call(rows, function (row) {
+      var haystack = (row.textContent || "").toLocaleLowerCase();
+      var matchesSearch = !searchValue || haystack.indexOf(searchValue) !== -1;
+      var matchesFilter = !filterValue || row.dataset.documentStatus === filterValue;
+      var visible = matchesSearch && matchesFilter;
+
+      row.classList.toggle("hidden", !visible);
+      if (visible) {
+        visibleCount += 1;
+      }
+    });
+
+    if (emptyState) {
+      emptyState.classList.toggle("hidden", !(rows.length > 0 && visibleCount === 0));
     }
   }
 
@@ -157,6 +200,32 @@
     }
 
     flashUpdatedElement(next);
+    applyDocumentFilters();
+  }
+
+  function initDocumentToolbar(root) {
+    var page = (root || document).querySelector("[data-documents-page]");
+    var searchInput;
+    var filterInput;
+
+    if (!page || page.dataset.documentToolbarBound === "1") {
+      applyDocumentFilters();
+      return;
+    }
+
+    searchInput = page.querySelector("[data-document-search]");
+    filterInput = page.querySelector("[data-document-filter]");
+
+    if (searchInput) {
+      searchInput.addEventListener("input", applyDocumentFilters);
+    }
+
+    if (filterInput) {
+      filterInput.addEventListener("change", applyDocumentFilters);
+    }
+
+    page.dataset.documentToolbarBound = "1";
+    applyDocumentFilters();
   }
 
   function requestJson(url, onSuccess) {
@@ -303,8 +372,8 @@
     setUploadError(widget, "");
     setUploadRuntime(widget, {
       visible: true,
-      stage: "Upload laeuft",
-      copy: "Die Datei wird uebertragen.",
+      stage: "Upload läuft",
+      copy: "Die Datei wird übertragen.",
       percent: 2,
       disabled: true,
     });
@@ -321,8 +390,8 @@
       }
       setUploadRuntime(widget, {
         visible: true,
-        stage: "Upload laeuft",
-        copy: "Die Datei wird uebertragen und direkt vorbereitet.",
+        stage: "Upload läuft",
+        copy: "Die Datei wird übertragen und direkt vorbereitet.",
         percent: percent,
         disabled: true,
       });
@@ -339,7 +408,7 @@
         setUploadRuntime(widget, {
           visible: true,
           stage: "Analyse gestartet",
-          copy: "Das Dokument ist in der Queue und laeuft jetzt im Hintergrund weiter.",
+          copy: "Das Dokument ist in der Queue und läuft jetzt im Hintergrund weiter.",
           percent: 100,
           complete: true,
           disabled: false,
@@ -352,7 +421,7 @@
       setUploadRuntime(widget, {
         visible: true,
         stage: "Upload fehlgeschlagen",
-        copy: "Bitte pruefe Datei und Eingaben und versuche es erneut.",
+        copy: "Bitte prüfe Datei und Eingaben und versuche es erneut.",
         percent: 100,
         error: true,
         disabled: false,
@@ -543,7 +612,7 @@
     var prev = document.createElement("button");
     prev.type = "button";
     prev.className = "table-tools-button";
-    prev.textContent = "Zurueck";
+    prev.textContent = "Zurück";
 
     var pageLabel = document.createElement("span");
     pageLabel.className = "table-tools-page";
@@ -567,7 +636,7 @@
     var emptyCell = document.createElement("td");
     emptyCell.colSpan = headers.length;
     emptyCell.className = "table-tools-empty";
-    emptyCell.textContent = "Keine Eintraege fuer diesen Filter.";
+    emptyCell.textContent = "Keine Einträge für diesen Filter.";
     emptyRow.appendChild(emptyCell);
 
     function render() {
@@ -594,11 +663,12 @@
       }
 
       var totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-      var start = (state.page - 1) * pageSize;
+      var safePage = Math.min(state.page, totalPages);
+      var start = (safePage - 1) * pageSize;
       var end = start + pageSize;
       var visibleSet = new Set(filtered.slice(start, end).map(function (model) { return model.row; }));
 
-      state.page = Math.min(state.page, totalPages);
+      state.page = safePage;
       filtered.forEach(function (model) {
         body.appendChild(model.row);
       });
@@ -614,7 +684,7 @@
         emptyRow.remove();
       }
 
-      summary.textContent = filtered.length + " / " + rowModels.length + " Eintraege";
+      summary.textContent = filtered.length + " / " + rowModels.length + " Einträge";
       pageLabel.textContent = "Seite " + state.page + " / " + totalPages;
       prev.disabled = state.page <= 1;
       next.disabled = state.page >= totalPages;
@@ -658,6 +728,7 @@
   function boot(root) {
     initUploadWidgets(root);
     initTableEnhancers(root);
+    initDocumentToolbar(root);
     startDocumentsPolling();
     startDetailPolling();
   }

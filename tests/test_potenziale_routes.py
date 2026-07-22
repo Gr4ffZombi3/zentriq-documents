@@ -49,10 +49,11 @@ def test_potenziale_shows_document_selector_and_translated_status(auth_client, d
     resp = auth_client.get("/potenziale")
     body = resp.get_data(as_text=True)
 
-    assert "Leipziger Liste auswaehlen" in body
+    assert "Leipziger Liste auswählen" in body
     assert "Angebot Kunde" in body
     assert "Angebot offen" in body
     assert document.original_filename in body
+    assert "auswaehlen" not in body
 
 
 def test_potenziale_document_selector_limits_rows_to_selected_document(auth_client, db, tenant):

@@ -15,8 +15,8 @@ def test_cockpit_renders_with_no_data(auth_client, db):
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
     assert "Tagescockpit" in body
-    assert "Keine offene Prioritaet" in body
-    assert "Keine Rueckrufe geplant" in body
+    assert "Keine offene Priorität" in body
+    assert "Keine Rückrufe geplant" in body
 
 
 def test_cockpit_shows_own_top_priority_task_and_call_today(auth_client, db, tenant, user):

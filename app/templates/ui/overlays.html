@@ -28,7 +28,7 @@
         {{ icon(v.icon_name, class='w-4 h-4') }}
       </span>
       <p class="flex-1 text-sm leading-6 text-text">{{ message }}</p>
-      <button type="button" x-on:click="show = false" class="topbar-icon-button h-8 w-8 border-transparent bg-transparent text-text-soft hover:bg-bg" aria-label="Schliessen">
+      <button type="button" x-on:click="show = false" class="topbar-icon-button h-8 w-8 border-transparent bg-transparent text-text-soft hover:bg-bg" aria-label="Schließen">
         {{ icon('x', class='w-4 h-4') }}
       </button>
     </div>
@@ -50,7 +50,7 @@
   <div class="surface-card glass-surface relative w-full max-w-xl rounded-[1.75rem] p-6 shadow-soft-lg" x-transition>
     <div class="mb-5 flex items-center justify-between gap-4">
       <h2 class="text-xl font-semibold tracking-tight text-text">{{ title }}</h2>
-      <button type="button" x-on:click="open = false" class="topbar-icon-button" aria-label="Schliessen">
+      <button type="button" x-on:click="open = false" class="topbar-icon-button" aria-label="Schließen">
         {{ icon('x', class='w-4 h-4') }}
       </button>
     </div>

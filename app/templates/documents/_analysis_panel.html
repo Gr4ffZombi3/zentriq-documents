@@ -1,0 +1,121 @@
+{% from "ui/icons.html" import icon %}
+{% from "ui/display.html" import badge, spinner, status_badge %}
+{% from "ui/forms.html" import button %}
+{% set has_leipziger_analysis = document_analysis and document_analysis.selected_document %}
+{% set progress = build_document_progress(document) %}
+{% set timings = progress.stage_durations or {} %}
+
+<div class="section-heading">
+  <div>
+    <h2 class="section-title">KI-Auswertung</h2>
+    <p class="section-copy">Status, Live-Fortschritt und Ergebnisse ohne Seitenreload.</p>
+  </div>
+  {{ status_badge(document.status) }}
+</div>
+
+<section class="analysis-progress-panel {{ 'analysis-progress-panel-failed' if progress.state == 'failed' else '' }}">
+  <div class="analysis-progress-header">
+    <div class="min-w-0">
+      <p class="analysis-progress-kicker">Live-Status</p>
+      <h3 class="analysis-progress-title">{{ progress.headline }}</h3>
+      {% if progress.detail %}
+        <p class="analysis-progress-copy">{{ progress.detail }}</p>
+      {% endif %}
+    </div>
+    <span class="analysis-progress-value">{{ progress.percent }}%</span>
+  </div>
+
+  <div class="analysis-progress-bar" aria-hidden="true">
+    <span style="width: {{ progress.percent }}%"></span>
+  </div>
+
+  <ol class="analysis-step-list" aria-label="Analysefortschritt">
+    {% for step in progress.steps %}
+      <li class="analysis-step analysis-step-{{ step.state }}">
+        <span class="analysis-step-icon">
+          {% if step.state == 'done' %}
+            {{ icon('check-circle', class='w-4 h-4') }}
+          {% elif step.state == 'active' %}
+            {{ spinner('w-4 h-4') }}
+          {% elif step.state == 'failed' %}
+            {{ icon('alert-circle', class='w-4 h-4') }}
+          {% else %}
+            {{ icon('clock', class='w-4 h-4') }}
+          {% endif %}
+        </span>
+        <div class="min-w-0">
+          <p class="analysis-step-label">{{ step.label }}</p>
+          <p class="analysis-step-copy">{{ step.description }}</p>
+        </div>
+      </li>
+    {% endfor %}
+  </ol>
+
+  {% if timings %}
+    <div class="analysis-timing-chips">
+      {% if timings.get('ocr') %}<span class="meta-chip">OCR {{ '%.1fs'|format(timings.get('ocr', 0) / 1000) }}</span>{% endif %}
+      {% if timings.get('parsing') %}<span class="meta-chip">Parser {{ '%.1fs'|format(timings.get('parsing', 0) / 1000) }}</span>{% endif %}
+      {% if timings.get('ai') %}<span class="meta-chip">KI {{ '%.1fs'|format(timings.get('ai', 0) / 1000) }}</span>{% endif %}
+      {% if timings.get('db') %}<span class="meta-chip">DB {{ '%.1fs'|format(timings.get('db', 0) / 1000) }}</span>{% endif %}
+      {% if timings.get('total') %}<span class="meta-chip">Gesamt {{ '%.1fs'|format(timings.get('total', 0) / 1000) }}</span>{% endif %}
+    </div>
+  {% endif %}
+</section>
+
+{% if document.status.value == 'done' or has_leipziger_analysis %}
+  {% if document.status.value == 'failed' %}
+    <div class="mt-6 rounded-[1.35rem] border border-warning/20 bg-warning/8 p-5">
+      <div class="flex flex-wrap items-center gap-3 text-sm text-warning-text">
+        {{ icon('alert-triangle', class='w-4 h-4') }}
+        <span class="font-semibold">{{ document.error_message or 'Analyse nur teilweise abgeschlossen.' }}</span>
+      </div>
+      <form method="post" action="{{ url_for('documents.retry', document_id=document.id) }}" class="mt-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {{ button('Erneut analysieren', type='submit', icon_name='refresh-cw', variant='secondary') }}
+      </form>
+    </div>
+  {% endif %}
+
+  <div class="mt-6">
+    {% if document.doc_type and document.doc_type.value == 'leipziger_liste' %}
+      {% include "documents/_leipziger_liste_analysis.html" %}
+    {% else %}
+      {% include "documents/_generic_analysis.html" %}
+    {% endif %}
+  </div>
+
+  {% if document.recommendations %}
+    <div class="mt-6">
+      {% include "documents/_recommendations.html" %}
+    </div>
+  {% endif %}
+
+  {% if document.raw_json %}
+    <details class="group mt-6 overflow-hidden rounded-[1.25rem] border border-border bg-surface-muted">
+      <summary class="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold text-text">
+        Rohdaten (JSON)
+        <span class="text-text-muted transition duration-200 group-open:rotate-90">{{ icon('chevron-right', class='w-4 h-4') }}</span>
+      </summary>
+      <pre class="overflow-x-auto border-t border-border p-4 text-xs leading-6 text-text-muted">{{ document.raw_json | tojson(indent=2) }}</pre>
+    </details>
+  {% endif %}
+{% elif document.status.value == 'failed' %}
+  <div class="mt-6 rounded-[1.35rem] border border-error/20 bg-error/5 p-5">
+    <p class="flex items-center gap-2 text-sm font-semibold text-error">
+      {{ icon('alert-circle', class='w-4 h-4') }}
+      {{ document.error_message or 'Unbekannter Fehler.' }}
+    </p>
+    <form method="post" action="{{ url_for('documents.retry', document_id=document.id) }}" class="mt-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {{ button('Erneut versuchen', type='submit', icon_name='refresh-cw', variant='secondary') }}
+    </form>
+  </div>
+{% else %}
+  <div class="analysis-live-note mt-6">
+    <span class="analysis-live-note-icon">{{ icon('info', class='w-4 h-4') }}</span>
+    <div>
+      <p class="text-sm font-semibold text-text">Die Oberflaeche bleibt nutzbar.</p>
+      <p class="mt-1 text-sm text-text-muted">Du kannst waehrend der Analyse weiter in Dokumenten, Kunden und dem Dashboard arbeiten.</p>
+    </div>
+  </div>
+{% endif %}

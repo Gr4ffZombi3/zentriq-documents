@@ -11,6 +11,7 @@ from app.services.analysis.layout import detect_layout
 from app.services.analysis.list_scope_detection import detect_list_scope
 from app.services.analysis.report import build_analysis_report
 from app.services.analysis.tables import detect_tables
+from app.services.document_progress import STEP_KEYS, make_progress_snapshot, merge_progress_into_extra_data
 from app.services.documents import apply_extraction, apply_leipziger_liste_extraction
 from app.services.list_comparison import compare_leipziger_liste, find_paired_gs_or_own_document
 from app.services.llm.extraction import extract_document_data, extract_leipziger_liste_rows
@@ -55,6 +56,61 @@ def _run_pipeline(document: Document) -> None:
     # erneuter Insert den Unique-Constraint auf (tenant_id, document_id, customer_id).
     # AnalysisRun wird bewusst NICHT zurueckgesetzt - jeder Versuch bleibt als eigene Zeile
     # in der Analyse-Historie erhalten (M12).
+    stage_durations: dict[str, float] = {"db": 0.0}
+    pipeline_start = time.monotonic()
+
+    def _commit_with_timing(label: str) -> None:
+        commit_start = time.monotonic()
+        db.session.commit()
+        duration_ms = round((time.monotonic() - commit_start) * 1000, 1)
+        stage_durations["db"] = round(stage_durations.get("db", 0.0) + duration_ms, 1)
+        current_app.logger.debug(
+            "document.analysis.db_commit tenant_id=%s document_id=%s step=%s duration_ms=%s",
+            document.tenant_id,
+            document.id,
+            label,
+            duration_ms,
+        )
+
+    def _set_progress(
+        *,
+        completed: list[str] | tuple[str, ...] | None = None,
+        active: str | None = None,
+        failed: str | None = None,
+        percent: int,
+        headline: str,
+        detail: str,
+        state: str = "running",
+    ) -> None:
+        document.extra_data = merge_progress_into_extra_data(
+            document.extra_data,
+            make_progress_snapshot(
+                completed=completed,
+                active=active,
+                failed=failed,
+                percent=percent,
+                headline=headline,
+                detail=detail,
+                state=state,
+                stage_durations=stage_durations,
+            ),
+        )
+
+    def _log_timings(event: str) -> None:
+        total_ms = round((time.monotonic() - pipeline_start) * 1000, 1)
+        current_app.logger.info(
+            "document.analysis.timings tenant_id=%s document_id=%s event=%s ocr_ms=%s parsing_ms=%s ai_ms=%s post_processing_ms=%s db_ms=%s total_ms=%s",
+            document.tenant_id,
+            document.id,
+            event,
+            stage_durations.get("ocr"),
+            stage_durations.get("parsing"),
+            stage_durations.get("ai"),
+            stage_durations.get("post_processing"),
+            stage_durations.get("db"),
+            total_ms,
+        )
+
     document.recommendations = []
     document.document_customers = []
     document.tasks = []
@@ -63,7 +119,14 @@ def _run_pipeline(document: Document) -> None:
     document.extra_data = None
     document.processed_at = None
     document.status = DocStatus.OCR_PROCESSING
-    db.session.commit()
+    _set_progress(
+        completed=["uploaded"],
+        active="ocr",
+        percent=18,
+        headline="Analyse gestartet",
+        detail="OCR wird vorbereitet und startet im Hintergrund.",
+    )
+    _commit_with_timing("pipeline_reset")
     current_app.logger.info(
         "document.analysis.started tenant_id=%s document_id=%s status=%s",
         document.tenant_id,
@@ -80,10 +143,7 @@ def _run_pipeline(document: Document) -> None:
         status=AnalysisRunStatus.RUNNING,
     )
     db.session.add(run)
-    db.session.commit()
-
-    stage_durations: dict[str, float] = {}
-    pipeline_start = time.monotonic()
+    _commit_with_timing("analysis_run_created")
 
     def _finish_run(
         status: AnalysisRunStatus,
@@ -91,16 +151,20 @@ def _run_pipeline(document: Document) -> None:
         summary: dict | None = None,
         overall_confidence: float | None = None,
     ) -> None:
+        total_ms = round((time.monotonic() - pipeline_start) * 1000, 1)
         run.status = status
         run.finished_at = datetime.now(timezone.utc)
-        run.duration_ms = int((time.monotonic() - pipeline_start) * 1000)
-        run.stage_durations = dict(stage_durations)
+        run.duration_ms = int(total_ms)
+        run.stage_durations = {
+            **stage_durations,
+            "total": total_ms,
+        }
         run.error_message = error_message
         if summary is not None:
             run.summary = summary
         if overall_confidence is not None:
             run.overall_confidence = overall_confidence
-        db.session.commit()
+        _commit_with_timing("analysis_run_finished")
 
     stage_start = time.monotonic()
     try:
@@ -109,23 +173,37 @@ def _run_pipeline(document: Document) -> None:
         db.session.rollback()
         document.status = DocStatus.FAILED
         document.error_message = f"OCR fehlgeschlagen: {exc}"
-        db.session.commit()
+        _set_progress(
+            completed=["uploaded"],
+            failed="ocr",
+            percent=100,
+            headline="OCR fehlgeschlagen",
+            detail=document.error_message,
+            state="failed",
+        )
+        _commit_with_timing("ocr_failed")
         current_app.logger.exception(
             "document.analysis.ocr_failed tenant_id=%s document_id=%s",
             document.tenant_id,
             document.id,
         )
         _finish_run(AnalysisRunStatus.FAILED, error_message=document.error_message)
+        _log_timings("ocr_failed")
         return
     stage_durations["ocr"] = round((time.monotonic() - stage_start) * 1000, 1)
 
     document.raw_text = raw_text
     document.ocr_engine_used = engine_used
     document.ocr_confidence = confidence
-    # M12: OCR_DONE wird jetzt tatsaechlich erreicht (war zuvor nur im Enum definiert, nie
-    # gesetzt) - die UI hat dafuer bereits ein fertiges Badge, keine Template-Aenderung noetig.
     document.status = DocStatus.OCR_DONE
-    db.session.commit()
+    _set_progress(
+        completed=["uploaded", "ocr"],
+        active="parser",
+        percent=52,
+        headline="OCR abgeschlossen",
+        detail="Vertragsdaten, Tabellen und Struktur werden erkannt.",
+    )
+    _commit_with_timing("ocr_done")
     current_app.logger.info(
         "document.analysis.ocr_done tenant_id=%s document_id=%s engine=%s confidence=%s",
         document.tenant_id,
@@ -141,9 +219,17 @@ def _run_pipeline(document: Document) -> None:
     stage_start = time.monotonic()
     table_info = detect_tables(raw_text)
     stage_durations["tables"] = round((time.monotonic() - stage_start) * 1000, 1)
+    stage_durations["parsing"] = round(stage_durations["layout"] + stage_durations["tables"], 1)
 
     document.status = DocStatus.AI_PROCESSING
-    db.session.commit()
+    _set_progress(
+        completed=["uploaded", "ocr", "parser"],
+        active="ai",
+        percent=74,
+        headline="Struktur erkannt",
+        detail="Die KI erstellt jetzt die eigentliche Auswertung.",
+    )
+    _commit_with_timing("ai_started")
     current_app.logger.info(
         "document.analysis.ai_started tenant_id=%s document_id=%s status=%s",
         document.tenant_id,
@@ -154,8 +240,44 @@ def _run_pipeline(document: Document) -> None:
     stage_start = time.monotonic()
     try:
         extraction = extract_document_data(raw_text)
-        if extraction.doc_type == DocType.LEIPZIGER_LISTE:
-            leipziger_extraction = extract_leipziger_liste_rows(page_texts)
+        leipziger_extraction = extract_leipziger_liste_rows(page_texts) if extraction.doc_type == DocType.LEIPZIGER_LISTE else None
+    except Exception as exc:
+        stage_durations["ai"] = round((time.monotonic() - stage_start) * 1000, 1)
+        stage_durations["extraction_and_rules"] = stage_durations["ai"]
+        db.session.rollback()
+        document.status = DocStatus.FAILED
+        document.error_message = f"KI-Analyse fehlgeschlagen: {exc}"
+        _set_progress(
+            completed=["uploaded", "ocr", "parser"],
+            failed="ai",
+            percent=100,
+            headline="KI-Analyse fehlgeschlagen",
+            detail=document.error_message,
+            state="failed",
+        )
+        _commit_with_timing("ai_failed")
+        current_app.logger.exception(
+            "document.analysis.ai_failed tenant_id=%s document_id=%s",
+            document.tenant_id,
+            document.id,
+        )
+        _finish_run(AnalysisRunStatus.FAILED, error_message=document.error_message)
+        _log_timings("ai_failed")
+        return
+    stage_durations["ai"] = round((time.monotonic() - stage_start) * 1000, 1)
+
+    _set_progress(
+        completed=["uploaded", "ocr", "parser", "ai"],
+        active="grouping",
+        percent=88,
+        headline="KI-Auswertung fertig",
+        detail="Kunden, Empfehlungen und Vergleichsdaten werden gespeichert.",
+    )
+    _commit_with_timing("grouping_started")
+
+    stage_start = time.monotonic()
+    try:
+        if extraction.doc_type == DocType.LEIPZIGER_LISTE and leipziger_extraction is not None:
             apply_stats = apply_leipziger_liste_extraction(document, leipziger_extraction)
             analysis_meta = _build_leipziger_analysis_meta(page_texts, leipziger_extraction, apply_stats)
             document.extra_data = {
@@ -178,29 +300,61 @@ def _run_pipeline(document: Document) -> None:
         else:
             apply_extraction(document, extraction)
     except Exception as exc:
-        stage_durations["extraction_and_rules"] = round((time.monotonic() - stage_start) * 1000, 1)
+        stage_durations["post_processing"] = round((time.monotonic() - stage_start) * 1000, 1)
+        stage_durations["extraction_and_rules"] = round(
+            stage_durations.get("ai", 0.0) + stage_durations["post_processing"],
+            1,
+        )
         db.session.rollback()
         document.status = DocStatus.FAILED
-        document.error_message = f"KI-Analyse fehlgeschlagen: {exc}"
-        db.session.commit()
+        document.error_message = f"Speichern der Analyse fehlgeschlagen: {exc}"
+        _set_progress(
+            completed=["uploaded", "ocr", "parser", "ai"],
+            failed="grouping",
+            percent=100,
+            headline="Nachbearbeitung fehlgeschlagen",
+            detail=document.error_message,
+            state="failed",
+        )
+        _commit_with_timing("post_processing_failed")
         current_app.logger.exception(
-            "document.analysis.ai_failed tenant_id=%s document_id=%s",
+            "document.analysis.post_processing_failed tenant_id=%s document_id=%s",
             document.tenant_id,
             document.id,
         )
         _finish_run(AnalysisRunStatus.FAILED, error_message=document.error_message)
+        _log_timings("post_processing_failed")
         return
-    stage_durations["extraction_and_rules"] = round((time.monotonic() - stage_start) * 1000, 1)
+    stage_durations["post_processing"] = round((time.monotonic() - stage_start) * 1000, 1)
+    stage_durations["extraction_and_rules"] = round(
+        stage_durations.get("ai", 0.0) + stage_durations["post_processing"],
+        1,
+    )
 
     leipziger_meta = (document.extra_data or {}).get("leipziger_analysis")
     if leipziger_meta and not leipziger_meta["is_complete"]:
         document.status = DocStatus.FAILED
-        document.error_message = str(leipziger_meta["completion_label"]).replace("â€“", "-").replace("–", "-")
+        document.error_message = str(leipziger_meta["completion_label"]).replace("Ã¢â‚¬â€œ", "-").replace("â€“", "-")
+        _set_progress(
+            completed=["uploaded", "ocr", "parser", "ai", "grouping"],
+            failed="done",
+            percent=100,
+            headline="Analyse teilweise abgeschlossen",
+            detail=document.error_message,
+            state="failed",
+        )
     else:
         document.status = DocStatus.DONE
         document.error_message = None
+        _set_progress(
+            completed=STEP_KEYS,
+            percent=100,
+            headline="Analyse abgeschlossen",
+            detail="Die Ergebnisse stehen jetzt fuer Review und Navigation bereit.",
+            state="done",
+        )
     document.processed_at = datetime.now(timezone.utc)
-    db.session.commit()
+    _commit_with_timing("analysis_completed")
     current_app.logger.info(
         "document.analysis.completed tenant_id=%s document_id=%s status=%s duration_ms=%s",
         document.tenant_id,
@@ -226,6 +380,7 @@ def _run_pipeline(document: Document) -> None:
         },
         overall_confidence=_compute_overall_confidence(document),
     )
+    _log_timings("completed")
 
 
 def _build_leipziger_analysis_meta(page_texts: list[str], extraction, apply_stats: dict) -> dict:
@@ -241,9 +396,9 @@ def _build_leipziger_analysis_meta(page_texts: list[str], extraction, apply_stat
     is_complete = processed_pages == total_pages and not failed_pages
 
     if is_complete:
-        completion_label = f"Vollstaendig ausgewertet – {processed_pages} von {total_pages} Seiten verarbeitet"
+        completion_label = f"Vollstaendig ausgewertet - {processed_pages} von {total_pages} Seiten verarbeitet"
     else:
-        completion_label = f"Teilweise ausgewertet – {processed_pages} von {total_pages} Seiten verarbeitet"
+        completion_label = f"Teilweise ausgewertet - {processed_pages} von {total_pages} Seiten verarbeitet"
 
     return {
         "total_pages": total_pages,

@@ -37,6 +37,29 @@ def test_upload_valid_pdf_creates_document_and_redirects(auth_client, db, user):
     assert document.customer.assigned_user_id == user.id
 
 
+def test_async_upload_returns_json_and_initial_progress(auth_client, db, monkeypatch):
+    pdf_bytes = make_pdf_bytes()
+    monkeypatch.setattr("app.blueprints.upload.routes.process_document.delay", lambda document_id: None)
+
+    resp = auth_client.post(
+        "/upload",
+        data={"file": (io.BytesIO(pdf_bytes), "Queue.pdf"), "list_type": "other"},
+        headers={"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"},
+        content_type="multipart/form-data",
+    )
+
+    assert resp.status_code == 201
+    payload = resp.get_json()
+    assert payload["status"] == "pending"
+    assert "Queue.pdf" in payload["row_html"]
+    assert "Gesamt" in payload["summary_html"]
+
+    document = Document.query.first()
+    assert document is not None
+    assert document.extra_data["analysis_progress"]["percent"] == 12
+    assert document.extra_data["analysis_progress"]["headline"] == "Upload abgeschlossen"
+
+
 def test_upload_with_manual_list_type_selection_sets_type_and_scope(auth_client, db):
     pdf_bytes = make_pdf_bytes()
     resp = auth_client.post(
@@ -104,6 +127,32 @@ def test_document_list_and_detail_and_file_serving(auth_client, db):
     file_resp = auth_client.get(f"/documents/{document.id}/file")
     assert file_resp.status_code == 200
     assert file_resp.mimetype == "application/pdf"
+
+
+def test_document_live_endpoints_render_partial_updates(auth_client, db, monkeypatch):
+    pdf_bytes = make_pdf_bytes()
+    monkeypatch.setattr("app.blueprints.upload.routes.process_document.delay", lambda document_id: None)
+
+    auth_client.post(
+        "/upload",
+        data={"file": (io.BytesIO(pdf_bytes), "Live.pdf"), "list_type": "other"},
+        headers={"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"},
+        content_type="multipart/form-data",
+    )
+    document = Document.query.first()
+
+    list_resp = auth_client.get(f"/documents/live?ids={document.id}")
+    assert list_resp.status_code == 200
+    list_payload = list_resp.get_json()
+    assert list_payload["rows"][0]["id"] == document.id
+    assert "Live.pdf" in list_payload["rows"][0]["html"]
+
+    detail_resp = auth_client.get(f"/documents/{document.id}/live")
+    assert detail_resp.status_code == 200
+    detail_payload = detail_resp.get_json()
+    assert detail_payload["status"] == "pending"
+    assert "Live-Status" in detail_payload["analysis_html"]
+    assert "Pipeline-Zeiten" not in detail_payload["history_html"]
 
 
 def test_document_list_renders_upload_form_with_standard_post_fallback(auth_client):

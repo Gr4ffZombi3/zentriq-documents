@@ -3,6 +3,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.celery_app import make_celery
 from app.extensions import csrf, db, login_manager, migrate
+from app.services.document_progress import build_document_progress, is_document_active_status
 from app.tenancy import (
     begin_request_tenant_scope,
     bypass_tenant_scope,
@@ -60,6 +61,8 @@ def create_app(config_object=None):
     app.register_blueprint(recommendations_bp)
     app.register_blueprint(settings_bp)
     app.register_blueprint(tasks_bp)
+    app.jinja_env.globals["build_document_progress"] = build_document_progress
+    app.jinja_env.globals["is_document_active_status"] = is_document_active_status
 
     @login_manager.user_loader
     def load_user(user_id):

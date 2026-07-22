@@ -3,13 +3,13 @@ from datetime import date
 from app.extensions import db
 from app.models import DocStatus, Document, DocumentCustomer
 from app.models.enums import DocType, ListScope, ListType, TimelineEventType
-from app.services.customers import CustomerMatcher, normalize_customer_name
 from app.services.analysis.business_rules import (
     count_offer_occurrences,
     create_advanced_recommendations,
     customer_has_ever_closed,
 )
 from app.services.analysis.validation import score_extraction, score_leipziger_liste_row
+from app.services.customers import CustomerMatcher, normalize_customer_name
 from app.services.llm.classification import compute_document_flags
 from app.services.llm.recommendations import create_recommendations
 from app.services.llm.schemas import DocumentExtraction, ExtractedCustomer, LeipzigerListeExtraction
@@ -25,6 +25,7 @@ def create_document(
     uploaded_by_user_id: int | None = None,
     list_scope: ListScope | None = None,
     list_type: ListType | None = None,
+    extra_data: dict | None = None,
 ) -> Document:
     document = Document(
         filename=stored_filename,
@@ -37,6 +38,7 @@ def create_document(
         # Erkennung in der Pipeline greift dann nicht mehr (siehe document_tasks.py).
         list_scope=list_scope,
         list_type=list_type,
+        extra_data=extra_data,
     )
     db.session.add(document)
     db.session.commit()

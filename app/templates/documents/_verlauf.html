@@ -1,5 +1,7 @@
 {% from "ui/icons.html" import icon %}
-{% from "ui/display.html" import card %}
+{% from "ui/display.html" import card, status_badge %}
+{% set progress = build_document_progress(document) %}
+{% set timings = progress.stage_durations or {} %}
 {% call card(padding='p-6 sm:p-7') %}
   <div class="section-heading">
     <div>
@@ -21,7 +23,7 @@
     </div>
     <div class="info-item">
       <dt>Bearbeitungsstatus</dt>
-      <dd>{{ document.status.value }}</dd>
+      <dd>{{ status_badge(document.status) }}</dd>
     </div>
     <div class="info-item">
       <dt>OCR-Engine</dt>
@@ -42,4 +44,18 @@
       </div>
     {% endif %}
   </dl>
+
+  {% if timings %}
+    <div class="mt-6">
+      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-soft">Pipeline-Zeiten</p>
+      <div class="chip-bar mt-3">
+        {% if timings.get('ocr') %}<span class="meta-chip">OCR {{ '%.1fs'|format(timings.get('ocr', 0) / 1000) }}</span>{% endif %}
+        {% if timings.get('parsing') %}<span class="meta-chip">Parser {{ '%.1fs'|format(timings.get('parsing', 0) / 1000) }}</span>{% endif %}
+        {% if timings.get('ai') %}<span class="meta-chip">KI {{ '%.1fs'|format(timings.get('ai', 0) / 1000) }}</span>{% endif %}
+        {% if timings.get('post_processing') %}<span class="meta-chip">Nachbereitung {{ '%.1fs'|format(timings.get('post_processing', 0) / 1000) }}</span>{% endif %}
+        {% if timings.get('db') %}<span class="meta-chip">DB {{ '%.1fs'|format(timings.get('db', 0) / 1000) }}</span>{% endif %}
+        {% if timings.get('total') %}<span class="meta-chip">Gesamt {{ '%.1fs'|format(timings.get('total', 0) / 1000) }}</span>{% endif %}
+      </div>
+    </div>
+  {% endif %}
 {% endcall %}

@@ -1,19 +1,21 @@
 {% from "ui/icons.html" import icon %}
-{% from "ui/display.html" import progressbar %}
 
 <div id="upload-widget" data-upload-widget>
   {% set selected_list_type = request.form.get('list_type', '') %}
-  <form data-upload-form action="{{ url_for('upload.upload_document') }}" method="post" enctype="multipart/form-data"
-        hx-post="{{ url_for('upload.upload_document') }}" hx-encoding="multipart/form-data"
-        hx-target="#upload-widget" hx-swap="outerHTML" hx-indicator="#upload-progress"
-        class="upload-dropzone upload-widget-shell p-5 sm:p-6 lg:p-7">
+  <form
+    data-upload-form
+    action="{{ url_for('upload.upload_document') }}"
+    method="post"
+    enctype="multipart/form-data"
+    class="upload-dropzone upload-widget-shell p-5 sm:p-6 lg:p-7"
+  >
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="flex flex-col gap-5">
       <div class="upload-widget-header">
         <div class="max-w-2xl">
           <span class="page-eyebrow">Dokument-Upload</span>
           <h2 class="upload-widget-title">Leipziger Liste hochladen</h2>
-          <p class="upload-widget-copy">Ein Dokument, eine klare Einordnung, dann direkt in die Analyse. Der bestehende Upload bleibt erhalten, die Oberflaeche wird nur kompakter und listenorientierter.</p>
+          <p class="upload-widget-copy">Datei auswaehlen, sofort hochladen und den Live-Status direkt in der Queue verfolgen - ohne extra Detail- oder Warteseite.</p>
         </div>
 
         <div class="upload-widget-aside">
@@ -38,11 +40,12 @@
           </span>
           <div>
             <p class="text-base font-semibold tracking-tight text-text sm:text-lg">PDF hierher ziehen oder Datei auswaehlen</p>
-            <p class="mt-2 text-sm leading-7 text-text-muted">Der Dateidialog bleibt der Standard-Fallback. Nach dem Upload startet die bestehende Analyse-Pipeline automatisch.</p>
+            <p class="mt-2 text-sm leading-7 text-text-muted">Nach der Auswahl startet der Upload sofort. Das Dokument landet direkt in der Liste und die Analyse laeuft im Hintergrund weiter.</p>
           </div>
           <div class="chip-bar justify-center">
             <span class="meta-chip">Nur PDF-Dateien</span>
-            <span class="meta-chip">Keine zweite Upload-Seite</span>
+            <span class="meta-chip">Kein Seitenreload</span>
+            <span class="meta-chip">Live-Status</span>
           </div>
         </div>
       </label>
@@ -55,37 +58,46 @@
           <p class="mt-2 truncate text-sm font-medium text-text" data-upload-filename>Noch keine Datei ausgewaehlt.</p>
         </div>
         <div class="chip-bar">
-          <span class="meta-chip">{{ icon('scan-line', class='h-3.5 w-3.5') }}OCR + KI</span>
+          <span class="meta-chip">{{ icon('search', class='h-3.5 w-3.5') }}OCR + KI</span>
           <span class="meta-chip">{{ icon('list-checks', class='h-3.5 w-3.5') }}Listenanalyse</span>
         </div>
-        <button type="submit" class="btn btn-primary h-11 px-5 text-sm whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg">
+        <button
+          type="submit"
+          data-upload-submit
+          class="btn btn-primary h-11 px-5 text-sm whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+        >
           {{ icon('upload', class='w-[1.05rem] h-[1.05rem]') }}
           Dokumente einreichen
         </button>
       </div>
 
-      <div class="flex flex-col gap-3 rounded-[1.15rem] border border-border/80 bg-surface/50 px-4 py-3">
-        <div class="flex items-center justify-between gap-3">
-          <p class="text-sm font-semibold text-text">Nach dem Upload</p>
-          <span class="meta-chip">Bestehender Flow</span>
+      <div class="upload-runtime-panel hidden" data-upload-runtime aria-live="polite">
+        <div class="upload-runtime-header">
+          <div>
+            <p class="upload-runtime-kicker">Live-Upload</p>
+            <p class="upload-runtime-stage" data-upload-stage>Bereit</p>
+          </div>
+          <span class="upload-runtime-percent" data-upload-percent>0%</span>
         </div>
-        <div class="grid gap-2 text-sm text-text-muted sm:grid-cols-3">
-          <span class="upload-step-chip">1. Speicherung</span>
-          <span class="upload-step-chip">2. Analyse starten</span>
-          <span class="upload-step-chip">3. Ergebnis pruefen</span>
+        <div class="upload-runtime-bar" aria-hidden="true">
+          <span data-upload-progress-bar></span>
         </div>
+        <p class="upload-runtime-copy" data-upload-copy>Die Datei wird direkt in die Dokumentenliste eingereiht.</p>
       </div>
 
-      <div id="upload-progress" class="htmx-indicator">
-        {{ progressbar() }}
-        <p class="mt-3 text-sm text-text-muted">Wird hochgeladen und vorbereitet...</p>
+      <div class="grid gap-2 text-sm text-text-muted sm:grid-cols-3">
+        <span class="upload-step-chip">1. Upload startet sofort</span>
+        <span class="upload-step-chip">2. Dokument erscheint direkt in der Liste</span>
+        <span class="upload-step-chip">3. Analyse laeuft im Hintergrund weiter</span>
       </div>
     </div>
   </form>
-  {% if error %}
-    <p class="mt-4 flex items-center gap-2 text-sm text-error">
-      {{ icon('alert-circle', class='w-4 h-4') }}
-      {{ error }}
-    </p>
-  {% endif %}
+
+  <p
+    data-upload-error
+    class="mt-4 {{ '' if error else 'hidden' }} flex items-center gap-2 text-sm text-error"
+  >
+    {{ icon('alert-circle', class='w-4 h-4') }}
+    <span>{{ error or '' }}</span>
+  </p>
 </div>

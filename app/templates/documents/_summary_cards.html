@@ -1,0 +1,8 @@
+{% from "ui/display.html" import stat_card %}
+
+<div class="stat-grid stat-grid-4">
+  {{ stat_card('Gesamt', summary.total, icon_name='file-text', variant='info', meta='Dokumente in dieser Ansicht', tone='strong') }}
+  {{ stat_card('In Arbeit', summary.active, icon_name='loader-circle', variant='info', meta='OCR oder KI laufen') }}
+  {{ stat_card('Bereit', summary.done, icon_name='check-circle', variant='success', meta='Fuer Review und Folgearbeit') }}
+  {{ stat_card('Fehler', summary.failed, icon_name='alert-circle', variant='danger', meta='Brauchen Nacharbeit') }}
+</div>

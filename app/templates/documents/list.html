@@ -1,45 +1,34 @@
 {% extends "base.html" %}
-{% from "ui/display.html" import page_header, empty_state, stat_card %}
+{% from "ui/display.html" import empty_state, page_header %}
 {% from "ui/forms.html" import button %}
-{% block title %}Dokumente – Zentriq Documents{% endblock %}
+{% block title %}Dokumente - Zentriq Documents{% endblock %}
 {% block content %}
-<div class="page-shell">
-  {% set ns = namespace(active=0, done=0, failed=0) %}
-  {% for document in documents %}
-    {% if document.status.value in ['pending', 'ocr_processing', 'ocr_done', 'ai_processing'] %}
-      {% set ns.active = ns.active + 1 %}
-    {% elif document.status.value == 'done' %}
-      {% set ns.done = ns.done + 1 %}
-    {% elif document.status.value == 'failed' %}
-      {% set ns.failed = ns.failed + 1 %}
-    {% endif %}
-  {% endfor %}
-
+<div class="page-shell" data-documents-page data-live-url="{{ url_for('documents.live_documents') }}">
   {% call page_header(
     "Dokumente",
-    "Die zentrale Arbeitsqueue fuer Uploads, Analysestatus und den direkten Einstieg in jeden Detail-Workspace.",
+    "Die zentrale Arbeitsqueue fuer Uploads, Live-Analysestatus und den direkten Einstieg in jeden Detail-Workspace.",
     "Document Queue"
   ) %}
     {{ button('KI-Suche', href=url_for('search.search'), variant='secondary', icon_name='search') }}
   {% endcall %}
 
-  <div class="stat-grid stat-grid-4">
-    {{ stat_card('Gesamt', documents|length, icon_name='file-text', variant='info', meta='Dokumente in dieser Ansicht', tone='strong') }}
-    {{ stat_card('In Arbeit', ns.active, icon_name='loader-circle', variant='info', meta='OCR oder KI laufen') }}
-    {{ stat_card('Bereit', ns.done, icon_name='check-circle', variant='success', meta='Fuer Review und Folgearbeit') }}
-    {{ stat_card('Fehler', ns.failed, icon_name='alert-circle', variant='danger', meta='Brauchen Nacharbeit') }}
+  <div id="document-summary-cards">
+    {% include "documents/_summary_cards.html" %}
   </div>
 
   {% include "components/upload_widget.html" %}
 
   {% if documents %}
-    <div class="list-stack">
+    <div id="document-list" class="list-stack" data-document-list>
       {% for document in documents %}
         {% include "documents/_row.html" %}
       {% endfor %}
     </div>
   {% else %}
-    {% call empty_state('Noch keine Dokumente hochgeladen', 'Lade oben eine PDF-Datei hoch, um mit OCR, Analyse und den daraus entstehenden Empfehlungen zu starten.', 'file-text') %}{% endcall %}
+    <div id="document-list" class="list-stack hidden" data-document-list></div>
+    <div id="document-empty-state">
+      {% call empty_state('Noch keine Dokumente hochgeladen', 'Lade oben eine PDF-Datei hoch, um mit OCR, Analyse und den daraus entstehenden Empfehlungen zu starten.', 'file-text') %}{% endcall %}
+    </div>
   {% endif %}
 </div>
 {% endblock %}

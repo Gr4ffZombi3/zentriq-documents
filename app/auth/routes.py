@@ -1,17 +1,27 @@
+import logging
 from datetime import datetime, timezone
 
-from flask import Blueprint, flash, redirect, render_template, url_for
+from flask import Blueprint, flash, make_response, redirect, render_template, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
-from app.auth.forms import LoginForm, RegisterForm
+from app.auth.forms import ForgotPasswordForm, LoginForm, RegisterForm, ResetPasswordForm
 from app.extensions import db
 from app.models import Tenant, User
 from app.models.audit_log import AuditEventType
 from app.services.audit import log_audit_event
-from app.tenancy import bypass_tenant_scope, set_current_tenant_id
+from app.services.password_reset import is_reset_rate_limited, verify_reset_token
+from app.tasks.auth_tasks import send_password_reset_email
+from app.tenancy import bypass_tenant_scope, set_current_tenant_id, use_tenant_id
 from app.utils.slugs import unique_tenant_slug
 
+logger = logging.getLogger(__name__)
+
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
+
+RESET_REQUESTED_MESSAGE = (
+    "Falls ein Konto mit dieser E-Mail-Adresse existiert, haben wir dir einen Link zum "
+    "Zurücksetzen des Passworts geschickt."
+)
 
 
 @auth_bp.route("/register", methods=["GET", "POST"])
@@ -97,6 +107,60 @@ def login():
         return redirect(url_for("dashboard.index"))
 
     return render_template("auth/login.html", form=form)
+
+
+@auth_bp.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if current_user.is_authenticated:
+        return redirect(url_for("dashboard.index"))
+
+    form = ForgotPasswordForm()
+    if form.validate_on_submit():
+        email = form.email.data.lower().strip()
+        with bypass_tenant_scope():
+            user = User.query.filter_by(email=email).first()
+
+        # Antwort ist fuer existierende, unbekannte, deaktivierte und gedrosselte Konten
+        # identisch, damit sich keine Konten per Reset-Formular ermitteln lassen.
+        if user is not None and user.is_active and not is_reset_rate_limited(user):
+            user_id, tenant_id = user.id, user.tenant_id
+            with use_tenant_id(tenant_id):
+                log_audit_event(AuditEventType.PASSWORD_RESET_REQUESTED, tenant_id=tenant_id, user=user)
+            try:
+                send_password_reset_email.delay(user_id)
+            except Exception:
+                logger.exception("Passwort-Reset-Mail fuer User %s konnte nicht eingeplant werden.", user_id)
+
+        flash(RESET_REQUESTED_MESSAGE, "success")
+        return redirect(url_for("auth.login"))
+
+    return render_template("auth/forgot_password.html", form=form)
+
+
+@auth_bp.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    if current_user.is_authenticated:
+        return redirect(url_for("dashboard.index"))
+
+    user = verify_reset_token(token)
+    if user is None:
+        flash("Der Link ist ungültig oder abgelaufen. Bitte fordere einen neuen an.", "error")
+        return redirect(url_for("auth.forgot_password"))
+
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        with use_tenant_id(user.tenant_id):
+            user.set_password(form.password.data)
+            db.session.commit()
+            log_audit_event(AuditEventType.PASSWORD_RESET_COMPLETED, tenant_id=user.tenant_id, user=user)
+        flash("Dein Passwort wurde geändert. Du kannst dich jetzt anmelden.", "success")
+        return redirect(url_for("auth.login"))
+
+    response = make_response(render_template("auth/reset_password.html", form=form))
+    # Token steht in der URL: nicht an Dritte weitergeben und nicht zwischenspeichern.
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @auth_bp.route("/logout", methods=["POST"])

@@ -71,6 +71,24 @@ class BaseConfig:
     SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true"
     PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
 
+    # Oeffentliche Basis-URL fuer Links in E-Mails. Bewusst NICHT aus dem Host-Header des
+    # Requests abgeleitet, damit Reset-Links nicht per Host-Header-Injection umgelenkt werden.
+    PUBLIC_URL = os.environ.get("PUBLIC_URL", "").rstrip("/")
+
+    # Passwort-Reset (fail-closed: ohne SMTP_HOST, MAIL_FROM und PUBLIC_URL wird nichts versendet)
+    PASSWORD_RESET_TOKEN_MAX_AGE_SECONDS = int(os.environ.get("PASSWORD_RESET_TOKEN_MAX_AGE_SECONDS", "1800"))
+    PASSWORD_RESET_MAX_REQUESTS_PER_HOUR = int(os.environ.get("PASSWORD_RESET_MAX_REQUESTS_PER_HOUR", "3"))
+
+    # SMTP-Versand
+    SMTP_HOST = os.environ.get("SMTP_HOST")
+    SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+    SMTP_USERNAME = os.environ.get("SMTP_USERNAME")
+    SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
+    SMTP_USE_STARTTLS = os.environ.get("SMTP_USE_STARTTLS", "true").lower() == "true"
+    SMTP_USE_SSL = os.environ.get("SMTP_USE_SSL", "false").lower() == "true"
+    SMTP_TIMEOUT_SECONDS = int(os.environ.get("SMTP_TIMEOUT_SECONDS", "30"))
+    MAIL_FROM = os.environ.get("MAIL_FROM")
+
 
 class DevelopmentConfig(BaseConfig):
     DEBUG = True
@@ -88,6 +106,9 @@ class TestingConfig(BaseConfig):
     PLACETEL_MAILBOX_ENABLED = False
     MAILBOX_DRY_RUN = True
     HUK_AUTOMATION_ENABLED = False
+    PUBLIC_URL = "https://zentriq.test"
+    SMTP_HOST = None
+    MAIL_FROM = None
 
 
 class ProductionConfig(BaseConfig):

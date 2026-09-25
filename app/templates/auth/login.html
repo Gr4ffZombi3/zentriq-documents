@@ -49,6 +49,9 @@
       </div>
 
       {{ input_field(form.password, icon_name='lock', autocomplete='current-password') }}
+      <p class="-mt-2 text-right text-sm">
+        <a href="{{ url_for('auth.forgot_password') }}" class="font-medium text-primary hover:text-primary-hover">Passwort vergessen?</a>
+      </p>
 
       <div class="space-y-3 pt-2">
         {{ button(form.submit.label.text, variant='primary', type='submit', size='lg', extra_class='w-full') }}

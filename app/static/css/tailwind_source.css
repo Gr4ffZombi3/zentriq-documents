@@ -4762,8 +4762,10 @@
     background: transparent;
   }
 
-  .cell-strong {
+  .cell-strong,
+  .data-table tbody th.cell-strong {
     font-weight: 600;
+    color: var(--color-text);
   }
 
   .cell-sub {

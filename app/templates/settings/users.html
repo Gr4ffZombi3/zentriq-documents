@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/forms.html" import button %}
+{% from "ui/portal.html" import panel, state_tag %}
+{% set weekday_names = {'1': 'Mo', '2': 'Di', '3': 'Mi', '4': 'Do', '5': 'Fr', '6': 'Sa', '7': 'So'} %}
+{% block title %}Benutzer – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell page-shell-wide">
+  {% call page_header('Benutzer', 'Benutzer und Mitarbeiter Ihres Mandanten: Rolle, Sollstunden und Zugang verwalten.') %}
+    {{ button('Benutzer anlegen', href=url_for('settings.user_create'), variant='primary') }}
+  {% endcall %}
+
+  {% call panel(flush=True) %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">E-Mail</th>
+            <th scope="col">Rolle</th>
+            <th scope="col" class="num">Soll/Woche</th>
+            <th scope="col">Arbeitstage</th>
+            <th scope="col">Status</th>
+            <th scope="col">Letzte Anmeldung</th>
+            <th scope="col"><span class="sr-only">Aktion</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in users %}
+            {% set profile = item.employee_profile %}
+            <tr class="{{ '' if item.is_active else 'is-muted' }}">
+              <th scope="row" class="cell-strong">
+                {{ profile.display_name if profile and profile.display_name else '–' }}
+                {% if profile and profile.personnel_number %}<span class="cell-sub">Nr. {{ profile.personnel_number }}</span>{% endif %}
+              </th>
+              <td>{{ item.email }}{% if item.id == current_user.id %} <span class="cell-sub">Sie</span>{% endif %}</td>
+              <td>{{ item.role.label }}</td>
+              <td class="num">{{ (profile.weekly_target_minutes * 60) | duration if profile else '–' }}</td>
+              <td>{% if profile %}{% for ch in profile.workdays %}{{ weekday_names.get(ch, ch) }}{{ ', ' if not loop.last }}{% endfor %}{% else %}–{% endif %}</td>
+              <td>{{ state_tag('Aktiv', 'success') if item.is_active else state_tag('Deaktiviert', 'neutral') }}</td>
+              <td class="whitespace-nowrap">{{ item.last_login_at | local_dt(default='noch nie') }}</td>
+              <td class="text-right"><a class="table-action" href="{{ url_for('settings.user_edit', user_id=item.id) }}">Bearbeiten</a></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endcall %}
+</div>
+{% endblock %}

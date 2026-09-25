@@ -29,6 +29,38 @@ class ParsedMailboxMessage:
     attachments: tuple[AudioAttachment, ...]
 
 
+# Von der OpenAI-Transkription akzeptierte Formate. Placetel verschickt Sprachnachrichten je
+# nach Produkt/Einstellung als MP3 oder WAV; beides muss funktionieren.
+AUDIO_EXTENSIONS = (".mp3", ".wav", ".m4a", ".mp4", ".mpeg", ".mpga", ".ogg", ".oga", ".webm", ".flac")
+AUDIO_CONTENT_TYPES = {
+    "audio/mpeg": ".mp3",
+    "audio/mp3": ".mp3",
+    "audio/mpeg3": ".mp3",
+    "audio/x-mpeg-3": ".mp3",
+    "audio/wav": ".wav",
+    "audio/x-wav": ".wav",
+    "audio/wave": ".wav",
+    "audio/vnd.wave": ".wav",
+    "audio/mp4": ".m4a",
+    "audio/x-m4a": ".m4a",
+    "audio/m4a": ".m4a",
+    "audio/ogg": ".ogg",
+    "audio/webm": ".webm",
+    "audio/flac": ".flac",
+    "audio/x-flac": ".flac",
+}
+
+
+def _audio_extension(filename: str | None, content_type: str) -> str | None:
+    """Liefert die Dateiendung fuer einen unterstuetzten Audioanhang oder None. Die Endung des
+    Dateinamens hat Vorrang (Mailer senden Audio oft als application/octet-stream)."""
+    lowered = (filename or "").lower()
+    for extension in AUDIO_EXTENSIONS:
+        if lowered.endswith(extension):
+            return extension
+    return AUDIO_CONTENT_TYPES.get(content_type.lower())
+
+
 def csv_values(value: str | None) -> tuple[str, ...]:
     return tuple(item.strip().lower() for item in (value or "").split(",") if item.strip())
 
@@ -41,11 +73,15 @@ def parse_mailbox_message(raw_message: bytes, caller_id_headers: str) -> ParsedM
     caller_phone = _extract_caller_phone(message, subject, body, caller_id_headers)
     attachments: list[AudioAttachment] = []
     for part in message.iter_attachments():
-        filename = part.get_filename() or "mailbox-audio"
-        content_type = part.get_content_type()
-        if filename.lower().endswith(".mp3") or content_type in {"audio/mpeg", "audio/mp3"}:
-            payload = part.get_payload(decode=True) or b""
-            attachments.append(AudioAttachment(filename, content_type, payload))
+        audio_extension = _audio_extension(part.get_filename(), part.get_content_type())
+        if audio_extension is None:
+            continue
+        filename = part.get_filename() or f"mailbox-audio{audio_extension}"
+        if not filename.lower().endswith(audio_extension):
+            # Die Transkriptions-API erkennt das Format an der Dateiendung.
+            filename = f"{filename}{audio_extension}"
+        payload = part.get_payload(decode=True) or b""
+        attachments.append(AudioAttachment(filename, part.get_content_type(), payload))
     return ParsedMailboxMessage(
         message_id=str(message.get("Message-ID")) if message.get("Message-ID") else None,
         sender=sender,

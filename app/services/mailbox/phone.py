@@ -67,6 +67,28 @@ def extract_explicit_callback_phone(transcript: str | None) -> str | None:
     return None
 
 
+# Zusammenhaengende Ziffernfolge inkl. typischer Trennzeichen ("0521 / 12 34-567", "+49 (0) 521 ...").
+DIGIT_RUN_PATTERN = re.compile(r"\+?\d[\d\s()/.\-]*\d")
+# Erlaubte Praefixe vor der nationalen Rufnummer: "0", "+49"/"0049", "+49 (0)".
+_NATIONAL_PREFIXES = {"0", "49", "0049", "490", "00490"}
+
+
+def phone_appears_in_text(phone: str | None, text: str | None) -> bool:
+    """Prueft, ob eine (z. B. von der KI gelieferte) Rufnummer tatsaechlich woertlich im Text
+    vorkommt. Verglichen werden nur Ziffern innerhalb EINER zusammenhaengenden Nummernangabe -
+    so koennen keine Ziffern aus verschiedenen Zahlen zu einer Treffernummer zusammengesetzt
+    werden."""
+    normalized = normalize_callback_phone(phone)
+    if not normalized or not text:
+        return False
+    national_number = str(phonenumbers.parse(normalized, None).national_number)
+    for match in DIGIT_RUN_PATTERN.finditer(text):
+        digits = re.sub(r"\D", "", match.group(0))
+        if digits.endswith(national_number) and digits[: -len(national_number)] in _NATIONAL_PREFIXES:
+            return True
+    return False
+
+
 def split_huk_phone(value: str) -> tuple[str, str]:
     normalized = normalize_callback_phone(value)
     if not normalized:

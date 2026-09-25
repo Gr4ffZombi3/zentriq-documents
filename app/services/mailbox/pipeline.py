@@ -14,7 +14,11 @@ from app.services.mailbox.message import (
     message_matches_placetel,
     parse_mailbox_message,
 )
-from app.services.mailbox.phone import extract_explicit_callback_phone, normalize_callback_phone
+from app.services.mailbox.phone import (
+    extract_explicit_callback_phone,
+    normalize_callback_phone,
+    phone_appears_in_text,
+)
 from app.services.mailbox.schemas import HUK_DAMAGE_TYPES, MailboxClassification
 
 
@@ -87,7 +91,7 @@ def process_raw_message(
 
     try:
         if attachment is None:
-            raise ValueError("Keine MP3-Audiodatei in der Placetel-Nachricht gefunden.")
+            raise ValueError("Keine unterstützte Audiodatei (z. B. MP3/WAV) in der Placetel-Nachricht gefunden.")
         max_bytes = int(current_app.config["MAILBOX_AUDIO_MAX_MB"]) * 1024 * 1024
         if not attachment.content or len(attachment.content) > max_bytes:
             raise ValueError("Der Audioanhang ist leer oder überschreitet die konfigurierte Größenbegrenzung.")
@@ -95,8 +99,13 @@ def process_raw_message(
         transcript = transcriber(attachment.filename, attachment.content_type, attachment.content)
         if not transcript.strip():
             raise ValueError("Die Transkription hat keinen Text geliefert.")
+        # Sofort sichern: scheitert die Klassifizierung, bleibt das (bereits bezahlte)
+        # Transkript fuer die manuelle Pruefung erhalten.
+        mailbox_case.transcript = transcript.strip()
+        db.session.commit()
+
         classification: MailboxClassification = classifier(transcript)
-        _apply_classification(mailbox_case, transcript, classification)
+        llm_phone_unverified = _apply_classification(mailbox_case, transcript, classification)
         add_case_event(
             mailbox_case,
             "processed",
@@ -105,6 +114,7 @@ def process_raw_message(
                 "dry_run": mailbox_case.dry_run,
                 "phone_source": mailbox_case.phone_source,
                 "damage_type": mailbox_case.damage_type,
+                "llm_phone_unverified": llm_phone_unverified,
             },
         )
     except Exception as exc:
@@ -129,15 +139,20 @@ def _apply_classification(
     mailbox_case: MailboxCase,
     transcript: str,
     classification: MailboxClassification,
-) -> None:
+) -> bool:
+    """Uebernimmt das Klassifizierungsergebnis. Rueckgabe: True, wenn die KI eine Rufnummer
+    genannt hat, die nicht im Transkript belegbar war und deshalb verworfen wurde."""
     explicit_phone = extract_explicit_callback_phone(transcript)
     classified_phone = normalize_callback_phone(classification.callback_phone)
+    # Eine KI-Rufnummer wird nur uebernommen, wenn sie woertlich im Transkript steht - eine
+    # moeglicherweise halluzinierte Nummer darf nie in eine (Live-)Einreichung gelangen.
+    classified_phone_verified = phone_appears_in_text(classified_phone, transcript)
     caller_phone = normalize_callback_phone(mailbox_case.caller_phone)
     if explicit_phone:
         callback_phone = explicit_phone
         phone_source = "transcript_explicit"
         phone_confidence = 1.0
-    elif classified_phone:
+    elif classified_phone and classified_phone_verified:
         callback_phone = classified_phone
         phone_source = "transcript_explicit"
         phone_confidence = classification.phone_confidence
@@ -171,3 +186,4 @@ def _apply_classification(
 
     mailbox_case.review_reason = " ".join(review_reasons) or None
     mailbox_case.status = MailboxStatus.REVIEW if review_reasons else MailboxStatus.NEW
+    return bool(classified_phone and not classified_phone_verified and not explicit_phone)

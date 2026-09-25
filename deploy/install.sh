@@ -58,6 +58,7 @@ pip install --upgrade pip -q
 pip install -q -r requirements.txt
 playwright install --with-deps chromium
 deactivate
+"$APP_DIR/deploy/ensure-playwright.sh"
 
 echo "==> [4/10] .env einrichten..."
 if [ ! -f ".env" ]; then

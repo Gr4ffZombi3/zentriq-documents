@@ -12,6 +12,8 @@ git pull
 echo "==> [2/6] Aktiviere virtuelle Umgebung & installiere Abhaengigkeiten..."
 source .venv/bin/activate
 pip install -q -r requirements.txt
+# Playwright-Chromium passend zur (ggf. aktualisierten) Playwright-Version, inkl. Startpruefung.
+"$APP_DIR/deploy/ensure-playwright.sh"
 
 echo "==> [3/6] Wende Datenbank-Migrationen an..."
 set -a

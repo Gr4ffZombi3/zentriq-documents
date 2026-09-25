@@ -229,3 +229,47 @@ def test_reprocessing_document_does_not_duplicate_comparison(app, db, tenant, tm
         process_document(document2.id)
 
     assert ListComparison.query.filter_by(document_id=document2.id).count() == 1
+
+
+def test_new_offer_produces_offer_entry(app, db, tenant, tmp_path, monkeypatch):
+    base_time = datetime.now(timezone.utc) - timedelta(days=1)
+
+    upload_leipziger_liste(
+        app, db, tenant, tmp_path, monkeypatch, "angebot1.pdf",
+        rows=[LeipzigerListeRow(customer=ExtractedCustomer(name="Angebot Kunde"))],
+        uploaded_at=base_time,
+    )
+    document2 = upload_leipziger_liste(
+        app, db, tenant, tmp_path, monkeypatch, "angebot2.pdf",
+        rows=[LeipzigerListeRow(customer=ExtractedCustomer(name="Angebot Kunde"), is_angebot=True)],
+        uploaded_at=base_time + timedelta(days=1),
+    )
+
+    comparison = ListComparison.query.filter_by(document_id=document2.id).one()
+    assert comparison.new_offer_count == 1
+    entry = ListComparisonEntry.query.filter_by(list_comparison_id=comparison.id).one()
+    assert entry.change_type == ListChangeType.NEW_OFFER
+
+
+def test_other_row_change_produces_status_change_entry(app, db, tenant, tmp_path, monkeypatch):
+    base_time = datetime.now(timezone.utc) - timedelta(days=1)
+
+    upload_leipziger_liste(
+        app, db, tenant, tmp_path, monkeypatch, "status1.pdf",
+        rows=[LeipzigerListeRow(customer=ExtractedCustomer(name="Status Kunde"), vehicle="VW Golf")],
+        uploaded_at=base_time,
+    )
+    document2 = upload_leipziger_liste(
+        app, db, tenant, tmp_path, monkeypatch, "status2.pdf",
+        rows=[LeipzigerListeRow(customer=ExtractedCustomer(name="Status Kunde"), vehicle="BMW 320d")],
+        uploaded_at=base_time + timedelta(days=1),
+    )
+
+    comparison = ListComparison.query.filter_by(document_id=document2.id).one()
+    assert comparison.status_change_count == 1
+    assert comparison.new_customer_count == 0
+    assert comparison.removed_customer_count == 0
+    entry = ListComparisonEntry.query.filter_by(list_comparison_id=comparison.id).one()
+    assert entry.change_type == ListChangeType.STATUS_CHANGE
+    assert entry.details["old"]["vehicle"] == ["VW Golf"]
+    assert entry.details["new"]["vehicle"] == ["BMW 320d"]

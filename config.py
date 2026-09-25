@@ -23,6 +23,9 @@ class BaseConfig:
     OPENAI_VISION_MODEL = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o")
     OPENAI_TRANSCRIPTION_MODEL = os.environ.get("OPENAI_TRANSCRIPTION_MODEL", "gpt-4o-mini-transcribe")
     MAILBOX_CLASSIFICATION_MODEL = os.environ.get("MAILBOX_CLASSIFICATION_MODEL", OPENAI_MODEL)
+    # Optional eigener Endpoint NUR fuer Mailbox-Transkription/-Klassifizierung. OPENAI_BASE_URL
+    # gilt dagegen global (auch fuer die Leipziger-Liste-Extraktion).
+    MAILBOX_OPENAI_BASE_URL = os.environ.get("MAILBOX_OPENAI_BASE_URL")
 
     # Placetel-Mailbox (fail-closed: ohne explizite Merkmale wird keine Nachricht erkannt)
     PLACETEL_MAILBOX_ENABLED = os.environ.get("PLACETEL_MAILBOX_ENABLED", "false").lower() == "true"

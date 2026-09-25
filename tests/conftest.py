@@ -48,9 +48,16 @@ def tenant(app, db):
 
 @pytest.fixture()
 def user(db, tenant):
-    from app.models import User
+    from app.models import User, UserRole
 
-    test_user = User(tenant_id=tenant.id, email="test@example.com", vermittlernummer="VM-1001", is_active=True)
+    # Admin: entspricht den bestehenden Konten, die per Migration auf ADMIN gesetzt werden.
+    test_user = User(
+        tenant_id=tenant.id,
+        email="test@example.com",
+        vermittlernummer="VM-1001",
+        is_active=True,
+        role=UserRole.ADMIN,
+    )
     test_user.set_password("testpassword123")
     db.session.add(test_user)
     db.session.commit()
@@ -66,6 +73,29 @@ def auth_client(client, user):
         follow_redirects=True,
     )
     return client
+
+
+@pytest.fixture()
+def employee(db, tenant):
+    from app.models import User, UserRole
+
+    employee_user = User(tenant_id=tenant.id, email="mitarbeiter@example.com", is_active=True, role=UserRole.MITARBEITER)
+    employee_user.set_password("mitarbeiterpass123")
+    db.session.add(employee_user)
+    db.session.commit()
+    return employee_user
+
+
+@pytest.fixture()
+def employee_client(app, employee):
+    """Eigener Test-Client, eingeloggt als MITARBEITER."""
+    employee_test_client = app.test_client()
+    employee_test_client.post(
+        "/auth/login",
+        data={"login_type": "email", "identifier": employee.email, "password": "mitarbeiterpass123"},
+        follow_redirects=False,
+    )
+    return employee_test_client
 
 
 @pytest.fixture(autouse=True)

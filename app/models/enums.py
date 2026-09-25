@@ -6,6 +6,19 @@ class TenantStatus(enum.Enum):
     SUSPENDED = "suspended"
 
 
+class UserRole(enum.Enum):
+    """Portal-Rollen. ADMIN: alle Bereiche (Leipziger Liste, Sprachnachrichten, Zeiterfassung
+    inkl. Team-Verwaltung) des eigenen Mandanten. MITARBEITER: ausschliesslich die eigene
+    Zeiterfassung."""
+
+    ADMIN = "admin"
+    MITARBEITER = "mitarbeiter"
+
+    @property
+    def label(self) -> str:
+        return {UserRole.ADMIN: "Admin", UserRole.MITARBEITER: "Mitarbeiter"}[self]
+
+
 class DocType(enum.Enum):
     LEIPZIGER_LISTE = "leipziger_liste"
     HUK_LISTE = "huk_liste"

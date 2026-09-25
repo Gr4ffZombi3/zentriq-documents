@@ -3,7 +3,7 @@ import logging
 import pytest
 
 from app.cli import create_user_command
-from app.models import Tenant, User
+from app.models import Tenant, User, UserRole
 from app.tenancy import bypass_tenant_scope
 
 PASSWORD = "sicheres-start-passwort"
@@ -167,3 +167,37 @@ def test_create_user_is_registered_as_flask_command(app):
     assert result.exit_code == 0
     assert "--email" in result.output
     assert "--company" in result.output
+
+
+# --- Rollen / bestehender Mandant -------------------------------------------------------
+
+
+def test_create_user_for_new_company_becomes_admin(app, password_prompt):
+    password_prompt(PASSWORD, PASSWORD)
+    result = _run(app, "--email", "gruender@example.com", "--company", "Gruender GmbH")
+    assert result.exit_code == 0, result.output
+    assert _find_user("gruender@example.com").role == UserRole.ADMIN
+
+
+def test_create_user_in_existing_tenant_requires_role(app, tenant, password_prompt):
+    password_prompt(PASSWORD, PASSWORD)
+    result = _run(app, "--email", "ma@example.com", "--tenant", tenant.slug)
+    assert result.exit_code != 0
+    assert "--role" in result.output
+    assert _find_user("ma@example.com") is None
+
+
+def test_create_user_in_existing_tenant_with_role(app, tenant, password_prompt):
+    password_prompt(PASSWORD, PASSWORD)
+    result = _run(app, "--email", "ma@example.com", "--tenant", tenant.slug, "--role", "mitarbeiter")
+    assert result.exit_code == 0, result.output
+    created = _find_user("ma@example.com")
+    assert created.tenant_id == tenant.id
+    assert created.role == UserRole.MITARBEITER
+    assert Tenant.query.count() == 1
+
+
+def test_create_user_rejects_company_and_tenant_together(app, tenant, password_prompt):
+    result = _run(app, "--email", "x@example.com", "--company", "X", "--tenant", tenant.slug, "--role", "admin")
+    assert result.exit_code != 0
+    assert "Genau eine" in result.output

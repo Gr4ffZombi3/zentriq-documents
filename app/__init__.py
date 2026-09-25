@@ -1,4 +1,4 @@
-from flask import Flask, g
+from flask import Flask, g, render_template
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.celery_app import make_celery
@@ -84,6 +84,11 @@ def create_app(config_object=None):
         with bypass_tenant_scope():
             user = db.session.get(User, int(user_id))
             tenant_id = user.tenant_id if user is not None else None
+            is_active = user.is_active if user is not None else False
+        if user is not None and not is_active:
+            # Von einem Admin deaktivierte Konten verlieren sofort den Zugriff, nicht erst
+            # beim naechsten Login.
+            return None
         if user is not None:
             set_current_tenant_id(tenant_id)
         return user
@@ -91,6 +96,16 @@ def create_app(config_object=None):
     @app.before_request
     def _begin_tenant_scope():
         g._tenant_scope_token = begin_request_tenant_scope()
+
+    from app.auth.permissions import enforce_role_access
+
+    # Nach _begin_tenant_scope registriert: current_user wird hier geladen und setzt den
+    # Tenant-Kontext des Nutzers.
+    app.before_request(enforce_role_access)
+
+    @app.errorhandler(403)
+    def _forbidden(error):
+        return render_template("errors/403.html"), 403
 
     @app.teardown_request
     def _end_tenant_scope(exception=None):

@@ -6,7 +6,7 @@ from flask_login import current_user, login_required, login_user, logout_user
 
 from app.auth.forms import ForgotPasswordForm, LoginForm, RegisterForm, ResetPasswordForm
 from app.extensions import db
-from app.models import Tenant, User
+from app.models import Tenant, User, UserRole
 from app.models.audit_log import AuditEventType
 from app.services.audit import log_audit_event
 from app.services.password_reset import (
@@ -57,7 +57,9 @@ def register():
             db.session.add(tenant)
             db.session.flush()
 
-            user = User(tenant_id=tenant.id, email=email, vermittlernummer=vermittlernummer)
+            user = User(
+                tenant_id=tenant.id, email=email, vermittlernummer=vermittlernummer, role=UserRole.ADMIN
+            )
             user.set_password(form.password.data)
             db.session.add(user)
             db.session.commit()

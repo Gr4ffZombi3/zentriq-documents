@@ -23,6 +23,7 @@ from app.models.enums import (
     TaskType,
     TenantStatus,
     TimelineEventType,
+    UserRole,
     WiedervorlageReason,
 )
 from app.models.feedback import RecommendationFeedback
@@ -76,5 +77,6 @@ __all__ = [
     "TaskType",
     "TenantStatus",
     "TimelineEventType",
+    "UserRole",
     "WiedervorlageReason",
 ]

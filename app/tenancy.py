@@ -11,9 +11,9 @@ from contextvars import ContextVar
 
 from flask import abort
 from sqlalchemy import event
-from sqlalchemy.sql import visitors
 from sqlalchemy.orm import declared_attr, with_loader_criteria
 from sqlalchemy.orm.session import Session
+from sqlalchemy.sql import visitors
 
 from app.extensions import db
 

@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet("setup", "migrate", "upgrade", "run", "worker", "test", "check", "css")]
+    [ValidateSet("setup", "migrate", "upgrade", "run", "worker", "beat", "test", "check", "css")]
     [string]$Command
 )
 
@@ -23,6 +23,9 @@ switch ($Command) {
     }
     "worker" {
         & $venvPython -m celery -A celery_worker.celery worker --pool=solo --loglevel=info
+    }
+    "beat" {
+        & $venvPython -m celery -A celery_worker.celery beat --loglevel=info
     }
     "test" {
         & $venvPython -m pytest

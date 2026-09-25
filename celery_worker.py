@@ -9,3 +9,4 @@ flask_app = create_app()
 celery = make_celery(flask_app)
 
 import app.tasks.document_tasks  # noqa: E402,F401
+import app.tasks.mailbox_tasks  # noqa: E402,F401

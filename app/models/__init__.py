@@ -5,6 +5,7 @@ from app.models.customer_timeline_event import CustomerTimelineEvent
 from app.models.document import Document, DocumentCustomer
 from app.models.enums import (
     AnalysisRunStatus,
+    CallbackAttemptStatus,
     ComparisonKind,
     DocStatus,
     DocType,
@@ -12,6 +13,7 @@ from app.models.enums import (
     ListChangeType,
     ListScope,
     ListType,
+    MailboxStatus,
     OcrEngine,
     PotentialCategory,
     Priority,
@@ -25,6 +27,12 @@ from app.models.enums import (
 )
 from app.models.feedback import RecommendationFeedback
 from app.models.list_comparison import ListComparison, ListComparisonEntry
+from app.models.mailbox_case import (
+    MailboxCallbackAttempt,
+    MailboxCase,
+    MailboxCaseEvent,
+    MailboxSyncCursor,
+)
 from app.models.recommendation import Recommendation
 from app.models.task import Task
 from app.models.tenant import Tenant
@@ -32,6 +40,10 @@ from app.models.user import User
 
 __all__ = [
     "AnalysisRun",
+    "MailboxCase",
+    "MailboxCallbackAttempt",
+    "MailboxCaseEvent",
+    "MailboxSyncCursor",
     "AuditLog",
     "AuditEventType",
     "Customer",
@@ -46,6 +58,7 @@ __all__ = [
     "Tenant",
     "User",
     "AnalysisRunStatus",
+    "CallbackAttemptStatus",
     "ComparisonKind",
     "DocType",
     "DocStatus",
@@ -53,6 +66,7 @@ __all__ = [
     "ListChangeType",
     "ListScope",
     "ListType",
+    "MailboxStatus",
     "OcrEngine",
     "PotentialCategory",
     "Priority",

@@ -1,150 +1,208 @@
 {% extends "base.html" %}
-{% from "ui/display.html" import badge, empty_state, page_header, status_badge %}
+{% from "ui/display.html" import badge, empty_state, page_header %}
 {% from "ui/forms.html" import button %}
-{% block title %}Übersicht - Zentriq Documents{% endblock %}
+{% from "ui/icons.html" import icon %}
+
+{% macro mailbox_status(status) -%}
+  {% set value = status.value if status.value is defined else status %}
+  {% set labels = {
+    'new': 'Neu',
+    'review': 'Zur Prüfung',
+    'callback_requested': 'Rückruf angefordert',
+    'failed': 'Fehlgeschlagen'
+  } %}
+  {% set variants = {
+    'new': 'muted',
+    'review': 'warning',
+    'callback_requested': 'success',
+    'failed': 'danger'
+  } %}
+  {% set icons = {
+    'new': 'mail',
+    'review': 'alert-circle',
+    'callback_requested': 'check-circle',
+    'failed': 'alert-triangle'
+  } %}
+  {{ badge(labels.get(value, value), variant=variants.get(value, 'muted'), icon_name=icons.get(value, 'info')) }}
+{%- endmacro %}
+
+{% macro phone_source_label(source) -%}
+  {%- set labels = {
+    'transcript_explicit': 'Nachricht',
+    'email_caller_id': 'Anruferkennung',
+    'manual': 'manuelle Korrektur'
+  } -%}
+  {{- labels.get(source, 'Anruferkennung') -}}
+{%- endmacro %}
+
+{% block title %}Rückruf-Automation – Zentriq{% endblock %}
+
 {% block content %}
-<div class="page-shell page-shell-wide dashboard-shell">
-  {% call page_header(dashboard.headline, dashboard.subheadline, 'Arbeitsübersicht') %}
-    <div class="dashboard-header-actions">
-      {{ button('Dokument hochladen', href=url_for('documents.list_documents') ~ '#upload-widget', variant='primary', icon_name='upload') }}
-    </div>
+{% set selected_status = status_filter or 'all' %}
+{% set status_cards = [
+  ('new', 'Neu', 'Eingang', 'mail', 'Neue Mailbox-Nachrichten'),
+  ('review', 'Zur Prüfung', 'Prüfung', 'alert-circle', 'Daten manuell klären'),
+  ('callback_requested', 'Rückruf angefordert', 'HUK', 'check-circle', 'Erfolgreich vorbereitet oder gesendet'),
+  ('failed', 'Fehlgeschlagen', 'Erneut', 'alert-triangle', 'Übermittlung erneut ausführen')
+] %}
+<div class="page-shell page-shell-wide mailbox-page-shell">
+  {% call page_header('Rückruf-Automation', 'Placetel-Nachrichten werden erkannt, transkribiert und für den HUK-Rückrufservice aufbereitet.', 'Mailbox-Automation') %}
+    <form method="post" action="{{ url_for('mailbox.sync') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button
+        type="submit"
+        class="btn btn-primary h-10 px-4 text-sm whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:pointer-events-none disabled:opacity-50"
+        {% if not mailbox_enabled %}disabled aria-disabled="true" title="E-Mail-Postfach ist noch nicht eingerichtet"{% endif %}
+      >
+        {{ icon('refresh-cw', class='h-[1.05rem] w-[1.05rem]') }}
+        Postfach prüfen
+      </button>
+    </form>
   {% endcall %}
 
-  {% if dashboard.scope_note %}
-    <p class="page-context-note">{{ dashboard.scope_note }}</p>
-  {% endif %}
-
-  {% if dashboard.has_data %}
-    <section class="summary-strip summary-strip-4" aria-label="Kennzahlen">
-      {% for metric in dashboard.metrics %}
-        <article class="summary-metric summary-metric-{{ metric.tone }}">
-          <span class="summary-metric-label">{{ metric.label }}</span>
-          <strong class="summary-metric-value">{{ metric.value }}</strong>
-          <p class="summary-metric-copy">
-            {% if metric.tone == 'info' %}
-              Sichtbare Anträge in den ausgewerteten Listen
-            {% elif metric.tone == 'warning' %}
-              Angebotsfälle ohne dokumentierten Start
-            {% elif metric.tone == 'success' %}
-              Fälle mit bestätigtem Beginn
-            {% else %}
-              Fälle mit offenem Folgebedarf
-            {% endif %}
-          </p>
-        </article>
-      {% endfor %}
-    </section>
-
-    <div class="dashboard-grid">
-      <section class="dashboard-panel">
-        <div class="dashboard-section-heading">
-          <div>
-            <h2 class="dashboard-section-title">Aktuelle Vorgänge</h2>
-            <p class="dashboard-section-copy">Belegbare Leipziger-Fälle aus den zuletzt ausgewerteten Listen.</p>
-          </div>
-          <span class="meta-chip">{{ dashboard.cases|length }} sichtbar</span>
-        </div>
-
-        {% if dashboard.cases %}
-          <div class="dashboard-table-shell" data-table-enhanced data-table-search-placeholder="Vorgänge filtern" data-table-page-size="6">
-            <table class="dashboard-table">
-              <thead>
-                <tr>
-                  <th>Kunde</th>
-                  <th>Sparte</th>
-                  <th>Status</th>
-                  <th>Beginn</th>
-                  <th>Ergebnis</th>
-                  <th>Aktion</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for item in dashboard.cases %}
-                  <tr>
-                    <td>
-                      {% if item.customer_href %}
-                        <a href="{{ item.customer_href }}" class="dashboard-customer-link">{{ item.customer_name }}</a>
-                      {% else %}
-                        <span class="dashboard-customer-link">{{ item.customer_name }}</span>
-                      {% endif %}
-                    </td>
-                    <td class="dashboard-table-muted">{{ item.product_line }}</td>
-                    <td>
-                      <div class="flex flex-wrap items-center gap-2">
-                        {{ badge(item.status_label, variant=item.status_variant) }}
-                        {% if item.is_uncertain %}
-                          {{ badge('Unsicher', variant='muted') }}
-                        {% endif %}
-                      </div>
-                    </td>
-                    <td class="dashboard-table-muted">{{ item.start_date_label }}</td>
-                    <td>
-                      <div class="dashboard-result-cell">
-                        <span>{{ item.result_label }}</span>
-                        {% if item.uncertainty_label %}
-                          <span class="dashboard-result-note">{{ item.uncertainty_label }}</span>
-                        {% endif %}
-                      </div>
-                    </td>
-                    <td>
-                      <a href="{{ item.document_href }}" class="dashboard-action-link">Dokument</a>
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
+  <section class="mailbox-environment-banner {{ 'is-dry-run' if dry_run else 'is-live' }}" aria-label="Betriebsmodus">
+    <span class="mailbox-environment-icon">
+      {{ icon('shield' if dry_run else 'check-circle', class='h-5 w-5') }}
+    </span>
+    <div class="min-w-0 flex-1">
+      <h2 class="mailbox-environment-title">
+        {% if dry_run %}
+          Dry Run aktiv – keine Rückrufanforderung wird abgesendet
         {% else %}
-          {% call empty_state('Noch keine Vorgänge', 'Sobald Leipziger-Listen-Zeilen erkannt wurden, erscheinen hier die relevantesten Fälle.', 'file-text') %}{% endcall %}
+          Live-Betrieb aktiv – eindeutige Fälle können abgesendet werden
         {% endif %}
-      </section>
-
-      <section class="dashboard-panel">
-        <div class="dashboard-section-heading">
-          <div>
-            <h2 class="dashboard-section-title">Letzte Dokumente</h2>
-            <p class="dashboard-section-copy">Die zuletzt hochgeladenen Leipziger Listen mit Analyse-Status und erkannten Vorgängen.</p>
-          </div>
-          <a href="{{ url_for('documents.list_documents') }}" class="dashboard-inline-link">Alle Dokumente</a>
-        </div>
-
-        {% if dashboard.recent_documents %}
-          <div class="dashboard-table-shell" data-table-enhanced data-table-search-placeholder="Dokumente filtern" data-table-page-size="5">
-            <table class="dashboard-table">
-              <thead>
-                <tr>
-                  <th>Dateiname</th>
-                  <th>Upload</th>
-                  <th>Analyse-Status</th>
-                  <th>Vorgänge</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for document in dashboard.recent_documents %}
-                  <tr>
-                    <td>
-                      <a href="{{ document.href }}" class="dashboard-customer-link">{{ document.name }}</a>
-                    </td>
-                    <td class="dashboard-table-muted">{{ document.uploaded_at_label }}</td>
-                    <td>{{ status_badge(document.status) }}</td>
-                    <td class="dashboard-table-count">{{ document.recognized_count }}</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
+      </h2>
+      <p class="mailbox-environment-copy">
+        {% if dry_run %}
+          Erkennung und Formulardaten werden vollständig geprüft; der letzte Absende-Schritt bleibt gesperrt.
         {% else %}
-          {% call empty_state('Noch keine Leipziger Listen', 'Lade dein erstes Dokument hoch, um echte Kennzahlen und Vorgänge in der Übersicht zu sehen.', 'upload') %}
-            {{ button('Zur Dokumentenliste', href=url_for('documents.list_documents'), variant='secondary', icon_name='file-text') }}
-          {% endcall %}
+          Nur Fälle mit eindeutiger Rufnummer und Schadenart werden automatisch an den Rückrufservice übergeben.
         {% endif %}
-      </section>
+      </p>
     </div>
-  {% else %}
-    {% call empty_state('Noch keine Leipziger Listen im System', 'Lade ein Dokument hoch. Sobald die Analyse durchgelaufen ist, erscheinen hier nur echte Leipziger-Kennzahlen und die zugehörigen Vorgänge.', 'upload') %}
-      {{ button('Dokument hochladen', href=url_for('documents.list_documents') ~ '#upload-widget', variant='primary', icon_name='upload') }}
-      {{ button('Dokumente öffnen', href=url_for('documents.list_documents'), variant='secondary', icon_name='file-text') }}
-    {% endcall %}
-  {% endif %}
+    <div class="mailbox-environment-states" aria-label="Konfigurationsstatus">
+      <span class="mailbox-state-chip {{ 'is-ready' if mailbox_enabled else 'is-missing' }}">
+        <span class="mailbox-state-dot" aria-hidden="true"></span>
+        Postfach {{ 'bereit' if mailbox_enabled else 'nicht eingerichtet' }}
+      </span>
+      <span class="mailbox-state-chip {{ 'is-ready' if automation_enabled else 'is-paused' }}">
+        <span class="mailbox-state-dot" aria-hidden="true"></span>
+        Automation {{ 'aktiv' if automation_enabled else 'pausiert' }}
+      </span>
+    </div>
+  </section>
+
+  <section class="mailbox-flow-section" aria-labelledby="mailbox-flow-title">
+    <div class="mailbox-flow-heading">
+      <div>
+        <h2 id="mailbox-flow-title" class="mailbox-section-title">Vorgangsstatus</h2>
+        <p class="mailbox-section-copy">Vom Eingang bis zur nachvollziehbaren Rückrufanforderung.</p>
+      </div>
+      <span class="mailbox-mode-label">{{ 'Sicherer Testbetrieb' if dry_run else 'Live-Betrieb' }}</span>
+    </div>
+    <div class="mailbox-flow-rail" aria-hidden="true">
+      <span>Eingang</span>
+      <span>Prüfung</span>
+      <span>HUK</span>
+      <span class="is-branch">Fehlerpfad</span>
+    </div>
+    <div class="mailbox-status-grid">
+      {% for value, label, step, icon_name, description in status_cards %}
+        <a
+          href="{{ url_for('dashboard.index', status=value) }}"
+          class="mailbox-status-card mailbox-status-card-{{ value }} {{ 'is-active' if selected_status == value else '' }}"
+          {% if selected_status == value %}aria-current="page"{% endif %}
+        >
+          <span class="mailbox-status-icon">{{ icon(icon_name, class='h-4 w-4') }}</span>
+          <span class="mailbox-status-step">{{ step }}</span>
+          <strong class="mailbox-status-count">{{ counts.get(value, 0) }}</strong>
+          <span class="mailbox-status-label">{{ label }}</span>
+          <span class="mailbox-status-description">{{ description }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="mailbox-queue-panel" aria-labelledby="mailbox-queue-title">
+    <div class="mailbox-queue-heading">
+      <div>
+        <h2 id="mailbox-queue-title" class="mailbox-section-title">Mailbox-Vorgänge</h2>
+        <p class="mailbox-section-copy">Transkript, Rückrufdaten und Übermittlung bleiben pro Nachricht nachvollziehbar.</p>
+      </div>
+      <span class="meta-chip">{{ cases|length }} sichtbar</span>
+    </div>
+
+    <nav class="mailbox-filter-tabs" aria-label="Vorgänge filtern">
+      {% set filters = [
+        ('all', 'Alle'),
+        ('new', 'Neu'),
+        ('review', 'Zur Prüfung'),
+        ('callback_requested', 'Rückruf angefordert'),
+        ('failed', 'Fehlgeschlagen')
+      ] %}
+      {% for value, label in filters %}
+        <a
+          href="{{ url_for('dashboard.index') if value == 'all' else url_for('dashboard.index', status=value) }}"
+          class="mailbox-filter-tab {{ 'is-active' if selected_status == value else '' }}"
+          {% if selected_status == value %}aria-current="page"{% endif %}
+        >{{ label }}{% if value != 'all' %}<span>{{ counts.get(value, 0) }}</span>{% endif %}</a>
+      {% endfor %}
+    </nav>
+
+    {% if cases %}
+      <div class="mailbox-queue" role="list">
+        <div class="mailbox-queue-columns" aria-hidden="true">
+          <span>Nachricht</span>
+          <span>Status</span>
+          <span>Rückruf</span>
+          <span>Schadenart</span>
+          <span>Hinweis</span>
+          <span></span>
+        </div>
+        {% for case in cases %}
+          {% set case_status = case.status.value if case.status.value is defined else case.status %}
+          <article class="mailbox-queue-row" role="listitem">
+            <div class="mailbox-queue-source">
+              <h3 title="{{ case.source_subject or 'Mailbox-Nachricht' }}">{{ case.source_subject or 'Mailbox-Nachricht ohne Betreff' }}</h3>
+              <p>{{ case.source_sender or 'Unbekannter Absender' }}</p>
+              <time datetime="{{ case.received_at.isoformat() if case.received_at else '' }}">
+                {{ case.received_at.strftime('%d.%m.%Y · %H:%M') if case.received_at else 'Eingangszeit unbekannt' }}
+              </time>
+            </div>
+            <div class="mailbox-queue-cell" data-label="Status">
+              {{ mailbox_status(case.status) }}
+            </div>
+            <div class="mailbox-queue-cell" data-label="Rückruf">
+              <strong class="mailbox-cell-primary">{{ case.callback_phone or 'Noch offen' }}</strong>
+              {% if case.phone_source %}<span class="mailbox-cell-secondary">Quelle: {{ phone_source_label(case.phone_source) }}</span>{% endif %}
+            </div>
+            <div class="mailbox-queue-cell" data-label="Schadenart">
+              <strong class="mailbox-cell-primary">{{ case.damage_type or 'Noch offen' }}</strong>
+              <span class="mailbox-cell-secondary">Schadenanliegen</span>
+            </div>
+            <div class="mailbox-queue-cell" data-label="Hinweis">
+              {% set reason = case.last_error if case_status == 'failed' else case.review_reason %}
+              <span class="mailbox-reason {{ 'is-error' if case_status == 'failed' else '' }}">
+                {{ reason or ('Bereit zur Detailprüfung' if case_status in ['new', 'review'] else 'Keine offene Aktion') }}
+              </span>
+            </div>
+            <div class="mailbox-queue-action">
+              {{ button('Prüfen' if case_status in ['new', 'review'] else 'Öffnen', href=url_for('mailbox.detail', case_id=case.id), variant='secondary', icon_name='chevron-right', size='sm') }}
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      {% if not mailbox_enabled %}
+        {% call empty_state('Postfach noch nicht eingerichtet', 'Hinterlege zuerst die IMAP- und Placetel-Erkennungsmerkmale in der Konfiguration. Danach können neue Mailbox-Nachrichten hier verarbeitet werden.', 'mail') %}{% endcall %}
+      {% elif selected_status != 'all' %}
+        {% call empty_state('Keine Vorgänge in diesem Status', 'Für den gewählten Filter gibt es aktuell keine Mailbox-Nachrichten. Wechsle zu „Alle“, um die gesamte Warteschlange zu sehen.', 'check-circle') %}
+          {{ button('Alle Vorgänge', href=url_for('dashboard.index'), variant='secondary', icon_name='list-checks') }}
+        {% endcall %}
+      {% else %}
+        {% call empty_state('Noch keine Mailbox-Nachrichten', 'Prüfe das Postfach, um passende Placetel-Nachrichten zu erkennen und im sicheren Dry Run aufzubereiten.', 'mail') %}{% endcall %}
+      {% endif %}
+    {% endif %}
+  </section>
 </div>
 {% endblock %}

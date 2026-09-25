@@ -13,6 +13,13 @@ def make_celery(app):
         result_backend=app.config["CELERY_RESULT_BACKEND"],
         task_always_eager=app.config.get("CELERY_TASK_ALWAYS_EAGER", False),
     )
+    if app.config.get("PLACETEL_MAILBOX_ENABLED"):
+        celery_app.conf.beat_schedule = {
+            "poll-placetel-mailbox": {
+                "task": "app.tasks.mailbox_tasks.poll_placetel_mailbox",
+                "schedule": app.config["PLACETEL_POLL_INTERVAL_SECONDS"],
+            }
+        }
     celery_app.set_default()
     app.extensions["celery"] = celery_app
     return celery_app

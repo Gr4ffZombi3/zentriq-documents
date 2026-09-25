@@ -26,6 +26,19 @@ class DocStatus(enum.Enum):
     FAILED = "failed"
 
 
+class MailboxStatus(enum.Enum):
+    NEW = "new"
+    REVIEW = "review"
+    CALLBACK_REQUESTED = "callback_requested"
+    FAILED = "failed"
+
+
+class CallbackAttemptStatus(enum.Enum):
+    PREPARED = "prepared"
+    SUBMITTED = "submitted"
+    FAILED = "failed"
+
+
 class OcrEngine(enum.Enum):
     NONE = "none"
     TESSERACT = "tesseract"

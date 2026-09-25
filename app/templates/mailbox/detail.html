@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import badge %}
+{% from "ui/forms.html" import button %}
+{% from "ui/icons.html" import icon %}
+
+{% macro mailbox_status(status) -%}
+  {% set value = status.value if status.value is defined else status %}
+  {% set labels = {'new': 'Neu', 'review': 'Zur Prüfung', 'callback_requested': 'Rückruf angefordert', 'failed': 'Fehlgeschlagen'} %}
+  {% set variants = {'new': 'muted', 'review': 'warning', 'callback_requested': 'success', 'failed': 'danger'} %}
+  {% set icons = {'new': 'mail', 'review': 'alert-circle', 'callback_requested': 'check-circle', 'failed': 'alert-triangle'} %}
+  {{ badge(labels.get(value, value), variant=variants.get(value, 'muted'), icon_name=icons.get(value, 'info')) }}
+{%- endmacro %}
+
+{% macro attempt_status(status) -%}
+  {% set value = status.value if status.value is defined else status %}
+  {% set labels = {'prepared': 'Vorbereitet', 'submitted': 'Abgesendet', 'failed': 'Fehlgeschlagen'} %}
+  {% set variants = {'prepared': 'info', 'submitted': 'success', 'failed': 'danger'} %}
+  {{ badge(labels.get(value, value), variant=variants.get(value, 'muted')) }}
+{%- endmacro %}
+
+{% block title %}Mailbox-Vorgang #{{ mailbox_case.id }} – Zentriq{% endblock %}
+
+{% macro phone_source_label(source) -%}
+  {%- set labels = {
+    'transcript_explicit': 'gesprochener Nachricht',
+    'email_caller_id': 'übermittelter Anrufernummer',
+    'manual': 'manueller Korrektur'
+  } -%}
+  {{- labels.get(source, 'übermittelter Anrufernummer') -}}
+{%- endmacro %}
+
+{% block content %}
+{% set case_status = mailbox_case.status.value if mailbox_case.status.value is defined else mailbox_case.status %}
+{% set event_labels = {
+  'created': 'Mailbox-Nachricht erfasst',
+  'received': 'Mailbox-Nachricht erfasst',
+  'transcribed': 'Audio transkribiert',
+  'classified': 'Formulardaten erkannt',
+  'review_required': 'Zur Prüfung gestellt',
+  'corrected': 'Daten korrigiert',
+  'prepared': 'Rückruf vorbereitet',
+  'submitted': 'Rückruf angefordert',
+  'failed': 'Verarbeitung fehlgeschlagen',
+  'retry_requested': 'Erneute Ausführung gestartet'
+} %}
+<div class="page-shell page-shell-wide mailbox-page-shell">
+  <header class="mailbox-detail-header">
+    <div>
+      <a href="{{ url_for('dashboard.index') }}" class="mailbox-back-link">
+        {{ icon('chevron-left', class='h-4 w-4') }}
+        Zur Rückruf-Automation
+      </a>
+      <span class="page-eyebrow mt-5">Mailbox-Vorgang #{{ mailbox_case.id }}</span>
+      <div class="mailbox-detail-title-row">
+        <h1 class="page-title">{{ mailbox_case.source_subject or 'Mailbox-Nachricht ohne Betreff' }}</h1>
+        {{ mailbox_status(mailbox_case.status) }}
+      </div>
+      <p class="page-description mt-3">Erkannte Angaben prüfen, korrigieren und die Verarbeitung lückenlos nachvollziehen.</p>
+    </div>
+  </header>
+
+  {% if dry_run %}
+    <section class="mailbox-environment-banner is-dry-run mailbox-detail-mode" aria-label="Betriebsmodus">
+      <span class="mailbox-environment-icon">{{ icon('shield', class='h-5 w-5') }}</span>
+      <div>
+        <h2 class="mailbox-environment-title">Dry Run aktiv</h2>
+        <p class="mailbox-environment-copy">Du kannst Erkennung, Korrekturen und Formularvorbereitung prüfen. Es wird keine echte Rückrufanforderung abgesendet.</p>
+      </div>
+    </section>
+  {% elif not automation_enabled %}
+    <section class="mailbox-environment-banner is-paused mailbox-detail-mode" aria-label="Betriebsmodus">
+      <span class="mailbox-environment-icon">{{ icon('alert-circle', class='h-5 w-5') }}</span>
+      <div>
+        <h2 class="mailbox-environment-title">Automation pausiert</h2>
+        <p class="mailbox-environment-copy">Korrekturen werden gespeichert, die Übermittlung bleibt bis zur Aktivierung angehalten.</p>
+      </div>
+    </section>
+  {% endif %}
+
+  <div class="mailbox-detail-grid">
+    <main class="mailbox-detail-main">
+      <section class="mailbox-detail-card" aria-labelledby="transcript-title">
+        <div class="mailbox-card-heading">
+          <div>
+            <span class="mailbox-card-kicker">Audioinhalt</span>
+            <h2 id="transcript-title" class="mailbox-section-title">Transkript</h2>
+          </div>
+          {% if mailbox_case.audio_filename %}<span class="meta-chip">MP3 verarbeitet</span>{% endif %}
+        </div>
+        {% if mailbox_case.transcript %}
+          <blockquote class="mailbox-transcript">{{ mailbox_case.transcript }}</blockquote>
+        {% else %}
+          <div class="mailbox-inline-empty">
+            {{ icon('loader-circle' if case_status == 'new' else 'alert-circle', class='h-5 w-5') }}
+            <p>{{ 'Das Transkript wird noch erstellt.' if case_status == 'new' else 'Für diese Nachricht liegt kein Transkript vor.' }}</p>
+          </div>
+        {% endif %}
+      </section>
+
+      <section class="mailbox-detail-card" aria-labelledby="source-title">
+        <div class="mailbox-card-heading">
+          <div>
+            <span class="mailbox-card-kicker">Herkunft</span>
+            <h2 id="source-title" class="mailbox-section-title">Quellnachricht</h2>
+          </div>
+        </div>
+        <dl class="mailbox-metadata-grid">
+          <div>
+            <dt>Absender</dt>
+            <dd>{{ mailbox_case.source_sender or 'Unbekannt' }}</dd>
+          </div>
+          <div>
+            <dt>Eingang</dt>
+            <dd>{{ mailbox_case.received_at.strftime('%d.%m.%Y · %H:%M') if mailbox_case.received_at else 'Unbekannt' }}</dd>
+          </div>
+          <div>
+            <dt>Postfach</dt>
+            <dd>{{ mailbox_case.source_mailbox or 'Standardpostfach' }}</dd>
+          </div>
+          <div>
+            <dt>Audiodatei</dt>
+            <dd>{{ mailbox_case.audio_filename or 'Nicht gespeichert' }}</dd>
+          </div>
+          <div>
+            <dt>Verarbeitung begonnen</dt>
+            <dd>{{ mailbox_case.processing_started_at.strftime('%d.%m.%Y · %H:%M') if mailbox_case.processing_started_at else 'Noch nicht' }}</dd>
+          </div>
+          <div>
+            <dt>Verarbeitet</dt>
+            <dd>{{ mailbox_case.processed_at.strftime('%d.%m.%Y · %H:%M') if mailbox_case.processed_at else 'Noch nicht' }}</dd>
+          </div>
+        </dl>
+      </section>
+    </main>
+
+    <aside class="mailbox-detail-aside">
+      <section class="mailbox-form-card" aria-labelledby="form-data-title">
+        <div class="mailbox-card-heading">
+          <div>
+            <span class="mailbox-card-kicker">HUK-Rückrufservice</span>
+            <h2 id="form-data-title" class="mailbox-section-title">Erkannte Formulardaten</h2>
+          </div>
+        </div>
+
+        {% if mailbox_case.review_reason or mailbox_case.last_error %}
+          <div class="mailbox-review-note {{ 'is-error' if mailbox_case.last_error else '' }}">
+            {{ icon('alert-triangle' if mailbox_case.last_error else 'alert-circle', class='h-4 w-4') }}
+            <p>{{ mailbox_case.last_error or mailbox_case.review_reason }}</p>
+          </div>
+        {% endif %}
+
+        <form method="post" action="{{ url_for('mailbox.update', case_id=mailbox_case.id) }}" class="mailbox-correction-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mailbox-field-group">
+            <label for="callback_phone" class="field-label">Rückrufnummer</label>
+            <input id="callback_phone" name="callback_phone" type="tel" class="field-surface text-sm" value="{{ mailbox_case.callback_phone or '' }}" autocomplete="tel" inputmode="tel" placeholder="z. B. +49 170 1234567">
+            {% if mailbox_case.phone_source %}
+              <p class="mailbox-field-hint">Erkannt aus: {{ phone_source_label(mailbox_case.phone_source) }}</p>
+            {% endif %}
+          </div>
+
+          <div class="mailbox-field-group">
+            <span class="field-label">Anliegen</span>
+            <div class="mailbox-fixed-field">
+              {{ icon('shield', class='h-4 w-4') }}
+              <span>Schadenanliegen</span>
+              {{ badge('Fest vorgegeben', variant='muted') }}
+            </div>
+          </div>
+
+          <div class="mailbox-field-group">
+            <label for="damage_type" class="field-label">Schadenart</label>
+            <select id="damage_type" name="damage_type" class="field-surface text-sm">
+              <option value="">Bitte auswählen</option>
+              {% for damage_type in allowed_damage_types %}
+                <option value="{{ damage_type }}" {% if mailbox_case.damage_type == damage_type %}selected{% endif %}>{{ damage_type }}</option>
+              {% endfor %}
+            </select>
+            <p class="mailbox-field-hint">Es stehen ausschließlich die im HUK-Formular geprüften Auswahlwerte zur Verfügung.</p>
+          </div>
+
+          {{ button('Korrektur speichern', type='submit', variant='primary', icon_name='check-circle', extra_class='w-full') }}
+        </form>
+      </section>
+
+      {% if case_status in ['failed', 'review', 'new'] %}
+        <section class="mailbox-retry-card" aria-labelledby="retry-title">
+          <div>
+            <h2 id="retry-title" class="mailbox-section-title">Verarbeitung erneut starten</h2>
+            <p class="mailbox-section-copy mt-2">
+              {% if dry_run %}
+                Die Formulardaten werden erneut vorbereitet; ein echtes Absenden bleibt im Dry Run gesperrt.
+              {% else %}
+                Der Vorgang wird mit den gespeicherten Korrekturen erneut geprüft und nur bei eindeutigen Daten abgesendet.
+              {% endif %}
+            </p>
+          </div>
+          <form method="post" action="{{ url_for('mailbox.retry', case_id=mailbox_case.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {{ button('Vorgang erneut ausführen', type='submit', variant='secondary', icon_name='refresh-cw', extra_class='w-full') }}
+          </form>
+        </section>
+      {% endif %}
+    </aside>
+  </div>
+
+  <section class="mailbox-audit-panel" aria-labelledby="audit-title">
+    <div class="mailbox-queue-heading">
+      <div>
+        <h2 id="audit-title" class="mailbox-section-title">Verlauf &amp; Übermittlungen</h2>
+        <p class="mailbox-section-copy">Zeitpunkte und Ergebnisse werden ohne sensible Rohdaten angezeigt.</p>
+      </div>
+      <span class="meta-chip">{{ mailbox_case.events|length + mailbox_case.attempts|length }} Einträge</span>
+    </div>
+
+    {% if mailbox_case.events or mailbox_case.attempts %}
+      <ol class="mailbox-audit-timeline">
+        {% for event in mailbox_case.events %}
+          <li class="mailbox-audit-item">
+            <span class="mailbox-audit-marker">{{ icon('history', class='h-3.5 w-3.5') }}</span>
+            <div class="mailbox-audit-content">
+              <div class="mailbox-audit-topline">
+                <h3>{{ event_labels.get(event.event_type, event.event_type|replace('_', ' ')|title) }}</h3>
+                <time>{{ event.created_at.strftime('%d.%m.%Y · %H:%M') if event.created_at else 'Zeitpunkt unbekannt' }}</time>
+              </div>
+              {% if event.details is mapping %}
+                {% set event_note = event.details.get('message') or event.details.get('reason') or event.details.get('error') %}
+                {% if event_note %}<p>{{ event_note }}</p>{% endif %}
+              {% endif %}
+            </div>
+          </li>
+        {% endfor %}
+        {% for attempt in mailbox_case.attempts %}
+          {% set attempt_value = attempt.status.value if attempt.status.value is defined else attempt.status %}
+          <li class="mailbox-audit-item {{ 'is-error' if attempt_value == 'failed' else '' }}">
+            <span class="mailbox-audit-marker">{{ icon('alert-triangle' if attempt_value == 'failed' else 'phone', class='h-3.5 w-3.5') }}</span>
+            <div class="mailbox-audit-content">
+              <div class="mailbox-audit-topline">
+                <h3>HUK-Formular {{ attempt_status(attempt.status) }}</h3>
+                <time>{{ attempt.started_at.strftime('%d.%m.%Y · %H:%M') if attempt.started_at else 'Zeitpunkt unbekannt' }}</time>
+              </div>
+              <div class="mailbox-audit-tags">
+                {% if attempt.dry_run %}{{ badge('Dry Run', variant='info') }}{% endif %}
+                {% if attempt.completed_at %}<span>Abschluss {{ attempt.completed_at.strftime('%d.%m.%Y · %H:%M') }}</span>{% endif %}
+              </div>
+              {% if attempt.error_message %}<p class="mailbox-audit-error">{{ attempt.error_message }}</p>{% endif %}
+            </div>
+          </li>
+        {% endfor %}
+      </ol>
+    {% else %}
+      <div class="mailbox-inline-empty mailbox-audit-empty">
+        {{ icon('history', class='h-5 w-5') }}
+        <p>Noch keine Verarbeitungsschritte protokolliert.</p>
+      </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

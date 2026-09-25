@@ -4,7 +4,7 @@ from app.models import Customer, DocStatus, DocType, Document, Recommendation, R
 def test_index_returns_200(auth_client):
     resp = auth_client.get("/")
     assert resp.status_code == 200
-    assert "Zentriq Documents" in resp.get_data(as_text=True)
+    assert "Rückruf-Automation" in resp.get_data(as_text=True)
 
 
 def test_index_redirects_to_login_when_unauthenticated(client):

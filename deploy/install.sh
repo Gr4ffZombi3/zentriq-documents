@@ -56,6 +56,7 @@ fi
 source .venv/bin/activate
 pip install --upgrade pip -q
 pip install -q -r requirements.txt
+playwright install --with-deps chromium
 deactivate
 
 echo "==> [4/10] .env einrichten..."
@@ -104,10 +105,12 @@ sed -e "s#__APP_DIR__#${APP_DIR}#g" \
     "${APP_DIR}/deploy/systemd/zentriq-api.service.template" > /etc/systemd/system/zentriq-api.service
 sed -e "s#__APP_DIR__#${APP_DIR}#g" \
     "${APP_DIR}/deploy/systemd/zentriq-worker.service.template" > /etc/systemd/system/zentriq-worker.service
+sed -e "s#__APP_DIR__#${APP_DIR}#g" \
+    "${APP_DIR}/deploy/systemd/zentriq-beat.service.template" > /etc/systemd/system/zentriq-beat.service
 chmod +x "${APP_DIR}/deploy/pre-start.sh" "${APP_DIR}/deploy/post-deploy.sh" "${APP_DIR}/deploy/repair-nginx.sh" "${APP_DIR}/deploy/update.sh"
 systemctl daemon-reload
-systemctl enable zentriq-api zentriq-worker
-systemctl restart zentriq-api zentriq-worker
+systemctl enable zentriq-api zentriq-worker zentriq-beat
+systemctl restart zentriq-api zentriq-worker zentriq-beat
 
 echo "==> [8/10] nginx einrichten..."
 if [ ! -f /etc/nginx/sites-available/zentriq ]; then
@@ -137,7 +140,7 @@ if [ -n "$DOMAIN" ]; then
         else
             printf '\nPUBLIC_URL=https://%s\n' "$DOMAIN" >> .env
         fi
-        systemctl restart zentriq-api zentriq-worker
+        systemctl restart zentriq-api zentriq-worker zentriq-beat
         echo "    SSL aktiv, SESSION_COOKIE_SECURE=true gesetzt."
     else
         echo "    certbot fehlgeschlagen (zeigt die Domain schon auf diesen Server? DNS propagiert?)."

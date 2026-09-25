@@ -58,6 +58,13 @@ def verify_reset_token(token: str | None) -> User | None:
     return user
 
 
+def is_password_reset_available() -> bool:
+    """Der Reset wird nur angeboten, wenn Reset-Mails tatsaechlich versendet werden koennen."""
+    from app.services.mailer import is_mail_configured
+
+    return bool(is_mail_configured() and current_app.config.get("PUBLIC_URL"))
+
+
 def build_reset_url(token: str) -> str:
     base_url = current_app.config.get("PUBLIC_URL")
     if not base_url:

@@ -9,7 +9,11 @@ from app.extensions import db
 from app.models import Tenant, User
 from app.models.audit_log import AuditEventType
 from app.services.audit import log_audit_event
-from app.services.password_reset import is_reset_rate_limited, verify_reset_token
+from app.services.password_reset import (
+    is_password_reset_available,
+    is_reset_rate_limited,
+    verify_reset_token,
+)
 from app.tasks.auth_tasks import send_password_reset_email
 from app.tenancy import bypass_tenant_scope, set_current_tenant_id, use_tenant_id
 from app.utils.slugs import unique_tenant_slug
@@ -111,8 +115,15 @@ def login():
     return render_template("auth/login.html", form=form)
 
 
+@auth_bp.app_context_processor
+def _inject_password_reset_available():
+    return {"password_reset_available": is_password_reset_available()}
+
+
 @auth_bp.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
+    if not is_password_reset_available():
+        abort(404)
     if current_user.is_authenticated:
         return redirect(url_for("dashboard.index"))
 
@@ -141,6 +152,8 @@ def forgot_password():
 
 @auth_bp.route("/reset-password", methods=["GET", "POST"])
 def reset_password():
+    if not is_password_reset_available():
+        abort(404)
     if current_user.is_authenticated:
         return redirect(url_for("dashboard.index"))
 

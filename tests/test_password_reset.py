@@ -10,9 +10,10 @@ RESET_PATH = "/auth/reset-password"
 LINK_PREFIX = "https://zentriq.test/auth/reset-password#token="
 
 
-@pytest.fixture()
+@pytest.fixture(autouse=True)
 def sent_mails(monkeypatch, app):
-    """Faengt den SMTP-Versand ab und aktiviert eine (fiktive) Mail-Konfiguration."""
+    """Faengt den SMTP-Versand ab und aktiviert eine (fiktive) Mail-Konfiguration - ohne sie
+    ist der Passwort-Reset bewusst nicht verfuegbar (siehe Tests weiter unten)."""
     app.config["SMTP_HOST"] = "smtp.example.test"
     app.config["MAIL_FROM"] = "noreply@example.test"
     mails = []
@@ -114,12 +115,36 @@ def test_forgot_password_is_rate_limited_per_account(client, app, user, sent_mai
     assert len(_reset_events(AuditEventType.PASSWORD_RESET_REQUESTED)) == 2
 
 
-def test_forgot_password_without_mail_config_sends_nothing(client, user, monkeypatch):
-    calls = []
-    monkeypatch.setattr("app.tasks.auth_tasks.send_email", lambda *args: calls.append(args))
-    resp = client.post("/auth/forgot-password", data={"email": user.email})
-    assert resp.status_code == 302
-    assert calls == []
+@pytest.mark.parametrize("missing", ["SMTP_HOST", "MAIL_FROM", "PUBLIC_URL"])
+def test_reset_is_unavailable_without_complete_mail_config(app, client, user, sent_mails, missing):
+    app.config[missing] = None
+    login_html = client.get("/auth/login")
+    assert login_html.status_code == 200
+    assert "Passwort vergessen?" not in login_html.get_data(as_text=True)
+    assert client.get("/auth/forgot-password").status_code == 404
+    assert client.post("/auth/forgot-password", data={"email": user.email}).status_code == 404
+    assert client.get(RESET_PATH).status_code == 404
+    assert _submit_reset(client, generate_reset_token(user), "ganz-neues-passwort").status_code == 404
+    assert user.check_password("testpassword123")
+    assert sent_mails == []
+    assert _reset_events(AuditEventType.PASSWORD_RESET_REQUESTED) == []
+
+
+def test_login_template_only_builds_reset_url_when_available(app):
+    """Hotfix-Absicherung: login.html ruft url_for('auth.forgot_password') nur auf, wenn
+    password_reset_available gesetzt ist - ein Prozess ohne diese Variable (z. B. ein noch
+    laufender Altstand ohne Reset-Route) rendert die Seite daher ohne BuildError."""
+    source = app.jinja_loader.get_source(app.jinja_env, "auth/login.html")[0]
+    guard = source.index("{% if password_reset_available %}")
+    assert guard < source.index("url_for('auth.forgot_password')") < source.index("{% endif %}", guard)
+
+
+def test_send_task_is_fail_closed_without_mail_config(app, user, sent_mails):
+    from app.tasks.auth_tasks import send_password_reset_email
+
+    app.config["SMTP_HOST"] = None
+    assert send_password_reset_email(user.id) == {"sent": False, "reason": "not_configured"}
+    assert sent_mails == []
 
 
 def test_forgot_password_survives_broker_failure(client, user, monkeypatch):

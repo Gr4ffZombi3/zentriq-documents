@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import PasswordField, RadioField, StringField, SubmitField
+from wtforms import HiddenField, PasswordField, RadioField, StringField, SubmitField
 from wtforms.validators import DataRequired, Email, EqualTo, Length
 
 
@@ -37,6 +37,7 @@ class ForgotPasswordForm(FlaskForm):
 
 
 class ResetPasswordForm(FlaskForm):
+    token = HiddenField()
     password = PasswordField(
         "Neues Passwort", validators=[DataRequired(), Length(min=8, message="Mindestens 8 Zeichen.")]
     )

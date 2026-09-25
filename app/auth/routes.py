@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 RESET_REQUESTED_MESSAGE = (
-    "Falls ein Konto mit dieser E-Mail-Adresse existiert, haben wir dir einen Link zum "
-    "Zurücksetzen des Passworts geschickt."
+    "Falls ein Konto mit dieser E-Mail-Adresse existiert, wurde eine Nachricht zum "
+    "Zurücksetzen des Passworts versendet."
 )
 
 
@@ -137,17 +137,19 @@ def forgot_password():
     return render_template("auth/forgot_password.html", form=form)
 
 
-@auth_bp.route("/reset-password/<token>", methods=["GET", "POST"])
-def reset_password(token):
+@auth_bp.route("/reset-password", methods=["GET", "POST"])
+def reset_password():
     if current_user.is_authenticated:
         return redirect(url_for("dashboard.index"))
 
-    user = verify_reset_token(token)
-    if user is None:
-        flash("Der Link ist ungültig oder abgelaufen. Bitte fordere einen neuen an.", "error")
-        return redirect(url_for("auth.forgot_password"))
-
+    # Das Token kommt nur per POST-Body (aus dem URL-Fragment), nie ueber Pfad oder Query-String.
     form = ResetPasswordForm()
+    if form.is_submitted():
+        user = verify_reset_token(form.token.data)
+        if user is None:
+            flash("Der Link ist ungültig oder abgelaufen. Bitte fordere einen neuen an.", "error")
+            return redirect(url_for("auth.forgot_password"))
+
     if form.validate_on_submit():
         with use_tenant_id(user.tenant_id):
             user.set_password(form.password.data)
@@ -157,7 +159,7 @@ def reset_password(token):
         return redirect(url_for("auth.login"))
 
     response = make_response(render_template("auth/reset_password.html", form=form))
-    # Token steht in der URL: nicht an Dritte weitergeben und nicht zwischenspeichern.
+    # Seite verarbeitet ein Token: nicht an Dritte weitergeben und nicht zwischenspeichern.
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Cache-Control"] = "no-store"
     return response

@@ -26,16 +26,21 @@ def _serializer() -> URLSafeTimedSerializer:
 
 
 def _password_fingerprint(user: User) -> str:
-    return hashlib.sha256(user.password_hash.encode("utf-8")).hexdigest()[:32]
+    # HMAC statt reinem Hash: Der Token-Payload ist nur signiert, nicht verschluesselt, und
+    # soll nichts vom Passwort-Hash preisgeben.
+    key = current_app.config["SECRET_KEY"].encode("utf-8")
+    return hmac.new(key, user.password_hash.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
 
 
 def generate_reset_token(user: User) -> str:
     return _serializer().dumps({"uid": user.id, "pw": _password_fingerprint(user)})
 
 
-def verify_reset_token(token: str) -> User | None:
+def verify_reset_token(token: str | None) -> User | None:
     """Liefert den User zum Token oder None, wenn das Token ungueltig, abgelaufen, bereits
     verbraucht oder das Konto deaktiviert ist."""
+    if not token:
+        return None
     max_age = current_app.config["PASSWORD_RESET_TOKEN_MAX_AGE_SECONDS"]
     try:
         payload = _serializer().loads(token, max_age=max_age)
@@ -57,7 +62,9 @@ def build_reset_url(token: str) -> str:
     base_url = current_app.config.get("PUBLIC_URL")
     if not base_url:
         raise RuntimeError("PUBLIC_URL ist nicht konfiguriert.")
-    return f"{base_url}/auth/reset-password/{token}"
+    # Token im Fragment (#): Browser senden es nie an den Server, dadurch taucht es weder in
+    # Gunicorn-/nginx-Access-Logs noch im Referer auf. Die Seite uebertraegt es per POST.
+    return f"{base_url}/auth/reset-password#token={token}"
 
 
 def is_reset_rate_limited(user: User) -> bool:

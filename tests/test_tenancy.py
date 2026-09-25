@@ -83,3 +83,26 @@ def test_tenant_queries_never_require_tenant_context():
     set_current_tenant_id(None)
     # Tenant selbst ist nicht mandantengebunden - darf ohne Kontext abgefragt werden.
     Tenant.query.all()
+
+
+def test_count_is_tenant_scoped(app, db, tenant):
+    """Regression: Query.count() erzeugt SELECT count(*) FROM (Unterabfrage). Der Tenant-Filter
+    muss auch dort greifen, sonst zaehlen Kennzahlen (Dashboard, Statistiken) mandantenuebergreifend."""
+    tenant_b = Tenant(name="Tenant B", slug="tenant-b-count")
+    db.session.add(tenant_b)
+    db.session.commit()
+    make_document(db, tenant.id, "a.pdf")
+    make_document(db, tenant.id, "a2.pdf")
+
+    set_current_tenant_id(tenant_b.id)
+    assert Document.query.count() == 0
+    assert Document.query.filter_by(status=DocStatus.PENDING).count() == 0
+
+    set_current_tenant_id(tenant.id)
+    assert Document.query.count() == 2
+
+
+def test_count_without_tenant_context_fails_closed(db):
+    set_current_tenant_id(None)
+    with pytest.raises(MissingTenantContextError):
+        Document.query.count()

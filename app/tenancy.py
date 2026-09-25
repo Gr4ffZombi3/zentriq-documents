@@ -11,6 +11,7 @@ from contextvars import ContextVar
 
 from flask import abort
 from sqlalchemy import event
+from sqlalchemy.sql import visitors
 from sqlalchemy.orm import declared_attr, with_loader_criteria
 from sqlalchemy.orm.session import Session
 
@@ -82,15 +83,30 @@ def bypass_tenant_scope():
         _bypass_tenant_scope.reset(token)
 
 
+def _tenant_scoped_tables() -> frozenset:
+    return frozenset(
+        mapper.local_table
+        for mapper in db.Model.registry.mappers
+        if issubclass(mapper.class_, TenantScopedMixin)
+    )
+
+
+def _statement_touches_tenant_scoped(execute_state) -> bool:
+    """Prueft nicht nur die Top-Level-Entities, sondern auch Unterabfragen: `Query.count()`
+    erzeugt `SELECT count(*) FROM (SELECT ... FROM <tabelle>)` - dort liefert
+    `all_mappers` nichts, der Tenant-Filter muss aber trotzdem greifen."""
+    if any(issubclass(mapper.class_, TenantScopedMixin) for mapper in execute_state.all_mappers):
+        return True
+    scoped_tables = _tenant_scoped_tables()
+    return any(element in scoped_tables for element in visitors.iterate(execute_state.statement))
+
+
 @event.listens_for(Session, "do_orm_execute")
 def _apply_tenant_filter(execute_state):
     if not execute_state.is_select or _bypass_tenant_scope.get():
         return
 
-    touches_tenant_scoped = any(
-        issubclass(mapper.class_, TenantScopedMixin) for mapper in execute_state.all_mappers
-    )
-    if not touches_tenant_scoped:
+    if not _statement_touches_tenant_scoped(execute_state):
         return
 
     tenant_id = _current_tenant_id.get()

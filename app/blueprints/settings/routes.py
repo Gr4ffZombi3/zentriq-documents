@@ -11,11 +11,7 @@ settings_bp = Blueprint("settings", __name__, url_prefix="/settings")
 @settings_bp.route("")
 @login_required
 def index():
-    return render_template(
-        "settings/coming_soon.html",
-        title="Einstellungen",
-        description="Weitere Einstellungen (Benachrichtigungen, Team, Abrechnung) folgen in Kürze.",
-    )
+    return redirect(url_for("settings.users" if current_user.is_admin else "settings.profile"))
 
 
 @settings_bp.route("/users")

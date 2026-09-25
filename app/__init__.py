@@ -41,7 +41,9 @@ def create_app(config_object=None):
     from app.blueprints.customers.routes import customers_bp
     from app.blueprints.dashboard.routes import dashboard_bp
     from app.blueprints.documents.routes import documents_bp
+    from app.blueprints.leipziger.routes import leipziger_bp
     from app.blueprints.mailbox.routes import mailbox_bp
+    from app.blueprints.portal.routes import portal_bp
     from app.blueprints.potenziale.routes import potenziale_bp
     from app.blueprints.recommendations.routes import recommendations_bp
     from app.blueprints.search.routes import search_bp
@@ -50,6 +52,8 @@ def create_app(config_object=None):
     from app.blueprints.upload.routes import upload_bp
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(portal_bp)
+    app.register_blueprint(leipziger_bp)
     app.register_blueprint(bestand_bp)
     app.register_blueprint(chat_bp)
     app.register_blueprint(cockpit_bp)
@@ -70,6 +74,13 @@ def create_app(config_object=None):
 
     app.jinja_env.globals["build_document_progress"] = build_document_progress
     app.jinja_env.globals["is_document_active_status"] = is_document_active_status
+
+    from app.navigation import build_navigation
+    from app.template_filters import register_template_filters
+
+    register_template_filters(app)
+
+    app.context_processor(build_navigation)
 
     @login_manager.user_loader
     def load_user(user_id):

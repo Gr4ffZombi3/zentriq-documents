@@ -33,7 +33,7 @@ def register():
     if not current_app.config.get("REGISTRATION_ENABLED"):
         abort(404)
     if current_user.is_authenticated:
-        return redirect(url_for("dashboard.index"))
+        return redirect(url_for("portal.home"))
 
     form = RegisterForm()
     if form.validate_on_submit():
@@ -70,7 +70,7 @@ def register():
             AuditEventType.LOGIN_SUCCESS, tenant_id=tenant.id, user=user, details={"reason": "registration"}
         )
         flash("Willkommen bei Zentriq Documents!", "success")
-        return redirect(url_for("dashboard.index"))
+        return redirect(url_for("portal.home"))
 
     return render_template("auth/register.html", form=form)
 
@@ -78,7 +78,7 @@ def register():
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for("dashboard.index"))
+        return redirect(url_for("portal.home"))
 
     form = LoginForm()
     if form.validate_on_submit():
@@ -112,7 +112,7 @@ def login():
         user.last_login_at = datetime.now(timezone.utc)
         db.session.commit()
         log_audit_event(AuditEventType.LOGIN_SUCCESS, tenant_id=user.tenant_id, user=user)
-        return redirect(url_for("dashboard.index"))
+        return redirect(url_for("portal.home"))
 
     return render_template("auth/login.html", form=form)
 
@@ -127,7 +127,7 @@ def forgot_password():
     if not is_password_reset_available():
         abort(404)
     if current_user.is_authenticated:
-        return redirect(url_for("dashboard.index"))
+        return redirect(url_for("portal.home"))
 
     form = ForgotPasswordForm()
     if form.validate_on_submit():
@@ -157,7 +157,7 @@ def reset_password():
     if not is_password_reset_available():
         abort(404)
     if current_user.is_authenticated:
-        return redirect(url_for("dashboard.index"))
+        return redirect(url_for("portal.home"))
 
     # Das Token kommt nur per POST-Body (aus dem URL-Fragment), nie ueber Pfad oder Query-String.
     form = ResetPasswordForm()

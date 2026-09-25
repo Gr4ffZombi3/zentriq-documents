@@ -58,7 +58,7 @@ def test_dashboard_route_labels_transcript_sourced_phone_correctly(auth_client, 
         phone_source="transcript_explicit",
         review_reason=None,
     )
-    html = auth_client.get("/").get_data(as_text=True)
+    html = auth_client.get("/sprachnachrichten").get_data(as_text=True)
     assert "Quelle: Nachricht" in html
     assert "Quelle: Anruferkennung" not in html
 

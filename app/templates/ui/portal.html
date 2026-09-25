@@ -1,0 +1,29 @@
+{# Portal-Bausteine des einheitlichen Designsystems (Kennzahlen, Panels, Status). #}
+
+{% macro kpi(label, value, meta=None, tone=None, href=None) -%}
+{% if href %}<a href="{{ href }}" class="kpi kpi-link{{ ' kpi-' ~ tone if tone else '' }}">{% else %}<div class="kpi{{ ' kpi-' ~ tone if tone else '' }}">{% endif %}
+  <span class="kpi-label">{{ label }}</span>
+  <span class="kpi-value">{{ value }}</span>
+  {% if meta %}<span class="kpi-meta">{{ meta }}</span>{% endif %}
+{% if href %}</a>{% else %}</div>{% endif %}
+{%- endmacro %}
+
+{% macro panel(title=None, description=None, extra_class='', flush=False) -%}
+<section class="panel {{ extra_class }}">
+  {% if title %}
+    <header class="panel-header">
+      <div class="min-w-0">
+        <h2 class="panel-title">{{ title }}</h2>
+        {% if description %}<p class="panel-description">{{ description }}</p>{% endif %}
+      </div>
+    </header>
+  {% endif %}
+  <div class="{{ 'panel-body-flush' if flush else 'panel-body' }}">
+    {{ caller() }}
+  </div>
+</section>
+{%- endmacro %}
+
+{% macro state_tag(text, tone='neutral') -%}
+<span class="state-tag state-tag-{{ tone }}">{{ text }}</span>
+{%- endmacro %}

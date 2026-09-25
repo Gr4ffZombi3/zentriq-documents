@@ -1,0 +1,50 @@
+{% from "ui/icons.html" import icon %}
+<header class="app-header">
+  <div class="app-header-inner">
+    <a href="{{ url_for('portal.home') }}" class="app-brand" aria-label="Zentriq – Startseite">
+      <span class="app-brand-mark" aria-hidden="true">Z</span>
+      <span class="app-brand-name">Zentriq</span>
+    </a>
+
+    <nav class="app-nav" aria-label="Hauptnavigation" :class="{ 'is-open': navOpen }">
+      {% for area in nav_areas %}
+        <a href="{{ area.url }}" class="app-nav-link {{ 'is-active' if area.active else '' }}"{% if area.active %} aria-current="page"{% endif %}>{{ area.label }}</a>
+      {% endfor %}
+      <div class="app-nav-mobile-user">
+        <a href="{{ url_for('settings.index') }}" class="app-nav-link {{ 'is-active' if nav_settings_active else '' }}">Einstellungen</a>
+      </div>
+    </nav>
+
+    {% if current_user.is_authenticated %}
+      <div class="app-user">
+        <div class="app-user-identity">
+          <span class="app-user-name" title="{{ current_user.email }}">{{ current_user.employee_profile.display_name if current_user.employee_profile and current_user.employee_profile.display_name else current_user.email }}</span>
+          <span class="app-role">{{ current_user.role.label }}</span>
+        </div>
+        <a href="{{ url_for('settings.index') }}" class="app-header-action {{ 'is-active' if nav_settings_active else '' }}" title="Einstellungen" aria-label="Einstellungen">
+          {{ icon('settings', class='h-4 w-4') }}<span class="app-header-action-label">Einstellungen</span>
+        </a>
+        <button
+          type="button"
+          x-data="{ dark: document.documentElement.classList.contains('dark') }"
+          x-on:click="dark = !dark; document.documentElement.classList.toggle('dark', dark); try { localStorage.setItem('zentriq-theme', dark ? 'dark' : 'light') } catch (e) {}"
+          class="app-header-action"
+          aria-label="Farbschema wechseln"
+          title="Farbschema wechseln"
+        >
+          <template x-if="!dark">{{ icon('moon', class='h-4 w-4') }}</template>
+          <template x-if="dark">{{ icon('sun', class='h-4 w-4') }}</template>
+        </button>
+        <form method="post" action="{{ url_for('auth.logout') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="app-header-action">
+            {{ icon('log-out', class='h-4 w-4') }}<span class="app-header-action-label">Abmelden</span>
+          </button>
+        </form>
+        <button type="button" class="app-header-action app-nav-toggle" x-on:click="navOpen = !navOpen" :aria-expanded="navOpen" aria-label="Menü">
+          {{ icon('menu', class='h-5 w-5') }}
+        </button>
+      </div>
+    {% endif %}
+  </div>
+</header>

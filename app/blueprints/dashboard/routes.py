@@ -7,7 +7,7 @@ from app.services.mailbox.schemas import HUK_DAMAGE_TYPES
 dashboard_bp = Blueprint("dashboard", __name__)
 
 
-@dashboard_bp.route("/")
+@dashboard_bp.route("/sprachnachrichten")
 @login_required
 def index():
     allowed_filters = {"all", *(status.value for status in MailboxStatus)}

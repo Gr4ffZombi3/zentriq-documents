@@ -198,7 +198,7 @@ def test_login_works_with_new_password_after_reset(client, user):
         data={"login_type": "email", "identifier": user.email, "password": "ganz-neues-passwort"},
     )
     assert new.status_code == 302
-    assert client.get("/").status_code == 200
+    assert client.get("/", follow_redirects=True).status_code == 200
 
 
 def test_reset_password_mismatch_is_rejected(client, user):

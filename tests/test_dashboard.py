@@ -27,7 +27,7 @@ def test_dashboard_route_renders_mailbox_overview(auth_client, tenant):
     make_case(tenant.id, status=MailboxStatus.CALLBACK_REQUESTED, source_key="k3")
     make_case(tenant.id, status=MailboxStatus.FAILED, source_key="k4")
 
-    response = auth_client.get("/")
+    response = auth_client.get("/sprachnachrichten")
     html = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -40,7 +40,7 @@ def test_dashboard_route_filters_by_status(auth_client, tenant):
     make_case(tenant.id, status=MailboxStatus.NEW, source_key="k1", source_subject="Neuer Anruf")
     make_case(tenant.id, status=MailboxStatus.FAILED, source_key="k2", source_subject="Fehlgeschlagener Anruf")
 
-    response = auth_client.get("/?status=failed")
+    response = auth_client.get("/sprachnachrichten?status=failed")
     html = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -51,7 +51,7 @@ def test_dashboard_route_filters_by_status(auth_client, tenant):
 def test_dashboard_route_ignores_invalid_status_filter(auth_client, tenant):
     make_case(tenant.id, status=MailboxStatus.NEW, source_key="k1", source_subject="Sichtbarer Anruf")
 
-    response = auth_client.get("/?status=not-a-real-status")
+    response = auth_client.get("/sprachnachrichten?status=not-a-real-status")
     html = response.get_data(as_text=True)
 
     assert response.status_code == 200

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header, status_badge %}
+{% from "ui/forms.html" import button %}
+{% from "ui/portal.html" import kpi, panel %}
+{% block title %}Leipziger Liste – Zentriq{% endblock %}
+
+{% macro comparison_panel(view, title, description, detail_endpoint, empty_text) -%}
+  {% call panel(title, description) %}
+    {% if view %}
+      {% set comparison = view.comparison %}
+      <dl class="meta-list">
+        <div><dt>Aktuelle Liste</dt><dd>{{ comparison.document.original_filename if comparison.document else '–' }}</dd></div>
+        <div><dt>Verglichen mit</dt><dd>{{ comparison.previous_document.original_filename if comparison.previous_document else '–' }}</dd></div>
+        <div><dt>Verglichen am</dt><dd>{{ comparison.compared_at | local_dt }}</dd></div>
+      </dl>
+      <table class="data-table data-table-compact">
+        <tbody>
+          {% for label, value in view.counters %}
+            <tr>
+              <th scope="row">{{ label }}</th>
+              <td class="num{{ ' is-zero' if not value else '' }}">{{ value }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="panel-footer-actions">
+        {{ button('Details öffnen', href=url_for(detail_endpoint, document_id=comparison.document_id), variant='secondary', size='sm') }}
+      </div>
+    {% else %}
+      <p class="empty-note">{{ empty_text }}</p>
+    {% endif %}
+  {% endcall %}
+{%- endmacro %}
+
+{% block content %}
+<div class="page-shell page-shell-wide">
+  {% call page_header('Leipziger Liste', 'Hochgeladene Listen, Vergleiche zur Vorversion und zur GS-Liste sowie der Einstieg in alle Auswertungen.') %}
+    {{ button('Liste hochladen', href=url_for('documents.list_documents') ~ '#upload-widget', variant='primary', icon_name='upload') }}
+    {{ button('Zur Auswertung', href=url_for('potenziale.index'), variant='secondary') }}
+  {% endcall %}
+
+  <div class="kpi-row">
+    {{ kpi('Listen gesamt', overview.list_count, href=url_for('documents.list_documents')) }}
+    {{ kpi('In Verarbeitung', overview.processing_count, tone='info' if overview.processing_count else None) }}
+    {{ kpi('Fehlgeschlagen', overview.failed_count, tone='danger' if overview.failed_count else None) }}
+    {{ kpi('Kunden', overview.customer_count, href=url_for('customers.list_customers')) }}
+    {{ kpi('Offene Aufgaben', overview.open_task_count, href=url_for('tasks.list_tasks')) }}
+  </div>
+
+  <div class="grid-2">
+    {{ comparison_panel(
+      overview.temporal,
+      'Letzter zeitlicher Vergleich',
+      'Veränderungen gegenüber der vorherigen Leipziger Liste.',
+      'documents.detail',
+      'Noch kein zeitlicher Vergleich vorhanden. Er entsteht automatisch ab der zweiten hochgeladenen Liste.'
+    ) }}
+    {{ comparison_panel(
+      overview.own_vs_gs,
+      'Eigene Liste und GS-Liste',
+      'Abgleich der eigenen Leipziger Liste mit der Liste der Geschäftsstelle.',
+      'potenziale.vergleich',
+      'Noch kein Vergleich vorhanden. Laden Sie eine eigene Liste und eine GS-Liste hoch.'
+    ) }}
+  </div>
+
+  {% call panel('Zuletzt hochgeladene Listen', 'Die neuesten Uploads mit Verarbeitungsstand.', flush=True) %}
+    {% if overview.recent_lists %}
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">Datei</th>
+              <th scope="col">Listentyp</th>
+              <th scope="col">Hochgeladen</th>
+              <th scope="col">Status</th>
+              <th scope="col" class="text-right">Aktion</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for document in overview.recent_lists %}
+              <tr>
+                <td class="cell-strong"><a href="{{ url_for('documents.detail', document_id=document.id) }}" class="table-link">{{ document.original_filename }}</a></td>
+                <td>{{ document.list_type.label if document.list_type else 'Leipziger Liste' }}</td>
+                <td class="whitespace-nowrap">{{ document.uploaded_at | local_dt }}</td>
+                <td>{{ status_badge(document.status) }}</td>
+                <td class="text-right whitespace-nowrap">
+                  <a href="{{ url_for('documents.detail', document_id=document.id) }}" class="table-action">Öffnen</a>
+                  <a href="{{ url_for('potenziale.index', document_id=document.id) }}" class="table-action">Auswertung</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-note panel-body">Es wurden noch keine Leipziger Listen hochgeladen.</p>
+    {% endif %}
+  {% endcall %}
+</div>
+{% endblock %}

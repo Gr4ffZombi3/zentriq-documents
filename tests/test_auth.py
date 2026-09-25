@@ -36,7 +36,7 @@ def test_register_creates_tenant_and_user_and_logs_in(client, db):
     assert user.check_password("sicheres-passwort")
 
     # Nach Registrierung sofort eingeloggt -> geschuetzte Route erreichbar.
-    dashboard_resp = client.get("/")
+    dashboard_resp = client.get("/", follow_redirects=True)
     assert dashboard_resp.status_code == 200
 
 
@@ -92,7 +92,7 @@ def test_login_with_correct_credentials_succeeds(client, db, user):
     assert resp.status_code == 302
     assert resp.headers["Location"] == "/"
 
-    dashboard_resp = client.get("/")
+    dashboard_resp = client.get("/", follow_redirects=True)
     assert dashboard_resp.status_code == 200
 
 
@@ -104,7 +104,7 @@ def test_login_with_vermittlernummer_succeeds(client, db, user):
     assert resp.status_code == 302
     assert resp.headers["Location"] == "/"
 
-    dashboard_resp = client.get("/")
+    dashboard_resp = client.get("/", follow_redirects=True)
     assert dashboard_resp.status_code == 200
 
 
@@ -143,7 +143,7 @@ def test_protected_route_redirects_to_login_when_unauthenticated(client):
 
 
 def test_logout_ends_session(auth_client):
-    resp = auth_client.get("/")
+    resp = auth_client.get("/", follow_redirects=True)
     assert resp.status_code == 200
 
     logout_resp = auth_client.post("/auth/logout")

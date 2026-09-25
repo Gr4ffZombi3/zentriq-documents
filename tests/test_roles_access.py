@@ -7,6 +7,8 @@ from app.models import UserRole
 
 ADMIN_ONLY_URLS = [
     "/",
+    "/leipziger-liste",
+    "/sprachnachrichten",
     "/mailbox",
     "/mailbox/1",
     "/documents",
@@ -30,8 +32,10 @@ def test_employee_cannot_open_admin_areas_by_direct_url(employee_client, url):
     resp = employee_client.get(url)
     assert resp.status_code in (302, 403)
     if resp.status_code == 302:
-        # Die Startseite leitet Mitarbeiter in die Zeiterfassung, niemals in Admin-Bereiche.
-        assert "/zeiterfassung" in resp.headers["Location"]
+        # Nur die Startseite leitet weiter - fuer Mitarbeiter nie in einen Admin-Bereich.
+        assert url == "/"
+        location = resp.headers["Location"]
+        assert not any(location.startswith(prefix) for prefix in ("/leipziger-liste", "/sprachnachrichten", "/documents"))
 
 
 @pytest.mark.parametrize(

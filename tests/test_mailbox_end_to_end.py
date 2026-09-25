@@ -646,4 +646,4 @@ def test_mailbox_case_of_other_tenant_is_not_visible(auth_client):
     case_id = _foreign_case()
     assert auth_client.get(f"/mailbox/{case_id}").status_code == 404
     assert auth_client.post(f"/mailbox/{case_id}/retry").status_code == 404
-    assert "Fremde Sprachnachricht" not in auth_client.get("/").get_data(as_text=True)
+    assert "Fremde Sprachnachricht" not in auth_client.get("/sprachnachrichten").get_data(as_text=True)

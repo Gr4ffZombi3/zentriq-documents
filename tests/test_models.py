@@ -2,7 +2,7 @@ from app.models import Customer, DocStatus, DocType, Document, Recommendation, R
 
 
 def test_index_returns_200(auth_client):
-    resp = auth_client.get("/")
+    resp = auth_client.get("/sprachnachrichten")
     assert resp.status_code == 200
     assert "Rückruf-Automation" in resp.get_data(as_text=True)
 

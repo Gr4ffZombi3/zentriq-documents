@@ -21,7 +21,9 @@ def utcnow_naive() -> datetime:
 def to_local(value: datetime | None) -> datetime | None:
     if value is None:
         return None
-    return value.replace(tzinfo=timezone.utc).astimezone(app_timezone())
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(app_timezone())
 
 
 def local_date_of(value: datetime) -> date:

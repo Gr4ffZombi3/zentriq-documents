@@ -1,0 +1,18 @@
+{% from "ui/icons.html" import icon %}
+{% if nav_subitems %}
+<div class="app-subnav">
+  <div class="app-subnav-inner">
+    <nav class="app-subnav-tabs" aria-label="{{ nav_active_label }}">
+      {% for item in nav_subitems %}
+        <a href="{{ item.url }}" class="app-subnav-link {{ 'is-active' if item.active else '' }}"{% if item.active %} aria-current="page"{% endif %}>{{ item.label }}</a>
+      {% endfor %}
+    </nav>
+    {% if nav_active_area == 'leipziger' %}
+      <form action="{{ url_for('search.search') }}" method="get" class="app-subnav-search" role="search">
+        <span class="app-subnav-search-icon">{{ icon('search', class='h-4 w-4') }}</span>
+        <input type="search" name="q" aria-label="Kunden und Listen durchsuchen" placeholder="Kunden, Verträge, Listen suchen" value="{{ request.args.get('q', '') if request.endpoint == 'search.search' else '' }}">
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endif %}

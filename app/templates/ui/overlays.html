@@ -9,7 +9,7 @@
 {% macro toast_container() %}
 {% set messages = get_flashed_messages(with_categories=true) %}
 {% if messages %}
-<div class="pointer-events-none fixed right-4 top-4 z-50 flex w-full max-w-sm flex-col gap-3" aria-live="polite">
+<div class="pointer-events-none fixed right-4 top-16 z-50 flex w-full max-w-sm flex-col gap-3" aria-live="polite">
   {% for category, message in messages %}
     {% set v = TOAST_VARIANTS.get(category, TOAST_VARIANTS['message']) %}
     <div

@@ -3198,7 +3198,7 @@
   }
 
   .page-hero {
-    border-radius: 1.35rem;
+    border-radius: 0;
   }
 
   .section-heading {
@@ -5324,5 +5324,125 @@
 
   .event-note.is-error {
     color: var(--color-error-text);
+  }
+}
+
+@layer components {
+  /* --- Harmonisierung bestehender Seiten (Leipziger Liste, Kunden, Auth) ------
+     Kleine Radien, keine Verläufe, ruhigere Überschriften. Nur Optik, keine Struktur. */
+  .dashboard-metric-card,
+  .dashboard-panel,
+  .dashboard-table-shell,
+  .segmented-shell,
+  .info-item,
+  .timeline-content,
+  .ops-toolbar-panel,
+  .ops-meta-panel,
+  .ops-meta-item,
+  .ops-stat-card,
+  .ops-table-shell,
+  .ops-inline-row,
+  .ops-inline-link-row,
+  .ops-json-block,
+  .upload-widget-shell,
+  .upload-widget-aside,
+  .upload-drop-target,
+  .upload-runtime-panel,
+  .analysis-progress-panel,
+  .analysis-live-note,
+  .summary-strip,
+  .list-row-card,
+  .doc-preview-card,
+  .doc-analysis-surface,
+  .technical-details,
+  .technical-json-block,
+  .inline-alert,
+  .document-list-shell,
+  .filter-panel,
+  .table-shell,
+  .auth-hero,
+  .auth-card,
+  .upload-dropzone {
+    border-radius: var(--radius-md);
+  }
+
+  .document-row-icon,
+  .empty-state-icon,
+  .upload-drop-icon,
+  .upload-step-chip,
+  .table-tools-search,
+  .table-tools-select,
+  .table-tools-button,
+  .avatar-chip,
+  .topbar-search,
+  .dropdown-link,
+  .mailbox-filter-tab {
+    border-radius: var(--radius-sm);
+  }
+
+  .dashboard-metric-card,
+  .dashboard-panel,
+  .filter-panel,
+  .auth-hero {
+    background: var(--color-surface);
+    box-shadow: 0 1px 2px var(--color-shadow);
+  }
+
+  .auth-hero::after {
+    display: none;
+  }
+
+  .doc-row-live-bar span,
+  .upload-runtime-bar span,
+  .analysis-progress-bar span {
+    background: var(--color-primary);
+  }
+
+  .subtle-divider {
+    background: var(--color-border);
+  }
+
+  .dashboard-title,
+  .dashboard-metric-value,
+  .dashboard-section-title,
+  .summary-metric-value,
+  .section-title,
+  .stat-value,
+  .document-row-title,
+  .ops-page-title,
+  .ops-stat-value,
+  .upload-widget-title,
+  .analysis-progress-title {
+    letter-spacing: -0.01em;
+  }
+
+  .stat-value,
+  .summary-metric-value,
+  .ops-stat-value,
+  .dashboard-metric-value {
+    font-weight: 650;
+  }
+
+  .upload-widget-title {
+    font-size: 1.15rem;
+  }
+
+  .summary-metric::before {
+    display: none;
+  }
+
+  .summary-metric-label {
+    padding-top: 0;
+  }
+
+  .summary-metric-label,
+  .stat-label,
+  .ops-stat-label,
+  .dashboard-metric-label,
+  .page-eyebrow,
+  .table-shell thead,
+  .document-list-head,
+  .document-row-label {
+    letter-spacing: 0.04em;
   }
 }

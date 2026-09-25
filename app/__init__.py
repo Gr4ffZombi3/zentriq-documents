@@ -63,6 +63,11 @@ def create_app(config_object=None):
     app.register_blueprint(recommendations_bp)
     app.register_blueprint(settings_bp)
     app.register_blueprint(tasks_bp)
+
+    from app.cli import register_cli
+
+    register_cli(app)
+
     app.jinja_env.globals["build_document_progress"] = build_document_progress
     app.jinja_env.globals["is_document_active_status"] = is_document_active_status
 

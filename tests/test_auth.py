@@ -1,4 +1,13 @@
+import pytest
+
 from app.models import Tenant, User
+
+
+@pytest.fixture(autouse=True)
+def registration_enabled(app):
+    """Die Registrierungstests pruefen den (optionalen) offenen Registrierungsweg; im
+    Standard ist er abgeschaltet (siehe test_user_provisioning.py)."""
+    app.config["REGISTRATION_ENABLED"] = True
 
 
 def test_register_creates_tenant_and_user_and_logs_in(client, db):

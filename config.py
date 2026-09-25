@@ -71,6 +71,10 @@ class BaseConfig:
     SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true"
     PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
 
+    # Offene Selbstregistrierung (legt pro Registrierung einen neuen Mandanten an). Standard:
+    # aus. Benutzer werden dann per `flask create-user` angelegt.
+    REGISTRATION_ENABLED = os.environ.get("REGISTRATION_ENABLED", "false").lower() == "true"
+
     # Oeffentliche Basis-URL fuer Links in E-Mails. Bewusst NICHT aus dem Host-Header des
     # Requests abgeleitet, damit Reset-Links nicht per Host-Header-Injection umgelenkt werden.
     PUBLIC_URL = os.environ.get("PUBLIC_URL", "").rstrip("/")
@@ -106,6 +110,7 @@ class TestingConfig(BaseConfig):
     PLACETEL_MAILBOX_ENABLED = False
     MAILBOX_DRY_RUN = True
     HUK_AUTOMATION_ENABLED = False
+    REGISTRATION_ENABLED = False
     PUBLIC_URL = "https://zentriq.test"
     SMTP_HOST = None
     MAIL_FROM = None

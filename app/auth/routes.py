@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timezone
 
-from flask import Blueprint, flash, make_response, redirect, render_template, url_for
+from flask import Blueprint, abort, current_app, flash, make_response, redirect, render_template, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
 from app.auth.forms import ForgotPasswordForm, LoginForm, RegisterForm, ResetPasswordForm
@@ -26,6 +26,8 @@ RESET_REQUESTED_MESSAGE = (
 
 @auth_bp.route("/register", methods=["GET", "POST"])
 def register():
+    if not current_app.config.get("REGISTRATION_ENABLED"):
+        abort(404)
     if current_user.is_authenticated:
         return redirect(url_for("dashboard.index"))
 

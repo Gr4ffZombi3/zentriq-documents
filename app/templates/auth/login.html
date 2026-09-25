@@ -62,9 +62,11 @@
     </form>
   </div>
 
+  {% if config.REGISTRATION_ENABLED %}
   <p class="text-center text-sm text-text-muted">
     Noch kein Konto?
     <a href="{{ url_for('auth.register') }}" class="font-medium text-primary hover:text-primary-hover">Jetzt registrieren</a>
   </p>
+  {% endif %}
 </div>
 {% endblock %}

@@ -5247,3 +5247,82 @@
     color: var(--color-text-soft);
   }
 }
+
+@layer components {
+  /* --- Sprachnachrichten ------------------------------------------------------ */
+  .panel-toolbar-start {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+
+  .cell-wide {
+    min-width: 16rem;
+    max-width: 30rem;
+  }
+
+  .transcript-toggle {
+    margin-top: 0.35rem;
+    font-size: 0.82rem;
+  }
+
+  .transcript-toggle summary {
+    width: fit-content;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--color-primary);
+  }
+
+  .transcript-toggle p {
+    margin-top: 0.35rem;
+    border-left: 2px solid var(--color-border-strong);
+    padding-left: 0.6rem;
+    line-height: 1.5;
+    white-space: pre-line;
+    color: var(--color-text-muted);
+  }
+
+  .transcript-block {
+    border-left: 3px solid var(--color-border-strong);
+    padding: 0.25rem 0 0.25rem 0.9rem;
+    font-size: 0.95rem;
+    line-height: 1.65;
+    white-space: pre-line;
+    color: var(--color-text);
+  }
+
+  .event-list {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .event-item {
+    display: grid;
+    grid-template-columns: 9.5rem minmax(0, 1fr);
+    gap: 1rem;
+    border-bottom: 1px solid var(--color-border);
+    padding: 0.6rem 1.1rem;
+    font-size: 0.875rem;
+  }
+
+  .event-item:last-child {
+    border-bottom: 0;
+  }
+
+  .event-time {
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-muted);
+  }
+
+  .event-title {
+    font-weight: 600;
+  }
+
+  .event-note {
+    margin-top: 0.1rem;
+    color: var(--color-text-muted);
+  }
+
+  .event-note.is-error {
+    color: var(--color-error-text);
+  }
+}

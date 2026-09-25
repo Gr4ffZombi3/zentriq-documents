@@ -1,208 +1,115 @@
 {% extends "base.html" %}
-{% from "ui/display.html" import badge, empty_state, page_header %}
+{% from "ui/display.html" import empty_state, page_header %}
 {% from "ui/forms.html" import button %}
-{% from "ui/icons.html" import icon %}
-
-{% macro mailbox_status(status) -%}
-  {% set value = status.value if status.value is defined else status %}
-  {% set labels = {
-    'new': 'Neu',
-    'review': 'Zur Prüfung',
-    'callback_requested': 'Rückruf angefordert',
-    'failed': 'Fehlgeschlagen'
-  } %}
-  {% set variants = {
-    'new': 'muted',
-    'review': 'warning',
-    'callback_requested': 'success',
-    'failed': 'danger'
-  } %}
-  {% set icons = {
-    'new': 'mail',
-    'review': 'alert-circle',
-    'callback_requested': 'check-circle',
-    'failed': 'alert-triangle'
-  } %}
-  {{ badge(labels.get(value, value), variant=variants.get(value, 'muted'), icon_name=icons.get(value, 'info')) }}
-{%- endmacro %}
-
-{% macro phone_source_label(source) -%}
-  {%- set labels = {
-    'transcript_explicit': 'Nachricht',
-    'email_caller_id': 'Anruferkennung',
-    'manual': 'manuelle Korrektur'
-  } -%}
-  {{- labels.get(source, 'Anruferkennung') -}}
-{%- endmacro %}
-
-{% block title %}Rückruf-Automation – Zentriq{% endblock %}
+{% from "ui/portal.html" import kpi, panel, state_tag %}
+{% block title %}Sprachnachrichten – Zentriq{% endblock %}
 
 {% block content %}
 {% set selected_status = status_filter or 'all' %}
-{% set status_cards = [
-  ('new', 'Neu', 'Eingang', 'mail', 'Neue Mailbox-Nachrichten'),
-  ('review', 'Zur Prüfung', 'Prüfung', 'alert-circle', 'Daten manuell klären'),
-  ('callback_requested', 'Rückruf angefordert', 'HUK', 'check-circle', 'Erfolgreich vorbereitet oder gesendet'),
-  ('failed', 'Fehlgeschlagen', 'Erneut', 'alert-triangle', 'Übermittlung erneut ausführen')
-] %}
-<div class="page-shell page-shell-wide mailbox-page-shell">
-  {% call page_header('Rückruf-Automation', 'Placetel-Nachrichten werden erkannt, transkribiert und für den HUK-Rückrufservice aufbereitet.', 'Mailbox-Automation') %}
+<div class="page-shell page-shell-wide">
+  {% call page_header('Sprachnachrichten', 'Mailbox-Nachrichten werden automatisch abgehört, ausgewertet und als Rückrufwunsch an den HUK-Rückrufservice übergeben.') %}
     <form method="post" action="{{ url_for('mailbox.sync') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button
-        type="submit"
-        class="btn btn-primary h-10 px-4 text-sm whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:pointer-events-none disabled:opacity-50"
-        {% if not mailbox_enabled %}disabled aria-disabled="true" title="E-Mail-Postfach ist noch nicht eingerichtet"{% endif %}
-      >
-        {{ icon('refresh-cw', class='h-[1.05rem] w-[1.05rem]') }}
-        Postfach prüfen
+      <button type="submit" class="btn btn-secondary h-10 px-4 text-sm" {% if not mailbox_enabled %}disabled aria-disabled="true" title="Das Postfach ist noch nicht eingerichtet"{% endif %}>
+        Postfach jetzt prüfen
       </button>
     </form>
   {% endcall %}
 
-  <section class="mailbox-environment-banner {{ 'is-dry-run' if dry_run else 'is-live' }}" aria-label="Betriebsmodus">
-    <span class="mailbox-environment-icon">
-      {{ icon('shield' if dry_run else 'check-circle', class='h-5 w-5') }}
-    </span>
+  <div class="notice {{ 'notice-warning' if dry_run or not automation_enabled else 'notice-success' }}" role="status">
     <div class="min-w-0 flex-1">
-      <h2 class="mailbox-environment-title">
-        {% if dry_run %}
-          Dry Run aktiv – keine Rückrufanforderung wird abgesendet
-        {% else %}
-          Live-Betrieb aktiv – eindeutige Fälle können abgesendet werden
-        {% endif %}
-      </h2>
-      <p class="mailbox-environment-copy">
-        {% if dry_run %}
-          Erkennung und Formulardaten werden vollständig geprüft; der letzte Absende-Schritt bleibt gesperrt.
-        {% else %}
-          Nur Fälle mit eindeutiger Rufnummer und Schadenart werden automatisch an den Rückrufservice übergeben.
-        {% endif %}
+      <p class="notice-title">
+        {% if dry_run %}Testbetrieb – Rückrufe werden vorbereitet, aber nicht an die HUK übermittelt
+        {% elif not automation_enabled %}Automatische Übermittlung pausiert
+        {% else %}Live-Betrieb – eindeutige Rückrufe werden automatisch übermittelt{% endif %}
+      </p>
+      <p class="notice-copy">
+        Postfach {{ 'verbunden' if mailbox_enabled else 'nicht eingerichtet' }} ·
+        Automatische Übermittlung {{ 'aktiv' if automation_enabled and not dry_run else 'aus' }}.
+        Nachrichten mit unklarer Rufnummer oder Schadenart werden immer zur manuellen Prüfung gestellt.
       </p>
     </div>
-    <div class="mailbox-environment-states" aria-label="Konfigurationsstatus">
-      <span class="mailbox-state-chip {{ 'is-ready' if mailbox_enabled else 'is-missing' }}">
-        <span class="mailbox-state-dot" aria-hidden="true"></span>
-        Postfach {{ 'bereit' if mailbox_enabled else 'nicht eingerichtet' }}
-      </span>
-      <span class="mailbox-state-chip {{ 'is-ready' if automation_enabled else 'is-paused' }}">
-        <span class="mailbox-state-dot" aria-hidden="true"></span>
-        Automation {{ 'aktiv' if automation_enabled else 'pausiert' }}
-      </span>
-    </div>
-  </section>
+  </div>
 
-  <section class="mailbox-flow-section" aria-labelledby="mailbox-flow-title">
-    <div class="mailbox-flow-heading">
-      <div>
-        <h2 id="mailbox-flow-title" class="mailbox-section-title">Vorgangsstatus</h2>
-        <p class="mailbox-section-copy">Vom Eingang bis zur nachvollziehbaren Rückrufanforderung.</p>
-      </div>
-      <span class="mailbox-mode-label">{{ 'Sicherer Testbetrieb' if dry_run else 'Live-Betrieb' }}</span>
-    </div>
-    <div class="mailbox-flow-rail" aria-hidden="true">
-      <span>Eingang</span>
-      <span>Prüfung</span>
-      <span>HUK</span>
-      <span class="is-branch">Fehlerpfad</span>
-    </div>
-    <div class="mailbox-status-grid">
-      {% for value, label, step, icon_name, description in status_cards %}
-        <a
-          href="{{ url_for('dashboard.index', status=value) }}"
-          class="mailbox-status-card mailbox-status-card-{{ value }} {{ 'is-active' if selected_status == value else '' }}"
-          {% if selected_status == value %}aria-current="page"{% endif %}
-        >
-          <span class="mailbox-status-icon">{{ icon(icon_name, class='h-4 w-4') }}</span>
-          <span class="mailbox-status-step">{{ step }}</span>
-          <strong class="mailbox-status-count">{{ counts.get(value, 0) }}</strong>
-          <span class="mailbox-status-label">{{ label }}</span>
-          <span class="mailbox-status-description">{{ description }}</span>
-        </a>
-      {% endfor %}
-    </div>
-  </section>
+  <div class="kpi-row">
+    {{ kpi('In Bearbeitung', counts.get('new', 0), href=url_for('dashboard.index', status='new'), tone='info' if counts.get('new', 0) else None) }}
+    {{ kpi('Prüfung nötig', counts.get('review', 0), href=url_for('dashboard.index', status='review'), tone='warning' if counts.get('review', 0) else None) }}
+    {{ kpi('Erledigt', counts.get('callback_requested', 0), href=url_for('dashboard.index', status='callback_requested')) }}
+    {{ kpi('Fehler', counts.get('failed', 0), href=url_for('dashboard.index', status='failed'), tone='danger' if counts.get('failed', 0) else None) }}
+  </div>
 
-  <section class="mailbox-queue-panel" aria-labelledby="mailbox-queue-title">
-    <div class="mailbox-queue-heading">
-      <div>
-        <h2 id="mailbox-queue-title" class="mailbox-section-title">Mailbox-Vorgänge</h2>
-        <p class="mailbox-section-copy">Transkript, Rückrufdaten und Übermittlung bleiben pro Nachricht nachvollziehbar.</p>
-      </div>
-      <span class="meta-chip">{{ cases|length }} sichtbar</span>
+  {% call panel('Eingang', 'Die neuesten 100 Nachrichten. Transkript per Klick aufklappen.', flush=True) %}
+    <div class="panel-toolbar panel-toolbar-start">
+      <nav class="segmented" aria-label="Nachrichten filtern">
+        {% for value, label in status_filters %}
+          <a href="{{ url_for('dashboard.index') if value == 'all' else url_for('dashboard.index', status=value) }}"
+             class="segmented-item {{ 'is-active' if selected_status == value else '' }}"
+             {% if selected_status == value %}aria-current="page"{% endif %}>{{ label }}{% if value != 'all' %} ({{ counts.get(value, 0) }}){% endif %}</a>
+        {% endfor %}
+      </nav>
     </div>
-
-    <nav class="mailbox-filter-tabs" aria-label="Vorgänge filtern">
-      {% set filters = [
-        ('all', 'Alle'),
-        ('new', 'Neu'),
-        ('review', 'Zur Prüfung'),
-        ('callback_requested', 'Rückruf angefordert'),
-        ('failed', 'Fehlgeschlagen')
-      ] %}
-      {% for value, label in filters %}
-        <a
-          href="{{ url_for('dashboard.index') if value == 'all' else url_for('dashboard.index', status=value) }}"
-          class="mailbox-filter-tab {{ 'is-active' if selected_status == value else '' }}"
-          {% if selected_status == value %}aria-current="page"{% endif %}
-        >{{ label }}{% if value != 'all' %}<span>{{ counts.get(value, 0) }}</span>{% endif %}</a>
-      {% endfor %}
-    </nav>
 
     {% if cases %}
-      <div class="mailbox-queue" role="list">
-        <div class="mailbox-queue-columns" aria-hidden="true">
-          <span>Nachricht</span>
-          <span>Status</span>
-          <span>Rückruf</span>
-          <span>Schadenart</span>
-          <span>Hinweis</span>
-          <span></span>
-        </div>
-        {% for case in cases %}
-          {% set case_status = case.status.value if case.status.value is defined else case.status %}
-          <article class="mailbox-queue-row" role="listitem">
-            <div class="mailbox-queue-source">
-              <h3 title="{{ case.source_subject or 'Mailbox-Nachricht' }}">{{ case.source_subject or 'Mailbox-Nachricht ohne Betreff' }}</h3>
-              <p>{{ case.source_sender or 'Unbekannter Absender' }}</p>
-              <time datetime="{{ case.received_at.isoformat() if case.received_at else '' }}">
-                {{ case.received_at.strftime('%d.%m.%Y · %H:%M') if case.received_at else 'Eingangszeit unbekannt' }}
-              </time>
-            </div>
-            <div class="mailbox-queue-cell" data-label="Status">
-              {{ mailbox_status(case.status) }}
-            </div>
-            <div class="mailbox-queue-cell" data-label="Rückruf">
-              <strong class="mailbox-cell-primary">{{ case.callback_phone or 'Noch offen' }}</strong>
-              {% if case.phone_source %}<span class="mailbox-cell-secondary">Quelle: {{ phone_source_label(case.phone_source) }}</span>{% endif %}
-            </div>
-            <div class="mailbox-queue-cell" data-label="Schadenart">
-              <strong class="mailbox-cell-primary">{{ case.damage_type or 'Noch offen' }}</strong>
-              <span class="mailbox-cell-secondary">Schadenanliegen</span>
-            </div>
-            <div class="mailbox-queue-cell" data-label="Hinweis">
-              {% set reason = case.last_error if case_status == 'failed' else case.review_reason %}
-              <span class="mailbox-reason {{ 'is-error' if case_status == 'failed' else '' }}">
-                {{ reason or ('Bereit zur Detailprüfung' if case_status in ['new', 'review'] else 'Keine offene Aktion') }}
-              </span>
-            </div>
-            <div class="mailbox-queue-action">
-              {{ button('Prüfen' if case_status in ['new', 'review'] else 'Öffnen', href=url_for('mailbox.detail', case_id=case.id), variant='secondary', icon_name='chevron-right', size='sm') }}
-            </div>
-          </article>
-        {% endfor %}
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">Eingang</th>
+              <th scope="col">Telefonnummer</th>
+              <th scope="col">Anliegen / Schadenart</th>
+              <th scope="col">Status</th>
+              <th scope="col">Rückruf</th>
+              <th scope="col">Hinweis</th>
+              <th scope="col"><span class="sr-only">Aktion</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for case in cases %}
+              {% set view = build_view(case) %}
+              <tr>
+                <td class="whitespace-nowrap">
+                  {{ case.received_at | local_dt('%d.%m.%Y', 'unbekannt') }}
+                  <span class="cell-sub">{{ case.received_at | local_dt('%H:%M Uhr', '') }}</span>
+                </td>
+                <td class="whitespace-nowrap">
+                  <span class="cell-strong">{{ case.callback_phone or case.caller_phone or 'nicht erkannt' }}</span>
+                  {% if view.phone_source_label %}<span class="cell-sub">Quelle: {{ view.phone_source_label }}</span>{% endif %}
+                </td>
+                <td class="cell-wide">
+                  <span class="cell-strong">{{ case.damage_type or 'Schadenart offen' }}</span>
+                  <span class="cell-sub">{{ case.concern or 'Anliegen offen' }}</span>
+                  {% if case.transcript %}
+                    <details class="transcript-toggle">
+                      <summary>Transkript</summary>
+                      <p>{{ case.transcript }}</p>
+                    </details>
+                  {% endif %}
+                </td>
+                <td>{{ state_tag(view.status_label, view.status_tone) }}</td>
+                <td class="whitespace-nowrap">
+                  {{ state_tag(view.callback_label, view.callback_tone) }}
+                  {% if view.callback_at %}<span class="cell-sub">{{ view.callback_at | local_dt }}</span>{% endif %}
+                </td>
+                <td class="{{ 'text-error-text' if view.hint_is_error else '' }}">{{ view.hint or '–' }}</td>
+                <td class="text-right whitespace-nowrap">
+                  <a class="table-action" href="{{ url_for('mailbox.detail', case_id=case.id) }}">{{ 'Prüfen' if view.needs_review or case.status.value == 'failed' else 'Öffnen' }}</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     {% else %}
-      {% if not mailbox_enabled %}
-        {% call empty_state('Postfach noch nicht eingerichtet', 'Hinterlege zuerst die IMAP- und Placetel-Erkennungsmerkmale in der Konfiguration. Danach können neue Mailbox-Nachrichten hier verarbeitet werden.', 'mail') %}{% endcall %}
-      {% elif selected_status != 'all' %}
-        {% call empty_state('Keine Vorgänge in diesem Status', 'Für den gewählten Filter gibt es aktuell keine Mailbox-Nachrichten. Wechsle zu „Alle“, um die gesamte Warteschlange zu sehen.', 'check-circle') %}
-          {{ button('Alle Vorgänge', href=url_for('dashboard.index'), variant='secondary', icon_name='list-checks') }}
-        {% endcall %}
-      {% else %}
-        {% call empty_state('Noch keine Mailbox-Nachrichten', 'Prüfe das Postfach, um passende Placetel-Nachrichten zu erkennen und im sicheren Dry Run aufzubereiten.', 'mail') %}{% endcall %}
-      {% endif %}
+      <div class="panel-body">
+        {% if not mailbox_enabled %}
+          <p class="empty-note">Das Postfach ist noch nicht eingerichtet. Sobald die Verbindung konfiguriert ist, erscheinen neue Sprachnachrichten hier automatisch.</p>
+        {% elif selected_status != 'all' %}
+          <p class="empty-note">Keine Nachrichten in diesem Status. <a class="table-action" href="{{ url_for('dashboard.index') }}">Alle anzeigen</a></p>
+        {% else %}
+          <p class="empty-note">Noch keine Sprachnachrichten eingegangen.</p>
+        {% endif %}
+      </div>
     {% endif %}
-  </section>
+  {% endcall %}
 </div>
 {% endblock %}

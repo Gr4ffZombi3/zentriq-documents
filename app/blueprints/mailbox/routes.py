@@ -6,6 +6,7 @@ from app.models import MailboxCase, MailboxStatus
 from app.services.mailbox.phone import normalize_callback_phone
 from app.services.mailbox.pipeline import add_case_event
 from app.services.mailbox.schemas import HUK_DAMAGE_TYPES
+from app.services.voice_messages_view import build_voice_message_view
 from app.tasks.mailbox_tasks import poll_placetel_mailbox, submit_mailbox_case
 from app.tenancy import get_or_404_scoped
 
@@ -28,6 +29,7 @@ def detail(case_id):
         dry_run=current_app.config["MAILBOX_DRY_RUN"],
         automation_enabled=current_app.config["HUK_AUTOMATION_ENABLED"],
         allowed_damage_types=HUK_DAMAGE_TYPES,
+        view=build_voice_message_view(mailbox_case),
     )
 
 

@@ -4747,7 +4747,8 @@
     text-decoration: line-through;
   }
 
-  .data-table tr.is-today td {
+  .data-table tr.is-today td,
+  .data-table tr.is-today th {
     background: color-mix(in oklab, var(--color-primary) 5%, var(--color-surface));
   }
 
@@ -5134,5 +5135,113 @@
   /* --- Abmelde-/Toast-Details ------------------------------------------------------ */
   .topbar-icon-button {
     border-radius: var(--radius-sm);
+  }
+}
+
+@layer components {
+  /* --- Zeiterfassung: Ergänzungen ------------------------------------------ */
+  .balance-plus { color: var(--color-success-text); }
+  .balance-minus { color: var(--color-error-text); }
+
+  .span-chip {
+    display: inline-block;
+    margin: 0 0.35rem 0.15rem 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-muted);
+    padding: 0 0.35rem;
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--color-text-muted);
+  }
+
+  .back-link {
+    width: fit-content;
+    font-size: 0.85rem;
+    font-weight: 550;
+    color: var(--color-text-muted);
+    text-decoration: none;
+  }
+
+  .back-link:hover {
+    color: var(--color-primary);
+  }
+
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .segmented {
+    display: inline-flex;
+    overflow: hidden;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+  }
+
+  .segmented-item {
+    padding: 0.35rem 0.85rem;
+    font-size: 0.85rem;
+    font-weight: 550;
+    color: var(--color-text-muted);
+    text-decoration: none;
+  }
+
+  .segmented-item + .segmented-item {
+    border-left: 1px solid var(--color-border-strong);
+  }
+
+  .segmented-item.is-active {
+    background: var(--color-primary);
+    color: #fff;
+  }
+
+  .dark .segmented-item.is-active {
+    color: var(--color-bg);
+  }
+
+  .panel-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+    padding: 0.6rem 0.9rem;
+  }
+
+  .data-table tr.row-child th,
+  .data-table tr.row-child td {
+    background: var(--color-surface-muted);
+    font-size: 0.82rem;
+  }
+
+  .data-table tr.row-child th {
+    padding-left: 1.75rem;
+  }
+
+  .clock-unit {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
+  }
+
+  .decision-form {
+    display: flex;
+    min-width: 14rem;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .decision-actions {
+    display: flex;
+    gap: 0.4rem;
+  }
+
+  .is-muted {
+    color: var(--color-text-soft);
   }
 }

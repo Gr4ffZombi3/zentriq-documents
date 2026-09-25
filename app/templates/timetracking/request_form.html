@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/portal.html" import panel %}
+{% from "timetracking/_macros.html" import time_inputs %}
+{% block title %}Korrektur beantragen – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell">
+  {% call page_header('Korrektur beantragen', 'Ihr Antrag ändert noch nichts. Erst nach Genehmigung durch einen Administrator werden die Zeiten übernommen – der bisherige Wert bleibt im Protokoll erhalten.') %}{% endcall %}
+
+  <div class="grid-sidebar">
+    {% call panel('Gewünschte Zeiten') %}
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if work_session %}<input type="hidden" name="buchung" value="{{ work_session.id }}">{% endif %}
+        {{ time_inputs(values, 'Kommen', 'Gehen') }}
+        <div class="form-field mt-4">
+          <label class="field-label" for="reason">Begründung (Pflicht)</label>
+          <textarea class="field-surface" id="reason" name="reason" rows="3" required maxlength="2000" placeholder="z. B. Außentermin, Stempeln vergessen">{{ reason }}</textarea>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary h-10 px-4 text-sm">Antrag einreichen</button>
+          <a class="btn btn-ghost h-10 px-4 text-sm" href="{{ url_for('timetracking.my_requests') }}">Abbrechen</a>
+        </div>
+      </form>
+    {% endcall %}
+
+    {% call panel('Betroffene Buchung') %}
+      {% if work_session %}
+        <dl class="meta-list">
+          <div><dt>Arbeitstag</dt><dd>{{ work_session.work_date | weekday_long }}, {{ work_session.work_date.strftime('%d.%m.%Y') }}</dd></div>
+          <div><dt>Kommen</dt><dd>{{ work_session.started_at | local_time }} Uhr</dd></div>
+          <div><dt>Gehen</dt><dd>{{ (work_session.ended_at | local_time) ~ ' Uhr' if work_session.ended_at else 'nicht erfasst' }}</dd></div>
+        </dl>
+      {% else %}
+        <p class="empty-note">Antrag auf Nachtrag einer fehlenden Buchung.</p>
+      {% endif %}
+    {% endcall %}
+  </div>
+</div>
+{% endblock %}

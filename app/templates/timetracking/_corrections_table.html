@@ -1,0 +1,32 @@
+{% set field_labels = {'started_at': 'Beginn', 'ended_at': 'Ende', 'work_date': 'Arbeitstag'} %}
+{% set action_labels = {'update': 'Geändert', 'create': 'Nachgetragen', 'void': 'Storniert', 'release': 'Zur Korrektur markiert'} %}
+<div class="table-wrap">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th scope="col">Zeitpunkt</th>
+        {% if show_employee %}<th scope="col">Mitarbeiter</th>{% endif %}
+        <th scope="col">Eintrag</th>
+        <th scope="col">Aktion</th>
+        <th scope="col">Alter Wert</th>
+        <th scope="col">Neuer Wert</th>
+        <th scope="col">Geändert von</th>
+        <th scope="col">Begründung</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in corrections %}
+        <tr>
+          <td class="whitespace-nowrap">{{ entry.created_at | local_dt('%d.%m.%Y %H:%M:%S') }}</td>
+          {% if show_employee %}<td>{{ entry.user.employee_profile.display_name if entry.user.employee_profile and entry.user.employee_profile.display_name else entry.user.email }}</td>{% endif %}
+          <td class="whitespace-nowrap">{{ 'Buchung' if entry.target_type == 'session' else 'Pause' }} #{{ entry.target_id }}{% if entry.field %} · {{ field_labels.get(entry.field, entry.field) }}{% endif %}</td>
+          <td>{{ action_labels.get(entry.action, entry.action) }}</td>
+          <td class="whitespace-nowrap">{{ entry.old_value | iso_local_dt if entry.field != 'work_date' else (entry.old_value or '–') }}</td>
+          <td class="whitespace-nowrap">{{ entry.new_value | iso_local_dt if entry.field != 'work_date' else (entry.new_value or '–') }}</td>
+          <td>{{ entry.corrected_by_email_snapshot or 'System' }}{% if entry.request_id %}<span class="cell-sub">Antrag #{{ entry.request_id }}</span>{% endif %}</td>
+          <td>{{ entry.reason or '–' }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

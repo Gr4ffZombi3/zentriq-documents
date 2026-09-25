@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/forms.html" import button %}
+{% from "ui/portal.html" import panel, state_tag %}
+{% block title %}Meine Korrekturanträge – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell">
+  {% call page_header('Meine Korrekturanträge', 'Abgeschlossene Zeiten können nicht direkt geändert werden. Beantragen Sie eine Korrektur; nach Genehmigung wird sie mit Protokoll übernommen.') %}
+    {{ button('Fehlende Buchung beantragen', href=url_for('timetracking.new_request'), variant='primary') }}
+  {% endcall %}
+
+  {% call panel(flush=True) %}
+    {% if correction_requests %}
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">Gestellt am</th>
+              <th scope="col">Arbeitstag</th>
+              <th scope="col">Bisher</th>
+              <th scope="col">Beantragt</th>
+              <th scope="col">Begründung</th>
+              <th scope="col">Status</th>
+              <th scope="col">Entscheidung</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in correction_requests %}
+              <tr>
+                <td class="whitespace-nowrap">{{ item.created_at | local_dt }}</td>
+                <td class="whitespace-nowrap">{{ item.work_date | weekday_short }}, {{ item.work_date.strftime('%d.%m.%Y') }}</td>
+                <td class="whitespace-nowrap">
+                  {% if item.work_session_id %}{{ item.original_started_at | local_time }}–{{ item.original_ended_at | local_time('offen') }}{% else %}<span class="is-muted">keine Buchung</span>{% endif %}
+                </td>
+                <td class="whitespace-nowrap">{{ item.requested_started_at | local_time }}–{{ item.requested_ended_at | local_time }}</td>
+                <td>{{ item.reason }}</td>
+                <td>{{ state_tag(item.status.label, {'pending': 'warning', 'approved': 'success', 'rejected': 'danger'}[item.status.value]) }}</td>
+                <td>
+                  {% if item.decided_at %}
+                    {{ item.decided_at | local_dt }}
+                    {% if item.decision_note %}<span class="cell-sub">{{ item.decision_note }}</span>{% endif %}
+                  {% else %}<span class="is-muted">–</span>{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-note panel-body">Sie haben noch keine Korrekturanträge gestellt.</p>
+    {% endif %}
+  {% endcall %}
+</div>
+{% endblock %}

@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/forms.html" import button %}
+{% from "ui/portal.html" import kpi, panel, state_tag %}
+{% from "timetracking/_macros.html" import presence, period_table, balance %}
+{% set profile = employee.employee_profile %}
+{% set employee_name = profile.display_name if profile and profile.display_name else employee.email %}
+{% block title %}{{ employee_name }} – Zeiterfassung – Zentriq{% endblock %}
+
+{% block content %}
+{% if view == 'tag' %}
+  {% set heading = (anchor | weekday_long) ~ ', ' ~ anchor.strftime('%d.%m.%Y') %}
+{% elif view == 'woche' %}
+  {% set heading = 'KW ' ~ summary.start.isocalendar()[1] ~ ' · ' ~ summary.start.strftime('%d.%m.') ~ '–' ~ summary.end.strftime('%d.%m.%Y') %}
+{% else %}
+  {% set heading = summary.start | month_name %}
+{% endif %}
+<div class="page-shell page-shell-wide">
+  <a class="back-link" href="{{ url_for('timetracking.team') }}">← Team</a>
+  {% call page_header(employee_name, employee.email ~ ' · ' ~ employee.role.label ~ ((' · Wochensoll ' ~ ((profile.weekly_target_minutes * 60) | duration) ~ ' Std.') if profile else ' · kein Sollprofil hinterlegt')) %}
+    <div class="clock-status">{{ presence(state.status) }}</div>
+  {% endcall %}
+
+  <div class="toolbar">
+    <nav class="segmented" aria-label="Ansicht">
+      {% for key, label in [('tag', 'Tag'), ('woche', 'Woche'), ('monat', 'Monat')] %}
+        <a href="{{ view_links[key] }}" class="segmented-item {{ 'is-active' if view == key else '' }}">{{ label }}</a>
+      {% endfor %}
+    </nav>
+    <div class="period-nav">
+      {{ button('Zurück', href=prev_url, variant='secondary', size='sm') }}
+      <span class="period-nav-label">{{ heading }}</span>
+      {{ button('Weiter', href=next_url, variant='secondary', size='sm') }}
+      {{ button('Heute', href=today_url, variant='ghost', size='sm') }}
+    </div>
+  </div>
+
+  <div class="kpi-row">
+    {{ kpi('Ist', summary.net_seconds | duration) }}
+    {{ kpi('Soll' ~ (' bis heute' if view != 'tag' else ''), summary.target_seconds | duration) }}
+    {{ kpi('Plus/Minus', summary.balance_seconds | duration(signed=True), tone='success' if summary.balance_seconds > 0 else ('danger' if summary.balance_seconds < 0 else None)) }}
+    {{ kpi('Pausen', summary.break_seconds | duration) }}
+  </div>
+
+  {% if view == 'tag' %}
+    {% call panel('Buchungen', 'Stempelzeiten werden nie gelöscht. Korrekturen und Stornierungen werden mit altem und neuem Wert protokolliert.', flush=True) %}
+      <div class="panel-toolbar">
+        {{ button('Buchung nachtragen', href=url_for('timetracking.session_create', user_id=employee.id, datum=anchor.isoformat()), variant='secondary', size='sm') }}
+      </div>
+      {% if day_sessions %}
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th scope="col">Art</th>
+                <th scope="col">Von</th>
+                <th scope="col">Bis</th>
+                <th scope="col" class="num">Dauer</th>
+                <th scope="col">Hinweis</th>
+                <th scope="col" class="text-right">Aktion</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for session in day_sessions %}
+                <tr class="{{ 'is-voided' if session.voided_at else '' }}">
+                  <th scope="row" class="cell-strong">Arbeitszeit</th>
+                  <td class="whitespace-nowrap">{{ session.started_at | local_dt }}</td>
+                  <td class="whitespace-nowrap">{{ session.ended_at | local_dt('%d.%m.%Y %H:%M', 'läuft' if session.is_open else 'fehlt') }}</td>
+                  <td class="num">{{ session | session_net | duration }}</td>
+                  <td>
+                    {% if session.voided_at %}{{ state_tag('storniert', 'neutral') }}{% endif %}
+                    {% if session.is_incomplete %}{{ state_tag('Ausstempeln fehlt', 'danger') }}{% endif %}
+                    {% if session.is_open %}{{ state_tag('läuft', 'info') }}{% endif %}
+                    {% if session.is_corrected %}{{ state_tag('korrigiert', 'neutral') }}{% endif %}
+                    {% if session.source.value == 'manual' %}{{ state_tag('nachgetragen', 'neutral') }}{% endif %}
+                  </td>
+                  <td class="text-right whitespace-nowrap">
+                    {% if not session.voided_at %}
+                      <a class="table-action" href="{{ url_for('timetracking.session_edit', session_id=session.id) }}">Korrigieren</a>
+                      <a class="table-action" href="{{ url_for('timetracking.break_create', session_id=session.id) }}">Pause nachtragen</a>
+                      <form method="post" action="{{ url_for('timetracking.session_void', session_id=session.id) }}" class="inline" x-data x-on:submit="if (!confirm('Buchung stornieren? Sie bleibt im Protokoll sichtbar.')) $event.preventDefault()">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="reason" value="Storniert durch Administrator">
+                        <button type="submit" class="table-action table-action-danger">Stornieren</button>
+                      </form>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% for work_break in session.breaks %}
+                  <tr class="row-child {{ 'is-voided' if work_break.voided_at or session.voided_at else '' }}">
+                    <th scope="row">Pause</th>
+                    <td class="whitespace-nowrap">{{ work_break.started_at | local_time }}</td>
+                    <td class="whitespace-nowrap">{{ work_break.ended_at | local_time('läuft' if work_break.is_open else 'fehlt') }}</td>
+                    <td class="num">{{ work_break | break_duration | duration }}</td>
+                    <td>
+                      {% if work_break.voided_at %}{{ state_tag('storniert', 'neutral') }}{% endif %}
+                      {% if work_break.is_corrected %}{{ state_tag('korrigiert', 'neutral') }}{% endif %}
+                    </td>
+                    <td class="text-right whitespace-nowrap">
+                      {% if not work_break.voided_at and not session.voided_at %}
+                        <a class="table-action" href="{{ url_for('timetracking.break_edit', break_id=work_break.id) }}">Korrigieren</a>
+                        <form method="post" action="{{ url_for('timetracking.break_void', break_id=work_break.id) }}" class="inline" x-data x-on:submit="if (!confirm('Pause stornieren?')) $event.preventDefault()">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          <input type="hidden" name="reason" value="Storniert durch Administrator">
+                          <button type="submit" class="table-action table-action-danger">Stornieren</button>
+                        </form>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="empty-note panel-body">Keine Buchungen an diesem Tag.</p>
+      {% endif %}
+    {% endcall %}
+
+    {% if corrections %}
+      {% call panel('Änderungsprotokoll dieses Tages', flush=True) %}
+        {% include "timetracking/_corrections_table.html" %}
+      {% endcall %}
+    {% endif %}
+  {% else %}
+    {% call panel(heading, flush=True) %}
+      {{ period_table(summary, today, row_link=day_link) }}
+    {% endcall %}
+  {% endif %}
+</div>
+{% endblock %}

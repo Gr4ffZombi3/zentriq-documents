@@ -1,0 +1,102 @@
+{% from "ui/portal.html" import state_tag %}
+
+{% macro presence(status) -%}
+  {%- if status == 'in' -%}{{ state_tag('Anwesend', 'success') }}
+  {%- elif status == 'break' -%}{{ state_tag('In Pause', 'warning') }}
+  {%- else -%}{{ state_tag('Abwesend', 'neutral') }}{%- endif -%}
+{%- endmacro %}
+
+{% macro balance(seconds) -%}
+<span class="balance {{ 'balance-plus' if seconds > 0 else ('balance-minus' if seconds < 0 else '') }}">{{ seconds | duration(signed=True) }}</span>
+{%- endmacro %}
+
+{% macro day_notes(day) -%}
+  {%- if day.is_running %}{{ state_tag('läuft', 'info') }} {% endif -%}
+  {%- if day.has_incomplete %}{{ state_tag('Ausstempeln fehlt', 'danger') }} {% endif -%}
+  {%- if day.is_corrected %}{{ state_tag('korrigiert', 'neutral') }}{% endif -%}
+{%- endmacro %}
+
+{% macro session_spans(day) -%}
+  {%- for session in day.sessions -%}
+    <span class="span-chip">{{ session.started_at | local_time }}–{{ session.ended_at | local_time('…') }}</span>
+  {%- endfor -%}
+{%- endmacro %}
+
+{# Tabelle fuer Woche/Monat. row_link(day) -> URL oder None; request_link(day) -> URL fuer Mitarbeiter. #}
+{% macro period_table(summary, today, row_link=None, request_link=None) -%}
+<div class="table-wrap">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th scope="col">Tag</th>
+        <th scope="col">Buchungen</th>
+        <th scope="col" class="num">Beginn</th>
+        <th scope="col" class="num">Ende</th>
+        <th scope="col" class="num">Pausen</th>
+        <th scope="col" class="num">Ist</th>
+        <th scope="col" class="num">Soll</th>
+        <th scope="col" class="num">Saldo</th>
+        <th scope="col">Hinweis</th>
+        {% if request_link %}<th scope="col"><span class="sr-only">Aktion</span></th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for day in summary.days %}
+        {% set future = day.day > today %}
+        <tr class="{{ 'is-today' if day.day == today else '' }} {{ 'is-muted' if future or (not day.sessions and not day.target_seconds) else '' }}">
+          <th scope="row" class="whitespace-nowrap">
+            {% if row_link %}<a class="table-link" href="{{ row_link(day.day) }}">{% endif %}
+            {{ day.day | weekday_short }}, {{ day.day.strftime('%d.%m.') }}
+            {% if row_link %}</a>{% endif %}
+          </th>
+          <td>{{ session_spans(day) }}</td>
+          <td class="num">{{ day.first_start | local_time }}</td>
+          <td class="num">{{ day.last_end | local_time }}</td>
+          <td class="num">{{ day.break_seconds | duration if day.sessions else '–' }}</td>
+          <td class="num">{{ day.net_seconds | duration if day.sessions else '–' }}</td>
+          <td class="num">{{ day.target_seconds | duration if day.target_seconds else '–' }}</td>
+          <td class="num">{{ balance(day.balance_seconds) if not future and (day.sessions or day.target_seconds) else '–' }}</td>
+          <td>{{ day_notes(day) }}</td>
+          {% if request_link %}
+            <td class="text-right whitespace-nowrap">
+              {% if not future %}<a class="table-action" href="{{ request_link(day.day) }}">Korrektur beantragen</a>{% endif %}
+            </td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <th scope="row" colspan="4">Summe</th>
+        <td class="num">{{ summary.break_seconds | duration }}</td>
+        <td class="num">{{ summary.net_seconds | duration }}</td>
+        <td class="num">{{ summary.target_seconds | duration }}</td>
+        <td class="num">{{ balance(summary.balance_seconds) }}</td>
+        <td colspan="{{ 2 if request_link else 1 }}"></td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{%- endmacro %}
+
+{% macro time_inputs(values, start_label='Beginn', end_label='Ende', end_optional=False) -%}
+<div class="form-grid form-grid-2">
+  <div class="form-field">
+    <label class="field-label" for="start_date">{{ start_label }} – Datum</label>
+    <input class="field-surface" type="date" id="start_date" name="start_date" value="{{ values.start_date }}" required>
+  </div>
+  <div class="form-field">
+    <label class="field-label" for="start_time">{{ start_label }} – Uhrzeit</label>
+    <input class="field-surface" type="time" id="start_time" name="start_time" value="{{ values.start_time }}" required>
+  </div>
+  <div class="form-field">
+    <label class="field-label" for="end_date">{{ end_label }} – Datum</label>
+    <input class="field-surface" type="date" id="end_date" name="end_date" value="{{ values.end_date }}" {{ '' if end_optional else 'required' }}>
+  </div>
+  <div class="form-field">
+    <label class="field-label" for="end_time">{{ end_label }} – Uhrzeit</label>
+    <input class="field-surface" type="time" id="end_time" name="end_time" value="{{ values.end_time }}" {{ '' if end_optional else 'required' }}>
+    {% if end_optional %}<span class="form-hint">Leer lassen, solange die Buchung noch läuft.</span>{% endif %}
+  </div>
+</div>
+{%- endmacro %}

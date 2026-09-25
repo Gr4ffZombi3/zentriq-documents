@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/portal.html" import panel %}
+{% block title %}Änderungsprotokoll – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell page-shell-wide">
+  {% call page_header('Änderungsprotokoll', 'Revisionssichere Aufzeichnung aller nachträglichen Änderungen an Arbeitszeiten. Einträge können nicht bearbeitet oder gelöscht werden.') %}
+    <form method="get" class="period-nav">
+      <label class="sr-only" for="mitarbeiter">Mitarbeiter</label>
+      <select class="field-surface text-sm" id="mitarbeiter" name="mitarbeiter" onchange="this.form.submit()">
+        <option value="">Alle Mitarbeiter</option>
+        {% for user in users %}
+          <option value="{{ user.id }}" {{ 'selected' if user_filter == user.id else '' }}>{{ user.employee_profile.display_name if user.employee_profile and user.employee_profile.display_name else user.email }}</option>
+        {% endfor %}
+      </select>
+      <noscript><button type="submit" class="btn btn-secondary h-9 px-3 text-sm">Filtern</button></noscript>
+    </form>
+  {% endcall %}
+
+  {% call panel(flush=True) %}
+    {% if corrections %}
+      {% set show_employee = true %}
+      {% include "timetracking/_corrections_table.html" %}
+    {% else %}
+      <p class="empty-note panel-body">Noch keine Änderungen protokolliert.</p>
+    {% endif %}
+  {% endcall %}
+</div>
+{% endblock %}

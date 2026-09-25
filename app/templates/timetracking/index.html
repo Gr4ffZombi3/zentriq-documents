@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/portal.html" import kpi, panel, state_tag %}
+{% from "timetracking/_macros.html" import presence, balance, day_notes %}
+{% block title %}Zeiterfassung – Zentriq{% endblock %}
+{% block content %}
+{% set status = state.status %}
+<div class="page-shell">
+  {% call page_header('Zeiterfassung', today | weekday_long ~ ', ' ~ today.strftime('%d.%m.%Y')) %}{% endcall %}
+
+  {% if state.stale %}
+    <div class="notice notice-danger" role="alert">
+      <div>
+        <p class="notice-title">Ausstempeln fehlt</p>
+        <p class="notice-copy">
+          Ihre Buchung vom {{ state.open_session.started_at | local_dt('%d.%m.%Y um %H:%M') }} Uhr wurde nicht beendet.
+          Beim nächsten Einstempeln wird sie ohne Endzeit zur Korrektur markiert – eine Uhrzeit wird dabei nicht angenommen.
+          <a class="table-action" href="{{ url_for('timetracking.new_request', buchung=state.open_session.id) }}">Korrektur beantragen</a>
+        </p>
+      </div>
+    </div>
+  {% endif %}
+
+  <section class="panel">
+    <div class="panel-body">
+      <div class="clock-panel">
+        <div
+          x-data="{ base: {{ today_summary.net_seconds }}, started: Date.now(), running: {{ 'true' if status == 'in' else 'false' }}, now: Date.now(),
+                    init() { if (this.running) setInterval(() => this.now = Date.now(), 1000) },
+                    get seconds() { return this.base + (this.running ? Math.floor((this.now - this.started) / 1000) : 0) },
+                    get label() { const m = Math.floor(this.seconds / 60); return Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0') } }"
+        >
+          <div class="clock-status">{{ presence(status) }}</div>
+          <p class="clock-display"><span x-text="label">{{ today_summary.net_seconds | duration }}</span> <span class="clock-unit">Std. heute</span></p>
+          <p class="clock-meta">
+            {% if status == 'in' %}
+              Eingestempelt seit {{ state.open_session.started_at | local_time }} Uhr
+            {% elif status == 'break' %}
+              Pause seit {{ state.open_break.started_at | local_time }} Uhr · eingestempelt seit {{ state.open_session.started_at | local_time }} Uhr
+            {% elif today_summary.sessions %}
+              Zuletzt ausgestempelt um {{ today_summary.last_end | local_time }} Uhr
+            {% else %}
+              Heute noch keine Buchung.
+            {% endif %}
+          </p>
+        </div>
+        <div>
+          <div class="clock-actions">
+            {% if status == 'out' %}
+              <form method="post" action="{{ url_for('timetracking.clock_in') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary btn-lg">Einstempeln</button>
+              </form>
+            {% elif status == 'in' %}
+              <form method="post" action="{{ url_for('timetracking.break_start') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-secondary btn-lg">Pause starten</button>
+              </form>
+              <form method="post" action="{{ url_for('timetracking.clock_out') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary btn-lg">Ausstempeln</button>
+              </form>
+            {% else %}
+              <form method="post" action="{{ url_for('timetracking.break_end') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary btn-lg">Pause beenden</button>
+              </form>
+              <form method="post" action="{{ url_for('timetracking.clock_out') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-secondary btn-lg">Ausstempeln</button>
+              </form>
+            {% endif %}
+          </div>
+          <p class="form-hint mt-2">Die Uhrzeit wird beim Klick vom Server erfasst.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="kpi-row">
+    {{ kpi('Soll heute', today_summary.target_seconds | duration) }}
+    {{ kpi('Ist Woche', week.net_seconds | duration, meta='Soll bis heute ' ~ (week.target_seconds | duration)) }}
+    {{ kpi('Saldo Woche', week.balance_seconds | duration(signed=True), tone='success' if week.balance_seconds > 0 else ('danger' if week.balance_seconds < 0 else None)) }}
+    {{ kpi('Ist Monat', month.net_seconds | duration, meta='Soll bis heute ' ~ (month.target_seconds | duration)) }}
+    {{ kpi('Saldo Monat', month.balance_seconds | duration(signed=True), tone='success' if month.balance_seconds > 0 else ('danger' if month.balance_seconds < 0 else None)) }}
+  </div>
+
+  {% call panel('Heutige Buchungen', 'Kommen, Gehen und Pausen des heutigen Tages.', flush=True) %}
+    {% if today_summary.sessions %}
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">Kommen</th>
+              <th scope="col">Gehen</th>
+              <th scope="col">Pausen</th>
+              <th scope="col" class="num">Arbeitszeit</th>
+              <th scope="col">Hinweis</th>
+              <th scope="col"><span class="sr-only">Aktion</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for session in today_summary.sessions %}
+              <tr>
+                <td class="whitespace-nowrap">{{ session.started_at | local_time }}</td>
+                <td class="whitespace-nowrap">{{ session.ended_at | local_time('läuft') }}</td>
+                <td>
+                  {% for work_break in session.active_breaks %}
+                    <span class="span-chip">{{ work_break.started_at | local_time }}–{{ work_break.ended_at | local_time('…') }}</span>
+                  {% else %}<span class="is-muted">keine</span>{% endfor %}
+                </td>
+                <td class="num">{{ session | session_net | duration }}</td>
+                <td>
+                  {% if session.is_corrected %}{{ state_tag('korrigiert', 'neutral') }}{% endif %}
+                  {% if session.source.value == 'manual' %}{{ state_tag('nachgetragen', 'neutral') }}{% endif %}
+                </td>
+                <td class="text-right">
+                  {% if not session.is_open %}<a class="table-action" href="{{ url_for('timetracking.new_request', buchung=session.id) }}">Korrektur beantragen</a>{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-note panel-body">Für heute liegen noch keine Buchungen vor.</p>
+    {% endif %}
+  {% endcall %}
+</div>
+{% endblock %}

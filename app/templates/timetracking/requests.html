@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/portal.html" import panel, state_tag %}
+{% block title %}Korrekturanträge – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell page-shell-wide">
+  {% call page_header('Korrekturanträge', 'Anträge Ihrer Mitarbeiter. Eine Genehmigung übernimmt die beantragten Zeiten und protokolliert alte und neue Werte.') %}
+    <nav class="segmented" aria-label="Filter">
+      <a href="{{ url_for('timetracking.requests', status='offen') }}" class="segmented-item {{ 'is-active' if status_filter == 'offen' else '' }}">Offen ({{ pending_count }})</a>
+      <a href="{{ url_for('timetracking.requests', status='alle') }}" class="segmented-item {{ 'is-active' if status_filter == 'alle' else '' }}">Alle</a>
+    </nav>
+  {% endcall %}
+
+  {% call panel(flush=True) %}
+    {% if correction_requests %}
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">Mitarbeiter</th>
+              <th scope="col">Arbeitstag</th>
+              <th scope="col">Bisher</th>
+              <th scope="col">Beantragt</th>
+              <th scope="col">Begründung</th>
+              <th scope="col">Status</th>
+              <th scope="col">Entscheidung</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in correction_requests %}
+              {% set profile = item.user.employee_profile %}
+              <tr>
+                <th scope="row" class="cell-strong">
+                  <a class="table-link" href="{{ url_for('timetracking.employee', user_id=item.user_id, ansicht='tag', datum=item.work_date.isoformat()) }}">{{ profile.display_name if profile and profile.display_name else item.user.email }}</a>
+                  <span class="cell-sub">Antrag #{{ item.id }} · {{ item.created_at | local_dt }}</span>
+                </th>
+                <td class="whitespace-nowrap">{{ item.work_date | weekday_short }}, {{ item.work_date.strftime('%d.%m.%Y') }}</td>
+                <td class="whitespace-nowrap">{% if item.work_session_id %}{{ item.original_started_at | local_time }}–{{ item.original_ended_at | local_time('offen') }}{% else %}<span class="is-muted">keine Buchung</span>{% endif %}</td>
+                <td class="whitespace-nowrap cell-strong">{{ item.requested_started_at | local_time }}–{{ item.requested_ended_at | local_time }}</td>
+                <td>{{ item.reason }}</td>
+                <td>{{ state_tag(item.status.label, {'pending': 'warning', 'approved': 'success', 'rejected': 'danger'}[item.status.value]) }}</td>
+                <td>
+                  {% if item.status.value == 'pending' %}
+                    <form method="post" action="{{ url_for('timetracking.decide_request', request_id=item.id) }}" class="decision-form">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <input type="text" name="note" class="field-surface text-sm" placeholder="Notiz (optional)" maxlength="2000" aria-label="Notiz zur Entscheidung">
+                      <div class="decision-actions">
+                        <button type="submit" name="decision" value="approve" class="btn btn-primary h-8 px-3 text-sm">Genehmigen</button>
+                        <button type="submit" name="decision" value="reject" class="btn btn-secondary h-8 px-3 text-sm">Ablehnen</button>
+                      </div>
+                    </form>
+                  {% else %}
+                    {{ item.decided_by.email if item.decided_by else '–' }}
+                    <span class="cell-sub">{{ item.decided_at | local_dt }}{% if item.decision_note %} · {{ item.decision_note }}{% endif %}</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-note panel-body">{{ 'Keine offenen Anträge.' if status_filter == 'offen' else 'Noch keine Anträge vorhanden.' }}</p>
+    {% endif %}
+  {% endcall %}
+</div>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/portal.html" import panel %}
+{% from "timetracking/_macros.html" import time_inputs %}
+{% set profile = employee.employee_profile %}
+{% set employee_name = profile.display_name if profile and profile.display_name else employee.email %}
+{% block title %}{{ title }} – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell">
+  <a class="back-link" href="{{ cancel_url }}">← {{ employee_name }}</a>
+  {% call page_header(title, employee_name ~ ' · Jede Änderung wird mit altem und neuem Wert, Ihrem Benutzer und dem Zeitpunkt protokolliert.') %}{% endcall %}
+
+  <div class="grid-sidebar">
+    {% call panel('Zeiten') %}
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% set is_break = mode.startswith('break') %}
+        {{ time_inputs(values, 'Pausenbeginn' if is_break else 'Beginn', 'Pausenende' if is_break else 'Ende', end_optional=allow_open_end) }}
+        <div class="form-field mt-4">
+          <label class="field-label" for="reason">Begründung (optional, wird protokolliert)</label>
+          <textarea class="field-surface" id="reason" name="reason" rows="3" maxlength="2000">{{ reason }}</textarea>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary h-10 px-4 text-sm">Speichern</button>
+          <a class="btn btn-ghost h-10 px-4 text-sm" href="{{ cancel_url }}">Abbrechen</a>
+        </div>
+      </form>
+    {% endcall %}
+
+    {% call panel('Aktueller Stand') %}
+      {% if entry is defined and entry %}
+        <dl class="meta-list">
+          <div><dt>Beginn</dt><dd>{{ entry.started_at | local_dt }}</dd></div>
+          <div><dt>Ende</dt><dd>{{ entry.ended_at | local_dt('%d.%m.%Y %H:%M', 'nicht erfasst') }}</dd></div>
+          {% if mode == 'break_create' %}<div><dt>Hinweis</dt><dd>Die Pause muss innerhalb dieser Buchung liegen.</dd></div>{% endif %}
+        </dl>
+      {% else %}
+        <p class="empty-note">Neue Buchung. Sie wird als „nachgetragen“ gekennzeichnet.</p>
+      {% endif %}
+    {% endcall %}
+  </div>
+</div>
+{% endblock %}

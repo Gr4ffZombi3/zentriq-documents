@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/forms.html" import button %}
+{% from "ui/portal.html" import kpi, panel %}
+{% from "timetracking/_macros.html" import period_table %}
+{% block title %}{{ 'Wochenübersicht' if view == 'woche' else 'Monatsübersicht' }} – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell">
+  {% set heading = ('KW ' ~ summary.start.isocalendar()[1] ~ ' · ' ~ summary.start.strftime('%d.%m.') ~ '–' ~ summary.end.strftime('%d.%m.%Y')) if view == 'woche' else (summary.start | month_name) %}
+  {% call page_header('Meine Arbeitszeiten', 'Eigene Buchungen je Tag mit Soll, Ist und Saldo. Korrekturen können Sie beantragen; ein Administrator prüft sie.') %}
+    <div class="period-nav">
+      {{ button('Zurück', href=prev_url, variant='secondary', size='sm') }}
+      <span class="period-nav-label">{{ heading }}</span>
+      {{ button('Weiter', href=next_url, variant='secondary', size='sm') }}
+      {{ button('Aktuell', href=current_url, variant='ghost', size='sm') }}
+    </div>
+  {% endcall %}
+
+  <div class="kpi-row">
+    {{ kpi('Ist', summary.net_seconds | duration) }}
+    {{ kpi('Soll bis heute', summary.target_seconds | duration) }}
+    {{ kpi('Saldo', summary.balance_seconds | duration(signed=True), tone='success' if summary.balance_seconds > 0 else ('danger' if summary.balance_seconds < 0 else None)) }}
+    {{ kpi('Pausen', summary.break_seconds | duration) }}
+  </div>
+
+  {% if summary.has_incomplete %}
+    <div class="notice notice-danger"><div><p class="notice-title">Unvollständige Buchung</p><p class="notice-copy">Mindestens ein Tag enthält eine Buchung ohne Ausstempeln. Sie wird erst nach einer Korrektur angerechnet.</p></div></div>
+  {% endif %}
+
+  {% call panel(heading, flush=True) %}
+    {{ period_table(summary, today, request_link=request_link) }}
+  {% endcall %}
+</div>
+{% endblock %}

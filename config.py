@@ -68,6 +68,9 @@ class BaseConfig:
     ANALYSIS_NARRATIVE_ENABLED = os.environ.get("ANALYSIS_NARRATIVE_ENABLED", "true").lower() == "true"
     ANALYSIS_NARRATIVE_MODEL = os.environ.get("ANALYSIS_NARRATIVE_MODEL", os.environ.get("OPENAI_MODEL", "gpt-4o"))
 
+    # Zeitzone fuer die Zeiterfassung (Tagesgrenzen, Anzeige). Gespeichert wird immer UTC.
+    APP_TIMEZONE = os.environ.get("APP_TIMEZONE", "Europe/Berlin")
+
     # Session-/Cookie-Haertung
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"

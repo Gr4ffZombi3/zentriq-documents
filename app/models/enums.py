@@ -19,6 +19,28 @@ class UserRole(enum.Enum):
         return {UserRole.ADMIN: "Admin", UserRole.MITARBEITER: "Mitarbeiter"}[self]
 
 
+class TimeEntrySource(enum.Enum):
+    """Herkunft einer Arbeitszeitbuchung: STAMP = per Stempeluhr (Serverzeit), MANUAL = von
+    einem Admin nachgetragen (immer mit TimeCorrection-Protokoll)."""
+
+    STAMP = "stamp"
+    MANUAL = "manual"
+
+
+class CorrectionRequestStatus(enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+    @property
+    def label(self) -> str:
+        return {
+            CorrectionRequestStatus.PENDING: "Offen",
+            CorrectionRequestStatus.APPROVED: "Genehmigt",
+            CorrectionRequestStatus.REJECTED: "Abgelehnt",
+        }[self]
+
+
 class DocType(enum.Enum):
     LEIPZIGER_LISTE = "leipziger_liste"
     HUK_LISTE = "huk_liste"

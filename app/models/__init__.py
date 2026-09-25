@@ -7,6 +7,7 @@ from app.models.enums import (
     AnalysisRunStatus,
     CallbackAttemptStatus,
     ComparisonKind,
+    CorrectionRequestStatus,
     DocStatus,
     DocType,
     FeedbackRating,
@@ -22,6 +23,7 @@ from app.models.enums import (
     TaskStatus,
     TaskType,
     TenantStatus,
+    TimeEntrySource,
     TimelineEventType,
     UserRole,
     WiedervorlageReason,
@@ -37,6 +39,13 @@ from app.models.mailbox_case import (
 from app.models.recommendation import Recommendation
 from app.models.task import Task
 from app.models.tenant import Tenant
+from app.models.timetracking import (
+    EmployeeProfile,
+    TimeCorrection,
+    TimeCorrectionRequest,
+    WorkBreak,
+    WorkSession,
+)
 from app.models.user import User
 
 __all__ = [
@@ -57,6 +66,13 @@ __all__ = [
     "RecommendationFeedback",
     "Task",
     "Tenant",
+    "EmployeeProfile",
+    "TimeCorrection",
+    "TimeCorrectionRequest",
+    "WorkBreak",
+    "WorkSession",
+    "CorrectionRequestStatus",
+    "TimeEntrySource",
     "User",
     "AnalysisRunStatus",
     "CallbackAttemptStatus",

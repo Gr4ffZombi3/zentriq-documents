@@ -10,6 +10,11 @@ class AuditEventType(enum.Enum):
     LOGOUT = "logout"
     PASSWORD_RESET_REQUESTED = "password_reset_requested"
     PASSWORD_RESET_COMPLETED = "password_reset_completed"
+    USER_CREATED = "user_created"
+    USER_UPDATED = "user_updated"
+    TIME_CORRECTED = "time_corrected"
+    TIME_CORRECTION_REQUESTED = "time_correction_requested"
+    TIME_CORRECTION_DECIDED = "time_correction_decided"
 
 
 class AuditLog(db.Model):

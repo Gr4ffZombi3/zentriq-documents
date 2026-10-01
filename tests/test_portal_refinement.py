@@ -258,13 +258,14 @@ def test_employee_overview_shows_only_own_information(app, world):
     assert "Dennis" in html
     for section in ("Leipziger Liste", "Memo", "Zeiterfassung"):
         assert section in html
-    assert "1 <span" in html  # genau ein eigener offener Vorgang (DENNIS-OFFEN-1)
+    assert "1 offener Vorgang" in html  # genau ein eigener offener Vorgang (DENNIS-OFFEN-1)
     assert "Büro heute" not in html and "Laura" not in html
 
 
 def test_office_admin_overview_adds_office_information(app, world):
     html = login(app, "admin-a@example.com").get("/uebersicht").get_data(as_text=True)
-    assert "Büro heute" in html and "Letzte Aktivitäten" in html
+    # Nur eine kompakte Bueroinformation - kein Aktivitaeten-Feed mehr auf der Startseite.
+    assert "Büro heute" in html and "Letzte Aktivitäten" not in html
     assert "Bob" not in html and "Buero B" not in html
 
 
@@ -517,11 +518,11 @@ def test_password_change_keeps_current_session_and_ends_others(app, world):
 def test_navigation_is_responsive_and_marks_active_area(app, world):
     html = login(app, "dennis@example.com").get("/leipziger-liste").get_data(as_text=True)
     assert 'name="viewport"' in html
-    assert 'class="app-header-action app-nav-toggle"' in html and 'aria-controls="hauptnavigation"' in html
+    assert 'app-topbar-menu' in html and 'aria-controls="hauptnavigation"' in html
     assert 'id="hauptnavigation"' in html
     active = html.split('aria-current="page"')[0].rsplit("<a", 1)[1]
     assert "/leipziger-liste" in active
-    for label in ("Übersicht", "Leipziger Liste", "Memo", "Zeiterfassung", "Mein Konto", "Abmelden"):
+    for label in ("Start", "Leipziger Liste", "Memo", "Zeiterfassung", "Werkzeuge", "Mein Konto", "Abmelden"):
         assert label in html
 
 

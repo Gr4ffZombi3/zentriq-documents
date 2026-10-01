@@ -252,7 +252,7 @@
           <article class="customer-memo">
             <div class="customer-memo-head">
               <span>{{ memo.created_at | local_dt('%d.%m.%Y, %H:%M Uhr') }}{% if memo.created_by %} · {{ display_name(memo.created_by) }}{% endif %} · {{ memo_basis.get(memo.matched_by, memo.matched_by) }}</span>
-              <button type="button" class="btn btn-secondary btn-sm" data-copy="#memo-{{ memo.id }}">Text kopieren</button>
+              <button type="button" class="btn btn-secondary btn-sm" data-copy="#memo-{{ memo.id }}">Kopieren</button>
             </div>
             <p class="customer-memo-text" id="memo-{{ memo.id }}">{{ memo.transcript }}</p>
           </article>

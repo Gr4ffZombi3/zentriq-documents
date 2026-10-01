@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Dokument anonymisieren – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell page-shell-narrow">
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">Dokument anonymisieren</h1>
+      <p class="page-subtitle">Die Erkennung läuft auf dem Zentriq-Server. Nichts wird gespeichert oder an eine KI übertragen.</p>
+    </div>
+  </div>
+
+  <section class="panel">
+    <form method="post" enctype="multipart/form-data" class="panel-body anon-form" data-anon-form>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="field-label" for="anon-file">PDF oder Bild</label>
+      <input class="field-surface" id="anon-file" type="file" name="file" accept="{{ accept }}">
+      <p class="anon-or">oder Text einfügen</p>
+      <label class="sr-only" for="anon-text">Text</label>
+      <textarea class="field-surface anon-input" id="anon-text" name="text" rows="6" maxlength="{{ max_chars }}"
+                placeholder="Text hier einfügen …">{{ request.form.get('text', '') if not result else '' }}</textarea>
+      {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Anonymisieren</button>
+      </div>
+    </form>
+  </section>
+
+  {% if result %}
+    <section class="panel" aria-labelledby="anon-ergebnis">
+      <header class="panel-header">
+        <h2 class="panel-title" id="anon-ergebnis">Anonymisierter Text{% if source %} <span class="anon-source">· {{ source }}</span>{% endif %}</h2>
+        <div class="panel-actions">
+          <button type="button" class="btn btn-primary btn-sm" data-copy="#anon-result">Kopieren</button>
+          {% if assistant_enabled %}
+            <button type="button" class="btn btn-secondary btn-sm" data-assistant-insert="#anon-result">Im Assistenten verwenden</button>
+          {% endif %}
+        </div>
+      </header>
+      <div class="panel-body">
+        <p class="form-hint">Bitte prüfen: Die automatische Erkennung findet nicht jeden Namen. Sie können den Text hier noch ändern – kopiert bzw. übernommen wird diese Fassung.</p>
+        <label class="sr-only" for="anon-result">Anonymisierter Text</label>
+        <textarea class="field-surface anon-output" id="anon-result" rows="14">{{ result.text }}</textarea>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="anon-entfernt">
+      <header class="panel-header">
+        <h2 class="panel-title" id="anon-entfernt">Entfernt: {{ result.count }} {{ 'Angabe' if result.count == 1 else 'Angaben' }}</h2>
+      </header>
+      {% if result.findings %}
+        <dl class="fact-list anon-findings">
+          {% for label, items in result.grouped() %}
+            <div>
+              <dt>{{ label }}</dt>
+              <dd>
+                <ul class="anon-finding-list">
+                  {% for finding in items %}
+                    <li><span class="anon-placeholder">{{ finding.placeholder }}</span> {{ finding.original }}</li>
+                  {% endfor %}
+                </ul>
+              </dd>
+            </div>
+          {% endfor %}
+        </dl>
+      {% else %}
+        <p class="empty-note panel-body">Keine personenbezogenen Angaben erkannt. Bitte den Text trotzdem prüfen.</p>
+      {% endif %}
+    </section>
+  {% endif %}
+</div>
+{% endblock %}

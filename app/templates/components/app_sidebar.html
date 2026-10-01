@@ -1,0 +1,74 @@
+{% from "ui/icons.html" import icon %}
+{# Navigation: ab 64rem eine feste Seitenleiste, darunter eine schmale Kopfleiste mit Menue.
+   Hoechstens zwei Ebenen - Gruppe und Bereich; Unterseiten stehen als Reiter ueber dem Inhalt. #}
+{% set office_member = current_user.is_office_admin or current_user.is_employee %}
+<header class="app-topbar">
+  <a href="{{ url_for('portal.home') }}" class="app-brand" aria-label="Zentriq – Startseite"><span class="wordmark">Zentriq</span></a>
+  <div class="app-topbar-actions">
+    {% if office_member %}
+      <a href="{{ url_for('search.search') }}" class="app-topbar-button app-topbar-search {{ 'is-active' if request.endpoint == 'search.search' else '' }}" aria-label="Suche">
+        {{ icon('search', class='h-4 w-4') }}
+      </a>
+    {% endif %}
+    <button type="button" class="app-topbar-button app-topbar-menu" x-on:click="navOpen = !navOpen" :aria-expanded="navOpen" aria-expanded="false" aria-controls="hauptnavigation" aria-label="Menü">
+      {{ icon('menu', class='h-5 w-5') }}
+    </button>
+  </div>
+</header>
+
+<div class="app-sidebar-backdrop" x-cloak x-show="navOpen" x-on:click="navOpen = false"></div>
+<nav class="app-sidebar" id="hauptnavigation" aria-label="Hauptnavigation" :class="{ 'is-open': navOpen }"
+     x-on:keydown.escape.window="navOpen = false">
+  <a href="{{ url_for('portal.home') }}" class="app-brand app-sidebar-brand" aria-label="Zentriq – Startseite"><span class="wordmark">Zentriq</span></a>
+
+  {% if office_member %}
+    <form action="{{ url_for('search.search') }}" method="get" class="app-sidebar-search" role="search">
+      <span class="app-sidebar-search-icon">{{ icon('search', class='h-4 w-4') }}</span>
+      <input type="search" name="q" aria-label="Suche" placeholder="Suchen" maxlength="60" autocomplete="off"
+             value="{{ request.args.get('q', '') if request.endpoint == 'search.search' else '' }}">
+    </form>
+  {% endif %}
+
+  <div class="app-sidebar-groups">
+    {% for group in nav_groups %}
+      <div class="app-sidebar-group">
+        {% if group.label %}
+          {% if group.url %}
+            <a href="{{ group.url }}" class="app-sidebar-heading is-link {{ 'is-active' if group.active else '' }}"{% if group.active %} aria-current="page"{% endif %}>{{ group.label }}</a>
+          {% else %}
+            <p class="app-sidebar-heading">{{ group.label }}</p>
+          {% endif %}
+        {% endif %}
+        <ul class="app-sidebar-list">
+          {% for entry in group.entries %}
+            <li>
+              {% if entry.kind == 'assistant' %}
+                <button type="button" class="app-sidebar-link" data-assistant-toggle aria-controls="assistent" aria-expanded="false">{{ entry.label }}</button>
+              {% else %}
+                <a href="{{ entry.url }}" class="app-sidebar-link {{ 'is-active' if entry.active else '' }}"{% if entry.active %} aria-current="page"{% endif %}>{{ entry.label }}</a>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="app-sidebar-footer">
+    <p class="app-sidebar-identity" title="{{ current_user.email }}">
+      <span class="app-sidebar-name">{{ nav_display_name }}</span>
+      <span class="app-sidebar-role">{{ current_user.role.label }}</span>
+    </p>
+    <ul class="app-sidebar-list">
+      <li>
+        <a href="{{ url_for('settings.profile') }}" class="app-sidebar-link {{ 'is-active' if nav_settings_active else '' }}"{% if nav_settings_active %} aria-current="page"{% endif %}>{{ nav_settings_label }}</a>
+      </li>
+      <li>
+        <form method="post" action="{{ url_for('auth.logout') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="app-sidebar-link">Abmelden</button>
+        </form>
+      </li>
+    </ul>
+  </div>
+</nav>

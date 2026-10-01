@@ -26,3 +26,10 @@ def ocr_image(image: Image.Image) -> tuple[str, float]:
     full_text = " ".join(words)
     avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
     return full_text, avg_confidence
+
+
+def ocr_image_lines(image: Image.Image) -> str:
+    """Tesseract-OCR mit erhaltenen Zeilenumbruechen (fuer lesbaren Fliesstext, z. B. beim
+    Anonymisieren). Laeuft lokal - es gibt hier bewusst keinen Fallback auf einen KI-Dienst."""
+    _configure_tesseract()
+    return pytesseract.image_to_string(image, lang="deu+eng")

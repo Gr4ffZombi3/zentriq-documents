@@ -435,11 +435,12 @@ def test_super_admin_platform_pages_show_no_business_data(app, world):
 
 def test_super_admin_navigation(app, world):
     html = login(app, "justin@example.com").get("/plattform/bueros").get_data(as_text=True)
-    for label in ("Büros", "Benutzer", "Systemeinstellungen", "Sicherheit"):
+    for label in ("Übersicht", "Büros", "Benutzer", ">System<", "Sicherheit"):
         assert label in html
-    assert 'href="/leipziger-liste"' not in html
-    assert 'href="/zeiterfassung"' not in html
-    assert 'href="/sprachnachrichten"' not in html
+    # Keine fachliche Navigation: weder Arbeit/Zeit/Werkzeuge noch deren Bereiche.
+    for href in ('href="/leipziger-liste"', 'href="/zeiterfassung"', 'href="/sprachnachrichten"', 'href="/werkzeuge', 'href="/customers"', 'href="/hochladen"'):
+        assert href not in html
+    assert "data-assistant-toggle" not in html
 
 
 def test_super_admin_home_is_platform(app, world):

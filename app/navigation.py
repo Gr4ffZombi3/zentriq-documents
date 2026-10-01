@@ -1,10 +1,12 @@
-"""Hauptnavigation des Portals, rollenabhaengig:
+"""Navigation des Portals: eine ruhige Seitenleiste, nach Taetigkeit gruppiert (hoechstens
+zwei Ebenen: Gruppe -> Bereich; Unterseiten eines Bereichs erscheinen als Reiter darueber).
 
-- SUPER_ADMIN: Uebersicht, Bueros, Benutzer, Systemeinstellungen, Sicherheit (keine Fachbereiche).
-- OFFICE_ADMIN: Uebersicht, Leipziger Liste, Memo, Kunden, Zeiterfassung, Mitarbeiter,
-  Aktivitaeten, Einstellungen.
-- EMPLOYEE: Uebersicht, Leipziger Liste, Memo, Zeiterfassung.
-Rechts in der Kopfleiste fuer alle: Mein Konto, Benutzername, Abmelden.
+- Buero-Rollen: Start | Arbeit (Leipziger Liste, Memo, Kunden*) | Zeit (Zeiterfassung) |
+  Werkzeuge (Assistent, Dokument anonymisieren, Universal-Upload*) | Buero* (Mitarbeiter,
+  Benutzerverwaltung, Aktivitaeten). * nur OFFICE_ADMIN.
+- SUPER_ADMIN: eigene Plattformnavigation (Uebersicht, Bueros, Benutzer, System, Sicherheit),
+  keine Fachbereiche.
+Unten in der Leiste fuer alle: Name, Rolle, Mein Konto, Abmelden.
 
 Die Sichtbarkeit hier ist nur Komfort - die eigentliche Absicherung erfolgt serverseitig in
 app/auth/permissions.py (Default-Deny je Rolle) und per @admin_required."""
@@ -33,6 +35,19 @@ class NavArea:
     prefixes: tuple[str, ...]
     admin_only: bool
     items: tuple[NavItem, ...] = field(default_factory=tuple)
+    # "assistant": kein Link, sondern der Schalter fuer das Assistent-Panel.
+    kind: str = "link"
+
+
+@dataclass(frozen=True)
+class NavGroup:
+    key: str
+    label: str | None  # None: ohne Ueberschrift (Start bzw. Plattform)
+    areas: tuple[NavArea, ...]
+    admin_only: bool = False
+    # Ueberschrift verlinkt auf eine Bereichsseite (Werkzeuge).
+    endpoint: str | None = None
+    prefixes: tuple[str, ...] = ()
 
 
 LEIPZIGER_ITEMS = (
@@ -57,32 +72,63 @@ TIME_ITEMS = (
     NavItem("timetracking.audit", "Protokoll", ("timetracking.audit",), admin_only=True),
 )
 
-PLATFORM_AREAS = (
-    NavArea("platform_home", "Übersicht", "platform.index", ("platform.index",), admin_only=False),
-    NavArea("platform_offices", "Büros", "platform.offices", ("platform.office",), admin_only=False),
-    NavArea("platform_users", "Benutzer", "platform.users", ("platform.user",), admin_only=False),
-    NavArea("platform_system", "Systemeinstellungen", "platform.system", ("platform.system",), admin_only=False),
-    NavArea("platform_security", "Sicherheit", "platform.security", ("platform.security",), admin_only=False),
+PLATFORM_GROUPS = (
+    NavGroup(
+        "platform",
+        None,
+        (
+            NavArea("platform_home", "Übersicht", "platform.index", ("platform.index",), admin_only=False),
+            NavArea("platform_offices", "Büros", "platform.offices", ("platform.office",), admin_only=False),
+            NavArea("platform_users", "Benutzer", "platform.users", ("platform.user",), admin_only=False),
+            NavArea("platform_system", "System", "platform.system", ("platform.system",), admin_only=False),
+            NavArea("platform_security", "Sicherheit", "platform.security", ("platform.security",), admin_only=False),
+        ),
+    ),
 )
 
-AREAS = (
-    NavArea("overview", "Übersicht", "portal.overview", ("portal.overview",), admin_only=False),
-    NavArea(
-        "leipziger",
-        "Leipziger Liste",
-        "leipziger.index",
-        ("leipziger.", "documents.", "upload.", "potenziale.", "tasks.", "recommendations.", "bestand.", "cockpit."),
-        admin_only=False,
-        items=LEIPZIGER_ITEMS,
+OFFICE_GROUPS = (
+    NavGroup("start", None, (NavArea("overview", "Start", "portal.overview", ("portal.overview",), admin_only=False),)),
+    NavGroup(
+        "work",
+        "Arbeit",
+        (
+            NavArea(
+                "leipziger",
+                "Leipziger Liste",
+                "leipziger.index",
+                ("leipziger.", "documents.", "upload.", "potenziale.", "tasks.", "recommendations.", "bestand.", "cockpit."),
+                admin_only=False,
+                items=LEIPZIGER_ITEMS,
+            ),
+            NavArea("voice", "Memo", "dashboard.index", ("dashboard.",), admin_only=False),
+            # Zentriq-Kundenstamm (nur OFFICE_ADMIN; Mitarbeiter sehen wie bisher keine Kundenstammdaten).
+            NavArea("customers", "Kunden", "customers.list_customers", ("customers.",), admin_only=True),
+        ),
     ),
-    NavArea("voice", "Memo", "dashboard.index", ("dashboard.",), admin_only=False),
-    # Zentriq-Kundenstamm (nur OFFICE_ADMIN; Mitarbeiter sehen wie bisher keine Kundenstammdaten).
-    NavArea("customers", "Kunden", "customers.list_customers", ("customers.",), admin_only=True),
-    NavArea("time", "Zeiterfassung", "timetracking.index", ("timetracking.",), admin_only=False, items=TIME_ITEMS),
-    # Buero-Verwaltung (nur OFFICE_ADMIN).
-    NavArea("staff", "Mitarbeiter", "office.staff", ("office.staff",), admin_only=True),
-    NavArea("activity", "Aktivitäten", "office.activities", ("office.activities",), admin_only=True),
-    NavArea("office_settings", "Einstellungen", "settings.users", ("settings.users", "settings.user_"), admin_only=True),
+    NavGroup("time", "Zeit", (NavArea("time", "Zeiterfassung", "timetracking.index", ("timetracking.",), admin_only=False, items=TIME_ITEMS),)),
+    NavGroup(
+        "tools",
+        "Werkzeuge",
+        (
+            NavArea("assistant", "Assistent", "assistant.generate", (), admin_only=False, kind="assistant"),
+            NavArea("anonymize", "Dokument anonymisieren", "tools.anonymize_document", ("tools.anonymize",), admin_only=False),
+            # Fuer Mitarbeiter waere der Universal-Upload nur ein zweiter Memo-Upload (sie duerfen
+            # keine Listen importieren) - deshalb nur fuer Buero-Admins in der Navigation.
+            NavArea("intake", "Universal-Upload", "intake.index", ("intake.",), admin_only=True),
+        ),
+        endpoint="tools.index",
+        prefixes=("tools.index",),
+    ),
+    NavGroup(
+        "office",
+        "Büro",
+        (
+            NavArea("staff", "Mitarbeiter", "office.staff", ("office.staff",), admin_only=True),
+            NavArea("office_settings", "Benutzerverwaltung", "settings.users", ("settings.users", "settings.user_"), admin_only=True),
+            NavArea("activity", "Aktivitäten", "office.activities", ("office.activities",), admin_only=True),
+        ),
+        admin_only=True,
+    ),
 )
 
 ACCOUNT_AREA = NavArea("settings", "Mein Konto", "settings.profile", ("settings.profile", "settings.security", "settings.index"), admin_only=False)
@@ -98,22 +144,43 @@ def _visible(entry, is_admin: bool) -> bool:
 
 def build_navigation() -> dict:
     if not current_user.is_authenticated:
-        return {"nav_areas": [], "nav_active_area": None, "nav_subitems": [], "nav_settings_label": "Mein Konto"}
+        return {"nav_groups": [], "nav_active_area": None, "nav_subitems": [], "nav_settings_label": "Mein Konto"}
     is_admin = current_user.is_admin
     endpoint = request.endpoint
     # Benutzerformulare, die von der Mitarbeiterseite aus geoeffnet wurden.
     from_staff = bool(endpoint and endpoint.startswith("settings.user") and request.values.get("von") == "mitarbeiter")
-    areas = []
+    has_assistant = assistant_available(current_user)
+    groups = []
     active_area = None
-    for area in PLATFORM_AREAS if current_user.is_super_admin else AREAS:
-        if not _visible(area, is_admin):
+    for group in PLATFORM_GROUPS if current_user.is_super_admin else OFFICE_GROUPS:
+        if group.admin_only and not is_admin:
             continue
-        active = active_area is None and _matches(endpoint, area.prefixes)
-        if from_staff and area.key in ("staff", "office_settings"):
-            active = area.key == "staff"
-        areas.append({"label": area.label, "url": url_for(area.endpoint), "active": active, "key": area.key})
-        if active:
-            active_area = area
+        entries = []
+        for area in group.areas:
+            if area.kind == "assistant":
+                if has_assistant:
+                    entries.append({"label": area.label, "url": None, "active": False, "key": area.key, "kind": area.kind})
+                continue
+            if not _visible(area, is_admin):
+                continue
+            active = active_area is None and _matches(endpoint, area.prefixes)
+            if from_staff and area.key in ("staff", "office_settings"):
+                active = area.key == "staff"
+            entries.append({"label": area.label, "url": url_for(area.endpoint), "active": active, "key": area.key, "kind": area.kind})
+            if active:
+                active_area = area
+        if not entries:
+            continue
+        heading_url = url_for(group.endpoint) if group.endpoint and group.endpoint in current_app.view_functions else None
+        groups.append(
+            {
+                "key": group.key,
+                "label": group.label,
+                "url": heading_url,
+                "active": _matches(endpoint, group.prefixes),
+                "entries": entries,
+            }
+        )
     account_active = active_area is None and _matches(endpoint, ACCOUNT_AREA.prefixes)
 
     subitems = []
@@ -124,7 +191,7 @@ def build_navigation() -> dict:
                 entry = {"label": item.label, "url": url_for(item.endpoint), "active": _matches(endpoint, item.prefixes)}
                 (more_items if item.secondary else subitems).append(entry)
     return {
-        "nav_areas": areas,
+        "nav_groups": groups,
         "nav_active_area": active_area.key if active_area else None,
         "nav_active_label": active_area.label if active_area else None,
         "nav_subitems": subitems,
@@ -133,7 +200,7 @@ def build_navigation() -> dict:
         "nav_settings_active": account_active,
         "nav_settings_label": "Mein Konto",
         "nav_display_name": display_name_for(current_user),
-        "assistant_available": assistant_available(current_user),
+        "assistant_available": has_assistant,
     }
 
 

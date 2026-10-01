@@ -63,6 +63,7 @@ def create_app(config_object=None):
     from app.blueprints.settings.routes import settings_bp
     from app.blueprints.tasks.routes import tasks_bp
     from app.blueprints.timetracking.routes import timetracking_bp
+    from app.blueprints.tools.routes import tools_bp
     from app.blueprints.upload.routes import upload_bp
     from app.models import User
 
@@ -70,6 +71,7 @@ def create_app(config_object=None):
     app.register_blueprint(portal_bp)
     app.register_blueprint(leipziger_bp)
     app.register_blueprint(intake_bp)
+    app.register_blueprint(tools_bp)
     app.register_blueprint(bestand_bp)
     app.register_blueprint(chat_bp)
     app.register_blueprint(cockpit_bp)

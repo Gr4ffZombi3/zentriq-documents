@@ -57,7 +57,7 @@ def test_upload_without_javascript_renders_transcript_page(auth_client, fake_tra
     assert "Transkript" in html
     assert "hier ist Herr Müller" in html
     assert "anruf.m4a" in html
-    assert "Text kopieren" in html
+    assert ">Kopieren<" in html
     assert "Neue Sprachnachricht" in html
 
 

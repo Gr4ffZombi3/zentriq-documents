@@ -161,13 +161,13 @@ def test_super_admin_has_no_access_to_search(app, world):
     assert client.get("/search?q=Müller").status_code == 403
     # Auch kein Suchfeld in der Kopfleiste.
     html = client.get("/plattform/bueros").get_data(as_text=True)
-    assert 'class="app-search"' not in html
+    assert 'class="app-sidebar-search"' not in html
 
 
 def test_search_field_in_header_for_office_members(app, world):
     for email in ("admin-a@example.com", "dennis@example.com"):
         html = _login(app, email).get("/uebersicht").get_data(as_text=True)
-        assert 'class="app-search"' in html
+        assert 'class="app-sidebar-search"' in html
 
 
 def test_short_query_runs_no_search(app, world):

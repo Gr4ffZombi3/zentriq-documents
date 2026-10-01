@@ -4,6 +4,7 @@ Gespeichert wird UTC; angezeigt wird in APP_TIMEZONE (Europe/Berlin)."""
 
 import hashlib
 import os
+import re
 from datetime import date, datetime
 
 from app.services.timetracking.calc import (
@@ -81,13 +82,19 @@ def short_dt(value: datetime | None, default: str = "–") -> str:
 
 
 def email_wrap(value: str | None):
-    """E-Mail mit Umbruchmoeglichkeit vor dem "@" statt mitten im Wort."""
+    """E-Mail mit Umbruchmoeglichkeiten vor dem "@" und nach Punkten bzw. Unterstrichen statt
+    mitten im Wort - lange Adressen ("vorname.nachname.abteilung@...") brechen so an
+    sinnvollen Stellen und machen ihre Spalte nicht breiter als noetig."""
     from markupsafe import Markup, escape
 
     if not value or "@" not in value:
         return value or ""
+
+    def breakable(part: str) -> str:
+        return re.sub(r"([._])", r"\1<wbr>", str(escape(part)))
+
     local, domain = value.split("@", 1)
-    return Markup(f"{escape(local)}<wbr>@{escape(domain)}")
+    return Markup(f"{breakable(local)}<wbr>@{breakable(domain)}")
 
 
 def weekday_short(value: date) -> str:

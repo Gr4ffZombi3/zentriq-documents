@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Werkzeuge – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell page-shell-narrow">
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">Werkzeuge</h1>
+      <p class="page-subtitle">Hilfsfunktionen für Texte und Dateien.</p>
+    </div>
+  </div>
+
+  <section class="panel">
+    <ul class="tool-list">
+      <li class="tool-row">
+        <div class="tool-text">
+          <h2 class="tool-name">Assistent</h2>
+          <p class="tool-desc">Text schreiben, verbessern oder zusammenfassen.</p>
+        </div>
+        {% if assistant_enabled %}
+          <button type="button" class="btn btn-secondary btn-sm" data-assistant-toggle aria-controls="assistent" aria-expanded="false">Öffnen</button>
+        {% else %}
+          <span class="tool-note">Nicht eingerichtet</span>
+        {% endif %}
+      </li>
+      <li class="tool-row">
+        <div class="tool-text">
+          <h2 class="tool-name">Dokument anonymisieren</h2>
+          <p class="tool-desc">Personenbezogene Angaben entfernen – lokal, ohne externe KI.</p>
+        </div>
+        <a class="btn btn-secondary btn-sm" href="{{ url_for('tools.anonymize_document') }}">Öffnen</a>
+      </li>
+      {% if current_user.is_office_admin %}
+        <li class="tool-row">
+          <div class="tool-text">
+            <h2 class="tool-name">Universal-Upload</h2>
+            <p class="tool-desc">PDF oder Sprachnachricht automatisch erkennen und passend verarbeiten.</p>
+          </div>
+          <a class="btn btn-secondary btn-sm" href="{{ url_for('intake.index') }}">Öffnen</a>
+        </li>
+      {% endif %}
+    </ul>
+  </section>
+</div>
+{% endblock %}

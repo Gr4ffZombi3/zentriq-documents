@@ -80,7 +80,7 @@
   }
 
   function copyButton() {
-    return button("Text kopieren", "btn btn-secondary btn-sm", function (event) { copyTranscript(event.currentTarget); });
+    return button("Kopieren", "btn btn-secondary btn-sm", function (event) { copyTranscript(event.currentTarget); });
   }
 
   function customerFacts(customer, extra) {

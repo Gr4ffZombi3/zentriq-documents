@@ -31,7 +31,8 @@ _manual_verify_*.py
 
 # Eigenstaendige Tailwind-CLI-Binary (lokales Build-Tool, ~110MB, kein Node.js noetig -
 # siehe README fuer den Download-Befehl). Nur die KOMPILIERTE app.css wird committet.
-tools/
+# Nur im Projektroot: app/blueprints/tools/ und app/templates/tools/ gehoeren ins Repository.
+/tools/
 
 # Lokale Server-Artefakte (Secrets-Kopie, Celery-Beat-Zustand)
 .env.save

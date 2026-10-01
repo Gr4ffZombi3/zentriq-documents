@@ -5,14 +5,26 @@
   {% include "components/_head_common.html" %}
   {% block head %}{% endblock %}
 </head>
-<body x-data="{ navOpen: false }" class="app-body">
+<body x-data="{ navOpen: false }" class="app-body" :class="{ 'nav-open': navOpen }">
   <a class="skip-link" href="#inhalt">Zum Inhalt springen</a>
-  {% include "components/app_header.html" %}
-  {% include "components/subnav.html" %}
-  <main class="app-content" id="inhalt">
-    {% include "components/flash_messages.html" %}
-    {% block content %}{% endblock %}
-  </main>
+  <div class="app-shell {{ 'has-sidebar' if current_user.is_authenticated else '' }}">
+    {% if current_user.is_authenticated %}
+      {% include "components/app_sidebar.html" %}
+    {% else %}
+      <header class="app-topbar is-public">
+        <a href="{{ url_for('portal.home') }}" class="app-brand" aria-label="Zentriq – Startseite"><span class="wordmark">Zentriq</span></a>
+      </header>
+    {% endif %}
+    {# Container fuer den Inhalt: Komponenten richten sich nach dem verfuegbaren Platz
+       (@container main), nicht nach der Fensterbreite - die Seitenleiste nimmt Breite weg. #}
+    <div class="app-main-col">
+      {% include "components/subnav.html" %}
+      <main class="app-content" id="inhalt">
+        {% include "components/flash_messages.html" %}
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
   {% if assistant_available %}{% include "components/assistant_panel.html" %}{% endif %}
 </body>
 </html>

@@ -17,7 +17,7 @@ def test_login_redirects_to_portal_home(client, user):
 def test_admin_navigation_shows_all_areas(auth_client):
     html = auth_client.get("/leipziger-liste").get_data(as_text=True)
     assert 'aria-label="Hauptnavigation"' in html
-    for label in ("Übersicht", "Leipziger Liste", "Memo", "Zeiterfassung", "Mitarbeiter", "Aktivitäten", "Einstellungen", "Mein Konto", "Abmelden", "Admin"):
+    for label in ("Start", "Leipziger Liste", "Memo", "Kunden", "Zeiterfassung", "Werkzeuge", "Mitarbeiter", "Aktivitäten", "Benutzerverwaltung", "Mein Konto", "Abmelden", "Admin"):
         assert label in html
     for tab in ("Zu erledigen", "Mitarbeiter", "Listen &amp; Upload", "Auswertung", "Weitere"):
         assert tab in html

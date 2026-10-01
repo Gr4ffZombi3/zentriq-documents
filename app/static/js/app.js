@@ -774,37 +774,7 @@
     });
   }
 
-  // Kopfleiste: passen die Bereiche nicht neben Suche und Konto, wird die Navigation in das
-  // Menue verlegt (.is-compact) - sie wird nie abgeschnitten und erzeugt keinen Scrollbalken.
-  function initHeaderFit() {
-    var header = document.querySelector(".app-header");
-    var nav = header && header.querySelector(".app-nav");
-    var user = header && header.querySelector(".app-user");
-    var inner = header && header.querySelector(".app-header-inner");
-    if (!nav || !user || !inner) {
-      return;
-    }
-
-    function fit() {
-      header.classList.remove("is-compact");
-      if (window.getComputedStyle(nav).position === "absolute" || window.getComputedStyle(nav).display === "none") {
-        return;
-      }
-      var tooTight =
-        inner.scrollWidth > inner.clientWidth + 1 ||
-        nav.scrollWidth > nav.clientWidth + 1 ||
-        nav.getBoundingClientRect().right > user.getBoundingClientRect().left - 12;
-      header.classList.toggle("is-compact", tooTight);
-    }
-
-    fit();
-    window.addEventListener("resize", fit);
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(fit);
-    }
-  }
-
-  // Kopieren: ein Klick -> Zwischenablage -> kurz "Kopiert". Ohne Dialog.
+  // Kopieren: ein Klick -> Zwischenablage -> kurz "✓ Kopiert". Ohne Dialog.
   // <button data-copy="#selector"> kopiert den Text des Elements, data-copy-text einen festen Text.
   function copyText(text, button) {
     var value = (text || "").trim();
@@ -830,7 +800,7 @@
     return write.then(function () {
       if (button) {
         if (!button.dataset.copyLabel) button.dataset.copyLabel = button.textContent;
-        button.textContent = "Kopiert";
+        button.textContent = "✓ Kopiert";
         button.classList.add("is-copied");
         window.clearTimeout(button._copyTimer);
         button._copyTimer = window.setTimeout(function () {
@@ -872,11 +842,9 @@
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", function () {
-      initHeaderFit();
       boot(document);
     });
   } else {
-    initHeaderFit();
     boot(document);
   }
 

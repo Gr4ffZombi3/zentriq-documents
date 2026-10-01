@@ -378,7 +378,7 @@ def test_customer_detail_shows_master_data_entries_memos_and_sources(app, world,
     assert body["assigned"] is True
     html = client.get(f"/customers/{customer_id}").get_data(as_text=True)
     for text in ("Stammdaten", "Kundennummer", "123456", "Vermittlernummer", "08/4205-M", "04109 Leipzig", "01.05.1980",
-                 "Leipziger Liste", "720/307259-C-14", "Memos", transcript, "Text kopieren", "Angelegt aus: Leipziger Liste"):
+                 "Leipziger Liste", "720/307259-C-14", "Memos", transcript, ">Kopieren<", "Angelegt aus: Leipziger Liste"):
         assert text in html, text
 
 

@@ -160,6 +160,25 @@
   });
   cancel.addEventListener("click", function () { if (controller) controller.abort(); });
 
+  // <button data-assistant-insert="#selector">: Text eines Elements (z. B. die anonymisierte
+  // Fassung) ins Eingabefeld uebernehmen. Bewusst OHNE Absenden - der Benutzer prueft den Text
+  // und entscheidet selbst.
+  document.addEventListener("click", function (event) {
+    var trigger = event.target.closest ? event.target.closest("[data-assistant-insert]") : null;
+    if (!trigger) return;
+    var source = document.querySelector(trigger.getAttribute("data-assistant-insert"));
+    if (!source || controller) return;
+    input.value = (source.matches("textarea, input") ? source.value : source.textContent).slice(0, maxChars);
+    output.textContent = "";
+    resultBox.hidden = true;
+    showError("");
+    updateCount();
+    setOpen(true);
+    input.setSelectionRange(0, 0);
+    input.scrollTop = 0;
+    status.textContent = "Text übernommen – bitte prüfen und selbst absenden.";
+  });
+
   panel.querySelector("[data-assistant-new]").addEventListener("click", function () {
     if (controller) controller.abort();
     input.value = "";

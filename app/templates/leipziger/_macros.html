@@ -38,7 +38,7 @@
       {% for entry in entries %}
         {% set same_customer = loop.previtem is defined and loop.previtem.customer and loop.previtem.customer == entry.customer %}
         <tr class="{{ 'worklist-same-customer' if same_customer else '' }}">
-          <td class="worklist-number" data-label="Nummer">{{ entry.number }}</td>
+          <td class="worklist-number" data-label="Nummer">{{ entry.number }}<button type="button" class="copy-inline" data-copy-text="{{ entry.number }}" aria-label="Nummer {{ entry.number }} kopieren">Kopieren</button></td>
           <td class="whitespace-nowrap" data-label="Status"><span title="{{ entry.label }}">{{ entry.status_code or entry.label }}</span></td>
           <td class="stack-full" data-label="Kunde">{{ entry.customer or '–' }}</td>
           <td class="whitespace-nowrap" data-label="Art">{{ entry.art or '–' }}</td>

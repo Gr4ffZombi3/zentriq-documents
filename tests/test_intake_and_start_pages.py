@@ -104,7 +104,10 @@ def test_upload_page_and_header_entry(app, office):
         client = _login(app, email)
         html = client.get("/hochladen").get_data(as_text=True)
         assert "Datei hier ablegen" in html and "Datei auswählen" in html
-        assert 'href="/hochladen"' in client.get("/uebersicht").get_data(as_text=True)
+    # In der Navigation (Werkzeuge) nur fuer Buero-Admins: Mitarbeiter koennen dort nur
+    # Sprachnachrichten verarbeiten - das deckt "Memo" bereits ab (keine Doppelung).
+    assert 'href="/hochladen"' in _login(app, "admin@example.org").get("/uebersicht").get_data(as_text=True)
+    assert 'href="/hochladen"' not in _login(app, "dennis@example.org").get("/uebersicht").get_data(as_text=True)
     assert "PDF (Leipziger Liste)" not in _login(app, "dennis@example.org").get("/hochladen").get_data(as_text=True)
 
 

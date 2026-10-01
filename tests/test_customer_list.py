@@ -52,5 +52,5 @@ def test_customer_list_renders_table_with_umlauts(auth_client, db, tenant):
     body = resp.get_data(as_text=True)
     assert "Anna Beispiel" in body
     assert "Vorgänge" in body
-    assert "Kundenakte öffnen" in body
+    assert "Öffnen" in body
     assert "Vorgaenge" not in body

@@ -44,6 +44,7 @@ def create_app(config_object=None):
 
     from app import models  # noqa: F401  (ensure models are registered with SQLAlchemy)
     from app.auth.routes import auth_bp
+    from app.blueprints.assistant.routes import assistant_bp
     from app.blueprints.bestand.routes import bestand_bp
     from app.blueprints.chat.routes import chat_bp
     from app.blueprints.cockpit.routes import cockpit_bp
@@ -73,6 +74,7 @@ def create_app(config_object=None):
     app.register_blueprint(chat_bp)
     app.register_blueprint(cockpit_bp)
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(assistant_bp)
     app.register_blueprint(documents_bp)
     app.register_blueprint(upload_bp)
     app.register_blueprint(search_bp)
@@ -103,6 +105,9 @@ def create_app(config_object=None):
     register_http_performance(app)
 
     app.context_processor(build_navigation)
+    from app.navigation import assistant_panel_actions
+
+    app.jinja_env.globals["assistant_panel_actions"] = assistant_panel_actions
 
     @app.get("/favicon.ico")
     def favicon():

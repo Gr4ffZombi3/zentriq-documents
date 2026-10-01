@@ -26,6 +26,17 @@ class BaseConfig:
     # global (auch fuer die Leipziger-Liste-Extraktion).
     MAILBOX_OPENAI_BASE_URL = os.environ.get("MAILBOX_OPENAI_BASE_URL")
 
+    # KI-Assistent (app/services/assistant.py): Anthropic API, ausschliesslich serverseitig.
+    # Ohne ANTHROPIC_API_KEY ist der Assistent ausgeblendet; ASSISTANT_ENABLED=false schaltet
+    # ihn auch mit Key ab.
+    ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+    ASSISTANT_ENABLED = os.environ.get("ASSISTANT_ENABLED", "true").lower() == "true"
+    ASSISTANT_MODEL = os.environ.get("ASSISTANT_MODEL", "claude-opus-5-5")
+    ASSISTANT_EFFORT = os.environ.get("ASSISTANT_EFFORT", "low")
+    ASSISTANT_TIMEOUT_SECONDS = float(os.environ.get("ASSISTANT_TIMEOUT_SECONDS", "50"))
+    ASSISTANT_MAX_INPUT_CHARS = int(os.environ.get("ASSISTANT_MAX_INPUT_CHARS", "8000"))
+    ASSISTANT_MAX_OUTPUT_TOKENS = int(os.environ.get("ASSISTANT_MAX_OUTPUT_TOKENS", "4000"))
+
     TESSERACT_CMD = os.environ.get("TESSERACT_CMD")
     OCR_MIN_CONFIDENCE = float(os.environ.get("OCR_MIN_CONFIDENCE", "60"))
     OCR_MIN_TEXT_LENGTH = int(os.environ.get("OCR_MIN_TEXT_LENGTH", "20"))
@@ -109,6 +120,9 @@ class TestingConfig(BaseConfig):
     PUBLIC_URL = "https://zentriq.test"
     SMTP_HOST = None
     MAIL_FROM = None
+    # Nie echte Anthropic-Aufrufe in Tests; tests/test_assistant.py setzt einen Test-Key und
+    # ersetzt den Client.
+    ANTHROPIC_API_KEY = None
 
 
 class ProductionConfig(BaseConfig):

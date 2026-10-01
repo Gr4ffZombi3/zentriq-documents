@@ -3,7 +3,9 @@
 {% block title %}Memo – Zentriq{% endblock %}
 
 {% block content %}
-<div class="page-shell page-shell-narrow" data-memo data-match-url="{{ url_for('dashboard.match') }}">
+<div class="page-shell page-shell-narrow" data-memo data-match-url="{{ url_for('dashboard.match') }}"
+     data-assign-url="{{ url_for('dashboard.assign') }}"
+     data-create-url="{{ url_for('dashboard.create_customer') }}">
   <div class="page-toolbar">
     <div>
       <h1 class="page-toolbar-title">Memo</h1>
@@ -44,6 +46,8 @@
         </div>
       </div>
     </section>
+
+    {% include "dashboard/_summary.html" %}
 
     <section class="panel" aria-live="polite">
       <header class="panel-header"><h2 class="panel-title">Kundenzuordnung</h2></header>

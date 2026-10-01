@@ -804,6 +804,62 @@
     }
   }
 
+  // Kopieren: ein Klick -> Zwischenablage -> kurz "Kopiert". Ohne Dialog.
+  // <button data-copy="#selector"> kopiert den Text des Elements, data-copy-text einen festen Text.
+  function copyText(text, button) {
+    var value = (text || "").trim();
+    if (!value) return Promise.resolve(false);
+    var write;
+    if (navigator.clipboard && window.isSecureContext) {
+      write = navigator.clipboard.writeText(value);
+    } else {
+      write = new Promise(function (resolve, reject) {
+        var area = document.createElement("textarea");
+        area.value = value;
+        area.setAttribute("readonly", "");
+        area.style.position = "fixed";
+        area.style.opacity = "0";
+        document.body.appendChild(area);
+        area.select();
+        var ok = false;
+        try { ok = document.execCommand("copy"); } catch (error) { ok = false; }
+        document.body.removeChild(area);
+        if (ok) { resolve(); } else { reject(new Error("copy")); }
+      });
+    }
+    return write.then(function () {
+      if (button) {
+        if (!button.dataset.copyLabel) button.dataset.copyLabel = button.textContent;
+        button.textContent = "Kopiert";
+        button.classList.add("is-copied");
+        window.clearTimeout(button._copyTimer);
+        button._copyTimer = window.setTimeout(function () {
+          button.textContent = button.dataset.copyLabel;
+          button.classList.remove("is-copied");
+        }, 1500);
+      }
+      return true;
+    }).catch(function () {
+      if (button) button.textContent = "Kopieren nicht möglich";
+      return false;
+    });
+  }
+
+  window.Zentriq = window.Zentriq || {};
+  window.Zentriq.copyText = copyText;
+
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest ? event.target.closest("[data-copy], [data-copy-text]") : null;
+    if (!button) return;
+    event.preventDefault();
+    if (button.hasAttribute("data-copy-text")) {
+      copyText(button.getAttribute("data-copy-text"), button);
+      return;
+    }
+    var source = document.querySelector(button.getAttribute("data-copy"));
+    if (source) copyText(source.matches("textarea, input") ? source.value : source.innerText, button);
+  });
+
   function boot(root) {
     initStackTables(root);
     initScrollStrips(root);

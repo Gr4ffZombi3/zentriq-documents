@@ -15,6 +15,27 @@
     </dl>
   </section>
 
+  <section class="panel" aria-labelledby="ki-assistent">
+    <header class="panel-header">
+      <h2 class="panel-title" id="ki-assistent">KI-Assistent</h2>
+      <p class="panel-description">Nur technische Angaben der letzten 30 Tage – keine Eingaben, Antworten oder Büro-Inhalte.</p>
+    </header>
+    {% set ai_state, ai_ok = assistant.state %}
+    <dl class="fact-list">
+      <div><dt>Status</dt><dd>{% if ai_ok is sameas true %}{{ state_tag(ai_state, 'success') }}{% elif ai_ok is sameas false %}{{ state_tag(ai_state, 'danger') }}{% else %}{{ ai_state }}{% endif %}</dd></div>
+      <div><dt>Modell</dt><dd><code>{{ assistant.model }}</code></dd></div>
+      <div><dt>Anfragen (24 Stunden / 30 Tage)</dt><dd class="tabular-nums">{{ assistant.stats.requests_24h }} / {{ assistant.stats.requests }}</dd></div>
+      <div><dt>Fehler (30 Tage)</dt><dd class="tabular-nums">{{ assistant.stats.errors }}</dd></div>
+      <div><dt>Letzter Fehler</dt><dd>{% if assistant.stats.last_error %}{{ assistant.stats.last_error.at | local_dt }} · {{ assistant.stats.last_error.type }}{% else %}–{% endif %}</dd></div>
+    </dl>
+    {% if assistant.configured %}
+      <form method="post" action="{{ url_for('platform.assistant_check') }}" class="panel-body">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-secondary btn-sm">API-Erreichbarkeit prüfen</button>
+      </form>
+    {% endif %}
+  </section>
+
   <section class="panel">
     <header class="panel-header"><h2 class="panel-title">Konten</h2></header>
     <dl class="fact-list">

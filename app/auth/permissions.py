@@ -6,7 +6,7 @@ oder JSON-Aufruf - endet mit 403. Neue Blueprints sind damit automatisch nur fue
 OFFICE_ADMINs erreichbar, solange sie hier nicht ausdruecklich freigegeben werden.
 
 - EMPLOYEE: Uebersicht, eigene Zeiterfassung, eigene Eintraege der Leipziger Liste, Memo,
-  globale Suche (nur eigene Vorgaenge), eigenes Konto.
+  globale Suche (nur eigene Vorgaenge), KI-Assistent, eigenes Konto.
 - OFFICE_ADMIN: alle Fachbereiche des eigenen Mandanten (Mandantentrennung: app/tenancy.py),
   aber nie die Plattformverwaltung.
 - SUPER_ADMIN: ausschliesslich Plattformverwaltung (Bueros, Benutzer) und eigenes Konto -
@@ -37,10 +37,11 @@ COMMON_ALLOWED_ENDPOINTS = frozenset(
 # Zeiterfassung sind dort zusaetzlich per @admin_required abgesichert).
 # "intake": Universal-Upload (Mitarbeiter: nur Sprachnachrichten, Listen-Import bleibt
 # ueber /upload Buero-Admins vorbehalten).
-EMPLOYEE_ALLOWED_BLUEPRINTS = frozenset({"timetracking", "intake"})
+# "assistant": KI-Assistent - sendet nur den vom Benutzer eingegebenen Text, speichert nichts.
+EMPLOYEE_ALLOWED_BLUEPRINTS = frozenset({"timetracking", "intake", "assistant"})
 # "leipziger.index" zeigt Mitarbeitern ausschliesslich die ueber ihre eigene Vermittlernummer
-# zugeordneten Vorgaenge. Memo (dashboard.*) speichert nichts; der Kundenabgleich bleibt im
-# eigenen Mandanten.
+# zugeordneten Vorgaenge. Memo (dashboard.*) speichert ein Transkript nur bei Zuordnung zu einem
+# Kunden; Kundenabgleich und -anlage bleiben im eigenen Mandanten.
 EMPLOYEE_ALLOWED_ENDPOINTS = frozenset(
     {
         "portal.overview",
@@ -48,6 +49,9 @@ EMPLOYEE_ALLOWED_ENDPOINTS = frozenset(
         "dashboard.index",
         "dashboard.transcribe",
         "dashboard.match",
+        # Memo einem Kunden zuordnen bzw. daraus anlegen (nur eigenes Buero, ohne Kundenakte).
+        "dashboard.assign",
+        "dashboard.create_customer",
         # Globale Suche: Mitarbeiter finden nur Vorgaenge ihrer eigenen Vermittlernummer
         # (app/services/global_search.py).
         "search.search",

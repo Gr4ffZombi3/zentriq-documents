@@ -1,8 +1,8 @@
 """Hauptnavigation des Portals, rollenabhaengig:
 
 - SUPER_ADMIN: Uebersicht, Bueros, Benutzer, Systemeinstellungen, Sicherheit (keine Fachbereiche).
-- OFFICE_ADMIN: Uebersicht, Leipziger Liste, Memo, Zeiterfassung, Mitarbeiter, Aktivitaeten,
-  Einstellungen.
+- OFFICE_ADMIN: Uebersicht, Leipziger Liste, Memo, Kunden, Zeiterfassung, Mitarbeiter,
+  Aktivitaeten, Einstellungen.
 - EMPLOYEE: Uebersicht, Leipziger Liste, Memo, Zeiterfassung.
 Rechts in der Kopfleiste fuer alle: Mein Konto, Benutzername, Abmelden.
 
@@ -41,7 +41,6 @@ LEIPZIGER_ITEMS = (
     NavItem("documents.list_documents", "Listen & Upload", ("documents.", "upload."), admin_only=True),
     NavItem("potenziale.index", "Auswertung", ("potenziale.index",), admin_only=True),
     NavItem("potenziale.vergleich", "Eigene vs. GS-Liste", ("potenziale.vergleich",), admin_only=True, secondary=True),
-    NavItem("customers.list_customers", "Kunden", ("customers.",), admin_only=True, secondary=True),
     NavItem("tasks.list_tasks", "Aufgaben", ("tasks.",), admin_only=True, secondary=True),
     NavItem("recommendations.list_recommendations", "Empfehlungen", ("recommendations.",), admin_only=True, secondary=True),
     NavItem("bestand.index", "Bestand", ("bestand.",), admin_only=True, secondary=True),
@@ -72,11 +71,13 @@ AREAS = (
         "leipziger",
         "Leipziger Liste",
         "leipziger.index",
-        ("leipziger.", "documents.", "upload.", "potenziale.", "customers.", "tasks.", "recommendations.", "bestand.", "cockpit."),
+        ("leipziger.", "documents.", "upload.", "potenziale.", "tasks.", "recommendations.", "bestand.", "cockpit."),
         admin_only=False,
         items=LEIPZIGER_ITEMS,
     ),
     NavArea("voice", "Memo", "dashboard.index", ("dashboard.",), admin_only=False),
+    # Zentriq-Kundenstamm (nur OFFICE_ADMIN; Mitarbeiter sehen wie bisher keine Kundenstammdaten).
+    NavArea("customers", "Kunden", "customers.list_customers", ("customers.",), admin_only=True),
     NavArea("time", "Zeiterfassung", "timetracking.index", ("timetracking.",), admin_only=False, items=TIME_ITEMS),
     # Buero-Verwaltung (nur OFFICE_ADMIN).
     NavArea("staff", "Mitarbeiter", "office.staff", ("office.staff",), admin_only=True),
@@ -132,7 +133,21 @@ def build_navigation() -> dict:
         "nav_settings_active": account_active,
         "nav_settings_label": "Mein Konto",
         "nav_display_name": display_name_for(current_user),
+        "assistant_available": assistant_available(current_user),
     }
+
+
+def assistant_panel_actions() -> list[tuple[str, str]]:
+    from app.services.assistant import ACTIONS, PANEL_ACTIONS
+
+    return [(key, ACTIONS[key].label) for key in PANEL_ACTIONS]
+
+
+def assistant_available(user) -> bool:
+    """KI-Assistent nur fuer Buero-Rollen und nur, wenn er eingerichtet und aktiviert ist."""
+    from app.services.assistant import is_enabled
+
+    return bool((user.is_office_admin or user.is_employee) and is_enabled())
 
 
 def display_name_for(user) -> str:

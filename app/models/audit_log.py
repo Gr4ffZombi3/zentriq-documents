@@ -33,6 +33,11 @@ class AuditEventType(enum.Enum):
     LEIPZIGER_LIST_UPLOADED = "leipziger_list_uploaded"
     SESSIONS_REVOKED = "sessions_revoked"
     CUSTOMER_MERGED = "customer_merged"
+    # Memo einem Kunden zugeordnet bzw. aus einem Memo angelegt (ohne Text, nur IDs).
+    MEMO_ASSIGNED = "memo_assigned"
+    CUSTOMER_CREATED = "customer_created"
+    # KI-Assistent genutzt - nur Schnellaktion, nie Eingabe oder Antwort.
+    ASSISTANT_USED = "assistant_used"
 
 
 # Sicherheitsrelevante Ereignisse ohne fachlichen Inhalt - nur diese sind fuer den
@@ -75,6 +80,9 @@ OFFICE_ACTIVITY_EVENT_TYPES = (
     AuditEventType.LEIPZIGER_LIST_UPLOADED,
     AuditEventType.SESSIONS_REVOKED,
     AuditEventType.CUSTOMER_MERGED,
+    AuditEventType.MEMO_ASSIGNED,
+    AuditEventType.CUSTOMER_CREATED,
+    AuditEventType.ASSISTANT_USED,
 )
 
 

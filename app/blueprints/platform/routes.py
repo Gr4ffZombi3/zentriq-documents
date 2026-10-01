@@ -2,7 +2,8 @@
 
 Bewusste, eng begrenzte Cross-Tenant-Zone: Hier werden mandantenuebergreifend AUSSCHLIESSLICH
 Tenant-, User- und EmployeeProfile-Daten (Kontoebene) sowie sicherheitsrelevante Audit-
-Ereignisse ohne Details gelesen. Fachliche Daten (Leipziger Liste, Dokumente, Kunden, Memo,
+Ereignisse ohne Details gelesen; vom KI-Assistenten nur Anzahl, Zeitpunkt und Fehlerart
+(app/services/assistant.usage_stats), nie Eingaben oder Antworten. Fachliche Daten (Leipziger Liste, Dokumente, Kunden, Memo,
 Zeiterfassung) werden in diesem Blueprint nie abgefragt; die Fach-Blueprints selbst sind fuer
 SUPER_ADMIN per Default-Deny (app/auth/permissions.py) gesperrt.
 
@@ -26,7 +27,7 @@ from app.blueprints.settings.routes import user_form_data
 from app.extensions import db
 from app.models import Tenant, TenantStatus, User, UserRole
 from app.models.audit_log import SECURITY_EVENT_TYPES, AuditEventType, AuditLog
-from app.services import two_factor
+from app.services import assistant, two_factor
 from app.services.audit import log_audit_event
 from app.services.mailer import is_mail_configured
 from app.services.password_reset import is_password_reset_available
@@ -353,7 +354,28 @@ def system():
         user_stats=_user_stats(),
         errors=latest_errors(20),
         tenants=tenants,
+        assistant=_assistant_status(),
     )
+
+
+def _assistant_status() -> dict:
+    """KI-Assistent: nur Konfiguration und Kennzahlen, keine Inhalte der Bueros."""
+    configured = assistant.is_configured()
+    if not current_app.config.get("ASSISTANT_ENABLED"):
+        state = ("deaktiviert", None)
+    elif not configured:
+        state = ("nicht eingerichtet (ANTHROPIC_API_KEY fehlt)", False)
+    else:
+        state = ("aktiviert", True)
+    return {"state": state, "configured": configured, "model": assistant.model_name(), "stats": assistant.usage_stats()}
+
+
+@platform_bp.post("/system/ki-pruefen")
+def assistant_check():
+    """Erreichbarkeit der Anthropic API pruefen - ruft nur die Modellinfo ab, sendet keinen Text."""
+    ok, message = assistant.check_connection()
+    flash(f"KI-Assistent: {message}.", "success" if ok else "error")
+    return redirect(url_for("platform.system"))
 
 
 @lru_cache(maxsize=1)

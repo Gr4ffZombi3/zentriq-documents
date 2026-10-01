@@ -1,0 +1,16 @@
+{# Fachliche Kurzfassung des Transkripts ueber den KI-Assistenten - nur auf ausdruecklichen Klick,
+   das Transkript wird nie automatisch an die KI uebertragen (memo.js, app/services/assistant.py). #}
+{% if assistant_available %}
+  <section class="panel" data-memo-summary data-url="{{ url_for('assistant.generate') }}">
+    <header class="panel-header"><h2 class="panel-title">Kurzfassung</h2></header>
+    <div class="panel-body">
+      <p class="form-hint" data-memo-summary-hint>Kurze fachliche Textfassung aus dem Transkript. Dafür wird nur das Transkript an den KI-Assistenten übertragen.</p>
+      <div class="memo-summary-text" data-memo-summary-text hidden></div>
+      <p class="form-error" data-memo-summary-error role="alert" hidden></p>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" data-memo-summary-create>Kurzfassung erstellen</button>
+        <button type="button" class="btn btn-primary" data-copy="[data-memo-summary-text]" data-memo-summary-copy hidden>Kurzfassung kopieren</button>
+      </div>
+    </div>
+  </section>
+{% endif %}

@@ -19,9 +19,11 @@ from sqlalchemy import or_, update
 from app.extensions import db
 from app.models import (
     Customer,
+    CustomerMemo,
     CustomerTimelineEvent,
     Document,
     DocumentCustomer,
+    LeipzigerEntry,
     ListComparisonEntry,
     Recommendation,
     Task,
@@ -49,6 +51,7 @@ MERGE_FIELDS = {
     "address": "Adresse",
     "postal_code": "PLZ",
     "city": "Ort",
+    "broker_number": "Vermittlernummer",
     "assigned_user_id": "Zuständig",
 }
 
@@ -137,6 +140,7 @@ def link_counts(customer: Customer) -> dict[str, int]:
         "Verlaufseinträge": CustomerTimelineEvent.query.filter_by(customer_id=customer.id).count(),
         "Aufgaben": Task.query.filter_by(customer_id=customer.id).count(),
         "Empfehlungen": Recommendation.query.filter_by(customer_id=customer.id).count(),
+        "Memos": CustomerMemo.query.filter_by(customer_id=customer.id).count(),
     }
 
 
@@ -188,7 +192,7 @@ def merge_customers(target: Customer, source: Customer, actor) -> dict:
     - Leere Felder von `target` werden aus `source` gefuellt, gefuellte nie ueberschrieben.
     - Abweichende Werte von `source` werden im Kundenverlauf von `target` festgehalten.
     - Alle Verknuepfungen (Listenzeilen, Dokumente, Verlauf, Aufgaben, Empfehlungen,
-      Listenvergleiche) werden auf `target` umgehaengt."""
+      Listenvergleiche, Leipziger-Vorgaenge, Memos) werden auf `target` umgehaengt."""
     if target.id == source.id:
         raise MergeError("Ein Datensatz kann nicht mit sich selbst zusammengeführt werden.")
     if target.tenant_id != source.tenant_id or target.tenant_id != actor.tenant_id:
@@ -220,7 +224,16 @@ def merge_customers(target: Customer, source: Customer, actor) -> dict:
             db.session.delete(link)
     db.session.flush()
 
-    for model in (Document, CustomerTimelineEvent, Task, Recommendation, ListComparisonEntry):
+    # Memos: dasselbe Transkript ist je Kunde nur einmal gespeichert.
+    target_memos = {memo.transcript_sha256 for memo in CustomerMemo.query.filter_by(customer_id=target.id)}
+    for memo in CustomerMemo.query.filter_by(customer_id=source.id).all():
+        if memo.transcript_sha256 in target_memos:
+            db.session.delete(memo)
+        else:
+            memo.customer_id = target.id
+    db.session.flush()
+
+    for model in (Document, CustomerTimelineEvent, Task, Recommendation, ListComparisonEntry, LeipzigerEntry):
         db.session.execute(
             update(model)
             .where(model.customer_id == source.id, model.tenant_id == tenant_id)

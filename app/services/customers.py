@@ -3,19 +3,26 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections import defaultdict
-from datetime import date
 
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import Customer, DocumentCustomer
+from app.models import Customer, DocumentCustomer, LeipzigerEntry
+from app.services import customer_sources
 from app.services.analysis.leipziger_liste_view import build_row_view
 from app.services.customer_duplicates import duplicate_map, find_duplicates
+from app.services.customer_overview import customer_link_counts, customer_search_condition
+from app.services.leipziger_entries import search_key
 from app.services.llm.schemas import ExtractedCustomer
 from app.tenancy import get_current_tenant_id
+from app.utils.customer_keys import customer_keys
+from app.utils.vermittlernummer import format_vermittlernummer
 
 DEFAULT_CUSTOMER_PAGE_SIZE = 25
 MAX_CUSTOMER_PAGE_SIZE = 50
+MIN_SEARCH_LENGTH = 2
+MAX_SEARCH_LENGTH = 60
 
 
 def normalize_customer_name(value: str | None) -> str:
@@ -47,72 +54,157 @@ def normalize_postal_code(value: str | None) -> str:
 
 
 class CustomerMatcher:
-    def __init__(self, existing_customers: list[Customer] | None = None):
+    """Ordnet extrahierte Kundendaten (Leipziger Liste) dem Kundenstamm des eigenen Bueros zu.
+
+    Abgleich ueber die indizierten Schluessel (app/utils/customer_keys.py) in dieser Reihenfolge:
+    1. Kundennummer, 2. Telefonnummer, 3. dieselbe Vorgangsnummer aus einer frueheren Liste bei
+    gleichem Namen, 4. Name + Geburtsdatum, 5. Name + PLZ (nur ohne abweichendes
+    Geburtsdatum). Ein gleicher Name allein fuehrt nie zu einer Zuordnung, und abweichende
+    Kundennummern bzw. Geburtsdaten schliessen eine Zuordnung immer aus. So legt eine neue
+    Wochenliste fuer bereits bekannte Kunden keinen weiteren Datensatz an.
+    Geladen werden nur Kunden des eigenen Bueros (globaler Tenant-Filter)."""
+
+    def __init__(self, existing_customers: list[Customer] | None = None, *, source: str = customer_sources.LEIPZIGER_LISTE):
         customers = existing_customers or Customer.query.order_by(Customer.id.asc()).all()
-        self.customers = list(customers)
-        self.by_normalized_name: dict[str, list[Customer]] = defaultdict(list)
-        for customer in self.customers:
-            self.by_normalized_name[normalize_customer_name(customer.name)].append(customer)
+        self.source = source
+        self.customers: list[Customer] = []
+        self._by_key: dict[str, dict[str, list[Customer]]] = {
+            "customer_number_key": defaultdict(list),
+            "phone_key": defaultdict(list),
+            "name_key": defaultdict(list),
+        }
+        for customer in customers:
+            self._index(customer, customer_keys(customer.name, customer.phone, customer.customer_number))
+        self._contract_owner: dict[str, set[int]] | None = None
 
-    def get_or_create(self, data: ExtractedCustomer, uploaded_by_user_id: int | None = None) -> Customer:
-        normalized_name = normalize_customer_name(data.name)
-        candidates = self.by_normalized_name.get(normalized_name, [])
+    def _contract_owners(self, contract_number: str | None) -> set[int]:
+        """Kunden, denen dieselbe Vorgangsnummer in einer frueheren Liste zugeordnet war."""
+        key = search_key(contract_number)[:100]
+        if not key:
+            return set()
+        if self._contract_owner is None:
+            self._contract_owner = defaultdict(set)
+            rows = db.session.execute(
+                select(LeipzigerEntry.contract_key, LeipzigerEntry.customer_id)
+                .where(LeipzigerEntry.customer_id.is_not(None), LeipzigerEntry.contract_key.is_not(None))
+                .distinct()
+            ).all()
+            for contract_key, customer_id in rows:
+                self._contract_owner[contract_key].add(customer_id)
+        return self._contract_owner.get(key, set())
 
-        matched = self._match_by_date_of_birth(candidates, data.date_of_birth)
-        if matched is None:
-            matched = self._match_by_postal_code(candidates, data.postal_code)
-
-        customer = matched or Customer(
-            name=data.name,
-            tenant_id=get_current_tenant_id(),
-            assigned_user_id=uploaded_by_user_id,
-        )
-        if matched is None:
-            db.session.add(customer)
+    def _index(self, customer: Customer, keys: dict) -> None:
+        if customer not in self.customers:
             self.customers.append(customer)
-            self.by_normalized_name[normalized_name].append(customer)
+        for column, value in keys.items():
+            if value and customer not in self._by_key[column][value]:
+                self._by_key[column][value].append(customer)
 
-        customer.address = data.address or customer.address
-        customer.city = data.city or customer.city
-        customer.postal_code = data.postal_code or customer.postal_code
-        customer.date_of_birth = data.date_of_birth or customer.date_of_birth
-        # Leere Quellwerte ueberschreiben nie vorhandene Daten.
-        customer.phone = data.phone or customer.phone
-        customer.customer_number = data.customer_number or customer.customer_number
+    def find(self, data: ExtractedCustomer, contract_number: str | None = None) -> Customer | None:
+        keys = customer_keys(data.name, data.phone, data.customer_number)
+        number = keys["customer_number_key"]
+
+        def number_conflict(customer: Customer) -> bool:
+            other = customer_keys(None, None, customer.customer_number)["customer_number_key"]
+            return bool(number and other and other != number)
+
+        if number and (candidates := self._by_key["customer_number_key"].get(number)):
+            return candidates[0]
+        if keys["phone_key"]:
+            candidates = [c for c in self._by_key["phone_key"].get(keys["phone_key"], []) if not number_conflict(c)]
+            if candidates:
+                return candidates[0]
+        if not keys["name_key"]:
+            return None
+        same_name = [c for c in self._by_key["name_key"].get(keys["name_key"], []) if not number_conflict(c)]
+        owners = self._contract_owners(contract_number)
+        if owners:
+            matched = [
+                c
+                for c in same_name
+                if c.id in owners and not (data.date_of_birth and c.date_of_birth and c.date_of_birth != data.date_of_birth)
+            ]
+            if len(matched) == 1:
+                return matched[0]
+        if data.date_of_birth is not None:
+            matched = [c for c in same_name if c.date_of_birth == data.date_of_birth]
+            if matched:
+                return matched[0]
+        postal_code = normalize_postal_code(data.postal_code)
+        if postal_code:
+            matched = [
+                c
+                for c in same_name
+                if normalize_postal_code(c.postal_code) == postal_code
+                and not (data.date_of_birth and c.date_of_birth and c.date_of_birth != data.date_of_birth)
+            ]
+            if matched:
+                return matched[0]
+        return None
+
+    def get_or_create(
+        self,
+        data: ExtractedCustomer,
+        uploaded_by_user_id: int | None = None,
+        *,
+        broker_number: str | None = None,
+        contract_number: str | None = None,
+    ) -> Customer:
+        customer = self.find(data, contract_number)
+        if customer is None:
+            customer = Customer(
+                name=data.name,
+                tenant_id=get_current_tenant_id(),
+                assigned_user_id=uploaded_by_user_id,
+                source=self.source,
+                field_sources={"name": self.source},
+            )
+            db.session.add(customer)
+
+        # Die neueste Liste ist der aktuelle Stand; leere Quellwerte ueberschreiben nie
+        # vorhandene Daten. Der Name bleibt unveraendert (Grundlage des Abgleichs).
+        customer_sources.apply_customer_values(
+            customer,
+            {
+                "address": data.address,
+                "city": data.city,
+                "postal_code": data.postal_code,
+                "date_of_birth": data.date_of_birth,
+                "phone": data.phone,
+                "customer_number": data.customer_number,
+                "broker_number": (format_vermittlernummer(broker_number) or "")[:50] or None,
+            },
+            self.source,
+            overwrite=True,
+        )
+        self._index(customer, customer_keys(customer.name, customer.phone, customer.customer_number))
         return customer
 
-    @staticmethod
-    def _match_by_date_of_birth(candidates: list[Customer], value: date | None) -> Customer | None:
-        if value is None:
-            return None
-        return next((customer for customer in candidates if customer.date_of_birth == value), None)
 
-    @staticmethod
-    def _match_by_postal_code(candidates: list[Customer], value: str | None) -> Customer | None:
-        normalized = normalize_postal_code(value)
-        if not normalized:
-            return None
-        return next(
-            (
-                customer
-                for customer in candidates
-                if customer.postal_code and normalize_postal_code(customer.postal_code) == normalized
-            ),
-            None,
-        )
-
-
-def build_customer_directory(*, page: int = 1, per_page: int = DEFAULT_CUSTOMER_PAGE_SIZE) -> dict:
+def build_customer_directory(*, page: int = 1, per_page: int = DEFAULT_CUSTOMER_PAGE_SIZE, query: str = "") -> dict:
+    """Kundenstamm des eigenen Bueros, optional gefiltert nach Name, Telefonnummer,
+    Kundennummer oder Vorgangsnummer (gleiche Suche wie die globale Suche)."""
     safe_per_page = max(1, min(per_page, MAX_CUSTOMER_PAGE_SIZE))
-    query = Customer.query.options(
-        selectinload(Customer.document_customers).joinedload(DocumentCustomer.document)
-    ).order_by(Customer.name.asc(), Customer.id.asc())
-    pagination = query.paginate(page=page, per_page=safe_per_page, error_out=False)
+    query = " ".join((query or "").split())[:MAX_SEARCH_LENGTH]
+    statement = Customer.query.order_by(Customer.name.asc(), Customer.id.asc())
+    if len(query) >= MIN_SEARCH_LENGTH:
+        statement = statement.filter(customer_search_condition(query))
+    pagination = statement.paginate(page=page, per_page=safe_per_page, error_out=False)
 
-    # Dubletten nur fuer die angezeigte Seite (eine Abfrage ueber die indizierten Schluessel).
-    duplicates = duplicate_map(list(pagination.items))
-    items = [_build_customer_summary(customer, duplicates.get(customer.id, [])) for customer in pagination.items]
-    return {"items": items, "pagination": pagination}
+    customers = list(pagination.items)
+    # Dubletten und Zaehler nur fuer die angezeigte Seite (je eine Abfrage).
+    duplicates = duplicate_map(customers)
+    counts = customer_link_counts([customer.id for customer in customers])
+    items = [
+        {
+            "customer": customer,
+            "leipziger_count": counts[customer.id]["leipziger"],
+            "memo_count": counts[customer.id]["memos"],
+            "possible_duplicates": duplicates.get(customer.id, []),
+        }
+        for customer in customers
+    ]
+    return {"items": items, "pagination": pagination, "query": query}
 
 
 def build_customer_detail_context(customer: Customer) -> dict:
@@ -158,29 +250,4 @@ def build_customer_detail_context(customer: Customer) -> dict:
             "stornos": stornos,
         },
         "possible_duplicates": find_duplicates(customer),
-    }
-
-
-def _build_customer_summary(customer: Customer, possible_duplicates: list[Customer]) -> dict:
-    latest_row = None
-    latest_uploaded_at = None
-    record_count = 0
-
-    for doc_customer in customer.document_customers:
-        confidence_rows = doc_customer.field_confidence or []
-        uploaded_at = doc_customer.document.uploaded_at
-        for index, row in enumerate(doc_customer.row_data or []):
-            record_count += 1
-            if latest_uploaded_at is None or (uploaded_at and uploaded_at > latest_uploaded_at):
-                confidence = confidence_rows[index] if index < len(confidence_rows) else {}
-                latest_uploaded_at = uploaded_at
-                latest_row = build_row_view(doc_customer, row, confidence)
-
-    return {
-        "customer": customer,
-        "record_count": record_count,
-        "latest_row": latest_row,
-        "latest_uploaded_at": latest_uploaded_at,
-        "possible_duplicates": possible_duplicates,
-        "status_label": latest_row["result_label"] if latest_row else "Noch keine Vorgänge",
     }

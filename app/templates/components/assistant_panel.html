@@ -1,0 +1,50 @@
+{% from "ui/icons.html" import icon %}
+{# KI-Assistent als Side-Panel: die Seite bleibt sichtbar und bedienbar. Uebertragen wird nur der
+   eingegebene Text (app/services/assistant.py); Eingabe und Ergebnis werden nicht gespeichert. #}
+<aside class="assistant-panel" id="assistent" role="dialog" aria-modal="false" aria-labelledby="assistent-titel"
+       data-assistant data-url="{{ url_for('assistant.generate') }}" data-max-chars="{{ config.ASSISTANT_MAX_INPUT_CHARS }}" hidden>
+  <header class="assistant-header">
+    <h2 class="assistant-title" id="assistent-titel">Assistent</h2>
+    <button type="button" class="assistant-close" data-assistant-close aria-label="Assistent schließen" title="Schließen (Esc)">
+      {{ icon('x', class='h-4 w-4') }}
+    </button>
+  </header>
+
+  <form class="assistant-body" data-assistant-form novalidate>
+    <div class="assistant-actions" role="radiogroup" aria-label="Schnellaktion">
+      {% for key, label in assistant_panel_actions() %}
+        <button type="button" class="assistant-action" role="radio" data-action="{{ key }}"
+                aria-checked="{{ 'true' if loop.first else 'false' }}" tabindex="{{ '0' if loop.first else '-1' }}">{{ label }}</button>
+      {% endfor %}
+    </div>
+
+    <label class="assistant-field">
+      <span class="sr-only">Text oder Stichpunkte</span>
+      <textarea class="field-surface assistant-input" data-assistant-input rows="7" maxlength="{{ config.ASSISTANT_MAX_INPUT_CHARS }}"
+                placeholder="Text oder Stichpunkte eingeben, z. B. „Kunde möchte Fahrleistung von 12000 auf 17000 erhöhen. Änderung erledigt.“"></textarea>
+    </label>
+    <p class="assistant-hint">
+      <span>Übertragen wird nur dieser Text. Nichts wird gespeichert.</span>
+      <span class="assistant-count" data-assistant-count aria-live="off"></span>
+    </p>
+
+    <div class="assistant-buttons">
+      <button type="submit" class="btn btn-primary btn-sm" data-assistant-submit>Absenden</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-assistant-cancel hidden>Abbrechen</button>
+      <span class="assistant-status" data-assistant-status aria-live="polite"></span>
+    </div>
+    <p class="form-error assistant-error" data-assistant-error role="alert" hidden></p>
+  </form>
+
+  <section class="assistant-result" data-assistant-result-box aria-live="polite" hidden>
+    <div class="assistant-result-head">
+      <h3 class="assistant-result-title">Ergebnis</h3>
+      <div class="assistant-result-actions">
+        <button type="button" class="btn btn-primary btn-sm" data-copy="[data-assistant-result]">Kopieren</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-assistant-new>Neue Anfrage</button>
+      </div>
+    </div>
+    <div class="assistant-output" data-assistant-result tabindex="0"></div>
+  </section>
+</aside>
+<script defer src="{{ url_for('static', filename='js/assistant.js', v=static_rev('js/assistant.js')) }}"></script>

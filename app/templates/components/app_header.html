@@ -30,6 +30,11 @@
             {{ icon('search', class='h-4 w-4') }}
           </a>
         {% endif %}
+        {% if assistant_available %}
+          <button type="button" class="app-header-action app-assistant-toggle" data-assistant-toggle aria-controls="assistent" aria-expanded="false" title="KI-Assistent">
+            {{ icon('pen-line', class='h-4 w-4') }}<span class="app-header-action-label">Assistent</span>
+          </button>
+        {% endif %}
         {# Konto und Identitaet in einem kompakten Element: Name, darunter die Rolle. #}
         <a href="{{ url_for('settings.profile') }}" class="app-header-action app-header-account {{ 'is-active' if nav_settings_active else '' }}"
            title="{{ nav_settings_label }} – {{ current_user.email }} · {{ current_user.role.label }}"{% if nav_settings_active %} aria-current="page"{% endif %}>

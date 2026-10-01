@@ -3,6 +3,7 @@ from datetime import date
 from app.extensions import db
 from app.models import DocStatus, Document, DocumentCustomer
 from app.models.enums import DocType, ListScope, ListType, TimelineEventType
+from app.services import customer_sources
 from app.services.analysis.business_rules import (
     count_offer_occurrences,
     create_advanced_recommendations,
@@ -49,13 +50,17 @@ def find_or_create_customer(
     data: ExtractedCustomer,
     uploaded_by_user_id: int | None = None,
     matcher: CustomerMatcher | None = None,
+    broker_number: str | None = None,
+    contract_number: str | None = None,
 ):
     active_matcher = matcher or CustomerMatcher()
-    return active_matcher.get_or_create(data, uploaded_by_user_id=uploaded_by_user_id)
+    return active_matcher.get_or_create(
+        data, uploaded_by_user_id=uploaded_by_user_id, broker_number=broker_number, contract_number=contract_number
+    )
 
 
 def apply_extraction(document: Document, extraction: DocumentExtraction) -> None:
-    matcher = CustomerMatcher()
+    matcher = CustomerMatcher(source=customer_sources.DOKUMENT)
     document.doc_type = extraction.doc_type
     document.vehicle = extraction.vehicle
     document.license_plate = extraction.license_plate
@@ -123,6 +128,8 @@ def apply_leipziger_liste_extraction(
             row.customer,
             uploaded_by_user_id=document.uploaded_by_user_id,
             matcher=matcher,
+            broker_number=row.broker_number,
+            contract_number=row.contract_number,
         )
         db.session.flush()  # Kunden-ID fuer den Abgleich mehrfacher Zeilen bereitstellen
 

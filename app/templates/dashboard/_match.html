@@ -14,6 +14,7 @@
 {%- endmacro %}
 {% if match.status == 'unique' %}
   <p class="memo-match-title">Kunde erkannt <span class="memo-match-basis">{{ basis[match.matched_by] }}</span></p>
+  {% if match.assigned %}<p class="memo-match-note">Das Memo wurde diesem Kunden zugeordnet.</p>{% endif %}
   {{ customer_facts(match.customers[0]) }}
 {% elif match.status == 'possible' %}
   <p class="memo-match-title memo-match-possible">Möglicher Kunde <span class="memo-match-basis">{{ basis['name'] }} – bitte prüfen</span></p>

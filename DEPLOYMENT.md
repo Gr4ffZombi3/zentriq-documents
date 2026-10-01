@@ -110,8 +110,30 @@ Alle drei laufen aktuell unter `root` (bewusste Entscheidung, um die Server-Einr
 
 Im Reiter „Memo“ laden Büro-Admins eine Audiodatei hoch (Klick oder Drag & Drop); sie wird
 direkt per OpenAI (`OPENAI_TRANSCRIPTION_MODEL`, Standard `gpt-4o-mini-transcribe`) transkribiert
-und der Text angezeigt. Es wird nichts gespeichert und keine Folgeaktion ausgelöst. Optional kann
-`MAILBOX_OPENAI_BASE_URL` einen eigenen Endpoint nur für die Transkription setzen.
+und der Text angezeigt. Die Audiodatei wird nie gespeichert; das Transkript nur, wenn es einem
+Kunden des Zentriq-Kundenstamms zugeordnet wird (eindeutig über Kunden- oder Telefonnummer oder
+ausdrücklich durch den Benutzer). Optional kann `MAILBOX_OPENAI_BASE_URL` einen eigenen Endpoint
+nur für die Transkription setzen.
+
+## KI-Assistent (Anthropic API)
+
+Der Assistent (Button „Assistent“ oben rechts, nur OFFICE_ADMIN und EMPLOYEE) ruft die Anthropic
+API ausschließlich serverseitig auf. Übertragen wird nur der Text, den der Benutzer absendet;
+Eingaben und Antworten werden nicht gespeichert, protokolliert werden nur Schnellaktion und
+Fehlerart. Konfiguration in der `.env`:
+
+| Variable | Standard | Zweck |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | – | Pflicht. Ohne Key ist der Assistent ausgeblendet. |
+| `ASSISTANT_ENABLED` | `true` | `false` schaltet den Assistenten auch mit Key ab. |
+| `ASSISTANT_MODEL` | `claude-opus-5-5` | Modell |
+| `ASSISTANT_EFFORT` | `low` | Denkaufwand (`low`/`medium`/`high`) |
+| `ASSISTANT_TIMEOUT_SECONDS` | `50` | muss unter dem nginx-Proxy-Timeout (60 s) bleiben |
+| `ASSISTANT_MAX_INPUT_CHARS` | `8000` | maximale Eingabelänge |
+
+Status, Modell, Anzahl Anfragen und Fehler zeigt das Plattform-Panel unter
+„Systemeinstellungen“ (SUPER_ADMIN, ohne Inhalte); dort lässt sich die Erreichbarkeit der API
+prüfen.
 
 Die frühere Mailbox-Automation (Placetel-Postfach, KI-Klassifizierung, HUK-Rückrufservice) ist
 entfernt; die zugehörigen `PLACETEL_*`-, `HUK_*`- und `MAILBOX_*`-Einträge (außer `MAILBOX_OPENAI_BASE_URL`) in der `.env` werden

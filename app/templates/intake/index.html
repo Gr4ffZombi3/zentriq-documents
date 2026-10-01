@@ -7,6 +7,8 @@
    data-detect-url schaltet die vorgelagerte Dateityp-Erkennung ein. #}
 <div class="page-shell page-shell-narrow" data-memo
      data-match-url="{{ url_for('dashboard.match') }}"
+     data-assign-url="{{ url_for('dashboard.assign') }}"
+     data-create-url="{{ url_for('dashboard.create_customer') }}"
      data-detect-url="{{ url_for('intake.check') }}"
      data-list-upload-url="{{ url_for('upload.upload_document') if current_user.is_office_admin else '' }}"
      data-list-url="{{ url_for('leipziger.index') }}"
@@ -70,6 +72,8 @@
         </div>
       </div>
     </section>
+
+    {% include "dashboard/_summary.html" %}
 
     <section class="panel" aria-live="polite">
       <header class="panel-header"><h2 class="panel-title">Kundenzuordnung</h2></header>

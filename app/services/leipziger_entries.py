@@ -83,6 +83,8 @@ def rebuild_entries(document: Document) -> int:
         for row in doc_customer.row_data or []:
             item = entry_values(row, customer_name, len(values))
             if item is not None:
+                # Jeder Vorgang bleibt eigenstaendig, gehoert aber genau einem Zentriq-Kunden.
+                item["customer_id"] = doc_customer.customer_id
                 values.append(item)
     db.session.add_all(
         LeipzigerEntry(tenant_id=document.tenant_id, document_id=document.id, **item) for item in values

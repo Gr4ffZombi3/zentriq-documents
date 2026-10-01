@@ -33,7 +33,10 @@
                   <th scope="col">Name</th>
                   <th scope="col">Kundennummer</th>
                   <th scope="col">Telefon</th>
-                  <th scope="col">Ort</th>
+                  <th scope="col">Vermittler</th>
+                  <th scope="col" class="num">Leipziger</th>
+                  <th scope="col" class="num">Memos</th>
+                  <th scope="col"><span class="sr-only">Aktion</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -42,7 +45,10 @@
                     <th scope="row" class="cell-strong stack-full"><a class="table-link" href="{{ url_for('customers.detail', customer_id=customer.id) }}">{{ customer.name }}</a></th>
                     <td class="tabular-nums" data-label="Kundennummer">{{ customer.customer_number or '–' }}</td>
                     <td class="tabular-nums whitespace-nowrap" data-label="Telefon">{{ customer.phone or '–' }}</td>
-                    <td data-label="Ort">{{ ((customer.postal_code or '') ~ ' ' ~ (customer.city or '')).strip() or '–' }}</td>
+                    <td class="tabular-nums whitespace-nowrap" data-label="Vermittler">{{ customer.broker_number or '–' }}</td>
+                    <td class="num tabular-nums" data-label="Leipziger">{{ customer.leipziger }}</td>
+                    <td class="num tabular-nums" data-label="Memos">{{ customer.memos }}</td>
+                    <td class="text-right" data-label=""><a class="table-action" href="{{ url_for('customers.detail', customer_id=customer.id) }}">Öffnen</a></td>
                   </tr>
                 {% endfor %}
               </tbody>

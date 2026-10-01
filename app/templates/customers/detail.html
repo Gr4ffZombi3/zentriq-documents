@@ -78,24 +78,22 @@
           <p class="section-copy">Die Akte bleibt bewusst schlank und nutzt nur vorhandene Daten.</p>
         </div>
       </div>
-      <dl class="info-grid mt-5">
-        <div class="info-item">
-          <dt>Name</dt>
-          <dd>{{ customer.name }}</dd>
+      {% macro fact(label, value, field=none, copy=false) -%}
+        <div>
+          <dt>{{ label }}{% if field and field_sources.get(field) %} <span class="customer-source">· {{ source_labels.get(field_sources[field], field_sources[field]) }}</span>{% endif %}</dt>
+          <dd>{{ value or '–' }}{% if copy and value %}<button type="button" class="copy-inline" data-copy-text="{{ value }}" aria-label="{{ label }} kopieren">Kopieren</button>{% endif %}</dd>
         </div>
-        <div class="info-item">
-          <dt>Geburtsdatum</dt>
-          <dd>{{ customer.date_of_birth.strftime('%d.%m.%Y') if customer.date_of_birth else '-' }}</dd>
-        </div>
-        <div class="info-item">
-          <dt>Ort / PLZ</dt>
-          <dd>{{ customer.city or '-' }}{% if customer.postal_code %} / {{ customer.postal_code }}{% endif %}</dd>
-        </div>
-        <div class="info-item">
-          <dt>Dokumente</dt>
-          <dd>{{ summary.documents }}</dd>
-        </div>
+      {%- endmacro %}
+      {% set field_sources = customer.field_sources or {} %}
+      <dl class="customer-facts mt-5">
+        {{ fact('Name', customer.name, 'name', copy=true) }}
+        {{ fact('Kundennummer', customer.customer_number, 'customer_number', copy=true) }}
+        {{ fact('Telefon', customer.phone, 'phone', copy=true) }}
+        {{ fact('PLZ / Ort', ((customer.postal_code or '') ~ ' ' ~ (customer.city or '')).strip(), 'city') }}
+        {{ fact('Geburtsdatum', customer.date_of_birth.strftime('%d.%m.%Y') if customer.date_of_birth else none, 'date_of_birth') }}
+        {{ fact('Vermittlernummer', customer.broker_number, 'broker_number', copy=true) }}
       </dl>
+      {% if customer.source %}<p class="form-hint mt-4">Angelegt aus: {{ source_labels.get(customer.source, customer.source) }}</p>{% endif %}
     {% endcall %}
 
     {% call card(padding='p-5 sm:p-6', tone='strong') %}
@@ -152,12 +150,46 @@
     {% endcall %}
   </div>
 
-  {% if case_rows %}
+  {% if leipziger_entries %}
+    <section class="panel" aria-labelledby="kunde-leipziger">
+      <header class="panel-header">
+        <h2 class="panel-title" id="kunde-leipziger">Leipziger Liste <span class="count-tag">{{ leipziger_entries | length }}</span></h2>
+        <span class="panel-meta">Jeder Vorgang einmal, mit dem Stand der neuesten Liste</span>
+      </header>
+      <div class="table-wrap">
+        <table class="data-table data-table-dense worklist table-stack">
+          <thead>
+            <tr>
+              <th scope="col">Nummer</th>
+              <th scope="col">Status</th>
+              <th scope="col">Art</th>
+              <th scope="col">Beginn</th>
+              <th scope="col">Vermittler</th>
+              <th scope="col">Liste</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in leipziger_entries %}
+              {% set entry = item.entry %}
+              <tr>
+                <td class="worklist-number tabular-nums" data-label="Nummer">{{ entry.contract_number or '–' }}</td>
+                <td class="whitespace-nowrap" data-label="Status">{{ entry.status_code or '–' }}</td>
+                <td data-label="Art">{{ entry.product_line or '–' }}</td>
+                <td class="whitespace-nowrap tabular-nums" data-label="Beginn">{{ entry.start_date | iso_date_de if entry.start_date else '–' }}</td>
+                <td class="whitespace-nowrap tabular-nums" data-label="Vermittler">{{ entry.broker_number or '–' }}</td>
+                <td data-label="Liste"><a class="table-link" href="{{ url_for('documents.detail', document_id=entry.document_id) }}">{{ item.document_name }}</a>{% if item.uploaded_at %} <span class="text-text-soft">· {{ item.uploaded_at | local_dt('%d.%m.%Y') }}</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% elif case_rows %}
     {% call card(padding='p-5 sm:p-6') %}
       <div class="section-heading">
         <div>
-          <h2 class="section-title">Zugeordnete Vorgänge</h2>
-          <p class="section-copy">Jede persistierte Listenzeile bleibt mit Dokumentbezug, Status und Rohdaten nachvollziehbar.</p>
+          <h2 class="section-title">Leipziger Liste</h2>
+          <p class="section-copy">Alle Vorgänge dieses Kunden aus den importierten Listen, mit Dokumentbezug, Status und Rohdaten.</p>
         </div>
       </div>
       <div class="ops-table-shell mt-5">
@@ -209,6 +241,27 @@
   {% else %}
     {% call empty_state('Keine zugeordneten Vorgänge', 'Dieser Kunde wurde noch in keiner Leipziger Liste erfasst.', 'file-text') %}{% endcall %}
   {% endif %}
+
+  <section class="panel" aria-labelledby="kunde-memos">
+    <header class="panel-header">
+      <h2 class="panel-title" id="kunde-memos">Memos <span class="count-tag">{{ memos | length }}</span></h2>
+    </header>
+    {% if memos %}
+      <div class="panel-body-flush">
+        {% for memo in memos %}
+          <article class="customer-memo">
+            <div class="customer-memo-head">
+              <span>{{ memo.created_at | local_dt('%d.%m.%Y, %H:%M Uhr') }}{% if memo.created_by %} · {{ display_name(memo.created_by) }}{% endif %} · {{ memo_basis.get(memo.matched_by, memo.matched_by) }}</span>
+              <button type="button" class="btn btn-secondary btn-sm" data-copy="#memo-{{ memo.id }}">Text kopieren</button>
+            </div>
+            <p class="customer-memo-text" id="memo-{{ memo.id }}">{{ memo.transcript }}</p>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="empty-note">Diesem Kunden ist noch kein Memo zugeordnet.</p>
+    {% endif %}
+  </section>
 
   <div class="grid gap-5 xl:grid-cols-2">
     {% call card(padding='p-5 sm:p-6') %}

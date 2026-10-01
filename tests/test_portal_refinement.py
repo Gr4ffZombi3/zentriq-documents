@@ -212,7 +212,8 @@ def test_transcription_does_not_wait_for_customer_match(app, world, monkeypatch)
         headers={"Accept": "application/json"},
     )
     assert resp.status_code == 200
-    assert set(resp.get_json()) == {"transcript", "filename", "uploaded_at"}
+    # "token": berechtigt nur zum Zuordnen genau dieses Transkripts (app/services/memo_customers.py).
+    assert set(resp.get_json()) == {"transcript", "filename", "uploaded_at", "token"}
 
 
 def test_memo_transcription_is_logged_without_content(app, world, monkeypatch):

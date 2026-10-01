@@ -14,12 +14,15 @@ class LeipzigerEntry(TenantScopedMixin, db.Model):
     __table_args__ = (
         db.Index("ix_leipziger_entries_doc_broker", "tenant_id", "document_id", "broker_key"),
         db.Index("ix_leipziger_entries_doc_contract", "tenant_id", "document_id", "contract_key"),
+        db.Index("ix_leipziger_entries_customer", "tenant_id", "customer_id"),
     )
 
     id = db.Column(db.Integer, primary_key=True)
     document_id = db.Column(
         db.Integer, db.ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # Zentriq-Kunde, dem der Vorgang beim Import zugeordnet wurde (ein Kunde, viele Vorgaenge).
+    customer_id = db.Column(db.Integer, db.ForeignKey("customers.id", ondelete="SET NULL"), nullable=True)
     # Reihenfolge wie in der PDF.
     position = db.Column(db.Integer, nullable=False, default=0)
 

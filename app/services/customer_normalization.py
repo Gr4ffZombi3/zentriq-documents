@@ -8,13 +8,13 @@ def normalize_customer_name(value: str | None) -> str:
     if not value:
         return ""
     replacements = {
-        "Ã¤": "ae",
-        "Ã¶": "oe",
-        "Ã¼": "ue",
-        "ÃŸ": "ss",
-        "Ã„": "ae",
-        "Ã–": "oe",
-        "Ãœ": "ue",
+        "ä": "ae",
+        "ö": "oe",
+        "ü": "ue",
+        "ß": "ss",
+        "Ä": "ae",
+        "Ö": "oe",
+        "Ü": "ue",
     }
     for source, target in replacements.items():
         value = value.replace(source, target)

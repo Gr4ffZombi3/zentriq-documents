@@ -25,6 +25,13 @@ class Customer(TenantScopedMixin, db.Model):
     phone = db.Column(db.String(50), nullable=True)
     # Kundennummer des Bueros (optional). Wird nur angezeigt/abgeglichen, wenn hinterlegt.
     customer_number = db.Column(db.String(50), nullable=True, index=True)
+    # Vermittlernummer aus der zuletzt importierten Leipziger Liste (Anzeigeform "08/4205-M").
+    broker_number = db.Column(db.String(50), nullable=True)
+
+    # Datenherkunft (app/services/customer_sources.py): woher der Datensatz stammt und - je
+    # Feld - woher der aktuelle Wert kommt, z. B. {"phone": "MEMO"}. Keine Versionierung.
+    source = db.Column(db.String(20), nullable=True)
+    field_sources = db.Column(db.JSON, nullable=True)
 
     # Vergleichsschluessel (app/utils/customer_keys.py), automatisch gepflegt (siehe unten):
     # Dubletten-Erkennung und Memo-Kundenerkennung laufen ueber diese Indizes.
@@ -51,6 +58,7 @@ class Customer(TenantScopedMixin, db.Model):
         "CustomerTimelineEvent", back_populates="customer", cascade="all, delete-orphan"
     )
     assigned_user = db.relationship("User", foreign_keys=[assigned_user_id])
+    memos = db.relationship("CustomerMemo", back_populates="customer", order_by="CustomerMemo.created_at.desc()")
 
     def __repr__(self):
         return f"<Customer {self.id} {self.name!r}>"

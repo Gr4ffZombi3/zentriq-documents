@@ -4,6 +4,8 @@ from flask_login import current_user, login_required
 from app.auth.permissions import admin_required
 from app.models import Customer, DocumentCustomer, Task
 from app.models.enums import TaskStatus
+from app.navigation import display_name_for
+from app.services import customer_sources
 from app.services.customer_duplicates import (
     MergeError,
     compare_rows,
@@ -11,6 +13,7 @@ from app.services.customer_duplicates import (
     link_counts,
     merge_customers,
 )
+from app.services.customer_overview import customer_entries, customer_memos
 from app.services.customers import (
     DEFAULT_CUSTOMER_PAGE_SIZE,
     MAX_CUSTOMER_PAGE_SIZE,
@@ -18,6 +21,13 @@ from app.services.customers import (
     build_customer_directory,
 )
 from app.tenancy import get_or_404_scoped
+
+MEMO_BASIS_LABELS = {
+    "customer_number": "über die Kundennummer erkannt",
+    "phone": "über die Telefonnummer erkannt",
+    "selected": "manuell zugeordnet",
+    "new_customer": "Kunde aus Memo angelegt",
+}
 
 customers_bp = Blueprint("customers", __name__, url_prefix="/customers")
 
@@ -27,7 +37,7 @@ customers_bp = Blueprint("customers", __name__, url_prefix="/customers")
 def list_customers():
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", DEFAULT_CUSTOMER_PAGE_SIZE, type=int)
-    directory = build_customer_directory(page=page, per_page=per_page)
+    directory = build_customer_directory(page=page, per_page=per_page, query=request.args.get("q", ""))
     return render_template(
         "customers/list.html",
         customer_directory=directory,
@@ -67,6 +77,11 @@ def detail(customer_id):
         possible_duplicates=customer_view["possible_duplicates"],
         document_customers=document_customers,
         open_tasks=open_tasks,
+        leipziger_entries=customer_entries(customer),
+        memos=customer_memos(customer),
+        memo_basis=MEMO_BASIS_LABELS,
+        source_labels=customer_sources.LABELS,
+        display_name=display_name_for,
     )
 
 

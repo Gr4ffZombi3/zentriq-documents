@@ -51,7 +51,12 @@ def verify_reset_token(token: str | None) -> User | None:
 
     with bypass_tenant_scope():
         user = db.session.get(User, payload["uid"])
-        if user is None or not user.is_active or user.deleted_at is not None:
+        if user is None:
+            return None
+        from app.services.account_state import account_login_block_reason
+
+        # Deaktivierte/geloeschte Konten und Konten deaktivierter Bueros: Token wertlos.
+        if account_login_block_reason(user) is not None:
             return None
     if not hmac.compare_digest(str(payload.get("pw", "")), _password_fingerprint(user)):
         return None
@@ -103,13 +108,18 @@ def is_ip_reset_rate_limited(ip_address: str | None) -> bool:
 def build_reset_email_body(reset_url: str) -> str:
     minutes = current_app.config["PASSWORD_RESET_TOKEN_MAX_AGE_SECONDS"] // 60
     return (
-        "Hallo,\n\n"
-        "für dein Konto bei Zentriq Documents wurde das Zurücksetzen des Passworts angefordert.\n"
-        f"Über den folgenden Link kannst du innerhalb von {minutes} Minuten ein neues Passwort festlegen:\n\n"
+        "Guten Tag,\n\n"
+        "für Ihr Konto bei Zentriq wurde das Zurücksetzen des Passworts angefordert.\n\n"
+        "Über den folgenden Link können Sie ein neues Passwort festlegen:\n\n"
         f"{reset_url}\n\n"
-        "Zur Bestätigung deiner Identität benötigst du zusätzlich den Code aus deiner "
-        "Authenticator-App (oder einen Wiederherstellungscode).\n\n"
-        "Der Link ist nur einmal gültig. Falls du das nicht angefordert hast, kannst du diese "
-        "E-Mail ignorieren – dein bisheriges Passwort bleibt unverändert.\n\n"
-        "Zentriq Documents\n"
+        f"Der Link ist {minutes} Minuten gültig und kann nur einmal verwendet werden. Zur "
+        "Bestätigung Ihrer Identität benötigen Sie zusätzlich den Code aus Ihrer "
+        "Authenticator-App oder einen Ihrer Wiederherstellungscodes.\n\n"
+        "Falls Sie diese Anfrage nicht gestellt haben, können Sie diese E-Mail ignorieren. "
+        "Ihr bisheriges Passwort bleibt dann unverändert.\n\n"
+        "Aus Sicherheitsgründen enthält diese E-Mail kein Passwort. Bitte geben Sie den Link "
+        "nicht weiter.\n\n"
+        "Mit freundlichen Grüßen\n"
+        "Zentriq\n\n"
+        "Diese Nachricht wurde automatisch erstellt. Bitte antworten Sie nicht auf diese E-Mail.\n"
     )

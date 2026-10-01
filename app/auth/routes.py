@@ -234,6 +234,16 @@ def forgot_password():
         elif user is None or account_login_block_reason(user) is not None:
             # Auch unbekannte Adressen zaehlen fuer die IP-Drosselung (ohne Kontobezug).
             log_audit_event(AuditEventType.PASSWORD_RESET_REQUESTED, details={"matched": False})
+        elif not user.two_factor_enabled:
+            # Reset per E-Mail nur mit eingerichteter 2FA - die Identitaet muss zusaetzlich
+            # bestaetigt werden koennen. Kein Versand, aber identische Antwort.
+            with use_tenant_id(user.tenant_id):
+                log_audit_event(
+                    AuditEventType.PASSWORD_RESET_REQUESTED,
+                    tenant_id=user.tenant_id,
+                    user=user,
+                    details={"sent": False, "reason": "two_factor_missing"},
+                )
         elif not is_reset_rate_limited(user):
             user_id, tenant_id = user.id, user.tenant_id
             with use_tenant_id(tenant_id):

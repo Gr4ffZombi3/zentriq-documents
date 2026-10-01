@@ -1,4 +1,4 @@
-from flask import Flask, g, render_template
+from flask import Flask, g, render_template, request
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.celery_app import make_celery
@@ -42,6 +42,7 @@ def create_app(config_object=None):
     from app.blueprints.dashboard.routes import dashboard_bp
     from app.blueprints.documents.routes import documents_bp
     from app.blueprints.leipziger.routes import leipziger_bp
+    from app.blueprints.office.routes import office_bp
     from app.blueprints.platform.routes import platform_bp
     from app.blueprints.portal.routes import portal_bp
     from app.blueprints.potenziale.routes import potenziale_bp
@@ -70,6 +71,7 @@ def create_app(config_object=None):
     app.register_blueprint(tasks_bp)
     app.register_blueprint(timetracking_bp)
     app.register_blueprint(platform_bp)
+    app.register_blueprint(office_bp)
 
     from app.cli import register_cli
 
@@ -91,6 +93,7 @@ def create_app(config_object=None):
 
     @login_manager.user_loader
     def load_user(user_id):
+        from app.services import user_sessions
         from app.services.account_state import account_login_block_reason
 
         # Session-ID hat das Format "<id>:<auth_version>". Aendert sich auth_version
@@ -115,6 +118,9 @@ def create_app(config_object=None):
             # den Zugriff, nicht erst beim naechsten Login.
             if account_login_block_reason(user) is not None:
                 return None
+            # Einzeln widerrufene Sitzungen ("auf anderen Geraeten abmelden").
+            if not user_sessions.validate_session(user):
+                return None
         set_current_tenant_id(tenant_id)
         return user
 
@@ -131,6 +137,29 @@ def create_app(config_object=None):
     @app.errorhandler(403)
     def _forbidden(error):
         return render_template("errors/403.html"), 403
+
+    # Verstaendliche Fehlerseiten ohne technische Details (keine Stacktraces im Frontend).
+    @app.errorhandler(404)
+    def _not_found(error):
+        if request.accept_mimetypes.best == "application/json":
+            return {"error": "Nicht gefunden."}, 404
+        return render_template(
+            "errors/error.html",
+            title="Seite nicht gefunden",
+            message="Die aufgerufene Seite gibt es nicht oder sie ist nicht mehr verfügbar.",
+        ), 404
+
+    @app.errorhandler(500)
+    def _server_error(error):
+        db.session.rollback()
+        if request.accept_mimetypes.best == "application/json":
+            return {"error": "Es ist ein Fehler aufgetreten. Bitte erneut versuchen."}, 500
+        return render_template(
+            "errors/error.html",
+            title="Es ist ein Fehler aufgetreten",
+            message="Die Aktion konnte nicht ausgeführt werden. Bitte versuchen Sie es erneut. "
+            "Besteht das Problem weiter, wenden Sie sich an Ihren Büro-Admin.",
+        ), 500
 
     @app.teardown_request
     def _end_tenant_scope(exception=None):

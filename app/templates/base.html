@@ -6,11 +6,11 @@
   {% block head %}{% endblock %}
 </head>
 <body x-data="{ navOpen: false }" class="app-body">
+  <a class="skip-link" href="#inhalt">Zum Inhalt springen</a>
   {% include "components/app_header.html" %}
   {% include "components/subnav.html" %}
   <main class="app-content" id="inhalt">
-    {% from "ui/overlays.html" import toast_container %}
-    {{ toast_container() }}
+    {% include "components/flash_messages.html" %}
     {% block content %}{% endblock %}
   </main>
 </body>

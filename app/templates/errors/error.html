@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell page-shell-narrow">
+  <section class="panel error-panel">
+    <div class="panel-body">
+      <h1 class="page-toolbar-title">{{ title }}</h1>
+      <p class="text-muted">{{ message }}</p>
+      <div class="form-actions">
+        <a class="btn btn-primary" href="{{ url_for('portal.home') if current_user.is_authenticated else url_for('auth.login') }}">Zur Startseite</a>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

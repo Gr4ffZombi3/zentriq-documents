@@ -14,7 +14,7 @@ einem JSON-Objekt in genau diesem Format:
 
 {
   "doc_type": "leipziger_liste" | "huk_liste" | "gutachten" | "rechnung" | "versicherungsunterlagen" | "schadenakte" | "brief" | "sonstiges",
-  "customer": {"name": str, "address": str|null, "city": str|null, "postal_code": str|null, "date_of_birth": "YYYY-MM-DD"|null} | null,
+  "customer": {"name": str, "address": str|null, "city": str|null, "postal_code": str|null, "date_of_birth": "YYYY-MM-DD"|null, "phone": str|null, "customer_number": str|null} | null,
   "vehicle": str|null,
   "license_plate": str|null,
   "insurer": str|null,
@@ -36,7 +36,11 @@ Vermittlername (das ist "broker"). "product_line" ist die Versicherungssparte (z
 Text genau wie im Dokument geschrieben (z.B. "123,45 EUR"), keine eigene Umrechnung. "tariff" \
 ist die Tarifbezeichnung.
 
-Erfinde keine Werte. Wenn eine Information im Text nicht vorhanden ist, setze das Feld auf null \
+"customer.phone" nur setzen, wenn beim Kunden ausdruecklich eine Telefon- oder Mobilnummer \
+aufgedruckt ist (genau wie geschrieben); Spaltenueberschriften wie "TEL" ohne Nummer zaehlen \
+nicht. "customer.customer_number" ist die aufgedruckte Kundennummer bzw. Versicherungsnehmer-\
+Nummer (z.B. "Kunden-Nr.", "VN-Nr."), NICHT die Vertrags- oder Vermittlernummer; leere Felder \
+bleiben null. Erfinde keine Werte. Wenn eine Information im Text nicht vorhanden ist, setze das Feld auf null \
 bzw. eine leere Liste. Antworte NUR mit dem JSON-Objekt, ohne zusaetzlichen Text."""
 
 LEIPZIGER_LISTE_SYSTEM_PROMPT = """Du analysierst eine deutsche "Leipziger Liste" - eine Tabelle \
@@ -55,7 +59,7 @@ Antworte AUSSCHLIESSLICH mit einem JSON-Objekt in genau diesem Format:
 {
   "rows": [
     {
-      "customer": {"name": str, "address": str|null, "city": str|null, "postal_code": str|null, "date_of_birth": "YYYY-MM-DD"|null},
+      "customer": {"name": str, "address": str|null, "city": str|null, "postal_code": str|null, "date_of_birth": "YYYY-MM-DD"|null, "phone": str|null, "customer_number": str|null},
       "vehicle": str|null,
       "license_plate": str|null,
       "insurer": str|null,
@@ -93,7 +97,11 @@ Zeile, "premium" der Beitrag/die Praemie als Text genau wie im Dokument, "tariff
 Tarifbezeichnung. "contract_start_date" ist das Versicherungsbeginn-Datum ("Beginn") dieser \
 Zeile, NICHT das Antragsdatum - nur setzen, wenn ein konkretes Beginn-Datum im Dokument \
 erkennbar ist. "has_antrag" ist true, wenn fuer diese Zeile erkennbar ein Versicherungsantrag \
-vorliegt. Erfinde keine Werte. Antworte NUR mit dem JSON-Objekt."""
+vorliegt. "customer.phone" nur setzen, wenn beim Kunden ausdruecklich eine Telefon- oder Mobilnummer \
+aufgedruckt ist (genau wie geschrieben); Spaltenueberschriften wie "TEL" ohne Nummer zaehlen \
+nicht. "customer.customer_number" ist die aufgedruckte Kundennummer bzw. Versicherungsnehmer-\
+Nummer (z.B. "Kunden-Nr.", "VN-Nr."), NICHT die Vertrags- oder Vermittlernummer; leere Felder \
+bleiben null. Erfinde keine Werte. Antworte NUR mit dem JSON-Objekt."""
 
 
 def extract_document_data(raw_text: str) -> DocumentExtraction:

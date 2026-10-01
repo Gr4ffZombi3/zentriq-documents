@@ -17,7 +17,7 @@
         </div>
       </details>
     {% endif %}
-    {% if nav_active_area == 'leipziger' and current_user.is_admin %}
+    {% if nav_active_area == 'leipziger' and current_user.is_admin and request.endpoint != 'leipziger.index' %}
       <form action="{{ url_for('search.search') }}" method="get" class="app-subnav-search" role="search">
         <span class="app-subnav-search-icon">{{ icon('search', class='h-4 w-4') }}</span>
         <input type="search" name="q" aria-label="Kunden und Listen durchsuchen" placeholder="Kunden, Verträge, Listen suchen" value="{{ request.args.get('q', '') if request.endpoint == 'search.search' else '' }}">

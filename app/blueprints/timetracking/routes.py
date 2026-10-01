@@ -7,13 +7,14 @@ zusaetzlich immer auf current_user.id."""
 
 from datetime import date, datetime, timedelta
 
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import Blueprint, Response, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.auth.permissions import admin_required
 from app.extensions import db
 from app.models import (
     CorrectionRequestStatus,
+    Tenant,
     TimeCorrection,
     TimeCorrectionRequest,
     User,
@@ -22,7 +23,7 @@ from app.models import (
 )
 from app.models.audit_log import AuditEventType
 from app.services.audit import log_audit_event
-from app.services.timetracking import service
+from app.services.timetracking import export, service
 from app.services.timetracking.calc import month_bounds, week_bounds
 from app.services.timetracking.clock import local_to_utc_naive, local_today, to_local, utcnow_naive
 from app.services.timetracking.service import TimeTrackingError
@@ -137,26 +138,37 @@ def index():
     )
 
 
-def _stamp(action, success_message: str):
+def _stamp(action, success_message: str, event_type: AuditEventType | None = None):
     try:
         action(current_user)
     except TimeTrackingError as exc:
         flash(str(exc), "error")
     else:
+        if event_type is not None:
+            # Aktivitaetsprotokoll des Bueros: nur das Ereignis, keine weiteren Daten.
+            log_audit_event(event_type, user=current_user)
         flash(success_message, "success")
-    return redirect(url_for("timetracking.index"))
+    return redirect(_safe_next() or url_for("timetracking.index"))
+
+
+def _safe_next() -> str | None:
+    """Rueckkehr z. B. zur Uebersicht nach dem Stempeln - nur relative Pfade dieser Anwendung."""
+    target = request.form.get("next") or ""
+    if target.startswith("/") and not target.startswith("//") and "\\" not in target:
+        return target
+    return None
 
 
 @timetracking_bp.post("/einstempeln")
 @login_required
 def clock_in():
-    return _stamp(service.clock_in, "Sie sind eingestempelt.")
+    return _stamp(service.clock_in, "Sie sind eingestempelt.", AuditEventType.TIME_CLOCK_IN)
 
 
 @timetracking_bp.post("/ausstempeln")
 @login_required
 def clock_out():
-    return _stamp(service.clock_out, "Sie sind ausgestempelt.")
+    return _stamp(service.clock_out, "Sie sind ausgestempelt.", AuditEventType.TIME_CLOCK_OUT)
 
 
 @timetracking_bp.post("/pause/start")
@@ -337,6 +349,66 @@ def employee(user_id):
         view_links={key: link(key, anchor) for key in VIEWS},
         day_link=lambda target_day: link("tag", target_day),
     )
+
+
+# --- Admin: Monatsexport (Lohnabrechnung / Archiv) -------------------------------------------
+
+
+def _export_month() -> date:
+    return _parse_month(request.args.get("monat"), local_today())
+
+
+def _download(data: bytes, filename: str, mimetype: str) -> Response:
+    response = Response(data, mimetype=mimetype)
+    response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def _export_name(user: User) -> tuple[str, str | None]:
+    profile = user.employee_profile
+    name = profile.display_name if profile and profile.display_name else user.email
+    return name, profile.personnel_number if profile else None
+
+
+def _file_slug(value: str) -> str:
+    return "".join(ch if ch.isalnum() else "-" for ch in value.split("@")[0]).strip("-").lower() or "mitarbeiter"
+
+
+@timetracking_bp.get("/team/<int:user_id>/export.<fmt>")
+@login_required
+@admin_required
+def employee_export(user_id, fmt):
+    if fmt not in ("csv", "pdf"):
+        abort(404)
+    employee_user = _employee_or_404(user_id)
+    month_start, month_end = month_bounds(_export_month())
+    summary = service.summarize_user_period(employee_user, month_start, month_end)
+    name, personnel_number = _export_name(employee_user)
+    filename = f"arbeitszeiten-{_file_slug(name)}-{month_start.strftime('%Y-%m')}.{fmt}"
+    if fmt == "csv":
+        return _download(export.month_csv(name, personnel_number, summary, local_today()), filename, "text/csv; charset=utf-8")
+    tenant = db.session.get(Tenant, current_user.tenant_id)
+    data = export.month_pdf(tenant.name if tenant else "", name, personnel_number, summary, local_today())
+    return _download(data, filename, "application/pdf")
+
+
+@timetracking_bp.get("/team/export.csv")
+@login_required
+@admin_required
+def team_export():
+    month_start, month_end = month_bounds(_export_month())
+    users = office_members_query(include_deleted=False).order_by(User.email).all()
+    rows = []
+    for user in users:
+        summary = service.summarize_user_period(user, month_start, month_end)
+        if not user.is_active and not summary.net_seconds:
+            continue
+        name, personnel_number = _export_name(user)
+        rows.append((name, personnel_number, summary))
+    rows.sort(key=lambda row: row[0].lower())
+    filename = f"arbeitszeiten-buero-{month_start.strftime('%Y-%m')}.csv"
+    return _download(export.team_csv(rows, month_start), filename, "text/csv; charset=utf-8")
 
 
 # --- Admin: Korrekturen an Buchungen und Pausen --------------------------------------------

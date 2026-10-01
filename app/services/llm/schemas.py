@@ -1,6 +1,6 @@
 from datetime import date
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.enums import DocType, Priority
 
@@ -11,6 +11,25 @@ class ExtractedCustomer(BaseModel):
     city: str | None = None
     postal_code: str | None = None
     date_of_birth: date | None = None
+    # Nur wenn ausdruecklich im Dokument aufgedruckt (siehe Prompts). Unbrauchbare Werte werden
+    # verworfen statt gespeichert - es wird nichts ergaenzt oder geraten.
+    phone: str | None = None
+    customer_number: str | None = None
+
+    @field_validator("phone")
+    @classmethod
+    def _valid_phone(cls, value: str | None) -> str | None:
+        from app.services.memo_customer_match import normalize_phone
+
+        value = " ".join((value or "").split())
+        return value[:50] if value and normalize_phone(value) else None
+
+    @field_validator("customer_number")
+    @classmethod
+    def _valid_customer_number(cls, value: str | None) -> str | None:
+        value = " ".join((value or "").split())
+        # Mindestens drei Ziffern; reine Platzhalter wie "-" oder "X" zaehlen nicht.
+        return value[:50] if sum(ch.isdigit() for ch in value) >= 3 else None
 
 
 class DocumentExtraction(BaseModel):

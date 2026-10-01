@@ -1,26 +1,55 @@
 {% extends "base.html" %}
 {% from "leipziger/_macros.html" import list_selector, entry_table %}
-{% block title %}Zu erledigen – Leipziger Liste{% endblock %}
+{% block title %}Leipziger Liste – Zentriq{% endblock %}
 
 {% block content %}
+{% set base_args = {'document_id': document.id if document and documents | length > 1 else none, 'q': query or none} %}
 <div class="page-shell">
   <div class="page-toolbar">
-    <h1 class="page-toolbar-title">Zu erledigen <span class="count-tag">{{ items | length }}</span></h1>
+    <h1 class="page-toolbar-title">Leipziger Liste</h1>
     <div class="page-toolbar-actions">
-      {{ list_selector(documents, document, 'leipziger.index') }}
+      {{ list_selector(documents, document, 'leipziger.index', {'tab': tab, 'q': query} if query else {'tab': tab}) }}
       {% if current_user.is_admin %}
-        <a href="{{ url_for('documents.list_documents') }}#upload-widget" class="btn-plain">Liste hochladen</a>
+        <a href="{{ url_for('documents.list_documents') }}#upload-widget" class="btn btn-secondary btn-sm">Liste hochladen</a>
       {% endif %}
     </div>
   </div>
 
+  <form method="get" action="{{ url_for('leipziger.index') }}" class="search-bar" role="search">
+    {% if document and documents | length > 1 %}<input type="hidden" name="document_id" value="{{ document.id }}">{% endif %}
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <label class="sr-only" for="leipziger-suche">Vermittlernummer oder Vertragsnummer suchen</label>
+    <input class="field-surface search-input" type="search" id="leipziger-suche" name="q" value="{{ query }}"
+           placeholder="Vermittlernummer / Vertragsnummer suchen" autocomplete="off" maxlength="60">
+    <button type="submit" class="btn btn-primary">Suchen</button>
+    {% if query %}<a class="btn btn-ghost" href="{{ url_for('leipziger.index', tab=tab, document_id=base_args.document_id) }}">Zurücksetzen</a>{% endif %}
+  </form>
+
   <section class="panel">
+    <nav class="panel-tabs" aria-label="Ansicht">
+      {% for key, label in tabs.items() %}
+        <a href="{{ url_for('leipziger.index', tab=key, **base_args) }}" class="panel-tab {{ 'is-active' if tab == key else '' }}"{% if tab == key %} aria-current="page"{% endif %}>{{ label }} <span class="count-tag">{{ counts[key] }}</span></a>
+      {% endfor %}
+    </nav>
     {% if not document %}
-      <p class="empty-note panel-body">Es liegt noch keine ausgewertete Leipziger Liste vor.</p>
+      <p class="empty-note">Es liegt noch keine ausgewertete Leipziger Liste vor.</p>
     {% elif not current_user.is_admin and not has_own_number %}
-      <p class="empty-note panel-body">In Ihrem Benutzerkonto ist keine Vermittlernummer hinterlegt. Bitte wenden Sie sich an einen Admin.</p>
+      <p class="empty-note">In Ihrem Benutzerkonto ist keine Vermittlernummer hinterlegt. Bitte wenden Sie sich an Ihren Büro-Admin.</p>
     {% else %}
-      {{ entry_table(items, broker_names=broker_names if current_user.is_admin else none, empty_text='Keine offenen Vorgänge.') }}
+      {% set empty_texts = {
+        'zu-erledigen': 'Keine offenen Vorgänge vorhanden.',
+        'mit-datum': 'Keine Vorgänge mit Datum vorhanden.',
+        'ohne-datum': 'Keine Vorgänge ohne Datum vorhanden.',
+      } %}
+      {{ entry_table(items, with_date=(tab == 'mit-datum'), broker_names=broker_names if current_user.is_admin else none,
+                     empty_text=('Keine Treffer für „' ~ query ~ '“.') if query else empty_texts[tab]) }}
+      {% if pages > 1 %}
+        <nav class="pager" aria-label="Seiten">
+          <span class="pager-info">{{ (page - 1) * 100 + 1 }}–{{ [page * 100, total] | min }} von {{ total }}</span>
+          {% if page > 1 %}<a class="btn btn-secondary btn-sm" href="{{ url_for('leipziger.index', tab=tab, seite=page - 1, **base_args) }}">Zurück</a>{% endif %}
+          {% if page < pages %}<a class="btn btn-secondary btn-sm" href="{{ url_for('leipziger.index', tab=tab, seite=page + 1, **base_args) }}">Weiter</a>{% endif %}
+        </nav>
+      {% endif %}
     {% endif %}
   </section>
 </div>

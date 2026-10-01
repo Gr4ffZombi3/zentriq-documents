@@ -47,6 +47,7 @@ from app.models.timetracking import (
     WorkSession,
 )
 from app.models.user import RecoveryCode, User
+from app.models.user_session import UserSession
 
 __all__ = [
     "AnalysisRun",
@@ -75,6 +76,7 @@ __all__ = [
     "TimeEntrySource",
     "User",
     "RecoveryCode",
+    "UserSession",
     "AnalysisRunStatus",
     "CallbackAttemptStatus",
     "ComparisonKind",

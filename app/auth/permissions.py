@@ -5,7 +5,8 @@ freigegebenen Blueprints/Endpunkte. Jeder andere Endpunkt - auch per direkter UR
 oder JSON-Aufruf - endet mit 403. Neue Blueprints sind damit automatisch nur fuer
 OFFICE_ADMINs erreichbar, solange sie hier nicht ausdruecklich freigegeben werden.
 
-- EMPLOYEE: eigene Zeiterfassung, eigene Eintraege der Leipziger Liste, eigenes Konto.
+- EMPLOYEE: Uebersicht, eigene Zeiterfassung, eigene Eintraege der Leipziger Liste, Memo,
+  eigenes Konto.
 - OFFICE_ADMIN: alle Fachbereiche des eigenen Mandanten (Mandantentrennung: app/tenancy.py),
   aber nie die Plattformverwaltung.
 - SUPER_ADMIN: ausschliesslich Plattformverwaltung (Bueros, Benutzer) und eigenes Konto -
@@ -20,15 +21,25 @@ from flask_login import current_user
 # Fuer jeden angemeldeten Benutzer erreichbar (Anmeldung, eigenes Konto, 2FA-Einrichtung).
 COMMON_ALLOWED_BLUEPRINTS = frozenset({"auth"})
 COMMON_ALLOWED_ENDPOINTS = frozenset(
-    {"static", "portal.home", "settings.index", "settings.profile", "settings.security"}
+    {
+        "static",
+        "portal.home",
+        "settings.index",
+        "settings.profile",
+        "settings.security",
+        "settings.revoke_other_sessions",
+    }
 )
 
 # Blueprints, die Mitarbeiter vollstaendig erreichen duerfen (Admin-Unterseiten der
 # Zeiterfassung sind dort zusaetzlich per @admin_required abgesichert).
 EMPLOYEE_ALLOWED_BLUEPRINTS = frozenset({"timetracking"})
 # "leipziger.index" zeigt Mitarbeitern ausschliesslich die ueber ihre eigene Vermittlernummer
-# zugeordneten Vorgaenge.
-EMPLOYEE_ALLOWED_ENDPOINTS = frozenset({"leipziger.index"})
+# zugeordneten Vorgaenge. Memo (dashboard.*) speichert nichts; der Kundenabgleich bleibt im
+# eigenen Mandanten.
+EMPLOYEE_ALLOWED_ENDPOINTS = frozenset(
+    {"portal.overview", "leipziger.index", "dashboard.index", "dashboard.transcribe", "dashboard.match"}
+)
 
 SUPER_ADMIN_ALLOWED_BLUEPRINTS = frozenset({"platform"})
 SUPER_ADMIN_ALLOWED_ENDPOINTS = frozenset()

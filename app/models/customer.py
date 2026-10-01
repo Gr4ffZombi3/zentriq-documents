@@ -15,6 +15,8 @@ class Customer(TenantScopedMixin, db.Model):
     date_of_birth = db.Column(db.Date, nullable=True)
     email = db.Column(db.String(255), nullable=True)
     phone = db.Column(db.String(50), nullable=True)
+    # Kundennummer des Bueros (optional). Wird nur angezeigt/abgeglichen, wenn hinterlegt.
+    customer_number = db.Column(db.String(50), nullable=True, index=True)
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(

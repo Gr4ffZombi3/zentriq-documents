@@ -5,12 +5,11 @@
   {% include "components/_head_common.html" %}
   {% block head %}{% endblock %}
 </head>
-<body class="bg-bg text-text antialiased">
-  {% from "ui/overlays.html" import toast_container %}
-  {{ toast_container() }}
+<body class="app-body">
   <main class="auth-simple">
     <div class="auth-simple-inner">
       <p class="auth-simple-brand"><span class="app-brand-mark" aria-hidden="true">Z</span> Zentriq</p>
+      {% include "components/flash_messages.html" %}
       {% block content %}{% endblock %}
     </div>
   </main>

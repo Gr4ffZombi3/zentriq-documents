@@ -179,7 +179,12 @@ def test_employee_cannot_load_foreign_tenant_list_by_document_id(app, world):
         "/zeiterfassung/antraege",
         "/settings/users",
         "/settings/users/{laura_id}",
-        "/sprachnachrichten",
+        "/mitarbeiter",
+        "/mitarbeiter/{laura_id}",
+        "/aktivitaeten",
+        "/zeiterfassung/team/{laura_id}/export.csv",
+        "/zeiterfassung/team/{laura_id}/export.pdf",
+        "/zeiterfassung/team/export.csv",
         "/plattform/bueros",
     ],
 )
@@ -222,8 +227,8 @@ def test_employee_timetracking_shows_only_own_data(app, world):
 
 def test_employee_navigation_has_no_admin_areas(app, world):
     html = login(app, "dennis@example.com").get("/zeiterfassung").get_data(as_text=True)
-    assert "Leipziger Liste" in html and "Zeiterfassung" in html and "Konto" in html
-    for hidden in ('href="/sprachnachrichten"', 'href="/settings/users"', 'href="/zeiterfassung/team"', 'href="/plattform'):
+    assert "Leipziger Liste" in html and "Zeiterfassung" in html and "Mein Konto" in html and 'href="/sprachnachrichten"' in html
+    for hidden in ('href="/settings/users"', 'href="/zeiterfassung/team"', 'href="/plattform', 'href="/mitarbeiter"', 'href="/aktivitaeten"'):
         assert hidden not in html
 
 
@@ -344,7 +349,15 @@ def test_office_admin_creates_employee_and_sees_team_times(app, world):
 
 # --- SUPER_ADMIN: Plattform ja, Fachdaten nein -----------------------------------------------
 
-SUPER_ADMIN_ALLOWED = {"static", "portal.home", "settings.index", "settings.profile", "settings.security"}
+# Eigenes Konto (inkl. "auf anderen Geraeten abmelden") - keine Buerodaten.
+SUPER_ADMIN_ALLOWED = {
+    "static",
+    "portal.home",
+    "settings.index",
+    "settings.profile",
+    "settings.security",
+    "settings.revoke_other_sessions",
+}
 
 
 def _concrete_url(rule, world):

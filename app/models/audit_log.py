@@ -25,6 +25,13 @@ class AuditEventType(enum.Enum):
     RECOVERY_CODES_REGENERATED = "recovery_codes_regenerated"
     TENANT_CREATED = "tenant_created"
     TENANT_UPDATED = "tenant_updated"
+    # Aktivitaetsprotokoll des Bueros (ohne fachliche Inhalte: keine Memo-Texte, keine
+    # Kundendaten - nur wer wann was ausgeloest hat).
+    TIME_CLOCK_IN = "time_clock_in"
+    TIME_CLOCK_OUT = "time_clock_out"
+    MEMO_TRANSCRIBED = "memo_transcribed"
+    LEIPZIGER_LIST_UPLOADED = "leipziger_list_uploaded"
+    SESSIONS_REVOKED = "sessions_revoked"
 
 
 # Sicherheitsrelevante Ereignisse ohne fachlichen Inhalt - nur diese sind fuer den
@@ -46,6 +53,26 @@ SECURITY_EVENT_TYPES = (
     AuditEventType.RECOVERY_CODES_REGENERATED,
     AuditEventType.TENANT_CREATED,
     AuditEventType.TENANT_UPDATED,
+    AuditEventType.SESSIONS_REVOKED,
+)
+
+# Ereignisse, die der Buero-Admin unter "Aktivitaeten" sieht (nur eigener Mandant).
+OFFICE_ACTIVITY_EVENT_TYPES = (
+    AuditEventType.USER_CREATED,
+    AuditEventType.USER_UPDATED,
+    AuditEventType.USER_DELETED,
+    AuditEventType.PASSWORD_CHANGED,
+    AuditEventType.PASSWORD_RESET_TRIGGERED,
+    AuditEventType.TWO_FACTOR_ENABLED,
+    AuditEventType.TWO_FACTOR_RESET,
+    AuditEventType.TIME_CLOCK_IN,
+    AuditEventType.TIME_CLOCK_OUT,
+    AuditEventType.TIME_CORRECTED,
+    AuditEventType.TIME_CORRECTION_REQUESTED,
+    AuditEventType.TIME_CORRECTION_DECIDED,
+    AuditEventType.MEMO_TRANSCRIBED,
+    AuditEventType.LEIPZIGER_LIST_UPLOADED,
+    AuditEventType.SESSIONS_REVOKED,
 )
 
 

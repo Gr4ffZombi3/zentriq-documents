@@ -17,18 +17,27 @@
   {% endcall %}
 
   <div class="kpi-row">
-    {{ kpi('Ist', summary.net_seconds | duration) }}
-    {{ kpi('Soll bis heute', summary.target_seconds | duration) }}
-    {{ kpi('Saldo', summary.balance_seconds | duration(signed=True), tone='success' if summary.balance_seconds > 0 else ('danger' if summary.balance_seconds < 0 else None)) }}
-    {{ kpi('Pausen', summary.break_seconds | duration) }}
+    {{ kpi('Soll' ~ (' bis heute' if summary.end >= today else ''), (summary.target_seconds | duration) ~ ' Std.') }}
+    {{ kpi('Ist', (summary.net_seconds | duration) ~ ' Std.') }}
+    {{ kpi('Differenz', (summary.balance_seconds | duration(signed=True)) ~ ' Std.', tone='success' if summary.balance_seconds > 0 else ('danger' if summary.balance_seconds < 0 else None)) }}
+    {{ kpi('Pausen', (summary.break_seconds | duration) ~ ' Std.') }}
   </div>
 
   {% if summary.has_incomplete %}
     <div class="notice notice-danger"><div><p class="notice-title">Unvollständige Buchung</p><p class="notice-copy">Mindestens ein Tag enthält eine Buchung ohne Ausstempeln. Sie wird erst nach einer Korrektur angerechnet.</p></div></div>
   {% endif %}
 
+  {% set has_sessions = summary.days | selectattr('sessions') | list | length > 0 %}
   {% call panel(heading, flush=True) %}
-    {{ period_table(summary, today, request_link=request_link) }}
+    {% if has_sessions or summary.start <= today %}
+      {% if not has_sessions %}
+        <p class="empty-note">Noch keine Arbeitszeiten {{ 'für ' ~ (summary.start | month_name) if view == 'monat' else 'in dieser Woche' }} vorhanden.</p>
+      {% else %}
+        {{ period_table(summary, today, request_link=request_link) }}
+      {% endif %}
+    {% else %}
+      <p class="empty-note">Dieser Zeitraum liegt in der Zukunft.</p>
+    {% endif %}
   {% endcall %}
 </div>
 {% endblock %}

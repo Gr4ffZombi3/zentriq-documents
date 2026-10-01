@@ -11,7 +11,7 @@ Konto-Relationen (employee_profile) mandantenuebergreifend korrekt funktionieren
 
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import selectinload
 
 from app.auth.permissions import super_admin_required
@@ -291,7 +291,38 @@ def system():
         ("Sitzungsdauer", f"{int(config['PERMANENT_SESSION_LIFETIME'].total_seconds() // 3600)} Stunden"),
         ("Zeitzone", config.get("APP_TIMEZONE")),
     ]
-    return render_template("platform/system.html", settings=settings)
+    return render_template("platform/system.html", settings=settings, status=_platform_status())
+
+
+def _platform_status() -> list[tuple[str, str, bool | None]]:
+    """Technischer Plattformstatus (ohne Buerodaten): (Bezeichnung, Wert, ok)."""
+    status = []
+    try:
+        db.session.execute(text("SELECT 1"))
+        status.append(("Datenbank", "erreichbar", True))
+    except Exception:
+        db.session.rollback()
+        status.append(("Datenbank", "nicht erreichbar", False))
+
+    if current_app.config.get("CELERY_TASK_ALWAYS_EAGER"):
+        status.append(("Hintergrunddienste (Redis)", "nicht verwendet (synchroner Modus)", None))
+    else:
+        try:
+            import redis
+
+            client = redis.Redis.from_url(current_app.config["CELERY_BROKER_URL"], socket_connect_timeout=1, socket_timeout=1)
+            client.ping()
+            status.append(("Hintergrunddienste (Redis)", "erreichbar", True))
+        except Exception:
+            status.append(("Hintergrunddienste (Redis)", "nicht erreichbar", False))
+
+    tenants = Tenant.query.all()
+    active = sum(1 for tenant in tenants if tenant.status == TenantStatus.ACTIVE)
+    status.append(("Büros", f"{active} aktiv, {len(tenants) - active} deaktiviert", None))
+    with bypass_tenant_scope():
+        users = User.query.filter(User.is_active.is_(True), User.deleted_at.is_(None)).count()
+    status.append(("Aktive Benutzerkonten", str(users), None))
+    return status
 
 
 @platform_bp.get("/sicherheit")

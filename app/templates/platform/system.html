@@ -1,20 +1,27 @@
 {% extends "base.html" %}
 {% from "ui/display.html" import page_header %}
-{% from "ui/portal.html" import panel %}
+{% from "ui/portal.html" import panel, state_tag %}
 {% block title %}Systemeinstellungen – Plattform – Zentriq{% endblock %}
 {% block content %}
-<div class="page-shell">
-  {% call page_header('Systemeinstellungen', 'Aktive Plattform-Konfiguration (nur lesend). Änderungen erfolgen über die Server-Konfiguration und ein Deployment.') %}{% endcall %}
-  {% call panel(flush=True) %}
-    <div class="table-wrap">
-      <table class="data-table">
-        <tbody>
-          {% for label, value in settings %}
-            <tr><th scope="row" class="cell-strong">{{ label }}</th><td>{{ value }}</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  {% endcall %}
+<div class="page-shell page-shell-narrow">
+  {% call page_header('Systemeinstellungen', 'Plattformstatus und aktive Konfiguration (nur lesend). Änderungen erfolgen über die Server-Konfiguration und ein Deployment.') %}{% endcall %}
+
+  <section class="panel">
+    <header class="panel-header"><h2 class="panel-title">Plattformstatus</h2></header>
+    <dl class="fact-list">
+      {% for label, value, ok in status %}
+        <div><dt>{{ label }}</dt><dd>{% if ok is sameas true %}{{ state_tag(value, 'success') }}{% elif ok is sameas false %}{{ state_tag(value, 'danger') }}{% else %}{{ value }}{% endif %}</dd></div>
+      {% endfor %}
+    </dl>
+  </section>
+
+  <section class="panel">
+    <header class="panel-header"><h2 class="panel-title">Konfiguration</h2></header>
+    <dl class="fact-list">
+      {% for label, value in settings %}
+        <div><dt>{{ label }}</dt><dd>{{ value }}</dd></div>
+      {% endfor %}
+    </dl>
+  </section>
 </div>
 {% endblock %}

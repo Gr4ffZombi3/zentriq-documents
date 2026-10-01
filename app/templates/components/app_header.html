@@ -6,42 +6,32 @@
       <span class="app-brand-name">Zentriq</span>
     </a>
 
-    <nav class="app-nav" aria-label="Hauptnavigation" :class="{ 'is-open': navOpen }">
-      {% for area in nav_areas %}
-        <a href="{{ area.url }}" class="app-nav-link {{ 'is-active' if area.active else '' }}"{% if area.active %} aria-current="page"{% endif %}>{{ area.label }}</a>
-      {% endfor %}
-      <div class="app-nav-mobile-user">
-        <a href="{{ url_for('settings.index') }}" class="app-nav-link {{ 'is-active' if nav_settings_active else '' }}">{{ nav_settings_label }}</a>
-      </div>
-    </nav>
-
     {% if current_user.is_authenticated %}
-      <div class="app-user">
-        <div class="app-user-identity">
-          <span class="app-user-name" title="{{ current_user.email }}">{{ current_user.employee_profile.display_name if not current_user.is_super_admin and current_user.employee_profile and current_user.employee_profile.display_name else current_user.email }}</span>
-          <span class="app-role">{{ current_user.role.label }}</span>
+      <nav class="app-nav" id="hauptnavigation" aria-label="Hauptnavigation" :class="{ 'is-open': navOpen }">
+        {% for area in nav_areas %}
+          <a href="{{ area.url }}" class="app-nav-link {{ 'is-active' if area.active else '' }}"{% if area.active %} aria-current="page"{% endif %}>{{ area.label }}</a>
+        {% endfor %}
+        <div class="app-nav-mobile-user">
+          <span class="app-nav-mobile-name">{{ nav_display_name }}</span>
+          <a href="{{ url_for('settings.profile') }}" class="app-nav-link {{ 'is-active' if nav_settings_active else '' }}">{{ nav_settings_label }}</a>
         </div>
-        <a href="{{ url_for('settings.index') }}" class="app-header-action {{ 'is-active' if nav_settings_active else '' }}" title="{{ nav_settings_label }}" aria-label="{{ nav_settings_label }}">
-          {{ icon('settings', class='h-4 w-4') }}<span class="app-header-action-label">{{ nav_settings_label }}</span>
+      </nav>
+
+      <div class="app-user">
+        <a href="{{ url_for('settings.profile') }}" class="app-header-action app-header-account {{ 'is-active' if nav_settings_active else '' }}"{% if nav_settings_active %} aria-current="page"{% endif %}>
+          {{ icon('user-cog', class='h-4 w-4') }}<span class="app-header-action-label">{{ nav_settings_label }}</span>
         </a>
-        <button
-          type="button"
-          x-data="{ dark: document.documentElement.classList.contains('dark') }"
-          x-on:click="dark = !dark; document.documentElement.classList.toggle('dark', dark); try { localStorage.setItem('zentriq-theme', dark ? 'dark' : 'light') } catch (e) {}"
-          class="app-header-action"
-          aria-label="Farbschema wechseln"
-          title="Farbschema wechseln"
-        >
-          <template x-if="!dark">{{ icon('moon', class='h-4 w-4') }}</template>
-          <template x-if="dark">{{ icon('sun', class='h-4 w-4') }}</template>
-        </button>
+        <span class="app-user-identity" title="{{ current_user.email }}">
+          <span class="app-user-name">{{ nav_display_name }}</span>
+          <span class="app-role">{{ current_user.role.label }}</span>
+        </span>
         <form method="post" action="{{ url_for('auth.logout') }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="app-header-action">
+          <button type="submit" class="app-header-action" title="Abmelden">
             {{ icon('log-out', class='h-4 w-4') }}<span class="app-header-action-label">Abmelden</span>
           </button>
         </form>
-        <button type="button" class="app-header-action app-nav-toggle" x-on:click="navOpen = !navOpen" :aria-expanded="navOpen" aria-label="Menü">
+        <button type="button" class="app-header-action app-nav-toggle" x-on:click="navOpen = !navOpen" :aria-expanded="navOpen" aria-controls="hauptnavigation" aria-label="Menü">
           {{ icon('menu', class='h-5 w-5') }}
         </button>
       </div>

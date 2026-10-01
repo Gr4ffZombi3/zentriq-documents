@@ -38,7 +38,7 @@
   <div class="kpi-row">
     {{ kpi('Ist', summary.net_seconds | duration) }}
     {{ kpi('Soll' ~ (' bis heute' if view != 'tag' else ''), summary.target_seconds | duration) }}
-    {{ kpi('Plus/Minus', summary.balance_seconds | duration(signed=True), tone='success' if summary.balance_seconds > 0 else ('danger' if summary.balance_seconds < 0 else None)) }}
+    {{ kpi('Differenz', summary.balance_seconds | duration(signed=True), tone='success' if summary.balance_seconds > 0 else ('danger' if summary.balance_seconds < 0 else None)) }}
     {{ kpi('Pausen', summary.break_seconds | duration) }}
   </div>
 
@@ -123,6 +123,12 @@
       {% endcall %}
     {% endif %}
   {% else %}
+    {% if view == 'monat' %}
+      <div class="panel-toolbar-start">
+        <a class="btn btn-secondary btn-sm" href="{{ url_for('timetracking.employee_export', user_id=employee.id, fmt='csv', monat=summary.start.strftime('%Y-%m')) }}">CSV exportieren</a>
+        <a class="btn btn-secondary btn-sm" href="{{ url_for('timetracking.employee_export', user_id=employee.id, fmt='pdf', monat=summary.start.strftime('%Y-%m')) }}">PDF exportieren</a>
+      </div>
+    {% endif %}
     {% call panel(heading, flush=True) %}
       {{ period_table(summary, today, row_link=day_link) }}
     {% endcall %}

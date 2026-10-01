@@ -38,7 +38,7 @@ def _parse_hours(value: str) -> float:
 
 OFFICE_ROLE_CHOICES = [
     ("office_admin", "Büro-Admin – verwaltet das Büro, alle Bereiche und alle Mitarbeiter"),
-    ("employee", "Mitarbeiter – Leipziger Liste und Zeiterfassung, jeweils nur eigene Daten"),
+    ("employee", "Mitarbeiter – eigene Leipziger-Liste-Vorgänge, Memo und eigene Zeiterfassung"),
 ]
 PLATFORM_ROLE_CHOICES = OFFICE_ROLE_CHOICES + [
     ("super_admin", "Super-Admin – Plattformverwaltung, kein Zugriff auf Bürodaten"),

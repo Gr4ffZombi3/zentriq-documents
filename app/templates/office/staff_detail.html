@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% from "ui/portal.html" import state_tag %}
+{% from "timetracking/_macros.html" import presence, balance %}
+{% set profile = member.employee_profile %}
+{% block title %}{{ name }} – Mitarbeiter – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell">
+  <a class="back-link" href="{{ url_for('office.staff') }}">← Mitarbeiter</a>
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">{{ name }}</h1>
+      <p class="page-subtitle">{{ member.role.label }}{% if not member.is_active %} · deaktiviert{% endif %}</p>
+    </div>
+    <div class="page-toolbar-actions">
+      <a class="btn btn-primary" href="{{ url_for('settings.user_edit', user_id=member.id, von='mitarbeiter') }}">Bearbeiten</a>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <section class="panel">
+      <header class="panel-header"><h2 class="panel-title">Stammdaten</h2></header>
+      <dl class="fact-list">
+        <div><dt>Name</dt><dd>{{ profile.display_name if profile and profile.display_name else '–' }}</dd></div>
+        <div><dt>E-Mail</dt><dd>{{ member.email }}</dd></div>
+        <div><dt>Vermittlernummer</dt><dd>{{ member.vermittlernummer | vermittlernummer if member.vermittlernummer else '–' }}</dd></div>
+        <div><dt>Personalnummer</dt><dd>{{ profile.personnel_number if profile and profile.personnel_number else '–' }}</dd></div>
+        <div><dt>Sollstunden</dt><dd>{{ ((profile.weekly_target_minutes * 60) | duration ~ ' Std. pro Woche') if profile else '–' }}</dd></div>
+        <div><dt>Arbeitstage</dt><dd>{% if profile %}{% for ch in profile.workdays %}{{ weekday_names.get(ch, ch) }}{{ ', ' if not loop.last }}{% endfor %}{% else %}–{% endif %}</dd></div>
+        <div><dt>Accountstatus</dt><dd>{{ state_tag('Aktiv', 'success') if member.is_active else state_tag('Deaktiviert', 'neutral') }}</dd></div>
+        <div><dt>Zwei-Faktor</dt><dd>{{ state_tag('Eingerichtet', 'success') if member.two_factor_enabled else state_tag('Nicht eingerichtet', 'warning') }}</dd></div>
+        <div><dt>Letzte Anmeldung</dt><dd>{{ member.last_login_at | local_dt(default='noch nie') }}</dd></div>
+      </dl>
+    </section>
+
+    <div class="stack">
+      <section class="panel">
+        <header class="panel-header"><h2 class="panel-title">Zeiterfassung</h2></header>
+        <dl class="fact-list">
+          <div><dt>Status</dt><dd>{{ presence(state.status) }}</dd></div>
+          <div><dt>Heute</dt><dd>{{ today_summary.net_seconds | duration }} Std.</dd></div>
+          <div><dt>{{ month.start | month_name }} – Ist</dt><dd>{{ month.net_seconds | duration }} Std.</dd></div>
+          <div><dt>Soll bis heute</dt><dd>{{ month.target_seconds | duration }} Std.</dd></div>
+          <div><dt>Differenz</dt><dd>{{ balance(month.balance_seconds) }} Std.</dd></div>
+        </dl>
+        <div class="panel-footer">
+          <a class="btn btn-secondary btn-sm" href="{{ url_for('timetracking.employee', user_id=member.id, ansicht='monat') }}">Monatsübersicht</a>
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('timetracking.employee_export', user_id=member.id, fmt='csv', monat=month.start.strftime('%Y-%m')) }}">CSV exportieren</a>
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('timetracking.employee_export', user_id=member.id, fmt='pdf', monat=month.start.strftime('%Y-%m')) }}">PDF exportieren</a>
+        </div>
+      </section>
+
+      <section class="panel">
+        <header class="panel-header"><h2 class="panel-title">Leipziger Liste</h2></header>
+        {% if not member.vermittlernummer %}
+          <p class="empty-note">Keine Vermittlernummer hinterlegt – es werden keine Vorgänge zugeordnet.</p>
+        {% elif not has_lists %}
+          <p class="empty-note">Es liegt noch keine ausgewertete Liste vor.</p>
+        {% else %}
+          <dl class="fact-list">
+            <div><dt>Zu erledigen</dt><dd>{{ leipziger.counts['zu-erledigen'] }}</dd></div>
+            <div><dt>Mit Datum</dt><dd>{{ leipziger.counts['mit-datum'] }}</dd></div>
+            <div><dt>Ohne Datum</dt><dd>{{ leipziger.counts['ohne-datum'] }}</dd></div>
+          </dl>
+          <div class="panel-footer">
+            <a class="btn btn-secondary btn-sm" href="{{ url_for('leipziger.team', mitarbeiter=member.id) }}">Vorgänge anzeigen</a>
+            <span class="form-hint">Liste vom {{ leipziger.document.uploaded_at | local_dt('%d.%m.%Y') }}</span>
+          </div>
+        {% endif %}
+      </section>
+    </div>
+  </div>
+</div>
+{% endblock %}

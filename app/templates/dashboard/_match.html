@@ -1,0 +1,33 @@
+{# Serverseitige Darstellung des Kundenabgleichs (ohne JavaScript). Gleiche Texte wie in memo.js. #}
+{% set basis = {'phone': 'über die Telefonnummer', 'customer_number': 'über die Kundennummer', 'name': 'nur der Name stimmt überein'} %}
+{% macro customer_facts(customer) -%}
+  <dl class="fact-list fact-list-compact">
+    <div><dt>Name</dt><dd>{{ customer.name }}</dd></div>
+    {% if customer.customer_number %}<div><dt>Kundennummer</dt><dd>{{ customer.customer_number }}</dd></div>{% endif %}
+    {% if customer.phone %}<div><dt>Telefonnummer</dt><dd>{{ customer.phone }}</dd></div>{% endif %}
+  </dl>
+  {% if customer.url %}<a class="btn btn-secondary btn-sm" href="{{ customer.url }}">Kundendaten öffnen</a>{% endif %}
+{%- endmacro %}
+{% if match.status == 'unique' %}
+  <p class="memo-match-title">Kunde erkannt <span class="memo-match-basis">{{ basis[match.matched_by] }}</span></p>
+  {{ customer_facts(match.customers[0]) }}
+{% elif match.status == 'possible' %}
+  <p class="memo-match-title memo-match-possible">Möglicher Treffer – nicht sicher zugeordnet</p>
+  <p class="form-hint">Nur der Name stimmt überein. Bitte vor der Verwendung prüfen.</p>
+  {{ customer_facts(match.customers[0]) }}
+{% elif match.status == 'multiple' %}
+  <p class="memo-match-title">Mehrere mögliche Kunden gefunden. <span class="memo-match-basis">{{ basis[match.matched_by] }}</span></p>
+  <p class="form-hint">Es wurde bewusst kein Kunde automatisch zugeordnet.</p>
+  <ul class="memo-candidates">
+    {% for customer in match.customers %}
+      <li>
+        {% if customer.url %}<a class="table-link" href="{{ customer.url }}">{{ customer.name }}</a>{% else %}<strong>{{ customer.name }}</strong>{% endif %}
+        {% set details = [('Kundennr. ' ~ customer.customer_number) if customer.customer_number, ('Tel. ' ~ customer.phone) if customer.phone, customer.city] | select | list %}
+        {% if details %}<span>{{ details | join(' · ') }}</span>{% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="memo-match-title">Kein vorhandener Kunde eindeutig erkannt.</p>
+  {% if match.detected_phones %}<p class="form-hint">Erkannte Telefonnummer: {{ match.detected_phones | join(', ') }}</p>{% endif %}
+{% endif %}

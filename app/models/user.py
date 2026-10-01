@@ -77,6 +77,15 @@ class User(TenantScopedMixin, UserMixin, db.Model):
 
     def invalidate_sessions(self) -> None:
         self.auth_version = (self.auth_version or 0) + 1
+        if self.id is not None:
+            # Auch die Sitzungsliste ("Mein Konto") bereinigen - abgemeldet sind die Sitzungen
+            # bereits ueber auth_version.
+            from app.models.user_session import UserSession
+
+            UserSession.query.filter(UserSession.user_id == self.id, UserSession.revoked_at.is_(None)).update(
+                {UserSession.revoked_at: datetime.now(timezone.utc).replace(tzinfo=None)},
+                synchronize_session=False,
+            )
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password, method="scrypt")

@@ -2,7 +2,9 @@ from flask import Blueprint, current_app, jsonify, redirect, render_template, re
 from flask_login import current_user, login_required
 
 from app.models import Document
+from app.models.audit_log import AuditEventType
 from app.models.enums import DocStatus, ListScope, ListType
+from app.services.audit import log_audit_event
 from app.services.document_progress import make_progress_snapshot, merge_progress_into_extra_data
 from app.services.documents import create_document
 from app.services.storage import save_pdf
@@ -112,6 +114,8 @@ def upload_document():
         document.id,
         file_path,
     )
+    # Aktivitaetsprotokoll des Bueros: nur Ereignis + Dokument-ID, kein Dateiinhalt.
+    log_audit_event(AuditEventType.LEIPZIGER_LIST_UPLOADED, user=current_user, details={"document_id": document.id})
     process_document.delay(document.id)
     current_app.logger.info(
         "document.upload.analysis_enqueued tenant_id=%s user_id=%s document_id=%s",

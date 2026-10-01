@@ -1,150 +1,57 @@
 {% extends "base.html" %}
-{% from "ui/display.html" import page_header %}
 {% from "ui/icons.html" import icon %}
-{% from "ui/portal.html" import panel %}
 {% block title %}Memo – Zentriq{% endblock %}
 
-{% block head %}
-<style>
-  .memo-drop { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; padding: 2.5rem 1rem;
-    border: 1.5px dashed var(--color-border-strong); border-radius: var(--radius-sm); text-align: center;
-    color: var(--color-text-muted); cursor: pointer; transition: border-color .15s, background-color .15s; }
-  .memo-drop:hover, .memo-drop.is-dragover { border-color: var(--color-primary); color: var(--color-text);
-    background: color-mix(in oklab, var(--color-primary) 6%, transparent); }
-  .memo-drop-title { font-weight: 600; color: var(--color-text); }
-  .memo-meta { font-size: 0.82rem; color: var(--color-text-muted); margin-bottom: 0.75rem; }
-  .memo-transcript { white-space: pre-wrap; line-height: 1.6; padding: 1rem; border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm); background: var(--color-surface); }
-  .memo-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
-  .memo-error { color: var(--color-error); margin-top: 0.75rem; font-size: 0.9rem; }
-</style>
-{% endblock %}
-
 {% block content %}
-<div class="page-shell" data-memo>
-  {{ page_header('Memo', 'Sprachnachricht hochladen – das Transkript erscheint direkt hier.') }}
+<div class="page-shell page-shell-narrow" data-memo data-match-url="{{ url_for('dashboard.match') }}">
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">Memo</h1>
+      <p class="page-subtitle">Sprachnachricht hochladen – das Transkript erscheint direkt hier.</p>
+    </div>
+  </div>
 
-  <div data-memo-upload {% if result %}hidden{% endif %}>
-    {% call panel('Sprachnachricht hochladen') %}
+  <section class="panel" data-memo-upload {% if result %}hidden{% endif %}>
+    <header class="panel-header"><h2 class="panel-title">Sprachnachricht hochladen</h2></header>
+    <div class="panel-body">
       <form method="post" action="{{ url_for('dashboard.transcribe') }}" enctype="multipart/form-data" data-memo-form>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label class="memo-drop" data-memo-drop>
           {{ icon('upload', class='h-6 w-6') }}
           <span class="memo-drop-title" data-memo-label>Datei hier ablegen</span>
-          <span>oder</span>
-          <span class="btn-plain btn-plain-primary">Sprachnachricht auswählen</span>
-          <span class="text-xs">MP3, M4A, WAV, OGG, WEBM, MP4, FLAC · max. 25 MB</span>
+          <span class="memo-drop-or">oder</span>
+          <span class="btn btn-primary">Sprachnachricht auswählen</span>
+          <span class="memo-drop-hint">MP3, M4A, WAV, OGG, WEBM, MP4, FLAC · max. 25 MB</span>
           <input type="file" name="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.oga,.webm,.mp4,.mpeg,.mpga,.flac" class="sr-only" data-memo-input>
         </label>
-        <noscript><div class="memo-actions"><button type="submit" class="btn-plain btn-plain-primary">Transkribieren</button></div></noscript>
+        <noscript><div class="form-actions"><button type="submit" class="btn btn-primary">Transkribieren</button></div></noscript>
       </form>
-      <p class="memo-error" data-memo-error role="alert" {% if not error %}hidden{% endif %}>{{ error or '' }}</p>
-    {% endcall %}
-  </div>
+      <p class="form-error memo-error" data-memo-error role="alert" {% if not error %}hidden{% endif %}>{{ error or '' }}</p>
+    </div>
+  </section>
 
-  <div data-memo-result {% if not result %}hidden{% endif %} aria-live="polite">
-    {% call panel('Transkript') %}
-      <p class="memo-meta" data-memo-meta>
-        {% if result %}{{ result.filename }} · hochgeladen {{ result.uploaded_at | local_dt('%d.%m.%Y, %H:%M Uhr') }}{% endif %}
-      </p>
-      <div class="memo-transcript" data-memo-transcript>{{ result.transcript if result else '' }}</div>
-      <div class="memo-actions">
-        <button type="button" class="btn-plain btn-plain-primary" data-memo-copy>Text kopieren</button>
-        <a href="{{ url_for('dashboard.index') }}" class="btn-plain" data-memo-reset>Neue Sprachnachricht</a>
+  <div class="stack" data-memo-result {% if not result %}hidden{% endif %} aria-live="polite">
+    <section class="panel">
+      <header class="panel-header">
+        <h2 class="panel-title">Transkript</h2>
+        <span class="panel-meta" data-memo-meta>{% if result %}{{ result.filename }} · {{ result.uploaded_at | local_dt('%d.%m.%Y, %H:%M Uhr') }}{% endif %}</span>
+      </header>
+      <div class="panel-body">
+        <div class="memo-transcript" data-memo-transcript>{{ result.transcript if result else '' }}</div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-primary" data-memo-copy>Text kopieren</button>
+          <a href="{{ url_for('dashboard.index') }}" class="btn btn-secondary" data-memo-reset>Neue Sprachnachricht</a>
+        </div>
       </div>
-    {% endcall %}
+    </section>
+
+    <section class="panel" aria-live="polite">
+      <header class="panel-header"><h2 class="panel-title">Kundenzuordnung</h2></header>
+      <div class="panel-body memo-match" data-memo-match>
+        {% if match %}{% include "dashboard/_match.html" %}{% endif %}
+      </div>
+    </section>
   </div>
 </div>
-
-<script>
-(function () {
-  var root = document.querySelector("[data-memo]");
-  var form = root.querySelector("[data-memo-form]");
-  var drop = root.querySelector("[data-memo-drop]");
-  var input = root.querySelector("[data-memo-input]");
-  var label = root.querySelector("[data-memo-label]");
-  var errorBox = root.querySelector("[data-memo-error]");
-  var uploadBox = root.querySelector("[data-memo-upload]");
-  var resultBox = root.querySelector("[data-memo-result]");
-  var transcriptBox = root.querySelector("[data-memo-transcript]");
-  var metaBox = root.querySelector("[data-memo-meta]");
-  var copyButton = root.querySelector("[data-memo-copy]");
-  var busy = false;
-
-  function showError(message) {
-    errorBox.textContent = message;
-    errorBox.hidden = !message;
-  }
-
-  function setBusy(state, filename) {
-    busy = state;
-    drop.setAttribute("aria-busy", state ? "true" : "false");
-    label.textContent = state ? "„" + filename + "“ wird transkribiert …" : "Datei hier ablegen";
-  }
-
-  function upload(file) {
-    if (!file || busy) return;
-    showError("");
-    setBusy(true, file.name);
-    var data = new FormData(form);
-    data.set("file", file, file.name);
-    fetch(form.action, { method: "POST", body: data, headers: { Accept: "application/json" }, credentials: "same-origin" })
-      .then(function (resp) {
-        return resp.json().catch(function () { return { error: "Die Transkription ist fehlgeschlagen. Bitte erneut versuchen." }; })
-          .then(function (body) { if (!resp.ok) throw new Error(body.error || "Fehler " + resp.status); return body; });
-      })
-      .then(function (body) {
-        var uploaded = new Date(body.uploaded_at);
-        transcriptBox.textContent = body.transcript;
-        metaBox.textContent = body.filename + " · hochgeladen " +
-          uploaded.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }) + ", " + uploaded.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) + " Uhr";
-        uploadBox.hidden = true;
-        resultBox.hidden = false;
-      })
-      .catch(function (err) { showError(err.message); })
-      .finally(function () { setBusy(false); input.value = ""; });
-  }
-
-  input.addEventListener("change", function () { upload(input.files[0]); });
-  ["dragenter", "dragover"].forEach(function (name) {
-    drop.addEventListener(name, function (event) { event.preventDefault(); drop.classList.add("is-dragover"); });
-  });
-  ["dragleave", "dragend", "drop"].forEach(function (name) {
-    drop.addEventListener(name, function () { drop.classList.remove("is-dragover"); });
-  });
-  drop.addEventListener("drop", function (event) {
-    event.preventDefault();
-    upload(event.dataTransfer && event.dataTransfer.files[0]);
-  });
-
-  copyButton.addEventListener("click", function () {
-    var text = transcriptBox.textContent;
-    var done = function () {
-      copyButton.textContent = "Kopiert";
-      setTimeout(function () { copyButton.textContent = "Text kopieren"; }, 1500);
-    };
-    if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(text).then(done);
-      return;
-    }
-    var range = document.createRange();
-    range.selectNodeContents(transcriptBox);
-    var selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
-    document.execCommand("copy");
-    selection.removeAllRanges();
-    done();
-  });
-
-  root.querySelector("[data-memo-reset]").addEventListener("click", function (event) {
-    event.preventDefault();
-    transcriptBox.textContent = "";
-    metaBox.textContent = "";
-    showError("");
-    resultBox.hidden = true;
-    uploadBox.hidden = false;
-  });
-})();
-</script>
+<script defer src="{{ url_for('static', filename='js/memo.js', v='20261001-3') }}"></script>
 {% endblock %}

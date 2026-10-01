@@ -1,4 +1,4 @@
-"""Serverseitige Rechtepruefung: Mitarbeiter erreichen nur Zeiterfassung, Profil und ihre\neigene "Zu erledigen"-Liste."""
+"""Serverseitige Rechtepruefung: Mitarbeiter erreichen nur Uebersicht, Zeiterfassung, Memo, Profil\nund ihre eigene Leipziger Liste."""
 
 import pytest
 
@@ -8,8 +8,9 @@ from app.models import UserRole
 ADMIN_ONLY_URLS = [
     "/",
     "/leipziger-liste/mitarbeiter",
-    "/sprachnachrichten",
     "/mailbox",
+    "/mitarbeiter",
+    "/aktivitaeten",
     "/documents",
     "/documents/1",
     "/documents/live",
@@ -39,7 +40,7 @@ def test_employee_cannot_open_admin_areas_by_direct_url(employee_client, url):
 
 @pytest.mark.parametrize(
     "url",
-    ["/upload", "/sprachnachrichten/transkribieren", "/documents/1/retry", "/api/chat"],
+    ["/upload", "/documents/1/retry", "/api/chat"],
 )
 def test_employee_cannot_trigger_admin_actions(employee_client, url):
     assert employee_client.post(url).status_code == 403

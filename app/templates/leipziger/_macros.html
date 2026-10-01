@@ -8,7 +8,7 @@
         <option value="{{ option.id }}"{% if document and option.id == document.id %} selected{% endif %}>{{ option.original_filename }} ({{ option.uploaded_at | local_dt('%d.%m.%Y') }})</option>
       {% endfor %}
     </select>
-    <button type="submit" class="btn-plain">Anzeigen</button>
+    <button type="submit" class="btn btn-secondary btn-sm">Anzeigen</button>
   </form>
 {% elif document %}
   <span class="toolbar-meta">{{ document.original_filename }} · {{ document.uploaded_at | local_dt('%d.%m.%Y') }}</span>
@@ -21,6 +21,7 @@
 
 {% macro entry_table(entries, with_date=False, broker_names=None, empty_text='Keine Einträge.') -%}
 {% if entries %}
+  <div class="table-wrap">
   <table class="data-table worklist">
     <thead>
       <tr>
@@ -43,7 +44,8 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 {% else %}
-  <p class="empty-note panel-body">{{ empty_text }}</p>
+  <p class="empty-note">{{ empty_text }}</p>
 {% endif %}
 {%- endmacro %}

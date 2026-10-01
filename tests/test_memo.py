@@ -113,10 +113,14 @@ def test_transcribe_audio_passes_file_to_transcription_api(app, monkeypatch):
     assert captured["file"].read() == b"RIFF"
 
 
-def test_employee_cannot_use_memo(employee_client, fake_transcription):
-    assert employee_client.get("/sprachnachrichten").status_code == 403
-    assert _upload(employee_client).status_code == 403
-    assert fake_transcription == []
+def test_employee_can_use_memo(employee_client, fake_transcription):
+    # Memo steht allen Buero-Rollen offen (Hauptnavigation: Uebersicht, Leipziger Liste, Memo,
+    # Zeiterfassung); der Kundenabgleich bleibt auf den eigenen Mandanten beschraenkt.
+    assert employee_client.get("/sprachnachrichten").status_code == 200
+    resp = _upload(employee_client)
+    assert resp.status_code == 200
+    assert resp.get_json()["transcript"].startswith("Guten Tag")
+    assert len(fake_transcription) == 1
 
 
 def test_anonymous_cannot_use_memo(client, fake_transcription):

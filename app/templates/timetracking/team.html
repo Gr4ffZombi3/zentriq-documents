@@ -9,7 +9,12 @@
 {% set on_break = rows | selectattr('state', 'equalto', 'break') | list | length %}
 <div class="page-shell page-shell-wide">
   {% call page_header('Team', 'Anwesenheit und Arbeitszeiten aller aktiven Benutzer Ihres Mandanten. Soll bis einschließlich heute.') %}
-    {{ button('Benutzer verwalten', href=url_for('settings.users'), variant='secondary') }}
+    <form method="get" action="{{ url_for('timetracking.team_export') }}" class="toolbar-form">
+      <label class="toolbar-label" for="export-monat">Monat</label>
+      <input class="toolbar-select" type="month" id="export-monat" name="monat" value="{{ today.strftime('%Y-%m') }}">
+      <button type="submit" class="btn btn-secondary btn-sm">CSV exportieren</button>
+    </form>
+    {{ button('Mitarbeiter', href=url_for('office.staff'), variant='ghost', size='sm') }}
   {% endcall %}
 
   <div class="kpi-row">

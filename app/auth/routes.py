@@ -21,6 +21,7 @@ from app.extensions import db
 from app.models import Tenant, User, UserRole
 from app.models.audit_log import AuditEventType, AuditLog
 from app.services import two_factor as two_factor_service
+from app.services import user_sessions
 from app.services.account_state import account_login_block_reason
 from app.services.audit import log_audit_event
 from app.services.password_reset import (
@@ -115,6 +116,7 @@ def _complete_login(user: User, details: dict | None = None):
     session.pop(PENDING_2FA_KEY, None)
     set_current_tenant_id(user.tenant_id)
     login_user(user)
+    user_sessions.start_session(user)
     user.last_login_at = datetime.now(timezone.utc)
     db.session.commit()
     log_audit_event(AuditEventType.LOGIN_SUCCESS, tenant_id=user.tenant_id, user=user, details=details)
@@ -309,6 +311,7 @@ def reset_password():
 @login_required
 def logout():
     log_audit_event(AuditEventType.LOGOUT, tenant_id=current_user.tenant_id, user=current_user)
+    user_sessions.end_current_session(current_user.id)
     logout_user()
     session.pop(PENDING_2FA_KEY, None)
     flash("Du wurdest abgemeldet.", "success")

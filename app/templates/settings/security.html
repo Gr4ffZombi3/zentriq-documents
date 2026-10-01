@@ -3,8 +3,9 @@
 {% from "ui/portal.html" import panel, state_tag %}
 {% block title %}Sicherheit – Zentriq{% endblock %}
 {% block content %}
-<div class="page-shell">
-  {% call page_header('Sicherheit', 'Zwei-Faktor-Authentifizierung per Authenticator-App (z. B. Microsoft Authenticator, Google Authenticator, 1Password).') %}{% endcall %}
+<div class="page-shell page-shell-narrow">
+  {% if not enforced %}<a class="back-link" href="{{ url_for('settings.profile') }}">← Mein Konto</a>{% endif %}
+  {% call page_header('Zwei-Faktor-Authentifizierung', 'Per Authenticator-App (z. B. Microsoft Authenticator, Google Authenticator, 1Password).') %}{% endcall %}
 
   {% if new_codes %}
     {% call panel('Wiederherstellungscodes', 'Diese Codes werden nur jetzt angezeigt. Bewahren Sie sie sicher auf (z. B. ausgedruckt oder im Passwortmanager). Jeder Code funktioniert genau einmal.') %}
@@ -14,7 +15,7 @@
       </ul>
       <p class="form-hint mt-3">Verlieren Sie Gerät und Codes, kann ein Administrator die Zwei-Faktor-Authentifizierung zurücksetzen.</p>
       <div class="mt-4">
-        <a class="btn btn-primary h-10 px-4 text-sm" href="{{ url_for('portal.home') }}">Codes gesichert – weiter</a>
+        <a class="btn btn-primary" href="{{ url_for('portal.home') }}">Codes gesichert – weiter</a>
       </div>
     {% endcall %}
   {% elif enabled %}
@@ -34,7 +35,7 @@
           {{ form.code(id='code', class_='field-surface', inputmode='numeric', autocomplete='one-time-code', placeholder='123456') }}
           {% for error in form.code.errors %}<span class="form-error">{{ error }}</span>{% endfor %}
         </div>
-        <button type="submit" class="btn btn-secondary h-10 px-4 text-sm">Codes neu erzeugen</button>
+        <button type="submit" class="btn btn-secondary">Codes neu erzeugen</button>
       </form>
     {% endcall %}
     </div>
@@ -58,7 +59,7 @@
           {{ form.code(id='code', class_='field-surface', inputmode='numeric', autocomplete='one-time-code', placeholder='123456', autofocus=true) }}
           {% for error in form.code.errors %}<span class="form-error">{{ error }}</span>{% endfor %}
         </div>
-        <button type="submit" class="btn btn-primary h-10 px-4 text-sm">Aktivieren</button>
+        <button type="submit" class="btn btn-primary">Aktivieren</button>
       </form>
     {% endcall %}
   {% endif %}

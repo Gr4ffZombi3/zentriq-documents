@@ -85,6 +85,9 @@ class CustomerMatcher:
         customer.city = data.city or customer.city
         customer.postal_code = data.postal_code or customer.postal_code
         customer.date_of_birth = data.date_of_birth or customer.date_of_birth
+        # Leere Quellwerte ueberschreiben nie vorhandene Daten.
+        customer.phone = data.phone or customer.phone
+        customer.customer_number = data.customer_number or customer.customer_number
         return customer
 
     @staticmethod

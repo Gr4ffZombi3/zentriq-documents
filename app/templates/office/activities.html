@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Aktivitäten – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell page-shell-narrow">
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">Aktivitäten</h1>
+      <p class="page-subtitle">Wichtige Aktionen in Ihrem Büro – ohne Inhalte von Memos oder Kundendaten.</p>
+    </div>
+  </div>
+
+  <form method="get" class="filter-bar" action="{{ url_for('office.activities') }}">
+    <label class="filter-field">Mitarbeiter
+      <select name="mitarbeiter">
+        <option value="">Alle</option>
+        {% for member in members %}
+          <option value="{{ member.id }}"{% if member.id == selected %} selected{% endif %}>{{ name_of(member) }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="filter-field">Zeitraum
+      <select name="tage">
+        {% for value, label in [(1, 'Heute'), (7, 'Letzte 7 Tage'), (30, 'Letzte 30 Tage'), (90, 'Letzte 90 Tage')] %}
+          <option value="{{ value }}"{% if value == days %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="filter-actions"><button type="submit" class="btn btn-secondary btn-sm">Anzeigen</button></div>
+  </form>
+
+  <section class="panel">
+    {% if groups %}
+      {% for group in groups %}
+        <h2 class="activity-day">{{ group.label }}</h2>
+        <ul class="activity-list">
+          {% for item in group['items'] %}
+            <li><time>{{ item.at.strftime('%H:%M') }}</time><span><strong>{{ item.actor }}</strong> – {{ item.text }}</span></li>
+          {% endfor %}
+        </ul>
+      {% endfor %}
+      {% if page > 1 or has_more %}
+        <nav class="pager" aria-label="Seiten">
+          {% if page > 1 %}<a class="btn btn-secondary btn-sm" href="{{ url_for('office.activities', mitarbeiter=selected, tage=days, seite=page - 1) }}">Neuere</a>{% endif %}
+          {% if has_more %}<a class="btn btn-secondary btn-sm" href="{{ url_for('office.activities', mitarbeiter=selected, tage=days, seite=page + 1) }}">Ältere</a>{% endif %}
+        </nav>
+      {% endif %}
+    {% else %}
+      <p class="empty-note">Keine Aktivitäten im gewählten Zeitraum.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

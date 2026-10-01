@@ -1,17 +1,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>
-  // Dark Mode so früh wie möglich setzen (vor dem CSS-Load), um ein Aufblitzen des
-  // falschen Themes zu vermeiden. localStorage hat Vorrang vor prefers-color-scheme,
-  // damit ein manueller Toggle über Reloads hinweg bestehen bleibt.
-  (function () {
-    var stored = localStorage.getItem("zentriq-theme");
-    var dark = stored ? stored === "dark" : false;
-    document.documentElement.classList.toggle("dark", dark);
-  })();
-</script>
+{# Bewusst helles Erscheinungsbild; ein frueher gespeichertes dunkles Theme wird verworfen. #}
+<script>try { localStorage.removeItem("zentriq-theme"); } catch (e) {}</script>
 <meta name="csrf-token" content="{{ csrf_token() }}">
-{% set asset_rev = '20261001-kompakt-1' %}
+{% set asset_rev = '20261001-design-2' %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=asset_rev) }}">
 {# Lokal ausgeliefert und per defer geladen: kein blockierender Abruf von einem fremden CDN. #}
 <script defer src="{{ url_for('static', filename='vendor/htmx-2.0.4.min.js') }}"></script>

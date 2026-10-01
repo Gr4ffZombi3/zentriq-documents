@@ -1,8 +1,10 @@
 """Hauptnavigation des Portals, rollenabhaengig:
 
 - SUPER_ADMIN: Bueros, Benutzer, Systemeinstellungen, Sicherheit (keine Fachbereiche).
-- OFFICE_ADMIN: Leipziger Liste, Memo, Zeiterfassung, Einstellungen.
-- EMPLOYEE: Leipziger Liste, Zeiterfassung, Konto.
+- OFFICE_ADMIN: Uebersicht, Leipziger Liste, Memo, Zeiterfassung, Mitarbeiter, Aktivitaeten,
+  Einstellungen.
+- EMPLOYEE: Uebersicht, Leipziger Liste, Memo, Zeiterfassung.
+Rechts in der Kopfleiste fuer alle: Mein Konto, Benutzername, Abmelden.
 
 Die Sichtbarkeit hier ist nur Komfort - die eigentliche Absicherung erfolgt serverseitig in
 app/auth/permissions.py (Default-Deny je Rolle) und per @admin_required."""
@@ -56,12 +58,6 @@ TIME_ITEMS = (
     NavItem("timetracking.audit", "Protokoll", ("timetracking.audit",), admin_only=True),
 )
 
-SETTINGS_ITEMS = (
-    NavItem("settings.profile", "Profil", ("settings.profile",)),
-    NavItem("settings.security", "Sicherheit", ("settings.security",)),
-    NavItem("settings.users", "Benutzer", ("settings.users", "settings.user_"), admin_only=True),
-)
-
 PLATFORM_AREAS = (
     NavArea("platform_offices", "Büros", "platform.offices", ("platform.office",), admin_only=False),
     NavArea("platform_users", "Benutzer", "platform.users", ("platform.user",), admin_only=False),
@@ -70,6 +66,7 @@ PLATFORM_AREAS = (
 )
 
 AREAS = (
+    NavArea("overview", "Übersicht", "portal.overview", ("portal.overview",), admin_only=False),
     NavArea(
         "leipziger",
         "Leipziger Liste",
@@ -78,11 +75,15 @@ AREAS = (
         admin_only=False,
         items=LEIPZIGER_ITEMS,
     ),
-    NavArea("voice", "Memo", "dashboard.index", ("dashboard.",), admin_only=True),
+    NavArea("voice", "Memo", "dashboard.index", ("dashboard.",), admin_only=False),
     NavArea("time", "Zeiterfassung", "timetracking.index", ("timetracking.",), admin_only=False, items=TIME_ITEMS),
+    # Buero-Verwaltung (nur OFFICE_ADMIN).
+    NavArea("staff", "Mitarbeiter", "office.staff", ("office.staff",), admin_only=True),
+    NavArea("activity", "Aktivitäten", "office.activities", ("office.activities",), admin_only=True),
+    NavArea("office_settings", "Einstellungen", "settings.users", ("settings.users", "settings.user_"), admin_only=True),
 )
 
-SETTINGS_AREA = NavArea("settings", "Einstellungen", "settings.index", ("settings.",), admin_only=False, items=SETTINGS_ITEMS)
+ACCOUNT_AREA = NavArea("settings", "Mein Konto", "settings.profile", ("settings.profile", "settings.security", "settings.index"), admin_only=False)
 
 
 def _matches(endpoint: str | None, prefixes: tuple[str, ...]) -> bool:
@@ -95,20 +96,23 @@ def _visible(entry, is_admin: bool) -> bool:
 
 def build_navigation() -> dict:
     if not current_user.is_authenticated:
-        return {"nav_areas": [], "nav_active_area": None, "nav_subitems": [], "nav_settings_label": "Konto"}
+        return {"nav_areas": [], "nav_active_area": None, "nav_subitems": [], "nav_settings_label": "Mein Konto"}
     is_admin = current_user.is_admin
     endpoint = request.endpoint
+    # Benutzerformulare, die von der Mitarbeiterseite aus geoeffnet wurden.
+    from_staff = bool(endpoint and endpoint.startswith("settings.user") and request.values.get("von") == "mitarbeiter")
     areas = []
     active_area = None
     for area in PLATFORM_AREAS if current_user.is_super_admin else AREAS:
         if not _visible(area, is_admin):
             continue
-        active = _matches(endpoint, area.prefixes)
+        active = active_area is None and _matches(endpoint, area.prefixes)
+        if from_staff and area.key in ("staff", "office_settings"):
+            active = area.key == "staff"
         areas.append({"label": area.label, "url": url_for(area.endpoint), "active": active, "key": area.key})
         if active:
             active_area = area
-    if active_area is None and _matches(endpoint, SETTINGS_AREA.prefixes):
-        active_area = SETTINGS_AREA
+    account_active = active_area is None and _matches(endpoint, ACCOUNT_AREA.prefixes)
 
     subitems = []
     more_items = []
@@ -124,20 +128,23 @@ def build_navigation() -> dict:
         "nav_subitems": subitems,
         "nav_more_items": more_items,
         "nav_more_active": any(item["active"] for item in more_items),
-        "nav_settings_active": active_area is SETTINGS_AREA,
-        # Buero-Admins verwalten hier auch Benutzer; fuer alle anderen ist es das eigene Konto.
-        "nav_settings_label": "Einstellungen" if is_admin else "Konto",
+        "nav_settings_active": account_active,
+        "nav_settings_label": "Mein Konto",
+        "nav_display_name": display_name_for(current_user),
     }
 
 
+def display_name_for(user) -> str:
+    profile = None if user.is_super_admin else user.employee_profile
+    if profile is not None and profile.display_name:
+        return profile.display_name
+    return user.email
+
+
 def home_endpoint_for(user) -> str:
-    """Startseite nach dem Login: Super-Admins landen in der Bueroverwaltung, Buero-Admins in
-    der Leipziger Liste, Mitarbeiter in der Zeiterfassung (Fallback: Profil, falls ein Bereich
-    nicht registriert ist)."""
-    if user.is_super_admin:
-        candidates = ("platform.offices",)
-    else:
-        candidates = ("leipziger.index",) if user.is_admin else ()
+    """Startseite nach dem Login: Super-Admins landen in der Bueroverwaltung, alle Buero-Rollen
+    auf ihrer persoenlichen Uebersicht (Fallback: Profil, falls ein Bereich nicht registriert ist)."""
+    candidates = ("platform.offices",) if user.is_super_admin else ("portal.overview",)
     for endpoint in (*candidates, "timetracking.index", "settings.profile"):
         if endpoint in current_app.view_functions:
             return endpoint

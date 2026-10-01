@@ -1,0 +1,12 @@
+{# Hinweise nach Aktionen: im Seitenfluss statt schwebend, damit nichts ueberdeckt wird. #}
+{% set messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<div class="flash-stack" role="status" aria-live="polite">
+  {% for category, message in messages %}
+    <div class="flash flash-{{ 'error' if category == 'error' else ('success' if category == 'success' else 'info') }}" x-data="{ show: true }" x-show="show">
+      <p>{{ message }}</p>
+      <button type="button" class="flash-close" x-on:click="show = false" aria-label="Hinweis schließen">×</button>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}

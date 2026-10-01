@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% from "timetracking/_macros.html" import presence %}
+{% block title %}Übersicht – Zentriq{% endblock %}
+{% block content %}
+{% set status = state.status %}
+<div class="page-shell">
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">{{ greeting }}{% if first_name %}, {{ first_name }}{% endif %}</h1>
+      <p class="page-subtitle">{{ today | weekday_long }}, {{ today.strftime('%d.%m.%Y') }}</p>
+    </div>
+  </div>
+
+  <div class="module-grid">
+    <section class="module" aria-labelledby="modul-leipziger">
+      <h2 class="module-label" id="modul-leipziger">Leipziger Liste</h2>
+      {% if not has_list %}
+        <p class="module-value module-value-muted">Keine Liste</p>
+        <p class="module-meta">Es liegt noch keine ausgewertete Liste vor.</p>
+      {% elif not has_own_number and not office %}
+        <p class="module-value module-value-muted">–</p>
+        <p class="module-meta">Keine Vermittlernummer hinterlegt.</p>
+      {% elif office and not has_own_number %}
+        <p class="module-value">{{ office.todo_total }} <span class="module-unit">offene Vorgänge</span></p>
+        <p class="module-meta">im Büro</p>
+      {% else %}
+        <p class="module-value">{{ own_todo }} <span class="module-unit">offene {{ 'Vorgang' if own_todo == 1 else 'Vorgänge' }}</span></p>
+        <p class="module-meta">{% if office %}Büro gesamt: {{ office.todo_total }}{% else %}Ihnen zugeordnet{% endif %}</p>
+      {% endif %}
+      <div class="module-actions">
+        <a class="btn btn-secondary" href="{{ url_for('leipziger.index') }}">Öffnen</a>
+      </div>
+    </section>
+
+    <section class="module" aria-labelledby="modul-memo">
+      <h2 class="module-label" id="modul-memo">Memo</h2>
+      <p class="module-value module-value-text">Sprachnachricht in Text umwandeln</p>
+      <p class="module-meta">Datei hochladen, Transkript kopieren.</p>
+      <div class="module-actions">
+        <a class="btn btn-secondary" href="{{ url_for('dashboard.index') }}">Öffnen</a>
+      </div>
+    </section>
+
+    <section class="module" aria-labelledby="modul-zeit">
+      <h2 class="module-label" id="modul-zeit">Zeiterfassung</h2>
+      <p class="module-value">{{ today_summary.net_seconds | duration }} <span class="module-unit">Std. heute</span></p>
+      <p class="module-meta">Status: {{ presence(status) }}</p>
+      <div class="module-actions">
+        {% if status == 'out' %}
+          <form method="post" action="{{ url_for('timetracking.clock_in') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ url_for('portal.overview') }}">
+            <button type="submit" class="btn btn-primary">Einstempeln</button>
+          </form>
+        {% else %}
+          <form method="post" action="{{ url_for('timetracking.clock_out') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ url_for('portal.overview') }}">
+            <button type="submit" class="btn btn-primary">Ausstempeln</button>
+          </form>
+        {% endif %}
+        <a class="btn btn-ghost" href="{{ url_for('timetracking.index') }}">Details</a>
+      </div>
+    </section>
+  </div>
+
+  {% if office %}
+    <div class="grid-2">
+      <section class="panel">
+        <header class="panel-header"><h2 class="panel-title">Büro heute</h2></header>
+        <dl class="fact-list">
+          <div><dt>Anwesend</dt><dd>{{ office.present }} von {{ office.members }}</dd></div>
+          <div><dt>In Pause</dt><dd>{{ office.on_break }}</dd></div>
+          <div><dt>Offene Korrekturanträge</dt><dd>{% if office.pending_requests %}<a class="table-link" href="{{ url_for('timetracking.requests') }}">{{ office.pending_requests }}</a>{% else %}0{% endif %}</dd></div>
+          <div><dt>Offene Vorgänge (Leipziger Liste)</dt><dd>{{ office.todo_total if office.todo_total is not none else '–' }}</dd></div>
+        </dl>
+        <div class="panel-footer">
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('office.staff') }}">Mitarbeiter</a>
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('timetracking.team') }}">Zeiterfassung Team</a>
+        </div>
+      </section>
+
+      <section class="panel">
+        <header class="panel-header"><h2 class="panel-title">Letzte Aktivitäten</h2></header>
+        {% if office.activities %}
+          <ul class="activity-list">
+            {% for item in office.activities %}
+              <li><time>{{ item.at.strftime('%d.%m. %H:%M') }}</time><span><strong>{{ item.actor }}</strong> – {{ item.text }}</span></li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="empty-note">Noch keine Aktivitäten vorhanden.</p>
+        {% endif %}
+        <div class="panel-footer">
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('office.activities') }}">Alle Aktivitäten</a>
+        </div>
+      </section>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

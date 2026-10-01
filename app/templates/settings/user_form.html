@@ -1,20 +1,28 @@
 {% extends "base.html" %}
 {% from "ui/display.html" import page_header %}
 {% from "ui/portal.html" import panel %}
-{% set title = 'Benutzer bearbeiten' if edit_user else 'Benutzer anlegen' %}
+{% set title = ('Mitarbeiter bearbeiten' if from_staff else 'Benutzer bearbeiten') if edit_user else ('Mitarbeiter anlegen' if from_staff else 'Benutzer anlegen') %}
+{% if from_staff %}
+  {% set back_url = url_for('office.staff_detail', user_id=edit_user.id) if edit_user else url_for('office.staff') %}
+  {% set back_label = 'Mitarbeiter' %}
+{% else %}
+  {% set back_url = url_for('settings.users') %}
+  {% set back_label = 'Benutzer' %}
+{% endif %}
 {% block title %}{{ title }} – Zentriq{% endblock %}
 {% block content %}
-<div class="page-shell">
-  <a class="back-link" href="{{ url_for('settings.users') }}">← Benutzer</a>
+<div class="page-shell page-shell-form">
+  <a class="back-link" href="{{ back_url }}">← {{ back_label }}</a>
   {% call page_header(title, edit_user.email if edit_user else 'Neue Benutzer werden in Ihrem Büro angelegt. Die Rolle muss ausdrücklich gewählt werden.') %}{% endcall %}
 
-  <form method="post" class="flex flex-col gap-5" novalidate>
+  <form method="post" class="form-stack" novalidate>
     {{ form.hidden_tag() }}
+    {% if from_staff %}<input type="hidden" name="von" value="mitarbeiter">{% endif %}
     {% include "settings/_user_fields.html" %}
 
-    <div class="flex gap-2">
-      <button type="submit" class="btn btn-primary h-10 px-4 text-sm">{{ 'Speichern' if edit_user else 'Benutzer anlegen' }}</button>
-      <a class="btn btn-ghost h-10 px-4 text-sm" href="{{ url_for('settings.users') }}">Abbrechen</a>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">{{ 'Speichern' if edit_user else 'Anlegen' }}</button>
+      <a class="btn btn-ghost" href="{{ back_url }}">Abbrechen</a>
     </div>
   </form>
 

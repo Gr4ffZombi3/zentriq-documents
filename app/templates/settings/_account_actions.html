@@ -17,18 +17,19 @@
     {% if edit_user.two_factor_enabled %}
       <form method="post" action="{{ urls.reset_2fa }}" onsubmit="return confirm('Zwei-Faktor-Authentifizierung wirklich zurücksetzen? Der Benutzer wird abgemeldet und muss sie neu einrichten.');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-secondary h-9 px-3.5 text-sm">2FA zurücksetzen</button>
+        <button type="submit" class="btn btn-secondary">2FA zurücksetzen</button>
       </form>
     {% endif %}
     {% if password_reset_available and edit_user.two_factor_enabled %}
       <form method="post" action="{{ urls.password_reset }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-secondary h-9 px-3.5 text-sm">Passwort-Reset per E-Mail senden</button>
+        <button type="submit" class="btn btn-secondary">Passwort-Reset per E-Mail senden</button>
       </form>
     {% endif %}
     <form method="post" action="{{ urls.delete }}" onsubmit="return confirm('Mitarbeiter wirklich löschen?');">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-danger h-9 px-3.5 text-sm">Mitarbeiter löschen</button>
+      {% if from_staff is defined and from_staff %}<input type="hidden" name="von" value="mitarbeiter">{% endif %}
+      <button type="submit" class="btn btn-danger">Mitarbeiter löschen</button>
     </form>
   </div>
   <p class="form-hint mt-3">Gelöschte Mitarbeiter können sich nicht mehr anmelden. Arbeitszeiten und Protokolle bleiben erhalten.</p>

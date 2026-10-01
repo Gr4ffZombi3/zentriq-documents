@@ -6,7 +6,7 @@ from app.blueprints.settings.forms import ChangePasswordForm, TwoFactorCodeForm,
 from app.extensions import db
 from app.models import Tenant, User
 from app.models.audit_log import AuditEventType
-from app.services import two_factor
+from app.services import two_factor, user_sessions
 from app.services.audit import log_audit_event
 from app.services.password_reset import is_password_reset_available
 from app.services.user_admin import (
@@ -40,6 +40,11 @@ def _no_store_for_secrets(response):
 @login_required
 def index():
     return redirect(url_for("settings.users" if current_user.is_office_admin else "settings.profile"))
+
+
+def _from_staff() -> bool:
+    """Rueckkehr zur Mitarbeiterseite statt zur Benutzertabelle (feste Zielseiten, keine URL)."""
+    return request.values.get("von") == "mitarbeiter"
 
 
 def user_form_data(edit_user) -> dict:
@@ -79,8 +84,8 @@ def user_create():
             flash(str(exc), "error")
         else:
             flash(f"Benutzer {created.email} wurde angelegt.", "success")
-            return redirect(url_for("settings.users"))
-    return render_template("settings/user_form.html", form=form, edit_user=None)
+            return redirect(url_for("office.staff_detail", user_id=created.id) if _from_staff() else url_for("settings.users"))
+    return render_template("settings/user_form.html", form=form, edit_user=None, from_staff=_from_staff())
 
 
 @settings_bp.route("/users/<int:user_id>", methods=["GET", "POST"])
@@ -99,9 +104,11 @@ def user_edit(user_id):
             if edit_user.id == current_user.id and "password" in changes:
                 # Eigene Session mit neuer auth_version weiterfuehren.
                 login_user(edit_user)
+                user_sessions.start_session(edit_user)
+                db.session.commit()
             flash("Änderungen gespeichert." if changes else "Keine Änderungen.", "success")
-            return redirect(url_for("settings.users"))
-    return render_template("settings/user_form.html", form=form, edit_user=edit_user)
+            return redirect(url_for("office.staff_detail", user_id=edit_user.id) if _from_staff() else url_for("settings.users"))
+    return render_template("settings/user_form.html", form=form, edit_user=edit_user, from_staff=_from_staff())
 
 
 @settings_bp.post("/users/<int:user_id>/loeschen")
@@ -116,7 +123,7 @@ def user_delete(user_id):
         flash(str(exc), "error")
     else:
         flash("Mitarbeiter wurde gelöscht. Arbeitszeit- und Protokolldaten bleiben erhalten.", "success")
-    return redirect(url_for("settings.users"))
+    return redirect(url_for("office.staff") if _from_staff() else url_for("settings.users"))
 
 
 @settings_bp.post("/users/<int:user_id>/2fa-zuruecksetzen")
@@ -162,13 +169,36 @@ def profile():
             user.set_password(form.new_password.data)
             # Beendet alle anderen Sessions; die aktuelle laeuft mit neuer Version weiter.
             user.invalidate_sessions()
+            user_sessions.start_session(user)
             db.session.commit()
             login_user(user)
             log_audit_event(AuditEventType.PASSWORD_CHANGED, user=user)
             flash("Passwort wurde erfolgreich geändert. Andere Sitzungen wurden abgemeldet.", "success")
             return redirect(url_for("settings.profile"))
 
-    return render_template("settings/profile.html", tenant=tenant, form=form)
+    sessions = user_sessions.active_sessions(current_user.id)
+    current_record = user_sessions.current_session_record(current_user.id)
+    return render_template(
+        "settings/profile.html",
+        tenant=tenant,
+        form=form,
+        sessions=sessions,
+        current_session_id=current_record.id if current_record else None,
+        describe_user_agent=user_sessions.describe_user_agent,
+    )
+
+
+@settings_bp.post("/sitzungen/abmelden")
+@login_required
+def revoke_other_sessions():
+    """Meldet alle anderen Geraete ab; die aktuelle Sitzung bleibt angemeldet."""
+    count = user_sessions.revoke_other_sessions(current_user.id)
+    log_audit_event(AuditEventType.SESSIONS_REVOKED, user=current_user, details={"count": count})
+    flash(
+        "Alle anderen Sitzungen wurden abgemeldet." if count else "Es gab keine weiteren aktiven Sitzungen.",
+        "success",
+    )
+    return redirect(url_for("settings.profile") + "#sitzungen")
 
 
 @settings_bp.route("/sicherheit", methods=["GET", "POST"])

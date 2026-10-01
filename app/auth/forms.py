@@ -5,7 +5,7 @@ from wtforms.validators import DataRequired, Email, EqualTo, Length
 
 class RegisterForm(FlaskForm):
     company_name = StringField("Firmenname", validators=[DataRequired(), Length(max=255)])
-    email = StringField("E-Mail", validators=[DataRequired(), Email()])
+    email = StringField("E-Mail", validators=[DataRequired(), Email(message="Bitte eine gültige E-Mail-Adresse eingeben.")])
     vermittlernummer = StringField("Vermittlernummer", validators=[DataRequired(), Length(max=50)])
     password = PasswordField("Passwort", validators=[DataRequired(), Length(min=8, message="Mindestens 8 Zeichen.")])
     password_confirm = PasswordField(
@@ -30,7 +30,7 @@ class LoginForm(FlaskForm):
 class ForgotPasswordForm(FlaskForm):
     email = StringField(
         "E-Mail",
-        validators=[DataRequired(), Email(), Length(max=255)],
+        validators=[DataRequired(), Email(message="Bitte eine gültige E-Mail-Adresse eingeben."), Length(max=255)],
         filters=[lambda value: value.strip() if value else value],
     )
     submit = SubmitField("Link anfordern")

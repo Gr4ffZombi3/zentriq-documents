@@ -10,7 +10,6 @@ ADMIN_ONLY_URLS = [
     "/leipziger-liste/mitarbeiter",
     "/sprachnachrichten",
     "/mailbox",
-    "/mailbox/1",
     "/documents",
     "/documents/1",
     "/documents/live",
@@ -40,7 +39,7 @@ def test_employee_cannot_open_admin_areas_by_direct_url(employee_client, url):
 
 @pytest.mark.parametrize(
     "url",
-    ["/upload", "/mailbox/sync", "/mailbox/1/retry", "/mailbox/1/update", "/documents/1/retry", "/api/chat"],
+    ["/upload", "/sprachnachrichten/transkribieren", "/documents/1/retry", "/api/chat"],
 )
 def test_employee_cannot_trigger_admin_actions(employee_client, url):
     assert employee_client.post(url).status_code == 403

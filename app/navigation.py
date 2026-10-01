@@ -46,8 +46,6 @@ LEIPZIGER_ITEMS = (
     NavItem("cockpit.index", "Cockpit", ("cockpit.",), admin_only=True, secondary=True),
 )
 
-VOICE_ITEMS = (NavItem("dashboard.index", "Eingang", ("dashboard.", "mailbox.")),)
-
 TIME_ITEMS = (
     NavItem("timetracking.index", "Heute", ("timetracking.index",)),
     NavItem("timetracking.week", "Woche", ("timetracking.week",)),
@@ -80,7 +78,7 @@ AREAS = (
         admin_only=False,
         items=LEIPZIGER_ITEMS,
     ),
-    NavArea("voice", "Memo", "dashboard.index", ("dashboard.", "mailbox."), admin_only=True, items=VOICE_ITEMS),
+    NavArea("voice", "Memo", "dashboard.index", ("dashboard.",), admin_only=True),
     NavArea("time", "Zeiterfassung", "timetracking.index", ("timetracking.",), admin_only=False, items=TIME_ITEMS),
 )
 

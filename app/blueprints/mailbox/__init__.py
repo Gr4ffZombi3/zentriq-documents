@@ -1,2 +1,0 @@
-"""Mailbox automation blueprint."""
-

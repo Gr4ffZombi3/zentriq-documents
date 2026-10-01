@@ -42,7 +42,6 @@ def create_app(config_object=None):
     from app.blueprints.dashboard.routes import dashboard_bp
     from app.blueprints.documents.routes import documents_bp
     from app.blueprints.leipziger.routes import leipziger_bp
-    from app.blueprints.mailbox.routes import mailbox_bp
     from app.blueprints.platform.routes import platform_bp
     from app.blueprints.portal.routes import portal_bp
     from app.blueprints.potenziale.routes import potenziale_bp
@@ -62,7 +61,6 @@ def create_app(config_object=None):
     app.register_blueprint(cockpit_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(documents_bp)
-    app.register_blueprint(mailbox_bp)
     app.register_blueprint(upload_bp)
     app.register_blueprint(search_bp)
     app.register_blueprint(customers_bp)

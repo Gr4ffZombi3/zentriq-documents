@@ -1,41 +1,61 @@
-from flask import Blueprint, current_app, render_template, request
-from flask_login import login_required
-from sqlalchemy.orm import selectinload
+"""Memo: Sprachnachricht hochladen -> Transkript anzeigen -> Text kopieren.
 
-from app.models import MailboxCase, MailboxStatus
-from app.services.mailbox.schemas import HUK_DAMAGE_TYPES
-from app.services.voice_messages_view import STATUS_FILTERS, build_voice_message_view
+Nur fuer Buero-Admins (Rollen-Hook in app/auth/permissions.py und @admin_required). Es wird
+nichts gespeichert und keine Folgeaktion ausgeloest."""
+
+from datetime import datetime, timezone
+
+from flask import Blueprint, current_app, jsonify, redirect, render_template, request, url_for
+from flask_login import login_required
+
+from app.auth.permissions import admin_required
+from app.services.memo import MemoError, transcribe_audio, validate_audio
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
 
-@dashboard_bp.route("/sprachnachrichten")
+@dashboard_bp.get("/sprachnachrichten")
 @login_required
+@admin_required
 def index():
-    allowed_filters = {"all", *(status.value for status in MailboxStatus)}
-    status_filter = request.args.get("status", "all")
-    if status_filter not in allowed_filters:
-        status_filter = "all"
+    return render_template("dashboard/index.html")
 
-    counts = {
-        status.value: MailboxCase.query.filter_by(status=status).count()
-        for status in MailboxStatus
-    }
-    query = MailboxCase.query.options(selectinload(MailboxCase.attempts)).order_by(
-        MailboxCase.received_at.desc(), MailboxCase.created_at.desc()
-    )
-    if status_filter != "all":
-        query = query.filter(MailboxCase.status == MailboxStatus(status_filter))
 
-    return render_template(
-        "dashboard/index.html",
-        cases=query.limit(100).all(),
-        counts=counts,
-        status_filter=status_filter,
-        dry_run=current_app.config["MAILBOX_DRY_RUN"],
-        automation_enabled=current_app.config["HUK_AUTOMATION_ENABLED"],
-        mailbox_enabled=current_app.config["PLACETEL_MAILBOX_ENABLED"],
-        allowed_damage_types=HUK_DAMAGE_TYPES,
-        status_filters=STATUS_FILTERS,
-        build_view=build_voice_message_view,
-    )
+@dashboard_bp.post("/sprachnachrichten/transkribieren")
+@login_required
+@admin_required
+def transcribe():
+    wants_json = request.accept_mimetypes.best == "application/json"
+    upload = request.files.get("file")
+    filename = upload.filename if upload else None
+    try:
+        content = upload.read() if upload else b""
+        filename = validate_audio(filename, content)
+        transcript = transcribe_audio(filename, content)
+        if not transcript:
+            raise MemoError("In der Aufnahme wurde keine Sprache erkannt.")
+    except MemoError as exc:
+        return _error(str(exc), 400, wants_json, filename)
+    except Exception:
+        current_app.logger.exception("memo.transcription.failed")
+        return _error("Die Transkription ist fehlgeschlagen. Bitte erneut versuchen.", 502, wants_json, filename)
+
+    uploaded_at = datetime.now(timezone.utc)
+    if wants_json:
+        return jsonify({"transcript": transcript, "filename": filename, "uploaded_at": uploaded_at.isoformat()})
+    result = {"transcript": transcript, "filename": filename, "uploaded_at": uploaded_at}
+    return render_template("dashboard/index.html", result=result)
+
+
+def _error(message: str, status: int, wants_json: bool, filename: str | None):
+    if wants_json:
+        return jsonify({"error": message}), status
+    return render_template("dashboard/index.html", error=message, filename=filename), status
+
+
+@dashboard_bp.get("/mailbox")
+@login_required
+@admin_required
+def legacy_mailbox():
+    # Alte Lesezeichen auf die fruehere Mailbox-Uebersicht.
+    return redirect(url_for("dashboard.index"))

@@ -1,115 +1,150 @@
 {% extends "base.html" %}
-{% from "ui/display.html" import empty_state, page_header %}
-{% from "ui/forms.html" import button %}
-{% from "ui/portal.html" import kpi, panel, state_tag %}
-{% block title %}Sprachnachrichten – Zentriq{% endblock %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/icons.html" import icon %}
+{% from "ui/portal.html" import panel %}
+{% block title %}Memo – Zentriq{% endblock %}
+
+{% block head %}
+<style>
+  .memo-drop { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; padding: 2.5rem 1rem;
+    border: 1.5px dashed var(--color-border-strong); border-radius: var(--radius-sm); text-align: center;
+    color: var(--color-text-muted); cursor: pointer; transition: border-color .15s, background-color .15s; }
+  .memo-drop:hover, .memo-drop.is-dragover { border-color: var(--color-primary); color: var(--color-text);
+    background: color-mix(in oklab, var(--color-primary) 6%, transparent); }
+  .memo-drop-title { font-weight: 600; color: var(--color-text); }
+  .memo-meta { font-size: 0.82rem; color: var(--color-text-muted); margin-bottom: 0.75rem; }
+  .memo-transcript { white-space: pre-wrap; line-height: 1.6; padding: 1rem; border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm); background: var(--color-surface); }
+  .memo-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+  .memo-error { color: var(--color-error); margin-top: 0.75rem; font-size: 0.9rem; }
+</style>
+{% endblock %}
 
 {% block content %}
-{% set selected_status = status_filter or 'all' %}
-<div class="page-shell page-shell-wide">
-  {% call page_header('Sprachnachrichten', 'Mailbox-Nachrichten werden automatisch abgehört, ausgewertet und als Rückrufwunsch an den HUK-Rückrufservice übergeben.') %}
-    <form method="post" action="{{ url_for('mailbox.sync') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-secondary h-10 px-4 text-sm" {% if not mailbox_enabled %}disabled aria-disabled="true" title="Das Postfach ist noch nicht eingerichtet"{% endif %}>
-        Postfach jetzt prüfen
-      </button>
-    </form>
-  {% endcall %}
+<div class="page-shell" data-memo>
+  {{ page_header('Memo', 'Sprachnachricht hochladen – das Transkript erscheint direkt hier.') }}
 
-  <div class="notice {{ 'notice-warning' if dry_run or not automation_enabled else 'notice-success' }}" role="status">
-    <div class="min-w-0 flex-1">
-      <p class="notice-title">
-        {% if dry_run %}Testbetrieb – Rückrufe werden vorbereitet, aber nicht an die HUK übermittelt
-        {% elif not automation_enabled %}Automatische Übermittlung pausiert
-        {% else %}Live-Betrieb – eindeutige Rückrufe werden automatisch übermittelt{% endif %}
-      </p>
-      <p class="notice-copy">
-        Postfach {{ 'verbunden' if mailbox_enabled else 'nicht eingerichtet' }} ·
-        Automatische Übermittlung {{ 'aktiv' if automation_enabled and not dry_run else 'aus' }}.
-        Nachrichten mit unklarer Rufnummer oder Schadenart werden immer zur manuellen Prüfung gestellt.
-      </p>
-    </div>
+  <div data-memo-upload {% if result %}hidden{% endif %}>
+    {% call panel('Sprachnachricht hochladen') %}
+      <form method="post" action="{{ url_for('dashboard.transcribe') }}" enctype="multipart/form-data" data-memo-form>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="memo-drop" data-memo-drop>
+          {{ icon('upload', class='h-6 w-6') }}
+          <span class="memo-drop-title" data-memo-label>Datei hier ablegen</span>
+          <span>oder</span>
+          <span class="btn-plain btn-plain-primary">Sprachnachricht auswählen</span>
+          <span class="text-xs">MP3, M4A, WAV, OGG, WEBM, MP4, FLAC · max. 25 MB</span>
+          <input type="file" name="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.oga,.webm,.mp4,.mpeg,.mpga,.flac" class="sr-only" data-memo-input>
+        </label>
+        <noscript><div class="memo-actions"><button type="submit" class="btn-plain btn-plain-primary">Transkribieren</button></div></noscript>
+      </form>
+      <p class="memo-error" data-memo-error role="alert" {% if not error %}hidden{% endif %}>{{ error or '' }}</p>
+    {% endcall %}
   </div>
 
-  <div class="kpi-row">
-    {{ kpi('In Bearbeitung', counts.get('new', 0), href=url_for('dashboard.index', status='new'), tone='info' if counts.get('new', 0) else None) }}
-    {{ kpi('Prüfung nötig', counts.get('review', 0), href=url_for('dashboard.index', status='review'), tone='warning' if counts.get('review', 0) else None) }}
-    {{ kpi('Erledigt', counts.get('callback_requested', 0), href=url_for('dashboard.index', status='callback_requested')) }}
-    {{ kpi('Fehler', counts.get('failed', 0), href=url_for('dashboard.index', status='failed'), tone='danger' if counts.get('failed', 0) else None) }}
+  <div data-memo-result {% if not result %}hidden{% endif %} aria-live="polite">
+    {% call panel('Transkript') %}
+      <p class="memo-meta" data-memo-meta>
+        {% if result %}{{ result.filename }} · hochgeladen {{ result.uploaded_at | local_dt('%d.%m.%Y, %H:%M Uhr') }}{% endif %}
+      </p>
+      <div class="memo-transcript" data-memo-transcript>{{ result.transcript if result else '' }}</div>
+      <div class="memo-actions">
+        <button type="button" class="btn-plain btn-plain-primary" data-memo-copy>Text kopieren</button>
+        <a href="{{ url_for('dashboard.index') }}" class="btn-plain" data-memo-reset>Neue Sprachnachricht</a>
+      </div>
+    {% endcall %}
   </div>
-
-  {% call panel('Eingang', 'Die neuesten 100 Nachrichten. Transkript per Klick aufklappen.', flush=True) %}
-    <div class="panel-toolbar panel-toolbar-start">
-      <nav class="segmented" aria-label="Nachrichten filtern">
-        {% for value, label in status_filters %}
-          <a href="{{ url_for('dashboard.index') if value == 'all' else url_for('dashboard.index', status=value) }}"
-             class="segmented-item {{ 'is-active' if selected_status == value else '' }}"
-             {% if selected_status == value %}aria-current="page"{% endif %}>{{ label }}{% if value != 'all' %} ({{ counts.get(value, 0) }}){% endif %}</a>
-        {% endfor %}
-      </nav>
-    </div>
-
-    {% if cases %}
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th scope="col">Eingang</th>
-              <th scope="col">Telefonnummer</th>
-              <th scope="col">Anliegen / Schadenart</th>
-              <th scope="col">Status</th>
-              <th scope="col">Rückruf</th>
-              <th scope="col">Hinweis</th>
-              <th scope="col"><span class="sr-only">Aktion</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for case in cases %}
-              {% set view = build_view(case) %}
-              <tr>
-                <td class="whitespace-nowrap">
-                  {{ case.received_at | local_dt('%d.%m.%Y', 'unbekannt') }}
-                  <span class="cell-sub">{{ case.received_at | local_dt('%H:%M Uhr', '') }}</span>
-                </td>
-                <td class="whitespace-nowrap">
-                  <span class="cell-strong">{{ case.callback_phone or case.caller_phone or 'nicht erkannt' }}</span>
-                  {% if view.phone_source_label %}<span class="cell-sub">Quelle: {{ view.phone_source_label }}</span>{% endif %}
-                </td>
-                <td class="cell-wide">
-                  <span class="cell-strong">{{ case.damage_type or 'Schadenart offen' }}</span>
-                  <span class="cell-sub">{{ case.concern or 'Anliegen offen' }}</span>
-                  {% if case.transcript %}
-                    <details class="transcript-toggle">
-                      <summary>Transkript</summary>
-                      <p>{{ case.transcript }}</p>
-                    </details>
-                  {% endif %}
-                </td>
-                <td>{{ state_tag(view.status_label, view.status_tone) }}</td>
-                <td class="whitespace-nowrap">
-                  {{ state_tag(view.callback_label, view.callback_tone) }}
-                  {% if view.callback_at %}<span class="cell-sub">{{ view.callback_at | local_dt }}</span>{% endif %}
-                </td>
-                <td class="{{ 'text-error-text' if view.hint_is_error else '' }}">{{ view.hint or '–' }}</td>
-                <td class="text-right whitespace-nowrap">
-                  <a class="table-action" href="{{ url_for('mailbox.detail', case_id=case.id) }}">{{ 'Prüfen' if view.needs_review or case.status.value == 'failed' else 'Öffnen' }}</a>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% else %}
-      <div class="panel-body">
-        {% if not mailbox_enabled %}
-          <p class="empty-note">Das Postfach ist noch nicht eingerichtet. Sobald die Verbindung konfiguriert ist, erscheinen neue Sprachnachrichten hier automatisch.</p>
-        {% elif selected_status != 'all' %}
-          <p class="empty-note">Keine Nachrichten in diesem Status. <a class="table-action" href="{{ url_for('dashboard.index') }}">Alle anzeigen</a></p>
-        {% else %}
-          <p class="empty-note">Noch keine Sprachnachrichten eingegangen.</p>
-        {% endif %}
-      </div>
-    {% endif %}
-  {% endcall %}
 </div>
+
+<script>
+(function () {
+  var root = document.querySelector("[data-memo]");
+  var form = root.querySelector("[data-memo-form]");
+  var drop = root.querySelector("[data-memo-drop]");
+  var input = root.querySelector("[data-memo-input]");
+  var label = root.querySelector("[data-memo-label]");
+  var errorBox = root.querySelector("[data-memo-error]");
+  var uploadBox = root.querySelector("[data-memo-upload]");
+  var resultBox = root.querySelector("[data-memo-result]");
+  var transcriptBox = root.querySelector("[data-memo-transcript]");
+  var metaBox = root.querySelector("[data-memo-meta]");
+  var copyButton = root.querySelector("[data-memo-copy]");
+  var busy = false;
+
+  function showError(message) {
+    errorBox.textContent = message;
+    errorBox.hidden = !message;
+  }
+
+  function setBusy(state, filename) {
+    busy = state;
+    drop.setAttribute("aria-busy", state ? "true" : "false");
+    label.textContent = state ? "„" + filename + "“ wird transkribiert …" : "Datei hier ablegen";
+  }
+
+  function upload(file) {
+    if (!file || busy) return;
+    showError("");
+    setBusy(true, file.name);
+    var data = new FormData(form);
+    data.set("file", file, file.name);
+    fetch(form.action, { method: "POST", body: data, headers: { Accept: "application/json" }, credentials: "same-origin" })
+      .then(function (resp) {
+        return resp.json().catch(function () { return { error: "Die Transkription ist fehlgeschlagen. Bitte erneut versuchen." }; })
+          .then(function (body) { if (!resp.ok) throw new Error(body.error || "Fehler " + resp.status); return body; });
+      })
+      .then(function (body) {
+        var uploaded = new Date(body.uploaded_at);
+        transcriptBox.textContent = body.transcript;
+        metaBox.textContent = body.filename + " · hochgeladen " +
+          uploaded.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }) + ", " + uploaded.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) + " Uhr";
+        uploadBox.hidden = true;
+        resultBox.hidden = false;
+      })
+      .catch(function (err) { showError(err.message); })
+      .finally(function () { setBusy(false); input.value = ""; });
+  }
+
+  input.addEventListener("change", function () { upload(input.files[0]); });
+  ["dragenter", "dragover"].forEach(function (name) {
+    drop.addEventListener(name, function (event) { event.preventDefault(); drop.classList.add("is-dragover"); });
+  });
+  ["dragleave", "dragend", "drop"].forEach(function (name) {
+    drop.addEventListener(name, function () { drop.classList.remove("is-dragover"); });
+  });
+  drop.addEventListener("drop", function (event) {
+    event.preventDefault();
+    upload(event.dataTransfer && event.dataTransfer.files[0]);
+  });
+
+  copyButton.addEventListener("click", function () {
+    var text = transcriptBox.textContent;
+    var done = function () {
+      copyButton.textContent = "Kopiert";
+      setTimeout(function () { copyButton.textContent = "Text kopieren"; }, 1500);
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done);
+      return;
+    }
+    var range = document.createRange();
+    range.selectNodeContents(transcriptBox);
+    var selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.execCommand("copy");
+    selection.removeAllRanges();
+    done();
+  });
+
+  root.querySelector("[data-memo-reset]").addEventListener("click", function (event) {
+    event.preventDefault();
+    transcriptBox.textContent = "";
+    metaBox.textContent = "";
+    showError("");
+    resultBox.hidden = true;
+    uploadBox.hidden = false;
+  });
+})();
+</script>
 {% endblock %}

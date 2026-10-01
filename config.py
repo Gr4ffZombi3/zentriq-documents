@@ -22,39 +22,9 @@ class BaseConfig:
     OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
     OPENAI_VISION_MODEL = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o")
     OPENAI_TRANSCRIPTION_MODEL = os.environ.get("OPENAI_TRANSCRIPTION_MODEL", "gpt-4o-mini-transcribe")
-    MAILBOX_CLASSIFICATION_MODEL = os.environ.get("MAILBOX_CLASSIFICATION_MODEL", OPENAI_MODEL)
-    # Optional eigener Endpoint NUR fuer Mailbox-Transkription/-Klassifizierung. OPENAI_BASE_URL
-    # gilt dagegen global (auch fuer die Leipziger-Liste-Extraktion).
+    # Optional eigener Endpoint NUR fuer die Memo-Transkription. OPENAI_BASE_URL gilt dagegen
+    # global (auch fuer die Leipziger-Liste-Extraktion).
     MAILBOX_OPENAI_BASE_URL = os.environ.get("MAILBOX_OPENAI_BASE_URL")
-
-    # Placetel-Mailbox (fail-closed: ohne explizite Merkmale wird keine Nachricht erkannt)
-    PLACETEL_MAILBOX_ENABLED = os.environ.get("PLACETEL_MAILBOX_ENABLED", "false").lower() == "true"
-    PLACETEL_TENANT_ID = int(os.environ["PLACETEL_TENANT_ID"]) if os.environ.get("PLACETEL_TENANT_ID") else None
-    PLACETEL_IMAP_HOST = os.environ.get("PLACETEL_IMAP_HOST")
-    PLACETEL_IMAP_PORT = int(os.environ.get("PLACETEL_IMAP_PORT", "993"))
-    PLACETEL_IMAP_USERNAME = os.environ.get("PLACETEL_IMAP_USERNAME")
-    PLACETEL_IMAP_PASSWORD = os.environ.get("PLACETEL_IMAP_PASSWORD")
-    PLACETEL_IMAP_FOLDER = os.environ.get("PLACETEL_IMAP_FOLDER", "INBOX")
-    PLACETEL_IMAP_SSL = os.environ.get("PLACETEL_IMAP_SSL", "true").lower() == "true"
-    PLACETEL_SENDER_PATTERNS = os.environ.get("PLACETEL_SENDER_PATTERNS", "")
-    PLACETEL_SUBJECT_PATTERNS = os.environ.get("PLACETEL_SUBJECT_PATTERNS", "")
-    PLACETEL_CALLER_ID_HEADERS = os.environ.get(
-        "PLACETEL_CALLER_ID_HEADERS", "X-Caller-ID,X-Caller-Number,Caller-Number"
-    )
-    PLACETEL_POLL_INTERVAL_SECONDS = int(os.environ.get("PLACETEL_POLL_INTERVAL_SECONDS", "120"))
-    MAILBOX_AUDIO_MAX_MB = int(os.environ.get("MAILBOX_AUDIO_MAX_MB", "25"))
-    MAILBOX_DRY_RUN = os.environ.get("MAILBOX_DRY_RUN", "true").lower() == "true"
-    MAILBOX_MIN_PHONE_CONFIDENCE = float(os.environ.get("MAILBOX_MIN_PHONE_CONFIDENCE", "0.85"))
-    MAILBOX_MIN_DAMAGE_CONFIDENCE = float(os.environ.get("MAILBOX_MIN_DAMAGE_CONFIDENCE", "0.85"))
-
-    # HUK: zwei unabhaengige Schalter verhindern versehentliches Live-Absenden.
-    HUK_AUTOMATION_ENABLED = os.environ.get("HUK_AUTOMATION_ENABLED", "false").lower() == "true"
-    HUK_FORM_URL = os.environ.get(
-        "HUK_FORM_URL",
-        "https://www.huk.de/hukinfo/af/form.html?formname=/rueckruf/rueckrufservice",
-    )
-    HUK_BROWSER_HEADLESS = os.environ.get("HUK_BROWSER_HEADLESS", "true").lower() == "true"
-    HUK_BROWSER_TIMEOUT_MS = int(os.environ.get("HUK_BROWSER_TIMEOUT_MS", "30000"))
 
     TESSERACT_CMD = os.environ.get("TESSERACT_CMD")
     OCR_MIN_CONFIDENCE = float(os.environ.get("OCR_MIN_CONFIDENCE", "60"))
@@ -132,9 +102,6 @@ class TestingConfig(BaseConfig):
     # Verhindert echte/gemockte OpenAI-Aufrufe fuer den Analysebericht-Text in der gesamten
     # bestehenden Testsuite; der Narrativ-Pfad wird gezielt in test_analysis_report.py getestet.
     ANALYSIS_NARRATIVE_ENABLED = False
-    PLACETEL_MAILBOX_ENABLED = False
-    MAILBOX_DRY_RUN = True
-    HUK_AUTOMATION_ENABLED = False
     REGISTRATION_ENABLED = False
     # Die bestehende Testsuite meldet Konten ohne 2FA an. Die Pflicht-Einrichtung wird in
     # tests/test_two_factor.py gezielt mit TWO_FACTOR_ENFORCED = True geprueft.

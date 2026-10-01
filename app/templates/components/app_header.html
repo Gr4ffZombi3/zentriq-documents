@@ -17,6 +17,16 @@
       </nav>
 
       <div class="app-user">
+        {% if current_user.is_office_admin or current_user.is_employee %}
+          <form action="{{ url_for('search.search') }}" method="get" class="app-search" role="search">
+            <span class="app-search-icon">{{ icon('search', class='h-4 w-4') }}</span>
+            <input type="search" name="q" aria-label="Suche" placeholder="Suchen" maxlength="60" autocomplete="off"
+                   value="{{ request.args.get('q', '') if request.endpoint == 'search.search' else '' }}">
+          </form>
+          <a href="{{ url_for('search.search') }}" class="app-header-action app-search-link {{ 'is-active' if request.endpoint == 'search.search' else '' }}" aria-label="Suche">
+            {{ icon('search', class='h-4 w-4') }}
+          </a>
+        {% endif %}
         <a href="{{ url_for('settings.profile') }}" class="app-header-action app-header-account {{ 'is-active' if nav_settings_active else '' }}"{% if nav_settings_active %} aria-current="page"{% endif %}>
           {{ icon('user-cog', class='h-4 w-4') }}<span class="app-header-action-label">{{ nav_settings_label }}</span>
         </a>

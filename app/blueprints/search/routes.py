@@ -1,8 +1,9 @@
-from flask import Blueprint, render_template, request
-from flask_login import login_required
+"""Globale Suche (Kopfleiste). Rechte und Umfang: app/services/global_search.py."""
 
-from app.search.query_builder import fallback_text_search, search_documents
-from app.services.llm.search_parser import parse_search_query
+from flask import Blueprint, abort, render_template, request
+from flask_login import current_user, login_required
+
+from app.services.global_search import MIN_QUERY_LENGTH, global_search
 
 search_bp = Blueprint("search", __name__, url_prefix="/search")
 
@@ -10,18 +11,9 @@ search_bp = Blueprint("search", __name__, url_prefix="/search")
 @search_bp.route("")
 @login_required
 def search():
-    query = request.args.get("q", "").strip()
-    documents = []
-    used_fallback = False
-
-    if query:
-        filter_spec = parse_search_query(query)
-        if filter_spec is not None and filter_spec.model_dump(exclude_none=True):
-            documents = search_documents(filter_spec)
-        else:
-            documents = fallback_text_search(query)
-            used_fallback = True
-
-    return render_template(
-        "search/results.html", query=query, documents=documents, used_fallback=used_fallback
-    )
+    # Nur Buero-Mitglieder: der Plattformbetreiber sieht keine Buerodaten (zusaetzlich zum
+    # Default-Deny in app/auth/permissions.py).
+    if not (current_user.is_office_admin or current_user.is_employee):
+        abort(403)
+    results = global_search(current_user, request.args.get("q"))
+    return render_template("search/results.html", results=results, min_length=MIN_QUERY_LENGTH)

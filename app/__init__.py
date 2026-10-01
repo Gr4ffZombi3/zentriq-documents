@@ -28,6 +28,13 @@ def create_app(config_object=None):
     db.init_app(app)
     migrate.init_app(app, db)
     make_celery(app)
+
+    from flask import got_request_exception
+
+    from app.services.system_errors import record_request_exception
+
+    # Technisches Fehlerprotokoll fuer das Plattform-Panel (ohne Inhalte).
+    got_request_exception.connect(record_request_exception, app)
     csrf.init_app(app)
 
     login_manager.init_app(app)
@@ -48,6 +55,7 @@ def create_app(config_object=None):
     from app.blueprints.platform.routes import platform_bp
     from app.blueprints.portal.routes import portal_bp
     from app.blueprints.potenziale.routes import potenziale_bp
+    from app.blueprints.pwa.routes import pwa_bp
     from app.blueprints.recommendations.routes import recommendations_bp
     from app.blueprints.search.routes import search_bp
     from app.blueprints.settings.routes import settings_bp
@@ -68,6 +76,7 @@ def create_app(config_object=None):
     app.register_blueprint(search_bp)
     app.register_blueprint(customers_bp)
     app.register_blueprint(potenziale_bp)
+    app.register_blueprint(pwa_bp)
     app.register_blueprint(recommendations_bp)
     app.register_blueprint(settings_bp)
     app.register_blueprint(tasks_bp)

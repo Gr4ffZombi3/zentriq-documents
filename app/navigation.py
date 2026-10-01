@@ -71,7 +71,7 @@ AREAS = (
         "leipziger",
         "Leipziger Liste",
         "leipziger.index",
-        ("leipziger.", "documents.", "upload.", "potenziale.", "customers.", "tasks.", "recommendations.", "bestand.", "cockpit.", "search."),
+        ("leipziger.", "documents.", "upload.", "potenziale.", "customers.", "tasks.", "recommendations.", "bestand.", "cockpit."),
         admin_only=False,
         items=LEIPZIGER_ITEMS,
     ),

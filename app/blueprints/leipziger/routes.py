@@ -6,7 +6,7 @@ from app.extensions import db
 from app.models import DocStatus, Document
 from app.models.audit_log import AuditEventType
 from app.models.enums import DocType
-from app.services import leipziger_todo
+from app.services import leipziger_entries, leipziger_todo
 from app.services.audit import log_audit_event
 from app.services.document_progress import make_progress_snapshot, merge_progress_into_extra_data
 from app.services.storage import resolve_document_path
@@ -57,6 +57,7 @@ def index():
         broker_names=leipziger_todo.broker_names(leipziger_todo.team_members()) if current_user.is_admin else {},
         has_own_number=own_key is not None,
         import_stats=leipziger_todo.import_stats(document) if current_user.is_admin else None,
+        import_comparison=leipziger_entries.stored_comparison(document) if current_user.is_admin else None,
     )
 
 

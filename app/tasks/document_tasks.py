@@ -5,7 +5,7 @@ from celery import shared_task
 from flask import current_app
 
 from app.extensions import db
-from app.models import AnalysisRun, CustomerTimelineEvent, DocStatus, Document
+from app.models import AnalysisRun, CustomerTimelineEvent, DocStatus, Document, LeipzigerEntry
 from app.models.enums import AnalysisRunStatus, ComparisonKind, DocType
 from app.services.analysis.layout import detect_layout
 from app.services.analysis.list_scope_detection import detect_list_scope
@@ -13,12 +13,18 @@ from app.services.analysis.report import build_analysis_report
 from app.services.analysis.tables import detect_tables
 from app.services.document_progress import STEP_KEYS, make_progress_snapshot, merge_progress_into_extra_data
 from app.services.documents import apply_extraction, apply_leipziger_liste_extraction
+from app.services.leipziger_entries import compare_with_previous, rebuild_entries
 from app.services.leipziger_parser import is_wm312_list, parse_pages, to_extraction
 from app.services.list_comparison import compare_leipziger_liste, find_paired_gs_or_own_document
 from app.services.llm.extraction import extract_document_data, extract_leipziger_liste_rows
 from app.services.llm.schemas import DocumentExtraction
 from app.services.ocr.pipeline import extract_text
+from app.services.system_errors import record_system_error
 from app.tenancy import bypass_tenant_scope, use_tenant_id
+
+# Feste Bezeichnungen der Abbruchstellen (Praefix von document.error_message) fuer das
+# technische Fehlerprotokoll.
+_FAILURE_STAGES = frozenset({"OCR fehlgeschlagen", "KI-Analyse fehlgeschlagen", "Speichern der Analyse fehlgeschlagen"})
 
 
 @shared_task(bind=True)
@@ -115,6 +121,7 @@ def _run_pipeline(document: Document) -> None:
 
     # Verlaufseintraege einer frueheren Auswertung dieses Dokuments werden neu erzeugt.
     CustomerTimelineEvent.query.filter_by(document_id=document.id).delete(synchronize_session=False)
+    LeipzigerEntry.query.filter_by(document_id=document.id).delete(synchronize_session=False)
     document.recommendations = []
     document.document_customers = []
     document.tasks = []
@@ -164,6 +171,15 @@ def _run_pipeline(document: Document) -> None:
             "total": total_ms,
         }
         run.error_message = error_message
+        if status == AnalysisRunStatus.FAILED:
+            # Nur eine feste Stufenbezeichnung, nie der Fehlertext (kann Inhalte enthalten).
+            stage = (error_message or "").split(":")[0]
+            record_system_error(
+                "import",
+                stage if stage in _FAILURE_STAGES else "Auswertung fehlgeschlagen",
+                location="Leipziger Liste" if document.doc_type == DocType.LEIPZIGER_LISTE else "Dokumentanalyse",
+                tenant_id=document.tenant_id,
+            )
         if summary is not None:
             run.summary = summary
         if overall_confidence is not None:
@@ -324,7 +340,14 @@ def _run_pipeline(document: Document) -> None:
                 "leipziger_analysis": analysis_meta,
             }
             db.session.flush()  # document_customers-IDs fuer den Listenvergleich bereitstellen
+            # Normalisierte Vorgaenge (Suche, Zuordnung) und Vergleich mit der vorherigen Liste.
+            rebuild_entries(document)
+            db.session.flush()
             if analysis_meta["is_complete"]:
+                document.extra_data = {
+                    **document.extra_data,
+                    "leipziger_analysis": {**analysis_meta, "import_comparison": compare_with_previous(document)},
+                }
                 compare_leipziger_liste(document)
                 # M13: nur automatisch erkennen, wenn beim Upload keine manuelle Auswahl getroffen wurde.
                 if document.list_scope is None:

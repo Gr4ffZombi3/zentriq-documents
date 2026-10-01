@@ -779,4 +779,11 @@
   document.body.addEventListener("htmx:afterSwap", function (event) {
     boot(event.target || document);
   });
+
+  // Installierbare Web-App: der Service Worker speichert nur statische Dateien.
+  if ("serviceWorker" in navigator && window.isSecureContext) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(function () {});
+    });
+  }
 })();

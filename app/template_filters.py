@@ -42,6 +42,16 @@ def iso_local_dt(value: str | None, fmt: str = "%d.%m.%Y %H:%M") -> str:
         return value
 
 
+def iso_date_de(value: str | None) -> str:
+    """"2026-10-01" -> "01.10.2026"; unlesbare Werte unveraendert."""
+    if not value:
+        return "–"
+    try:
+        return date.fromisoformat(value[:10]).strftime("%d.%m.%Y")
+    except ValueError:
+        return value
+
+
 def weekday_short(value: date) -> str:
     return WEEKDAYS_SHORT[value.weekday()]
 
@@ -100,6 +110,7 @@ def register_template_filters(app) -> None:
     app.jinja_env.filters["local_dt"] = local_dt
     app.jinja_env.filters["local_time"] = local_time
     app.jinja_env.filters["iso_local_dt"] = iso_local_dt
+    app.jinja_env.filters["iso_date_de"] = iso_date_de
     app.jinja_env.filters["duration"] = format_duration
     app.jinja_env.filters["weekday_short"] = weekday_short
     app.jinja_env.filters["weekday_long"] = weekday_long

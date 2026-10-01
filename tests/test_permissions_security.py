@@ -357,6 +357,11 @@ SUPER_ADMIN_ALLOWED = {
     "settings.profile",
     "settings.security",
     "settings.revoke_other_sessions",
+    # Ohne Benutzer- oder Buerodaten: Symbol, Web-App-Manifest, Service Worker, Offline-Seite.
+    "favicon",
+    "pwa.manifest",
+    "pwa.service_worker",
+    "pwa.offline",
 }
 
 

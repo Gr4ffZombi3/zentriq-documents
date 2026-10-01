@@ -45,6 +45,42 @@
     </div>
   {% endif %}
 
+  {% if import_comparison %}
+    <div class="import-compare" aria-label="Vergleich mit der vorherigen Liste">
+      <span class="import-compare-title">Seit der letzten Liste</span>
+      <span class="import-compare-figure"><strong>{{ import_comparison.new }}</strong>Neue Einträge</span>
+      <span class="import-compare-figure"><strong>{{ import_comparison.unchanged }}</strong>Bereits vorhanden</span>
+      <span class="import-compare-figure"><strong>{{ import_comparison.changed }}</strong>Geändert</span>
+      <span class="import-compare-base">Verglichen mit {{ import_comparison.previous_filename }}</span>
+      {% if import_comparison.changes %}
+        <details>
+          <summary>Änderungen anzeigen</summary>
+          <div class="table-wrap">
+            <table class="data-table data-table-dense table-stack">
+              <thead>
+                <tr><th scope="col">Nummer</th><th scope="col">Kunde</th><th scope="col">Änderung</th></tr>
+              </thead>
+              <tbody>
+                {% for change in import_comparison.changes %}
+                  <tr>
+                    <td class="worklist-number" data-label="Nummer">{{ change.contract_number or '–' }}</td>
+                    <td data-label="Kunde">{{ change.customer or '–' }}</td>
+                    <td class="stack-full" data-label="Änderung">
+                      {% for label, values in change.fields.items() %}
+                        <div>{{ label }}: <span class="change-old">{{ (values[0] | iso_date_de if label == 'Datum' else values[0]) or '–' }}</span><span class="change-arrow">→</span>{{ (values[1] | iso_date_de if label == 'Datum' else values[1]) or '–' }}</div>
+                      {% endfor %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if import_comparison.changed > import_comparison.changes | length %}<p class="panel-note">Es werden die ersten {{ import_comparison.changes | length }} Änderungen angezeigt.</p>{% endif %}
+        </details>
+      {% endif %}
+    </div>
+  {% endif %}
+
   <section class="panel">
     <nav class="panel-tabs" aria-label="Ansicht">
       {% for key, label in tabs.items() %}

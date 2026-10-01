@@ -22,7 +22,6 @@ ADMIN_ONLY_URLS = [
     "/cockpit",
     "/tasks",
     "/recommendations",
-    "/search?q=test",
     "/settings/users",
 ]
 

@@ -7259,6 +7259,10 @@
       margin-top: -1px;
     }
 
+    /* --- Listenauswahl: Auswahlfeld nimmt die verfuegbare Breite ein --------------- */
+    .toolbar-form { width: 100%; }
+    .toolbar-form .toolbar-select { min-width: 0; max-width: none; flex: 1 1 auto; }
+
     /* --- Suche: Feld und Schaltflaeche in einer Zeile ------------------------------ */
     .search-input { flex: 1 1 10rem; min-width: 0; }
 
@@ -7271,4 +7275,91 @@
     .period-nav-label { min-width: 0; font-size: 0.875rem; }
     .period-nav:has(> .period-nav-label) > :nth-child(4) { grid-column: 1 / -1; justify-self: center; }
   }
+}
+
+/* ==========================================================================
+   Globale Suche, Importvergleich, PWA 10/2026.
+   ========================================================================== */
+@layer components {
+  /* --- Suche in der Kopfleiste: ab 90rem als Feld, darunter als Symbol ----------- */
+  .app-search { position: relative; display: none; }
+  .app-search input {
+    width: 13rem;
+    height: 2.15rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-muted);
+    padding: 0 0.6rem 0 2rem;
+    font-size: 0.82rem;
+    color: var(--color-text);
+    transition: width 0.15s ease, background-color 0.15s ease;
+  }
+  .app-search input::placeholder { color: var(--color-text-soft); }
+  .app-search input:focus {
+    width: 16rem;
+    outline: none;
+    border-color: var(--color-primary);
+    background: var(--color-surface);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-primary) 16%, transparent);
+  }
+  .app-search-icon {
+    pointer-events: none;
+    position: absolute;
+    left: 0.6rem;
+    top: 50%;
+    display: flex;
+    transform: translateY(-50%);
+    color: var(--color-text-soft);
+  }
+  .app-search-link { padding: 0 0.6rem; }
+
+  @media (min-width: 90rem) {
+    .app-search { display: block; }
+    .app-search-link { display: none; }
+  }
+
+  /* --- Zeilenaktionen: untereinander statt abgeschnitten --------------------------- */
+  .data-table td.row-actions { text-align: right; }
+  .row-actions form,
+  .row-actions .table-action { display: block; margin-left: auto; white-space: nowrap; }
+  .row-actions form + .table-action { margin-top: 0.3rem; }
+
+  /* --- Suchseite ------------------------------------------------------------------ */
+  .search-hint { margin: 0; font-size: 0.82rem; color: var(--color-text-muted); }
+  .panel-title .count-tag { margin-left: 0.35rem; vertical-align: 1px; }
+
+  /* --- Importvergleich (Leipziger Liste) ----------------------------------------- */
+  .import-compare {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 1.25rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    padding: 0.65rem 1rem;
+    font-size: 0.85rem;
+  }
+  .import-compare-title { font-weight: 600; color: var(--color-text); }
+  .import-compare-figure { color: var(--color-text-muted); }
+  .import-compare-figure strong { margin-right: 0.25rem; font-weight: 650; color: var(--color-text); font-variant-numeric: tabular-nums; }
+  .import-compare-base { margin-left: auto; font-size: 0.78rem; color: var(--color-text-soft); }
+  .import-compare details { flex-basis: 100%; }
+  .import-compare summary { cursor: pointer; font-size: 0.8rem; font-weight: 550; color: var(--color-primary); }
+  .import-compare .table-wrap { margin-top: 0.6rem; max-height: 24rem; overflow-y: auto; }
+  .change-old { color: var(--color-text-soft); text-decoration: line-through; }
+  .change-arrow { margin: 0 0.25rem; color: var(--color-text-soft); }
+
+  /* --- Offline-Seite (PWA) -------------------------------------------------------- */
+  .offline-shell {
+    display: flex;
+    min-height: 100dvh;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 2rem 1rem;
+    text-align: center;
+  }
+  .offline-shell p { max-width: 22rem; margin: 0; font-size: 0.9rem; color: var(--color-text-muted); }
 }

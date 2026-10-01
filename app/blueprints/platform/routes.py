@@ -9,6 +9,11 @@ SUPER_ADMIN per Default-Deny (app/auth/permissions.py) gesperrt.
 Templates werden innerhalb von bypass_tenant_scope() gerendert, damit Lazy-Loads der
 Konto-Relationen (employee_profile) mandantenuebergreifend korrekt funktionieren."""
 
+import platform as python_platform
+import subprocess
+from functools import lru_cache
+from importlib.metadata import PackageNotFoundError, version
+
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func, text
@@ -24,6 +29,7 @@ from app.services import two_factor
 from app.services.audit import log_audit_event
 from app.services.mailer import is_mail_configured
 from app.services.password_reset import is_password_reset_available
+from app.services.system_errors import latest_errors
 from app.services.user_admin import (
     UserAdminError,
     create_user,
@@ -226,6 +232,28 @@ def user_edit(user_id):
         )
 
 
+@platform_bp.post("/benutzer/<int:user_id>/buero-admin")
+def user_make_office_admin(user_id):
+    """Legt ein aktives Konto eines Bueros als Buero-Admin fest."""
+    target = _user_or_404(user_id)
+    if target.role != UserRole.EMPLOYEE or not target.is_active:
+        flash("Nur aktive Mitarbeiter können als Büro-Admin festgelegt werden.", "error")
+        return redirect(url_for("platform.office_detail", tenant_id=target.tenant_id))
+    with bypass_tenant_scope():
+        target.role = UserRole.OFFICE_ADMIN
+        # Neue Rechte gelten erst nach erneuter Anmeldung (wie bei jeder Rollenaenderung).
+        target.invalidate_sessions()
+        log_audit_event(
+            AuditEventType.USER_UPDATED,
+            tenant_id=target.tenant_id,
+            user=current_user,
+            details={"target_user_id": target.id, "changes": {"role": {"old": "employee", "new": "office_admin"}}},
+        )
+        db.session.commit()
+    flash(f"{target.email} ist jetzt Büro-Admin.", "success")
+    return redirect(url_for("platform.office_detail", tenant_id=target.tenant_id))
+
+
 @platform_bp.post("/benutzer/<int:user_id>/loeschen")
 def user_delete(user_id):
     target = _user_or_404(user_id)
@@ -291,7 +319,78 @@ def system():
         ("Sitzungsdauer", f"{int(config['PERMANENT_SESSION_LIFETIME'].total_seconds() // 3600)} Stunden"),
         ("Zeitzone", config.get("APP_TIMEZONE")),
     ]
-    return render_template("platform/system.html", settings=settings, status=_platform_status())
+    tenants = {tenant.id: tenant for tenant in Tenant.query.all()}
+    return render_template(
+        "platform/system.html",
+        settings=settings,
+        status=_platform_status(),
+        versions=_versions(),
+        user_stats=_user_stats(),
+        errors=latest_errors(20),
+        tenants=tenants,
+    )
+
+
+@lru_cache(maxsize=1)
+def _git_revision() -> str:
+    try:
+        output = subprocess.run(
+            ["git", "-C", current_app.root_path, "log", "-1", "--format=%h · %cd", "--date=format:%d.%m.%Y %H:%M"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=True,
+        ).stdout.strip()
+        return output or "unbekannt"
+    except Exception:
+        return "unbekannt"
+
+
+def _package_version(name: str) -> str:
+    try:
+        return version(name)
+    except PackageNotFoundError:
+        return "–"
+
+
+def _versions() -> list[tuple[str, str]]:
+    try:
+        schema = db.session.execute(text("SELECT version_num FROM alembic_version")).scalar() or "–"
+    except Exception:
+        db.session.rollback()
+        schema = "–"
+    return [
+        ("Anwendung (Git-Stand)", _git_revision()),
+        ("Datenbankschema", schema),
+        ("Python", python_platform.python_version()),
+        ("Flask", _package_version("flask")),
+        ("SQLAlchemy", _package_version("sqlalchemy")),
+        ("Celery", _package_version("celery")),
+    ]
+
+
+def _user_stats() -> list[tuple[str, int]]:
+    """Kontenzahlen je Rolle (nur Kontoebene, keine Buerodaten)."""
+    with bypass_tenant_scope():
+        rows = (
+            db.session.query(User.role, User.is_active, func.count(User.id))
+            .filter(User.deleted_at.is_(None))
+            .group_by(User.role, User.is_active)
+            .all()
+        )
+    total = sum(count for _, _, count in rows)
+    active = sum(count for _, is_active, count in rows if is_active)
+
+    def by_role(role):
+        return sum(count for row_role, is_active, count in rows if row_role == role and is_active)
+
+    return [
+        ("Benutzer gesamt", total),
+        ("davon aktiv", active),
+        ("Büro-Admins (aktiv)", by_role(UserRole.OFFICE_ADMIN)),
+        ("Mitarbeiter (aktiv)", by_role(UserRole.EMPLOYEE)),
+        ("Super-Admins (aktiv)", by_role(UserRole.SUPER_ADMIN)),
+    ]
 
 
 def _platform_status() -> list[tuple[str, str, bool | None]]:

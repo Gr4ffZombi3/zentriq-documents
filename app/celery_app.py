@@ -7,6 +7,13 @@ def make_celery(app):
             with app.app_context():
                 return self.run(*args, **kwargs)
 
+        def on_failure(self, exc, task_id, args, kwargs, einfo):
+            # Technisches Fehlerprotokoll (nur Aufgabenname und Fehlerklasse, keine Inhalte).
+            from app.services.system_errors import record_system_error
+
+            with app.app_context():
+                record_system_error("task", type(exc).__name__, location=self.name)
+
     celery_app = Celery(app.import_name, task_cls=FlaskTask)
     celery_app.conf.update(
         broker_url=app.config["CELERY_BROKER_URL"],

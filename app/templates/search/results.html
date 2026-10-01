@@ -1,46 +1,100 @@
 {% extends "base.html" %}
-{% from "ui/icons.html" import icon %}
-{% from "ui/display.html" import empty_state, page_header %}
-{% from "ui/forms.html" import button %}
 {% block title %}Suche – Zentriq{% endblock %}
 {% block content %}
+{% set q = results.query %}
 <div class="page-shell">
-  {% call page_header('KI-Suche', 'Durchsuche Dokumente in natuerlicher Sprache und springe direkt in relevante Treffer.', 'Search workspace') %}{% endcall %}
+  <div class="page-toolbar">
+    <h1 class="page-toolbar-title">Suche</h1>
+  </div>
 
-  <section class="surface-card p-5 sm:p-6">
-    <form method="get" action="{{ url_for('search.search') }}" class="flex flex-col gap-3 sm:flex-row">
-      <div class="relative flex-1">
-        <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-text-soft">
-          {{ icon('search', class='w-4 h-4') }}
-        </span>
-        <input type="text" name="q" value="{{ query }}" aria-label="KI-Suche" placeholder='z.B. "Zeige alle Kunden aus Koeln"'
-               class="field-surface pl-11 text-sm">
-      </div>
-      {{ button('Suchen', type='submit', icon_name='search') }}
-    </form>
+  <form method="get" action="{{ url_for('search.search') }}" class="search-bar" role="search">
+    <label class="sr-only" for="suche-seite">Suchbegriff</label>
+    <input class="field-surface search-input" type="search" id="suche-seite" name="q" value="{{ q }}"
+           placeholder="{{ 'Kunde, Telefon, Kunden- oder Vertragsnummer' if results.show_customers else 'Kunde oder Vertragsnummer' }}"
+           autocomplete="off" maxlength="60" autofocus>
+    <button type="submit" class="btn btn-primary">Suchen</button>
+  </form>
 
-    {% if query %}
-      <div class="mt-6">
-        <p class="text-sm text-text-muted">
-          {{ documents | length }} Ergebnis(se) für "{{ query }}"
-          {% if used_fallback %}
-            <span class="ml-2 inline-flex items-center gap-1 text-warning">{{ icon('info', class='w-3.5 h-3.5') }}einfache Textsuche, kein KI-Filter erkannt</span>
-          {% endif %}
-        </p>
+  {% if q | length < min_length %}
+    <p class="search-hint">Mindestens {{ min_length }} Zeichen eingeben.</p>
+  {% else %}
+    <p class="search-hint">{{ results.total }}{{ '+' if results.customers_more or results.entries_more else '' }} {{ 'Treffer' }} für „{{ q }}“</p>
 
-        {% if documents %}
-          <div class="list-stack mt-5">
-            {% for document in documents %}
-              {% include "documents/_row.html" %}
-            {% endfor %}
+    {% if results.show_customers %}
+      <section class="panel" aria-labelledby="treffer-kunden">
+        <header class="panel-header">
+          <h2 class="panel-title" id="treffer-kunden">Kunden <span class="count-tag">{{ results.customers | length }}{{ '+' if results.customers_more else '' }}</span></h2>
+        </header>
+        {% if results.customers %}
+          <div class="table-wrap">
+            <table class="data-table data-table-dense table-stack">
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Kundennummer</th>
+                  <th scope="col">Telefon</th>
+                  <th scope="col">Ort</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for customer in results.customers %}
+                  <tr>
+                    <th scope="row" class="cell-strong stack-full"><a class="table-link" href="{{ url_for('customers.detail', customer_id=customer.id) }}">{{ customer.name }}</a></th>
+                    <td class="tabular-nums" data-label="Kundennummer">{{ customer.customer_number or '–' }}</td>
+                    <td class="tabular-nums whitespace-nowrap" data-label="Telefon">{{ customer.phone or '–' }}</td>
+                    <td data-label="Ort">{{ ((customer.postal_code or '') ~ ' ' ~ (customer.city or '')).strip() or '–' }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
           </div>
+          {% if results.customers_more %}<p class="panel-note">Weitere Treffer – bitte genauer suchen.</p>{% endif %}
         {% else %}
-          <div class="mt-6">
-            {% call empty_state('Keine Ergebnisse', 'Versuche eine andere Suchanfrage oder formuliere sie etwas allgemeiner.', 'search') %}{% endcall %}
-          </div>
+          <p class="empty-note">Keine Kunden gefunden.</p>
         {% endif %}
-      </div>
+      </section>
     {% endif %}
-  </section>
+
+    <section class="panel" aria-labelledby="treffer-leipziger">
+      <header class="panel-header">
+        <h2 class="panel-title" id="treffer-leipziger">Leipziger Liste <span class="count-tag">{{ results.entries | length }}{{ '+' if results.entries_more else '' }}</span></h2>
+        {% if results.document %}<span class="panel-meta">{{ results.document.original_filename }} · {{ results.document.uploaded_at | local_dt('%d.%m.%Y') }}</span>{% endif %}
+      </header>
+      {% if not results.document %}
+        <p class="empty-note">Es liegt noch keine ausgewertete Leipziger Liste vor.</p>
+      {% elif results.entries %}
+        <div class="table-wrap">
+          <table class="data-table data-table-dense worklist table-stack">
+            <thead>
+              <tr>
+                <th scope="col">Nummer</th>
+                <th scope="col">Status</th>
+                <th scope="col">Kunde</th>
+                <th scope="col">Art</th>
+                <th scope="col">Datum</th>
+                {% if results.show_customers %}<th scope="col">Vermittler</th>{% endif %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for entry in results.entries %}
+                {% set target_tab = 'mit-datum' if entry.start_date else 'ohne-datum' %}
+                <tr>
+                  <td class="worklist-number" data-label="Nummer"><a class="table-link" href="{{ url_for('leipziger.index', tab=target_tab, q=entry.contract_number or entry.customer_name, document_id=results.document.id) }}">{{ entry.contract_number or '–' }}</a></td>
+                  <td class="whitespace-nowrap" data-label="Status">{{ entry.status_code or '–' }}</td>
+                  <td class="stack-full" data-label="Kunde">{{ entry.customer_name or '–' }}</td>
+                  <td data-label="Art">{{ entry.product_line or '–' }}</td>
+                  <td class="whitespace-nowrap tabular-nums" data-label="Datum">{{ entry.start_date | iso_date_de if entry.start_date else '–' }}</td>
+                  {% if results.show_customers %}<td class="whitespace-nowrap tabular-nums" data-label="Vermittler">{{ entry.broker_number or '–' }}</td>{% endif %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if results.entries_more %}<p class="panel-note">Weitere Treffer – bitte genauer suchen.</p>{% endif %}
+      {% else %}
+        <p class="empty-note">Keine Vorgänge gefunden.</p>
+      {% endif %}
+    </section>
+  {% endif %}
 </div>
 {% endblock %}

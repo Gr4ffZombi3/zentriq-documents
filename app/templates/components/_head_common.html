@@ -11,6 +11,14 @@
 <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg', v=_rev('img/favicon.svg') if _rev else '1') }}" type="image/svg+xml">
 <link rel="icon" href="{{ url_for('static', filename='img/favicon-32.png', v=_rev('img/favicon-32.png') if _rev else '1') }}" type="image/png" sizes="32x32">
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png', v=_rev('img/apple-touch-icon.png') if _rev else '1') }}">
+{# Installierbare Web-App (Manifest, Service Worker: app/blueprints/pwa/routes.py). #}
+<link rel="manifest" href="{{ url_for('pwa.manifest') }}">
+<meta name="theme-color" content="#ffffff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Zentriq">
+<meta name="application-name" content="Zentriq">
 {# Lokal ausgeliefert und per defer geladen: kein blockierender Abruf von einem fremden CDN. #}
 <script defer src="{{ url_for('static', filename='vendor/htmx-2.0.4.min.js') }}"></script>
 <script defer src="{{ url_for('static', filename='vendor/alpine-3.14.9.min.js') }}"></script>

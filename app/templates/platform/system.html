@@ -4,7 +4,7 @@
 {% block title %}Systemeinstellungen – Plattform – Zentriq{% endblock %}
 {% block content %}
 <div class="page-shell page-shell-narrow">
-  {% call page_header('Systemeinstellungen', 'Plattformstatus und aktive Konfiguration (nur lesend). Änderungen erfolgen über die Server-Konfiguration und ein Deployment.') %}{% endcall %}
+  {% call page_header('Systemeinstellungen', 'Plattformstatus, Konten, Version, Systemfehler und aktive Konfiguration (nur lesend). Änderungen erfolgen über die Server-Konfiguration und ein Deployment.') %}{% endcall %}
 
   <section class="panel">
     <header class="panel-header"><h2 class="panel-title">Plattformstatus</h2></header>
@@ -13,6 +13,54 @@
         <div><dt>{{ label }}</dt><dd>{% if ok is sameas true %}{{ state_tag(value, 'success') }}{% elif ok is sameas false %}{{ state_tag(value, 'danger') }}{% else %}{{ value }}{% endif %}</dd></div>
       {% endfor %}
     </dl>
+  </section>
+
+  <section class="panel">
+    <header class="panel-header"><h2 class="panel-title">Konten</h2></header>
+    <dl class="fact-list">
+      {% for label, value in user_stats %}
+        <div><dt>{{ label }}</dt><dd class="tabular-nums">{{ value }}</dd></div>
+      {% endfor %}
+    </dl>
+  </section>
+
+  <section class="panel">
+    <header class="panel-header"><h2 class="panel-title">Version</h2></header>
+    <dl class="fact-list">
+      {% for label, value in versions %}
+        <div><dt>{{ label }}</dt><dd class="tabular-nums">{{ value }}</dd></div>
+      {% endfor %}
+    </dl>
+  </section>
+
+  <section class="panel" aria-labelledby="systemfehler">
+    <header class="panel-header">
+      <h2 class="panel-title" id="systemfehler">Letzte Systemfehler</h2>
+      <p class="panel-description">Nur Zeitpunkt, Ort und Fehlerart – ohne Inhalte. Details stehen im Server-Log.</p>
+    </header>
+    {% if errors %}
+      <div class="table-wrap">
+        <table class="data-table data-table-dense table-stack">
+          <thead>
+            <tr><th scope="col">Zeitpunkt</th><th scope="col">Herkunft</th><th scope="col">Ort</th><th scope="col">Fehlerart</th><th scope="col">Büro</th></tr>
+          </thead>
+          <tbody>
+            {% set source_labels = {'request': 'Anfrage', 'task': 'Hintergrundaufgabe', 'import': 'Import'} %}
+            {% for error in errors %}
+              <tr>
+                <td class="whitespace-nowrap tabular-nums" data-label="Zeitpunkt">{{ error.occurred_at | local_dt }}</td>
+                <td data-label="Herkunft">{{ source_labels.get(error.source, error.source) }}</td>
+                <td class="stack-full" data-label="Ort"><code>{{ error.location or '–' }}</code></td>
+                <td data-label="Fehlerart">{{ error.error_type }}</td>
+                <td data-label="Büro">{{ tenants[error.tenant_id].name if error.tenant_id in tenants else '–' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-note">Keine Systemfehler protokolliert.</p>
+    {% endif %}
   </section>
 
   <section class="panel">

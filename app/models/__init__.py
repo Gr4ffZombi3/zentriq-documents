@@ -29,6 +29,7 @@ from app.models.enums import (
     WiedervorlageReason,
 )
 from app.models.feedback import RecommendationFeedback
+from app.models.leipziger_entry import LeipzigerEntry
 from app.models.list_comparison import ListComparison, ListComparisonEntry
 from app.models.mailbox_case import (
     MailboxCallbackAttempt,
@@ -37,6 +38,7 @@ from app.models.mailbox_case import (
     MailboxSyncCursor,
 )
 from app.models.recommendation import Recommendation
+from app.models.system_error import SystemErrorEvent
 from app.models.task import Task
 from app.models.tenant import Tenant
 from app.models.timetracking import (
@@ -61,10 +63,12 @@ __all__ = [
     "CustomerTimelineEvent",
     "Document",
     "DocumentCustomer",
+    "LeipzigerEntry",
     "ListComparison",
     "ListComparisonEntry",
     "Recommendation",
     "RecommendationFeedback",
+    "SystemErrorEvent",
     "Task",
     "Tenant",
     "EmployeeProfile",

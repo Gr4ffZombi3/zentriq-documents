@@ -6,7 +6,7 @@ oder JSON-Aufruf - endet mit 403. Neue Blueprints sind damit automatisch nur fue
 OFFICE_ADMINs erreichbar, solange sie hier nicht ausdruecklich freigegeben werden.
 
 - EMPLOYEE: Uebersicht, eigene Zeiterfassung, eigene Eintraege der Leipziger Liste, Memo,
-  eigenes Konto.
+  globale Suche (nur eigene Vorgaenge), eigenes Konto.
 - OFFICE_ADMIN: alle Fachbereiche des eigenen Mandanten (Mandantentrennung: app/tenancy.py),
   aber nie die Plattformverwaltung.
 - SUPER_ADMIN: ausschliesslich Plattformverwaltung (Bueros, Benutzer) und eigenes Konto -
@@ -19,10 +19,12 @@ from flask import abort, current_app, redirect, request, url_for
 from flask_login import current_user
 
 # Fuer jeden angemeldeten Benutzer erreichbar (Anmeldung, eigenes Konto, 2FA-Einrichtung).
-COMMON_ALLOWED_BLUEPRINTS = frozenset({"auth"})
+# "pwa": Manifest, Service Worker und Offline-Seite (ohne Benutzerdaten).
+COMMON_ALLOWED_BLUEPRINTS = frozenset({"auth", "pwa"})
 COMMON_ALLOWED_ENDPOINTS = frozenset(
     {
         "static",
+        "favicon",
         "portal.home",
         "settings.index",
         "settings.profile",
@@ -38,7 +40,16 @@ EMPLOYEE_ALLOWED_BLUEPRINTS = frozenset({"timetracking"})
 # zugeordneten Vorgaenge. Memo (dashboard.*) speichert nichts; der Kundenabgleich bleibt im
 # eigenen Mandanten.
 EMPLOYEE_ALLOWED_ENDPOINTS = frozenset(
-    {"portal.overview", "leipziger.index", "dashboard.index", "dashboard.transcribe", "dashboard.match"}
+    {
+        "portal.overview",
+        "leipziger.index",
+        "dashboard.index",
+        "dashboard.transcribe",
+        "dashboard.match",
+        # Globale Suche: Mitarbeiter finden nur Vorgaenge ihrer eigenen Vermittlernummer
+        # (app/services/global_search.py).
+        "search.search",
+    }
 )
 
 SUPER_ADMIN_ALLOWED_BLUEPRINTS = frozenset({"platform"})
@@ -48,7 +59,9 @@ SUPER_ADMIN_ALLOWED_ENDPOINTS = frozenset()
 SUPER_ADMIN_ONLY_BLUEPRINTS = frozenset({"platform"})
 
 # Waehrend die 2FA-Einrichtung erzwungen wird, sind nur diese Endpunkte erreichbar.
-TWO_FACTOR_SETUP_ENDPOINTS = frozenset({"static", "settings.security", "auth.logout"})
+TWO_FACTOR_SETUP_ENDPOINTS = frozenset(
+    {"static", "favicon", "settings.security", "auth.logout", "pwa.manifest", "pwa.service_worker", "pwa.offline"}
+)
 
 
 def _is_common(endpoint: str | None, blueprint: str | None) -> bool:

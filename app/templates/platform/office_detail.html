@@ -37,7 +37,16 @@
               <td>{{ state_tag('Aktiv', 'success') if member.is_active else state_tag('Deaktiviert', 'neutral') }}</td>
               <td>{{ state_tag('Aktiv', 'success') if member.two_factor_enabled else state_tag('Nicht eingerichtet', 'warning') }}</td>
               <td class="whitespace-nowrap">{{ member.last_login_at | local_dt(default='noch nie') }}</td>
-              <td class="text-right"><a class="table-action" href="{{ url_for('platform.user_edit', user_id=member.id) }}">Bearbeiten</a></td>
+              <td class="row-actions">
+                {% if member.is_employee and member.is_active %}
+                  <form method="post" action="{{ url_for('platform.user_make_office_admin', user_id=member.id) }}" class="inline"
+                        onsubmit="return confirm('{{ member.email }} als Büro-Admin festlegen? Das Konto erhält Zugriff auf alle Daten dieses Büros.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="table-action">Zum Büro-Admin</button>
+                  </form>
+                {% endif %}
+                <a class="table-action" href="{{ url_for('platform.user_edit', user_id=member.id) }}">Bearbeiten</a>
+              </td>
             </tr>
           {% else %}
             <tr><td colspan="8" class="is-muted">Keine Benutzer.</td></tr>

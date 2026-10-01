@@ -86,6 +86,9 @@ class Document(TenantScopedMixin, db.Model):
         "Recommendation", back_populates="document", cascade="all, delete-orphan"
     )
     tasks = db.relationship("Task", back_populates="document", cascade="all, delete-orphan")
+    leipziger_entries = db.relationship(
+        "LeipzigerEntry", back_populates="document", cascade="all, delete-orphan", passive_deletes=True
+    )
     uploaded_by = db.relationship("User", foreign_keys=[uploaded_by_user_id])
     analysis_runs = db.relationship(
         "AnalysisRun", back_populates="document", cascade="all, delete-orphan", order_by="AnalysisRun.started_at"

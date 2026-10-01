@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% from "leipziger/_macros.html" import list_selector, entry_table %}
+{% block title %}Mitarbeiter – Leipziger Liste{% endblock %}
+
+{% block content %}
+<div class="page-shell">
+  <div class="page-toolbar">
+    <h1 class="page-toolbar-title">Mitarbeiter</h1>
+    <div class="page-toolbar-actions">
+      {{ list_selector(documents, document, 'leipziger.team', {'mitarbeiter': selected.user.id, 'ansicht': view} if selected else {}) }}
+    </div>
+  </div>
+
+  {% if not members %}
+    <section class="panel">
+      <p class="empty-note panel-body">Kein Benutzer hat eine Vermittlernummer hinterlegt. Vermittlernummern werden unter Einstellungen → Benutzer gepflegt.</p>
+    </section>
+  {% else %}
+    <div class="split-list">
+      <nav class="split-list-nav" aria-label="Mitarbeiter">
+        {% for member in members %}
+          <a href="{{ url_for('leipziger.team', mitarbeiter=member.user.id, ansicht=view, document_id=document.id if document else none) }}"
+             class="split-list-link {{ 'is-active' if selected and member.user.id == selected.user.id else '' }}"{% if selected and member.user.id == selected.user.id %} aria-current="page"{% endif %}>
+            <span class="split-list-name">{{ member.name }}<span class="split-list-sub">{{ member.user.vermittlernummer | vermittlernummer }}</span></span>
+            <span class="count-tag" title="Ohne Datum">{{ member.open | length }}</span>
+          </a>
+        {% endfor %}
+      </nav>
+
+      <section class="panel">
+        {% set base_args = {'mitarbeiter': selected.user.id, 'document_id': document.id if document else none} %}
+        <div class="panel-tabs" role="tablist">
+          <a href="{{ url_for('leipziger.team', ansicht='ohne', **base_args) }}" role="tab" aria-selected="{{ 'true' if view == 'ohne' else 'false' }}" class="panel-tab {{ 'is-active' if view == 'ohne' else '' }}">Ohne Datum <span class="count-tag">{{ selected.open | length }}</span></a>
+          <a href="{{ url_for('leipziger.team', ansicht='mit', **base_args) }}" role="tab" aria-selected="{{ 'true' if view == 'mit' else 'false' }}" class="panel-tab {{ 'is-active' if view == 'mit' else '' }}">Mit Datum <span class="count-tag">{{ selected.done | length }}</span></a>
+        </div>
+        {% if not document %}
+          <p class="empty-note panel-body">Es liegt noch keine ausgewertete Leipziger Liste vor.</p>
+        {% elif view == 'mit' %}
+          {{ entry_table(selected.done, with_date=True, empty_text='Keine Einträge mit Datum.') }}
+        {% else %}
+          {{ entry_table(selected.open, empty_text='Keine offenen Einträge.') }}
+        {% endif %}
+      </section>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

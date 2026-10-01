@@ -1,0 +1,49 @@
+{% macro list_selector(documents, document, endpoint, extra={}) -%}
+{% if documents | length > 1 %}
+  <form method="get" action="{{ url_for(endpoint) }}" class="toolbar-form">
+    {% for key, value in extra.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+    <label for="document_id" class="toolbar-label">Liste</label>
+    <select id="document_id" name="document_id" class="toolbar-select">
+      {% for option in documents %}
+        <option value="{{ option.id }}"{% if document and option.id == document.id %} selected{% endif %}>{{ option.original_filename }} ({{ option.uploaded_at | local_dt('%d.%m.%Y') }})</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn-plain">Anzeigen</button>
+  </form>
+{% elif document %}
+  <span class="toolbar-meta">{{ document.original_filename }} · {{ document.uploaded_at | local_dt('%d.%m.%Y') }}</span>
+{% endif %}
+{%- endmacro %}
+
+{% macro entry_date(entry) -%}
+{{ entry.date.strftime('%d.%m.%Y') if entry.date and entry.date.year > 1 else 'vorhanden' }}
+{%- endmacro %}
+
+{% macro entry_table(entries, with_date=False, broker_names=None, empty_text='Keine Einträge.') -%}
+{% if entries %}
+  <table class="data-table worklist">
+    <thead>
+      <tr>
+        <th scope="col">Nummer</th>
+        <th scope="col">Status</th>
+        {% if with_date %}<th scope="col">Datum</th>{% endif %}
+        {% if broker_names is not none %}<th scope="col">Vermittler</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in entries %}
+        <tr>
+          <td class="worklist-number">{{ entry.number }}</td>
+          <td>{{ entry.label }}</td>
+          {% if with_date %}<td class="whitespace-nowrap">{{ entry_date(entry) }}</td>{% endif %}
+          {% if broker_names is not none %}
+            <td class="is-muted whitespace-nowrap">{{ broker_names.get(entry.broker_key) or entry.broker_number or '–' }}</td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p class="empty-note panel-body">{{ empty_text }}</p>
+{% endif %}
+{%- endmacro %}

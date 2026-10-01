@@ -10,6 +10,7 @@ from app.models import EmployeeProfile, User, UserRole
 from app.models.audit_log import AuditEventType
 from app.services.audit import log_audit_event
 from app.tenancy import bypass_tenant_scope
+from app.utils.vermittlernummer import format_vermittlernummer, vermittlernummer_key
 
 
 class UserAdminError(Exception):
@@ -21,15 +22,32 @@ def _normalize_optional(value: str | None) -> str | None:
     return value or None
 
 
+def find_user_by_vermittlernummer(value: str | None) -> User | None:
+    """Mandantenuebergreifende Suche ueber die normalisierte Vermittlernummer ("080950-T"
+    findet auch "08/0950-T"). Nur fuer Login und Eindeutigkeitspruefung gedacht."""
+    key = vermittlernummer_key(value)
+    if key is None:
+        return None
+    with bypass_tenant_scope():
+        exact = User.query.filter(User.vermittlernummer == format_vermittlernummer(value)).first()
+        if exact is not None:
+            return exact
+        # Aeltere, noch nicht einheitlich gespeicherte Schreibweisen.
+        for candidate in User.query.filter(User.vermittlernummer.isnot(None)).all():
+            if vermittlernummer_key(candidate.vermittlernummer) == key:
+                return candidate
+    return None
+
+
 def _ensure_unique(email: str, vermittlernummer: str | None, exclude_user_id: int | None = None) -> None:
     with bypass_tenant_scope():
         existing = User.query.filter(User.email == email).first()
         if existing is not None and existing.id != exclude_user_id:
             raise UserAdminError("Diese E-Mail-Adresse ist bereits vergeben.")
-        if vermittlernummer:
-            existing = User.query.filter(User.vermittlernummer == vermittlernummer).first()
-            if existing is not None and existing.id != exclude_user_id:
-                raise UserAdminError("Diese Vermittlernummer ist bereits vergeben.")
+    if vermittlernummer:
+        existing = find_user_by_vermittlernummer(vermittlernummer)
+        if existing is not None and existing.id != exclude_user_id:
+            raise UserAdminError("Diese Vermittlernummer ist bereits vergeben.")
 
 
 def _active_admin_count() -> int:
@@ -57,7 +75,7 @@ def _apply_profile(user: User, form) -> dict:
 
 def create_user(actor: User, form) -> User:
     email = form.email.data.strip().lower()
-    vermittlernummer = _normalize_optional(form.vermittlernummer.data)
+    vermittlernummer = format_vermittlernummer(form.vermittlernummer.data)
     if not form.password.data:
         raise UserAdminError("Bitte ein Startpasswort vergeben.")
     _ensure_unique(email, vermittlernummer)
@@ -83,7 +101,7 @@ def create_user(actor: User, form) -> User:
 
 def update_user(actor: User, user: User, form) -> dict:
     email = form.email.data.strip().lower()
-    vermittlernummer = _normalize_optional(form.vermittlernummer.data)
+    vermittlernummer = format_vermittlernummer(form.vermittlernummer.data)
     new_role = UserRole(form.role.data)
     new_active = bool(form.is_active.data)
     _ensure_unique(email, vermittlernummer, exclude_user_id=user.id)

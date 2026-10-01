@@ -1,21 +1,30 @@
 """CLI-Befehle (`flask <befehl>`), z. B. fuer die Anlage von Benutzern ohne offene Registrierung."""
 
 import getpass
+import sys
 
 import click
 from email_validator import EmailNotValidError, validate_email
 
 from app.extensions import db
 from app.models import Tenant, User, UserRole
+from app.services.user_admin import find_user_by_vermittlernummer
 from app.tenancy import bypass_tenant_scope
 from app.utils.slugs import unique_tenant_slug
+from app.utils.vermittlernummer import format_vermittlernummer
 
 MIN_PASSWORD_LENGTH = 8
 
 
-def _prompt_password() -> str:
+def _prompt_password(from_stdin: bool = False) -> str:
     # getpass statt click-Option: Das Passwort taucht weder in der Shell-History noch in der
-    # Prozessliste auf und wird nirgends ausgegeben oder geloggt.
+    # Prozessliste auf und wird nirgends ausgegeben oder geloggt. --password-stdin erlaubt
+    # die nicht-interaktive Uebergabe per Pipe (ebenfalls ohne Kommandozeilenargument).
+    if from_stdin:
+        password = sys.stdin.readline().rstrip("\r\n")
+        if len(password) < MIN_PASSWORD_LENGTH:
+            raise click.ClickException(f"Das Passwort muss mindestens {MIN_PASSWORD_LENGTH} Zeichen lang sein.")
+        return password
     password = getpass.getpass("Passwort: ")
     if len(password) < MIN_PASSWORD_LENGTH:
         raise click.ClickException(f"Das Passwort muss mindestens {MIN_PASSWORD_LENGTH} Zeichen lang sein.")
@@ -59,15 +68,13 @@ def create_user_command(
         existing_tenant = Tenant.query.filter_by(slug=tenant_slug.strip()).first()
         if existing_tenant is None:
             raise click.ClickException(f"Mandant '{tenant_slug}' nicht gefunden.")
-    vermittlernummer = (vermittlernummer or "").strip() or None
-    if vermittlernummer is not None and len(vermittlernummer) > 50:
-        raise click.ClickException("--vermittlernummer darf hoechstens 50 Zeichen lang sein.")
+    vermittlernummer = _clean_vermittlernummer(vermittlernummer)
 
     with bypass_tenant_scope():
         if User.query.filter_by(email=email).first() is not None:
             raise click.ClickException("Diese E-Mail-Adresse ist bereits registriert.")
-        if vermittlernummer and User.query.filter_by(vermittlernummer=vermittlernummer).first() is not None:
-            raise click.ClickException("Diese Vermittlernummer ist bereits registriert.")
+    if vermittlernummer and find_user_by_vermittlernummer(vermittlernummer) is not None:
+        raise click.ClickException("Diese Vermittlernummer ist bereits registriert.")
 
     password = _prompt_password()
 
@@ -93,5 +100,62 @@ def create_user_command(
     )
 
 
+def _clean_vermittlernummer(value: str | None) -> str | None:
+    value = format_vermittlernummer(value)
+    if value is not None and len(value) > 50:
+        raise click.ClickException("--vermittlernummer darf hoechstens 50 Zeichen lang sein.")
+    return value
+
+
+@click.command("set-admin")
+@click.option("--email", required=True, help="E-Mail-Adresse (Login) des Admins.")
+@click.option("--vermittlernummer", default=None, help="Vermittlernummer (wird einheitlich formatiert).")
+@click.option("--tenant", "tenant_slug", default=None, help="Mandant (Slug) - nur noetig, wenn der Benutzer neu angelegt wird.")
+@click.option("--password-stdin", is_flag=True, help="Passwort als eine Zeile von stdin lesen statt verdeckt abzufragen.")
+def set_admin_command(email: str, vermittlernummer: str | None, tenant_slug: str | None, password_stdin: bool):
+    """Legt einen Admin an oder aktualisiert einen bestehenden Benutzer mit dieser E-Mail
+    (Rolle ADMIN, aktiv, Vermittlernummer, neues Passwort) - ohne Duplikat. Der Mandant eines
+    bestehenden Benutzers bleibt unveraendert."""
+    try:
+        email = validate_email(email.strip(), check_deliverability=False).normalized.lower()
+    except EmailNotValidError as exc:
+        raise click.ClickException(f"Ungültige E-Mail-Adresse: {exc}") from exc
+    vermittlernummer = _clean_vermittlernummer(vermittlernummer)
+
+    with bypass_tenant_scope():
+        user = User.query.filter(db.func.lower(User.email) == email).first()
+        tenant = None
+        if user is None:
+            if not tenant_slug:
+                raise click.ClickException("Benutzer existiert nicht - fuer die Neuanlage --tenant angeben.")
+            tenant = Tenant.query.filter_by(slug=tenant_slug.strip()).first()
+            if tenant is None:
+                raise click.ClickException(f"Mandant '{tenant_slug}' nicht gefunden.")
+    if vermittlernummer:
+        owner = find_user_by_vermittlernummer(vermittlernummer)
+        if owner is not None and (user is None or owner.id != user.id):
+            raise click.ClickException("Diese Vermittlernummer ist bereits einem anderen Benutzer zugeordnet.")
+
+    password = _prompt_password(from_stdin=password_stdin)
+
+    with bypass_tenant_scope():
+        created = user is None
+        if created:
+            user = User(tenant_id=tenant.id, email=email)
+            db.session.add(user)
+        user.email = email
+        user.role = UserRole.ADMIN
+        user.is_active = True
+        if vermittlernummer:
+            user.vermittlernummer = vermittlernummer
+        user.set_password(password)
+        db.session.commit()
+        user_id, tenant_id = user.id, user.tenant_id
+
+    action = "angelegt" if created else "aktualisiert"
+    click.echo(f"Admin {email} (ID {user_id}, Mandant-ID {tenant_id}) {action}.")
+
+
 def register_cli(app) -> None:
     app.cli.add_command(create_user_command)
+    app.cli.add_command(set_admin_command)

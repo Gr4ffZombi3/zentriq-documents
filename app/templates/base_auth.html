@@ -8,47 +8,10 @@
 <body class="bg-bg text-text antialiased">
   {% from "ui/overlays.html" import toast_container %}
   {{ toast_container() }}
-  <main class="flex min-h-screen items-center justify-center p-4 sm:p-6 lg:p-8">
-    <div class="auth-shell">
-      <section class="auth-hero hidden lg:flex lg:flex-col lg:justify-between">
-        <div class="relative z-10 max-w-md">
-          <span class="hero-badge">Zentriq</span>
-          <h1 class="mt-5 text-3xl font-semibold tracking-tight text-text">
-            Internes Arbeitsportal
-          </h1>
-          <p class="mt-4 text-sm leading-7 text-text-muted">
-            Bestandsauswertung, Rückrufbearbeitung und Arbeitszeiterfassung in einer gemeinsamen Anwendung.
-          </p>
-        </div>
-
-        <div class="auth-note-list relative z-10">
-          <div class="auth-note-item">
-            <p class="auth-note-title">Leipziger Liste</p>
-            <p class="auth-note-copy">Listen hochladen, mit Vorversion und GS-Liste vergleichen und Veränderungen im Bestand auswerten.</p>
-          </div>
-          <div class="auth-note-item">
-            <p class="auth-note-title">Sprachnachrichten</p>
-            <p class="auth-note-copy">Mailbox-Nachrichten werden abgehört, ausgewertet und als Rückrufwunsch weitergegeben.</p>
-          </div>
-          <div class="auth-note-item">
-            <p class="auth-note-title">Zeiterfassung</p>
-            <p class="auth-note-copy">Arbeitszeiten und Pausen erfassen, Wochen- und Monatswerte einsehen.</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="auth-card flex items-center justify-center">
-        <div class="w-full max-w-[420px]">
-          <div class="mb-6 lg:hidden">
-            <span class="hero-badge">Zentriq</span>
-            <p class="mt-3 text-sm leading-7 text-text-muted">
-              Internes Arbeitsportal: Leipziger Liste, Sprachnachrichten und Zeiterfassung.
-            </p>
-            <div class="mt-5 subtle-divider"></div>
-          </div>
-          {% block content %}{% endblock %}
-        </div>
-      </section>
+  <main class="auth-simple">
+    <div class="auth-simple-inner">
+      <p class="auth-simple-brand"><span class="app-brand-mark" aria-hidden="true">Z</span> Zentriq</p>
+      {% block content %}{% endblock %}
     </div>
   </main>
 </body>

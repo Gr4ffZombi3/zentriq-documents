@@ -6,7 +6,7 @@
 {% block title %}Benutzer – Zentriq{% endblock %}
 {% block content %}
 <div class="page-shell page-shell-wide">
-  {% call page_header('Benutzer', 'Benutzer und Mitarbeiter Ihres Mandanten: Rolle, Sollstunden und Zugang verwalten.') %}
+  {% call page_header('Benutzer') %}
     {{ button('Benutzer anlegen', href=url_for('settings.user_create'), variant='primary') }}
   {% endcall %}
 
@@ -17,6 +17,7 @@
           <tr>
             <th scope="col">Name</th>
             <th scope="col">E-Mail</th>
+            <th scope="col">Vermittlernummer</th>
             <th scope="col">Rolle</th>
             <th scope="col" class="num">Soll/Woche</th>
             <th scope="col">Arbeitstage</th>
@@ -34,6 +35,7 @@
                 {% if profile and profile.personnel_number %}<span class="cell-sub">Nr. {{ profile.personnel_number }}</span>{% endif %}
               </th>
               <td>{{ item.email }}{% if item.id == current_user.id %} <span class="cell-sub">Sie</span>{% endif %}</td>
+              <td class="whitespace-nowrap">{{ item.vermittlernummer | vermittlernummer }}</td>
               <td>{{ item.role.label }}</td>
               <td class="num">{{ (profile.weekly_target_minutes * 60) | duration if profile else '–' }}</td>
               <td>{% if profile %}{% for ch in profile.workdays %}{{ weekday_names.get(ch, ch) }}{{ ', ' if not loop.last }}{% endfor %}{% else %}–{% endif %}</td>

@@ -1,6 +1,6 @@
 from flask import Blueprint, abort, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import defer, joinedload
 
 from app.extensions import db
 from app.models import AnalysisRun, DocStatus, Document, ListComparison
@@ -20,7 +20,10 @@ documents_bp = Blueprint("documents", __name__, url_prefix="/documents")
 
 
 def _document_list_query():
-    return Document.query.options(joinedload(Document.customer)).order_by(Document.uploaded_at.desc())
+    # Rohtext/Roh-JSON werden in der Liste nicht angezeigt und daher nicht mitgeladen.
+    return Document.query.options(
+        joinedload(Document.customer), defer(Document.raw_text), defer(Document.raw_json)
+    ).order_by(Document.uploaded_at.desc())
 
 
 def _build_document_summary(documents: list[Document]) -> dict[str, int]:

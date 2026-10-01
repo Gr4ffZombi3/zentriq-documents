@@ -82,6 +82,10 @@ def create_app(config_object=None):
 
     register_template_filters(app)
 
+    from app.http_performance import register_http_performance
+
+    register_http_performance(app)
+
     app.context_processor(build_navigation)
 
     @login_manager.user_loader

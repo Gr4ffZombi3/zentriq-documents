@@ -14,9 +14,11 @@ from app.services.password_reset import (
     is_reset_rate_limited,
     verify_reset_token,
 )
+from app.services.user_admin import find_user_by_vermittlernummer
 from app.tasks.auth_tasks import send_password_reset_email
 from app.tenancy import bypass_tenant_scope, set_current_tenant_id, use_tenant_id
 from app.utils.slugs import unique_tenant_slug
+from app.utils.vermittlernummer import format_vermittlernummer
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +40,7 @@ def register():
     form = RegisterForm()
     if form.validate_on_submit():
         email = form.email.data.lower().strip()
-        vermittlernummer = form.vermittlernummer.data.strip()
+        vermittlernummer = format_vermittlernummer(form.vermittlernummer.data)
 
         with bypass_tenant_scope():
             existing = User.query.filter_by(email=email).first()
@@ -46,8 +48,7 @@ def register():
             flash("Diese E-Mail-Adresse ist bereits registriert.", "error")
             return render_template("auth/register.html", form=form)
 
-        with bypass_tenant_scope():
-            existing_vm = User.query.filter_by(vermittlernummer=vermittlernummer).first()
+        existing_vm = find_user_by_vermittlernummer(vermittlernummer)
         if existing_vm is not None:
             flash("Diese Vermittlernummer ist bereits registriert.", "error")
             return render_template("auth/register.html", form=form)
@@ -87,7 +88,7 @@ def login():
 
         with bypass_tenant_scope():
             if login_type == "vermittlernummer":
-                user = User.query.filter_by(vermittlernummer=identifier).first()
+                user = find_user_by_vermittlernummer(identifier)
             else:
                 user = User.query.filter_by(email=identifier.lower()).first()
 

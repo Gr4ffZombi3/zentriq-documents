@@ -1,5 +1,5 @@
 {% from "ui/icons.html" import icon %}
-{% if nav_subitems %}
+{% if nav_subitems and (nav_subitems | length > 1 or nav_more_items) %}
 <div class="app-subnav">
   <div class="app-subnav-inner">
     <nav class="app-subnav-tabs" aria-label="{{ nav_active_label }}">
@@ -7,7 +7,17 @@
         <a href="{{ item.url }}" class="app-subnav-link {{ 'is-active' if item.active else '' }}"{% if item.active %} aria-current="page"{% endif %}>{{ item.label }}</a>
       {% endfor %}
     </nav>
-    {% if nav_active_area == 'leipziger' %}
+    {% if nav_more_items %}
+      <details class="app-subnav-more">
+        <summary class="app-subnav-link {{ 'is-active' if nav_more_active else '' }}">Weitere {{ icon('chevron-down', class='h-3.5 w-3.5') }}</summary>
+        <div class="app-subnav-menu">
+          {% for item in nav_more_items %}
+            <a href="{{ item.url }}" class="{{ 'is-active' if item.active else '' }}"{% if item.active %} aria-current="page"{% endif %}>{{ item.label }}</a>
+          {% endfor %}
+        </div>
+      </details>
+    {% endif %}
+    {% if nav_active_area == 'leipziger' and current_user.is_admin %}
       <form action="{{ url_for('search.search') }}" method="get" class="app-subnav-search" role="search">
         <span class="app-subnav-search-icon">{{ icon('search', class='h-4 w-4') }}</span>
         <input type="search" name="q" aria-label="Kunden und Listen durchsuchen" placeholder="Kunden, Verträge, Listen suchen" value="{{ request.args.get('q', '') if request.endpoint == 'search.search' else '' }}">

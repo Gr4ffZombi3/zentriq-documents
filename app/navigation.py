@@ -1,4 +1,5 @@
-"""Hauptnavigation des Portals: drei Bereiche plus Einstellungen, rollenabhaengig.
+"""Hauptnavigation des Portals: Leipziger Liste, Memo, Zeiterfassung plus Einstellungen,
+rollenabhaengig.
 
 Die Sichtbarkeit hier ist nur Komfort - die eigentliche Absicherung erfolgt serverseitig in
 app/auth/permissions.py (Default-Deny fuer Mitarbeiter) und per @admin_required."""
@@ -15,6 +16,8 @@ class NavItem:
     label: str
     prefixes: tuple[str, ...]
     admin_only: bool = False
+    # Selten genutzte Ansichten erscheinen gesammelt unter "Weitere" statt als eigener Reiter.
+    secondary: bool = False
 
 
 @dataclass(frozen=True)
@@ -28,15 +31,16 @@ class NavArea:
 
 
 LEIPZIGER_ITEMS = (
-    NavItem("leipziger.index", "Übersicht", ("leipziger.",)),
-    NavItem("documents.list_documents", "Listen & Upload", ("documents.", "upload.")),
-    NavItem("potenziale.index", "Auswertung", ("potenziale.index",)),
-    NavItem("potenziale.vergleich", "Eigene vs. GS-Liste", ("potenziale.vergleich",)),
-    NavItem("customers.list_customers", "Kunden", ("customers.",)),
-    NavItem("tasks.list_tasks", "Aufgaben", ("tasks.",)),
-    NavItem("recommendations.list_recommendations", "Empfehlungen", ("recommendations.",)),
-    NavItem("bestand.index", "Bestand", ("bestand.",)),
-    NavItem("cockpit.index", "Cockpit", ("cockpit.",)),
+    NavItem("leipziger.index", "Zu erledigen", ("leipziger.index",)),
+    NavItem("leipziger.team", "Mitarbeiter", ("leipziger.team",), admin_only=True),
+    NavItem("documents.list_documents", "Listen & Upload", ("documents.", "upload."), admin_only=True),
+    NavItem("potenziale.index", "Auswertung", ("potenziale.index",), admin_only=True),
+    NavItem("potenziale.vergleich", "Eigene vs. GS-Liste", ("potenziale.vergleich",), admin_only=True, secondary=True),
+    NavItem("customers.list_customers", "Kunden", ("customers.",), admin_only=True, secondary=True),
+    NavItem("tasks.list_tasks", "Aufgaben", ("tasks.",), admin_only=True, secondary=True),
+    NavItem("recommendations.list_recommendations", "Empfehlungen", ("recommendations.",), admin_only=True, secondary=True),
+    NavItem("bestand.index", "Bestand", ("bestand.",), admin_only=True, secondary=True),
+    NavItem("cockpit.index", "Cockpit", ("cockpit.",), admin_only=True, secondary=True),
 )
 
 VOICE_ITEMS = (NavItem("dashboard.index", "Eingang", ("dashboard.", "mailbox.")),)
@@ -62,10 +66,10 @@ AREAS = (
         "Leipziger Liste",
         "leipziger.index",
         ("leipziger.", "documents.", "upload.", "potenziale.", "customers.", "tasks.", "recommendations.", "bestand.", "cockpit.", "search."),
-        admin_only=True,
+        admin_only=False,
         items=LEIPZIGER_ITEMS,
     ),
-    NavArea("voice", "Sprachnachrichten", "dashboard.index", ("dashboard.", "mailbox."), admin_only=True, items=VOICE_ITEMS),
+    NavArea("voice", "Memo", "dashboard.index", ("dashboard.", "mailbox."), admin_only=True, items=VOICE_ITEMS),
     NavArea("time", "Zeiterfassung", "timetracking.index", ("timetracking.",), admin_only=False, items=TIME_ITEMS),
 )
 
@@ -98,15 +102,19 @@ def build_navigation() -> dict:
         active_area = SETTINGS_AREA
 
     subitems = []
+    more_items = []
     if active_area is not None:
         for item in active_area.items:
             if _visible(item, is_admin):
-                subitems.append({"label": item.label, "url": url_for(item.endpoint), "active": _matches(endpoint, item.prefixes)})
+                entry = {"label": item.label, "url": url_for(item.endpoint), "active": _matches(endpoint, item.prefixes)}
+                (more_items if item.secondary else subitems).append(entry)
     return {
         "nav_areas": areas,
         "nav_active_area": active_area.key if active_area else None,
         "nav_active_label": active_area.label if active_area else None,
         "nav_subitems": subitems,
+        "nav_more_items": more_items,
+        "nav_more_active": any(item["active"] for item in more_items),
         "nav_settings_active": active_area is SETTINGS_AREA,
     }
 

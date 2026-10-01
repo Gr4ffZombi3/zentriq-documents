@@ -11,6 +11,7 @@ from app.services.timetracking.calc import (
     session_net_seconds,
 )
 from app.services.timetracking.clock import parse_utc_iso, to_local, utcnow_naive
+from app.utils.vermittlernummer import format_vermittlernummer
 
 WEEKDAYS_SHORT = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 WEEKDAYS_LONG = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")
@@ -74,3 +75,4 @@ def register_template_filters(app) -> None:
     app.jinja_env.filters["weekday_short"] = weekday_short
     app.jinja_env.filters["weekday_long"] = weekday_long
     app.jinja_env.filters["month_name"] = month_name
+    app.jinja_env.filters["vermittlernummer"] = lambda value: format_vermittlernummer(value) or "–"

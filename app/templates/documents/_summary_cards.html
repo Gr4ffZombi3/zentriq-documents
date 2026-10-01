@@ -1,22 +1,6 @@
-<section class="summary-strip summary-strip-4" aria-label="Dokumentenstatus">
-  <article class="summary-metric summary-metric-info">
-    <span class="summary-metric-label">Gesamt</span>
-    <strong class="summary-metric-value">{{ summary.total }}</strong>
-    <p class="summary-metric-copy">Dokumente in dieser Ansicht</p>
-  </article>
-  <article class="summary-metric summary-metric-info">
-    <span class="summary-metric-label">In Arbeit</span>
-    <strong class="summary-metric-value">{{ summary.active }}</strong>
-    <p class="summary-metric-copy">OCR oder KI laufen noch</p>
-  </article>
-  <article class="summary-metric summary-metric-success">
-    <span class="summary-metric-label">Bereit</span>
-    <strong class="summary-metric-value">{{ summary.done }}</strong>
-    <p class="summary-metric-copy">Zur Prüfung und Folgearbeit</p>
-  </article>
-  <article class="summary-metric summary-metric-danger">
-    <span class="summary-metric-label">Fehler</span>
-    <strong class="summary-metric-value">{{ summary.failed }}</strong>
-    <p class="summary-metric-copy">Benötigen Nacharbeit</p>
-  </article>
-</section>
+<dl class="fact-line fact-line-numbers" aria-label="Dokumentenstatus">
+  <div><dt>Gesamt</dt><dd>{{ summary.total }}</dd></div>
+  <div><dt>In Arbeit</dt><dd>{{ summary.active }}</dd></div>
+  <div><dt>Fertig</dt><dd>{{ summary.done }}</dd></div>
+  <div><dt>Fehler</dt><dd>{{ summary.failed }}</dd></div>
+</dl>

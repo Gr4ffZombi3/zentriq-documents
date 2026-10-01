@@ -1,4 +1,4 @@
-"""Serverseitige Rechtepruefung: Mitarbeiter erreichen ausschliesslich die Zeiterfassung."""
+"""Serverseitige Rechtepruefung: Mitarbeiter erreichen nur Zeiterfassung, Profil und ihre\neigene "Zu erledigen"-Liste."""
 
 import pytest
 
@@ -7,7 +7,7 @@ from app.models import UserRole
 
 ADMIN_ONLY_URLS = [
     "/",
-    "/leipziger-liste",
+    "/leipziger-liste/mitarbeiter",
     "/sprachnachrichten",
     "/mailbox",
     "/mailbox/1",

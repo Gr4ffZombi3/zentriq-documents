@@ -2,7 +2,12 @@ from datetime import date
 
 from app.models import Customer, DocStatus, Document, DocumentCustomer
 from app.models.enums import DocType, OcrEngine
-from app.services.llm.schemas import DocumentExtraction, ExtractedCustomer, LeipzigerListeExtraction, LeipzigerListeRow
+from app.services.llm.schemas import (
+    DocumentExtraction,
+    ExtractedCustomer,
+    LeipzigerListeExtraction,
+    LeipzigerListeRow,
+)
 
 
 def test_retry_reenqueues_failed_document(auth_client, db, tenant):

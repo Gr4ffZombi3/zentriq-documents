@@ -5,14 +5,9 @@
 {% block title %}Dokumente – Zentriq{% endblock %}
 {% block content %}
 <div class="page-shell page-shell-wide" data-documents-page data-live-url="{{ url_for('documents.live_documents') }}">
-  {% call page_header(
-    "Dokumente",
-    "Die zentrale Arbeitsfläche für Uploads, Live-Status und den direkten Einstieg in jeden Dokumentvorgang.",
-    "Dokumenten-Workspace"
-  ) %}
-    {{ button('Zum Upload', href='#upload-widget', variant='primary', icon_name='upload') }}
-    {{ button('KI-Suche', href=url_for('search.search'), variant='secondary', icon_name='search') }}
-  {% endcall %}
+  <div class="page-toolbar">
+    <h1 class="page-toolbar-title">Listen &amp; Upload</h1>
+  </div>
 
   <div id="document-summary-cards">
     {% include "documents/_summary_cards.html" %}
@@ -45,7 +40,6 @@
         <option value="failed">Fehlgeschlagen</option>
       </select>
     </label>
-    <p class="document-toolbar-note">Upload startet sofort, neue Dokumente erscheinen direkt in der Liste und bleiben live aktualisiert.</p>
   </section>
 
   {% if documents %}

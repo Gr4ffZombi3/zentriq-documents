@@ -11,9 +11,10 @@
   })();
 </script>
 <meta name="csrf-token" content="{{ csrf_token() }}">
-{% set asset_rev = '20260925-portal-2' %}
+{% set asset_rev = '20261001-kompakt-1' %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=asset_rev) }}">
-<script src="https://unpkg.com/htmx.org@2.0.4"></script>
-<script defer src="https://unpkg.com/alpinejs@3.14.9/dist/cdn.min.js"></script>
+{# Lokal ausgeliefert und per defer geladen: kein blockierender Abruf von einem fremden CDN. #}
+<script defer src="{{ url_for('static', filename='vendor/htmx-2.0.4.min.js') }}"></script>
+<script defer src="{{ url_for('static', filename='vendor/alpine-3.14.9.min.js') }}"></script>
 <script defer src="{{ url_for('static', filename='js/htmx-csrf.js', v=asset_rev) }}"></script>
 <script defer src="{{ url_for('static', filename='js/app.js', v=asset_rev) }}"></script>

@@ -43,7 +43,7 @@ class UserForm(FlaskForm):
     email = StringField("E-Mail (Login)", validators=[DataRequired(), Email(), Length(max=255)])
     display_name = StringField("Anzeigename", validators=[Optional(), Length(max=120)])
     personnel_number = StringField("Personalnummer", validators=[Optional(), Length(max=50)])
-    vermittlernummer = StringField("Vermittlernummer (optional, alternativer Login)", validators=[Optional(), Length(max=50)])
+    vermittlernummer = StringField("Vermittlernummer (Zuordnung Leipziger Liste, alternativer Login)", validators=[Optional(), Length(max=50)])
     role = RadioField(
         "Rolle",
         choices=[("admin", "Admin – alle Bereiche"), ("mitarbeiter", "Mitarbeiter – nur Zeiterfassung")],

@@ -149,7 +149,7 @@
                       <td class="px-4 py-3">{{ badge(row.status_label, variant=row.status_variant) }}</td>
                       <td class="px-4 py-3 text-text-muted">{{ row.product_line }}</td>
                       <td class="px-4 py-3 text-text-muted">{{ row.start_date_label }}</td>
-                      <td class="px-4 py-3 text-text-muted">{{ row.broker_number }}</td>
+                      <td class="px-4 py-3 text-text-muted">{{ row.broker_number | vermittlernummer }}</td>
                       <td class="px-4 py-3">
                         <div class="flex flex-col gap-1">
                           <span class="font-medium">{{ row.completion_label }}</span>
@@ -198,7 +198,7 @@
               <td>{{ badge(row.status_label, variant=row.status_variant) }}</td>
               <td class="text-text-muted">{{ row.product_line }}</td>
               <td class="text-text-muted">{{ row.start_date_label }}</td>
-              <td class="text-text-muted">{{ row.broker_number }}</td>
+              <td class="text-text-muted">{{ row.broker_number | vermittlernummer }}</td>
               <td>
                 <div class="ops-result-cell">
                   <span class="font-medium text-text">{{ row.completion_label }}</span>

@@ -3,7 +3,12 @@ from flask_login import login_required
 
 from app.models import Customer, DocumentCustomer, Task
 from app.models.enums import TaskStatus
-from app.services.customers import DEFAULT_CUSTOMER_PAGE_SIZE, MAX_CUSTOMER_PAGE_SIZE, build_customer_detail_context, build_customer_directory
+from app.services.customers import (
+    DEFAULT_CUSTOMER_PAGE_SIZE,
+    MAX_CUSTOMER_PAGE_SIZE,
+    build_customer_detail_context,
+    build_customer_directory,
+)
 from app.tenancy import get_or_404_scoped
 
 customers_bp = Blueprint("customers", __name__, url_prefix="/customers")

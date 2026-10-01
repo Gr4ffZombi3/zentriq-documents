@@ -12,12 +12,13 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import defer, joinedload, selectinload
 
 from app.models import Document, DocumentCustomer
 from app.models.enums import DocType, ListScope, PotentialCategory
-from app.services.customer_normalization import normalize_customer_name, normalize_postal_code
 from app.services.analysis.potential_classification import classify_row, explain_category
+from app.services.customer_normalization import normalize_customer_name, normalize_postal_code
+from app.utils.vermittlernummer import format_vermittlernummer, same_vermittlernummer, vermittlernummer_key
 
 STATUS_FILTER_OPTIONS = [
     ("alle", "Alle"),
@@ -73,8 +74,10 @@ def _base_query(document_id: int | None, list_scope: ListScope | None, date_from
 
 
 def get_leipziger_documents() -> list[Document]:
+    # Fuer die Listenauswahl genuegen Metadaten: OCR-Rohtext, Roh-JSON und die Zeilendaten
+    # aller Listen werden hier bewusst nicht geladen (wachsen mit jeder hochgeladenen Liste).
     return (
-        Document.query.options(selectinload(Document.document_customers))
+        Document.query.options(defer(Document.raw_text), defer(Document.raw_json))
         .filter(Document.doc_type == DocType.LEIPZIGER_LISTE)
         .order_by(Document.uploaded_at.desc())
         .all()
@@ -104,7 +107,7 @@ def get_leipziger_document_options() -> list[dict]:
 
 def build_row_view(doc_customer: DocumentCustomer, row: dict, confidence: dict | None = None) -> dict:
     confidence = confidence or {}
-    status_key = _row_status_key(row)
+    status_key = row_status_key(row)
     status_label, status_variant = STATUS_PRESENTATION[status_key]
     is_uncertain = _row_is_uncertain(confidence)
     start_date = row.get("contract_start_date")
@@ -295,7 +298,7 @@ def get_potential_records(
                 continue
             if product_line and row_view["product_line"] != product_line:
                 continue
-            if broker_number and row_view["broker_number"] != broker_number:
+            if broker_number and vermittlernummer_key(row_view["broker_number"]) != vermittlernummer_key(broker_number):
                 continue
 
             records.append(
@@ -315,7 +318,6 @@ def get_potential_records(
 
 
 def get_analysis_summary(document: Document | None = None) -> dict:
-    counters = _empty_summary()
     document_id = document.id if document is not None else None
     rows = []
     reliable_ohne_antrag = 0
@@ -405,13 +407,19 @@ def _analysis_meta(document: Document) -> dict:
 
 
 def _document_broker_label(rows: list[dict], current_broker_number: str | None) -> str:
-    broker_numbers = sorted({row["broker_number"] for row in rows if row["broker_number"] and row["broker_number"] != "-"})
+    broker_numbers = sorted(
+        {
+            format_vermittlernummer(row["broker_number"])
+            for row in rows
+            if row["broker_number"] and row["broker_number"] != "-"
+        }
+    )
     if not broker_numbers:
         return "-"
     if len(broker_numbers) == 1:
         return broker_numbers[0]
-    if current_broker_number and current_broker_number in broker_numbers:
-        return f"{current_broker_number} + weitere"
+    if current_broker_number and any(same_vermittlernummer(current_broker_number, number) for number in broker_numbers):
+        return f"{format_vermittlernummer(current_broker_number)} + weitere"
     return "Mehrere"
 
 
@@ -425,7 +433,7 @@ def _document_list_type_label(document: Document) -> str:
     return "Nicht angegeben"
 
 
-def _row_status_key(row: dict) -> str:
+def row_status_key(row: dict) -> str:
     status_code = str(row.get("status_code") or "").strip().lower()
     if row.get("is_storno") or status_code == "storno":
         return "storno"

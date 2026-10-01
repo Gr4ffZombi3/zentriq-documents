@@ -13,7 +13,11 @@ from flask_login import current_user
 # Blueprints, die Mitarbeiter vollstaendig erreichen duerfen (Admin-Unterseiten der
 # Zeiterfassung sind dort zusaetzlich per @admin_required abgesichert).
 EMPLOYEE_ALLOWED_BLUEPRINTS = frozenset({"auth", "timetracking"})
-EMPLOYEE_ALLOWED_ENDPOINTS = frozenset({"static", "portal.home", "settings.index", "settings.profile"})
+# "leipziger.index" zeigt Mitarbeitern ausschliesslich die ueber ihre eigene Vermittlernummer
+# zugeordneten offenen Vorgaenge.
+EMPLOYEE_ALLOWED_ENDPOINTS = frozenset(
+    {"static", "portal.home", "settings.index", "settings.profile", "leipziger.index"}
+)
 
 
 def is_endpoint_allowed_for_employee(endpoint: str | None, blueprint: str | None) -> bool:

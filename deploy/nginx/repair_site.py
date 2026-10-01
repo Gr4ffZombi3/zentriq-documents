@@ -6,7 +6,6 @@ import re
 import sys
 from pathlib import Path
 
-
 TARGET_PROXY = "proxy_pass http://127.0.0.1:8000;"
 
 

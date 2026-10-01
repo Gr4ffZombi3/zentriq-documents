@@ -7,95 +7,44 @@
     action="{{ url_for('upload.upload_document') }}"
     method="post"
     enctype="multipart/form-data"
-    class="upload-dropzone upload-widget-shell p-5 sm:p-6 lg:p-7"
+    class="upload-dropzone upload-compact-shell"
   >
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="flex flex-col gap-5">
-      <div class="upload-widget-header">
-        <div class="max-w-2xl">
-          <span class="page-eyebrow">Dokument-Upload</span>
-          <h2 class="upload-widget-title">Leipziger Liste hochladen</h2>
-          <p class="upload-widget-copy">PDF auswählen, direkt in die Queue stellen und den Status live verfolgen. Alles bleibt in derselben Arbeitsfläche sichtbar.</p>
-        </div>
-
-        <div class="upload-widget-aside">
-          <div class="flex flex-col gap-2">
-            <label for="upload-list-type" class="field-label">Welche Liste wird hochgeladen?</label>
-            <select id="upload-list-type" name="list_type" required class="field-surface upload-list-type-select">
-              <option value="">Bitte auswählen</option>
-              <option value="own" {{ 'selected' if selected_list_type == 'own' else '' }}>Eigene Leipziger Liste</option>
-              <option value="gs" {{ 'selected' if selected_list_type == 'gs' else '' }}>GS-Liste</option>
-              <option value="comparison" {{ 'selected' if selected_list_type == 'comparison' else '' }}>Vergleichsliste</option>
-              <option value="other" {{ 'selected' if selected_list_type == 'other' else '' }}>Sonstige Leipziger Liste</option>
-            </select>
-            <p class="text-xs leading-6 text-text-soft">Die Auswahl steuert nur die fachliche Einordnung des Dokuments im Workspace.</p>
-          </div>
-        </div>
-      </div>
-
-      <label for="file-input" class="cursor-pointer" data-upload-label>
-        <div class="upload-drop-target text-center">
-          <span class="upload-drop-icon" data-upload-icon>
-            {{ icon('upload', class='h-8 w-8') }}
-          </span>
-          <div>
-            <p class="text-base font-semibold tracking-tight text-text sm:text-lg">PDF hierher ziehen oder Datei auswählen</p>
-            <p class="mt-2 text-sm leading-7 text-text-muted">Nach der Auswahl startet der Upload sofort. Das Dokument erscheint direkt in der Liste und die Analyse läuft im Hintergrund weiter.</p>
-          </div>
-          <div class="chip-bar justify-center">
-            <span class="meta-chip">Nur PDF</span>
-            <span class="meta-chip">Sofortstart</span>
-            <span class="meta-chip">Live-Status</span>
-          </div>
-        </div>
+    <div class="upload-compact">
+      <h2 class="upload-compact-title">Liste hochladen</h2>
+      <label class="filter-field">
+        <span>Listentyp</span>
+        <select id="upload-list-type" name="list_type" required>
+          <option value="">Bitte auswählen</option>
+          <option value="own" {{ 'selected' if selected_list_type == 'own' else '' }}>Eigene Leipziger Liste</option>
+          <option value="gs" {{ 'selected' if selected_list_type == 'gs' else '' }}>GS-Liste</option>
+          <option value="comparison" {{ 'selected' if selected_list_type == 'comparison' else '' }}>Vergleichsliste</option>
+          <option value="other" {{ 'selected' if selected_list_type == 'other' else '' }}>Sonstige Leipziger Liste</option>
+        </select>
       </label>
-
+      <label for="file-input" class="upload-compact-drop" data-upload-label>
+        <span class="upload-compact-icon" data-upload-icon>{{ icon('upload', class='h-4 w-4') }}</span>
+        <span class="upload-compact-file" data-upload-filename>PDF auswählen oder hierher ziehen</span>
+      </label>
       <input id="file-input" type="file" name="file" accept="application/pdf" class="sr-only" data-upload-input>
+      <button type="submit" data-upload-submit class="btn-plain btn-plain-primary">Hochladen</button>
+    </div>
 
-      <div class="upload-submit-row">
-        <div class="min-w-0 flex-1">
-          <p class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-text-soft">Ausgewählte Datei</p>
-          <p class="mt-2 truncate text-sm font-medium text-text" data-upload-filename>Noch keine Datei ausgewählt.</p>
-        </div>
-        <div class="chip-bar">
-          <span class="meta-chip">{{ icon('search', class='h-3.5 w-3.5') }}OCR + KI</span>
-          <span class="meta-chip">{{ icon('list-checks', class='h-3.5 w-3.5') }}Listenanalyse</span>
-        </div>
-        <button
-          type="submit"
-          data-upload-submit
-          class="btn btn-primary h-11 px-5 text-sm whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-        >
-          {{ icon('upload', class='w-[1.05rem] h-[1.05rem]') }}
-          Dokumente einreichen
-        </button>
+    <div class="upload-runtime-panel hidden" data-upload-runtime aria-live="polite">
+      <div class="upload-runtime-header">
+        <p class="upload-runtime-stage" data-upload-stage>Bereit</p>
+        <span class="upload-runtime-percent" data-upload-percent>0%</span>
       </div>
-
-      <div class="upload-runtime-panel hidden" data-upload-runtime aria-live="polite">
-        <div class="upload-runtime-header">
-          <div>
-            <p class="upload-runtime-kicker">Live-Upload</p>
-            <p class="upload-runtime-stage" data-upload-stage>Bereit</p>
-          </div>
-          <span class="upload-runtime-percent" data-upload-percent>0%</span>
-        </div>
-        <div class="upload-runtime-bar" aria-hidden="true">
-          <span data-upload-progress-bar></span>
-        </div>
-        <p class="upload-runtime-copy" data-upload-copy>Die Datei wird direkt in die Dokumentenliste eingereiht.</p>
+      <div class="upload-runtime-bar" aria-hidden="true">
+        <span data-upload-progress-bar></span>
       </div>
-
-      <div class="grid gap-2 text-sm text-text-muted sm:grid-cols-3">
-        <span class="upload-step-chip">1. Upload startet sofort</span>
-        <span class="upload-step-chip">2. Dokument erscheint direkt in der Liste</span>
-        <span class="upload-step-chip">3. Analyse läuft im Hintergrund weiter</span>
-      </div>
+      <p class="upload-runtime-copy" data-upload-copy></p>
     </div>
   </form>
 
   <p
     data-upload-error
-    class="mt-4 {{ '' if error else 'hidden' }} flex items-center gap-2 text-sm text-error"
+    class="mt-2 {{ '' if error else 'hidden' }} flex items-center gap-2 text-sm text-error"
   >
     {{ icon('alert-circle', class='w-4 h-4') }}
     <span>{{ error or '' }}</span>

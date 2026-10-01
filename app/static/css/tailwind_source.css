@@ -5446,3 +5446,511 @@
     letter-spacing: 0.04em;
   }
 }
+
+/* ==========================================================================
+   Kompakte Verwaltungsoberflaeche (Arbeitslisten, Filterleisten, Reiter)
+   Flach, dicht, tabellenorientiert. Steht am Ende und uebersteuert aeltere Regeln.
+   ========================================================================== */
+
+@layer base {
+  body,
+  .app-body {
+    font-size: 0.875rem;
+    line-height: 1.45;
+  }
+}
+
+@layer components {
+  .app-header-inner { height: 3rem; }
+  .app-brand-mark { height: 1.5rem; width: 1.5rem; font-size: 0.8rem; }
+  .app-brand-name { font-size: 0.95rem; }
+  .app-nav-link { font-size: 0.875rem; }
+  .app-subnav-link { padding: 0.55rem 0.7rem; font-size: 0.82rem; }
+  .app-subnav-search input { height: 1.85rem; }
+
+  .app-content {
+    gap: 1rem;
+    padding: 1rem 1rem 2.5rem;
+  }
+
+  @media (min-width: 64rem) {
+    .app-content { padding: 1.25rem 1.5rem 2.5rem; }
+  }
+
+  .page-shell,
+  .page-shell-wide { gap: 1rem; }
+  .page-eyebrow { display: none; }
+  .page-title { font-size: 1.2rem; }
+  .page-description { font-size: 0.82rem; color: var(--color-text-muted); }
+
+  .surface-card,
+  .panel,
+  .kpi-row { box-shadow: none; border-radius: var(--radius-sm); }
+  .panel-header { padding: 0.6rem 0.9rem; }
+  .panel-body { padding: 0.75rem 0.9rem; }
+  .panel-title { font-size: 0.9rem; }
+
+  .kpi { padding: 0.55rem 0.9rem; gap: 0.1rem; }
+  .kpi-value { font-size: 1.1rem; }
+
+  /* Aeltere Kennzahlen-Kacheln: kompakt und ohne Schatten. */
+  .ops-stat-card,
+  .stat-card,
+  .dashboard-metric-card,
+  .summary-metric,
+  .ops-meta-item {
+    min-height: 0 !important;
+    border-radius: var(--radius-sm);
+    box-shadow: none;
+    padding: 0.5rem 0.75rem;
+  }
+  .ops-stat-value,
+  .stat-value,
+  .dashboard-metric-value,
+  .summary-metric-value { font-size: 1.1rem !important; line-height: 1.3; }
+  .ops-toolbar-panel,
+  .ops-meta-panel,
+  .filter-panel,
+  .dashboard-panel { border-radius: var(--radius-sm); box-shadow: none; padding: 0.75rem 0.9rem; }
+
+  .data-table { font-size: 0.85rem; }
+  .data-table thead th { padding: 0.45rem 0.75rem; font-size: 0.72rem; }
+  .data-table tbody td,
+  .data-table tbody th { padding: 0.45rem 0.75rem; }
+
+  .btn { border-radius: var(--radius-sm); }
+
+  /* --- Seitenleiste: Titel links, Aktionen rechts, eine Zeile ------------- */
+  .page-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+  }
+
+  .page-toolbar-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.15rem;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+  }
+
+  .page-toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .count-tag {
+    display: inline-block;
+    min-width: 1.5rem;
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-strong);
+    padding: 0.05rem 0.4rem;
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-muted);
+  }
+
+  .toolbar-form {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .toolbar-label,
+  .toolbar-meta {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+  }
+
+  .toolbar-select,
+  .filter-field select,
+  .filter-field input {
+    height: 1.9rem;
+    max-width: 22rem;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    padding: 0 0.5rem;
+    font-size: 0.82rem;
+    color: var(--color-text);
+  }
+
+  .toolbar-select:focus,
+  .filter-field select:focus,
+  .filter-field input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+  }
+
+  .btn-plain {
+    display: inline-flex;
+    height: 1.9rem;
+    align-items: center;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    padding: 0 0.7rem;
+    font-size: 0.82rem;
+    font-weight: 550;
+    color: var(--color-text);
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .btn-plain:hover {
+    background: var(--color-surface-muted);
+  }
+
+  .btn-plain-primary {
+    border-color: var(--color-primary);
+    background: var(--color-primary);
+    color: #fff;
+  }
+
+  .btn-plain-primary:hover {
+    background: var(--color-primary-hover);
+  }
+
+  .dark .btn-plain-primary { color: var(--color-bg); }
+
+  /* --- Arbeitsliste ---------------------------------------------------------- */
+  .worklist td { vertical-align: middle; }
+
+  .worklist-number {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    width: 1%;
+    padding-right: 2.5rem !important;
+  }
+
+  /* --- Mitarbeiterauswahl links, Inhalt rechts ------------------------------ */
+  .split-list {
+    display: grid;
+    gap: 1rem;
+    align-items: start;
+  }
+
+  @media (min-width: 48rem) {
+    .split-list { grid-template-columns: 15rem minmax(0, 1fr); }
+  }
+
+  .split-list-nav {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+  }
+
+  .split-list-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+    border-left: 3px solid transparent;
+    padding: 0.5rem 0.75rem;
+    color: var(--color-text);
+    text-decoration: none;
+  }
+
+  .split-list-link:last-child { border-bottom: 0; }
+  .split-list-link:hover { background: var(--color-surface-muted); }
+
+  .split-list-link.is-active {
+    border-left-color: var(--color-primary);
+    background: var(--color-primary-soft);
+    font-weight: 600;
+  }
+
+  .split-list-name { display: flex; min-width: 0; flex-direction: column; }
+
+  .split-list-sub {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--color-text-muted);
+  }
+
+  /* --- Reiter innerhalb eines Panels ---------------------------------------- */
+  .panel-tabs {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--color-border);
+    padding: 0 0.5rem;
+  }
+
+  .panel-tab {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.55rem 0.6rem;
+    font-size: 0.85rem;
+    font-weight: 550;
+    color: var(--color-text-muted);
+    text-decoration: none;
+  }
+
+  .panel-tab:hover { color: var(--color-text); }
+
+  .panel-tab.is-active {
+    color: var(--color-text);
+    font-weight: 650;
+  }
+
+  .panel-tab.is-active::after {
+    content: "";
+    position: absolute;
+    left: 0.6rem;
+    right: 0.6rem;
+    bottom: -1px;
+    height: 2px;
+    background: var(--color-primary);
+  }
+
+  /* --- "Weitere" in der Bereichsnavigation (natives <details>) -------------- */
+  .app-subnav-more { position: relative; flex-shrink: 0; }
+
+  .app-subnav-more summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    list-style: none;
+    cursor: pointer;
+  }
+
+  .app-subnav-more summary::-webkit-details-marker { display: none; }
+
+  .app-subnav-menu {
+    position: absolute;
+    right: 0;
+    z-index: 50;
+    display: flex;
+    min-width: 12rem;
+    flex-direction: column;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    padding: 0.25rem 0;
+    box-shadow: 0 6px 16px -8px var(--color-shadow-strong);
+  }
+
+  .app-subnav-menu a {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    color: var(--color-text);
+    text-decoration: none;
+  }
+
+  .app-subnav-menu a:hover,
+  .app-subnav-menu a.is-active { background: var(--color-surface-muted); }
+  .app-subnav-menu a.is-active { font-weight: 650; }
+
+  /* --- Filterleiste ---------------------------------------------------------- */
+  .filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.5rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    padding: 0.6rem 0.75rem;
+  }
+
+  .filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.75rem;
+    font-weight: 550;
+    color: var(--color-text-muted);
+  }
+
+  .filter-field-wide select { min-width: 16rem; }
+
+  .filter-check {
+    display: inline-flex;
+    height: 1.9rem;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
+    color: var(--color-text);
+  }
+
+  .filter-actions { display: flex; gap: 0.4rem; margin-left: auto; }
+
+  /* --- Kennwerte als eine Zeile ---------------------------------------------- */
+  .fact-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.5rem;
+    margin: 0;
+    font-size: 0.82rem;
+  }
+
+  .fact-line > div { display: flex; align-items: baseline; gap: 0.35rem; }
+  .fact-line dt { color: var(--color-text-muted); }
+  .fact-line dd { margin: 0; font-weight: 600; color: var(--color-text); }
+
+  .fact-line-numbers {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    padding: 0.5rem 0.75rem;
+  }
+
+  .fact-line-numbers dd { font-variant-numeric: tabular-nums; }
+
+  /* --- Dichte Tabelle mit Gruppenzeilen ------------------------------------- */
+  .data-table-dense tbody td,
+  .data-table-dense tbody th { padding: 0.35rem 0.75rem; }
+
+  .data-table .group-row th {
+    border-top: 1px solid var(--color-border-strong);
+    background: var(--color-surface-muted);
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .group-block:first-of-type .group-row th { border-top: 0; }
+
+  .group-meta {
+    margin-left: 0.75rem;
+    font-size: 0.78rem;
+    font-weight: 400;
+    color: var(--color-text-muted);
+  }
+
+  .group-row .badge,
+  .group-row [class*="status-pill"] { margin-left: 0.5rem; }
+}
+
+/* Ausserhalb der Layer: neutralisiert Rundungen, Schatten und Verlaeufe aus aelteren
+   Utility-Klassen in den Seiten-Templates (Utilities stehen sonst ueber den Komponenten). */
+.app-content [class*="rounded-["],
+.app-content .rounded-xl,
+.app-content .rounded-2xl,
+.app-content .rounded-3xl {
+  border-radius: var(--radius-sm);
+}
+
+.app-content [class*="shadow-soft"],
+.app-content .shadow-sm,
+.app-content .shadow-md,
+.app-content .shadow-lg,
+.app-content .shadow-xl {
+  box-shadow: none;
+}
+
+.app-content [class*="bg-gradient"],
+.app-content [class*="bg-linear"] {
+  background-image: none;
+}
+
+@layer components {
+  /* --- Upload in einer Zeile ------------------------------------------------- */
+  .upload-compact-shell {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    padding: 0.6rem 0.75rem;
+  }
+
+  .upload-compact {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.5rem 0.75rem;
+  }
+
+  .upload-compact-title {
+    align-self: center;
+    margin-right: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 650;
+  }
+
+  .upload-compact-drop {
+    display: inline-flex;
+    height: 1.9rem;
+    min-width: 16rem;
+    flex: 1;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px dashed var(--color-border-strong);
+    border-radius: var(--radius-sm);
+    padding: 0 0.6rem;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+    cursor: pointer;
+  }
+
+  .upload-compact-drop:hover,
+  .upload-dropzone-active .upload-compact-drop {
+    border-color: var(--color-primary);
+    color: var(--color-text);
+  }
+
+  .upload-compact-file {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .upload-compact-shell .upload-runtime-panel { margin-top: 0.6rem; border-radius: var(--radius-sm); }
+
+  /* --- Dokumentliste: Zeilen statt Karten ------------------------------------ */
+  .document-list-shell { border-radius: var(--radius-sm); box-shadow: none; }
+  .document-list-head { padding: 0.45rem 0.9rem; font-size: 0.72rem; letter-spacing: 0; text-transform: none; }
+  .document-list-row { padding: 0.5rem 0.9rem; }
+  .document-row-icon { display: none; }
+  .document-row-title { font-size: 0.875rem; }
+  .document-row-subtitle { font-size: 0.78rem; }
+  .document-row-value { font-size: 0.85rem; }
+
+  @media (min-width: 64rem) {
+    .document-row-label { display: none; }
+  }
+
+  .document-list-toolbar { gap: 0.5rem; }
+  .document-list-toolbar .topbar-search,
+  .document-list-toolbar .field-surface { min-height: 0; height: 1.9rem; padding-top: 0; padding-bottom: 0; border-radius: var(--radius-sm); font-size: 0.82rem; }
+  .document-toolbar-label { display: none; }
+}
+
+@layer components {
+  /* --- Anmeldung: ein schlichtes, zentriertes Formular ---------------------- */
+  .auth-simple {
+    display: flex;
+    min-height: 100dvh;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  .auth-simple-inner { width: 100%; max-width: 24rem; }
+
+  .auth-simple-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+    font-size: 1rem;
+    font-weight: 650;
+  }
+
+  .auth-simple-title { font-size: 1.15rem; font-weight: 650; }
+  .auth-simple .surface-card { border-radius: var(--radius-sm); box-shadow: none; }
+}

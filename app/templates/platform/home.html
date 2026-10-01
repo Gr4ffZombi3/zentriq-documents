@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Plattform – Zentriq{% endblock %}
+{% block content %}
+{# Startseite des Plattformbetreibers: ausschliesslich Konto- und Technikebene - keine Inhalte
+   der Bueros (Leipziger Liste, Memo, Kunden, Arbeitszeiten). #}
+{% set db_ok = status[0][2] %}
+<div class="page-shell">
+  <header class="dash-head">
+    <h1 class="dash-greeting">Plattform</h1>
+    <p class="dash-date">Verwaltung der Büros und Konten</p>
+  </header>
+
+  <div class="dash-cards dash-cards-4">
+    <section class="dash-card" aria-labelledby="kachel-bueros">
+      <div class="dash-card-head"><h2 class="dash-card-title" id="kachel-bueros">Büros</h2></div>
+      <div class="dash-card-body">
+        <p class="dash-card-value">{{ offices.active }} <span class="dash-card-unit">aktiv</span></p>
+        <p class="dash-card-meta">
+          {{ offices.suspended }} deaktiviert{% if offices.without_admin %} · <span class="text-warning">{{ offices.without_admin }} ohne Büro-Admin</span>{% endif %}
+        </p>
+      </div>
+      <div class="dash-card-actions"><a class="btn btn-secondary" href="{{ url_for('platform.offices') }}">Öffnen</a></div>
+    </section>
+
+    <section class="dash-card" aria-labelledby="kachel-benutzer">
+      <div class="dash-card-head"><h2 class="dash-card-title" id="kachel-benutzer">Benutzer</h2></div>
+      <div class="dash-card-body">
+        <p class="dash-card-value">{{ users.active }} <span class="dash-card-unit">aktive Konten</span></p>
+        <p class="dash-card-meta">{{ users.total }} insgesamt</p>
+      </div>
+      <div class="dash-card-actions"><a class="btn btn-secondary" href="{{ url_for('platform.users') }}">Öffnen</a></div>
+    </section>
+
+    <section class="dash-card" aria-labelledby="kachel-system">
+      <div class="dash-card-head"><h2 class="dash-card-title" id="kachel-system">System</h2></div>
+      <div class="dash-card-body">
+        <p class="dash-card-value is-text">{% if db_ok %}Betriebsbereit{% else %}<span class="text-danger">Datenbank nicht erreichbar</span>{% endif %}</p>
+        <p class="dash-card-meta">{% if last_error %}Letzter Fehler: {{ last_error.occurred_at | local_dt }}{% else %}Keine Systemfehler protokolliert{% endif %}</p>
+      </div>
+      <div class="dash-card-actions"><a class="btn btn-secondary" href="{{ url_for('platform.system') }}">Öffnen</a></div>
+    </section>
+
+    <section class="dash-card" aria-labelledby="kachel-sicherheit">
+      <div class="dash-card-head"><h2 class="dash-card-title" id="kachel-sicherheit">Sicherheit</h2></div>
+      <div class="dash-card-body">
+        <p class="dash-card-value">{{ security.without_2fa }} <span class="dash-card-unit">Konten ohne 2FA</span></p>
+        <p class="dash-card-meta">{{ security.failed_logins }} fehlgeschlagene Anmeldungen (24 Std.)</p>
+      </div>
+      <div class="dash-card-actions"><a class="btn btn-secondary" href="{{ url_for('platform.security') }}">Öffnen</a></div>
+    </section>
+  </div>
+</div>
+{% endblock %}

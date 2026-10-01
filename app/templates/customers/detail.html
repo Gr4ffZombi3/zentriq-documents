@@ -124,17 +124,17 @@
         </div>
       </div>
       {% if possible_duplicates %}
-        <div class="mt-5 flex flex-col gap-2">
+        <div class="mt-5 flex flex-col gap-2" aria-label="Mögliche Dubletten">
           {% for duplicate in possible_duplicates %}
-            <a href="{{ url_for('customers.detail', customer_id=duplicate.id) }}" class="ops-inline-link-row">
+            {% set other = duplicate.customer %}
+            <a href="{{ url_for('customers.compare', customer_id=customer.id, other_id=other.id) }}" class="ops-inline-link-row">
               <div class="min-w-0">
-                <p class="truncate text-sm font-semibold text-text">{{ duplicate.name }}</p>
+                <p class="truncate text-sm font-semibold text-text">{{ other.name }}</p>
                 <p class="mt-1 text-xs text-text-soft">
-                  {{ duplicate.date_of_birth.strftime('%d.%m.%Y') if duplicate.date_of_birth else 'Kein Geburtsdatum' }}
-                  {% if duplicate.postal_code %} | {{ duplicate.postal_code }}{% endif %}
+                  {{ duplicate.reason_label }}{% if other.customer_number %} · Kundennr. {{ other.customer_number }}{% endif %}{% if other.phone %} · {{ other.phone }}{% endif %}
                 </p>
               </div>
-              <span class="text-xs text-warning">Prüfen</span>
+              <span class="text-xs text-warning">Vergleichen</span>
             </a>
           {% endfor %}
         </div>

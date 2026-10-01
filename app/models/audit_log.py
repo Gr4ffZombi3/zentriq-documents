@@ -32,6 +32,7 @@ class AuditEventType(enum.Enum):
     MEMO_TRANSCRIBED = "memo_transcribed"
     LEIPZIGER_LIST_UPLOADED = "leipziger_list_uploaded"
     SESSIONS_REVOKED = "sessions_revoked"
+    CUSTOMER_MERGED = "customer_merged"
 
 
 # Sicherheitsrelevante Ereignisse ohne fachlichen Inhalt - nur diese sind fuer den
@@ -73,6 +74,7 @@ OFFICE_ACTIVITY_EVENT_TYPES = (
     AuditEventType.MEMO_TRANSCRIBED,
     AuditEventType.LEIPZIGER_LIST_UPLOADED,
     AuditEventType.SESSIONS_REVOKED,
+    AuditEventType.CUSTOMER_MERGED,
 )
 
 

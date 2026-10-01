@@ -19,11 +19,10 @@
 
   {% call panel(flush=True) %}
     <div class="table-wrap">
-      <table class="data-table">
+      <table class="data-table data-table-fit table-stack-md">
         <thead>
           <tr>
-            <th scope="col">E-Mail</th>
-            <th scope="col">Name</th>
+            <th scope="col">Name / E-Mail</th>
             <th scope="col">Büro</th>
             <th scope="col">Rolle</th>
             <th scope="col">Status</th>
@@ -37,17 +36,19 @@
             {% set profile = item.employee_profile %}
             {% set tenant = tenants.get(item.tenant_id) %}
             <tr class="{{ '' if item.is_active else 'is-muted' }}">
-              <th scope="row" class="cell-strong">{{ item.email }}{% if item.id == current_user.id %} <span class="cell-sub">Sie</span>{% endif %}</th>
-              <td>{{ profile.display_name if profile and profile.display_name else '–' }}</td>
+              <th scope="row" class="cell-strong cell-person">
+                {{ profile.display_name if profile and profile.display_name else '–' }}
+                <span class="cell-sub cell-email">{{ item.email }}{% if item.id == current_user.id %} · Sie{% endif %}</span>
+              </th>
               <td>{% if tenant %}<a class="table-link" href="{{ url_for('platform.office_detail', tenant_id=tenant.id) }}">{{ tenant.name }}</a>{% else %}–{% endif %}</td>
               <td>{{ item.role.label }}</td>
               <td>{{ state_tag('Aktiv', 'success') if item.is_active else state_tag('Deaktiviert', 'neutral') }}</td>
-              <td>{{ state_tag('Aktiv', 'success') if item.two_factor_enabled else state_tag('Nicht eingerichtet', 'warning') }}</td>
-              <td class="whitespace-nowrap">{{ item.last_login_at | local_dt(default='noch nie') }}</td>
-              <td class="text-right"><a class="table-action" href="{{ url_for('platform.user_edit', user_id=item.id) }}">Bearbeiten</a></td>
+              <td>{{ state_tag('Aktiv', 'success') if item.two_factor_enabled else state_tag('Fehlt', 'warning') }}</td>
+              <td class="whitespace-nowrap tabular-nums">{{ item.last_login_at | short_dt(default='noch nie') }}</td>
+              <td class="row-actions"><a class="table-action" href="{{ url_for('platform.user_edit', user_id=item.id) }}">Bearbeiten</a></td>
             </tr>
           {% else %}
-            <tr><td colspan="8" class="is-muted">Keine Benutzer.</td></tr>
+            <tr><td colspan="7" class="is-muted">Keine Benutzer.</td></tr>
           {% endfor %}
         </tbody>
       </table>

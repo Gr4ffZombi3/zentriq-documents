@@ -50,6 +50,7 @@ def create_app(config_object=None):
     from app.blueprints.customers.routes import customers_bp
     from app.blueprints.dashboard.routes import dashboard_bp
     from app.blueprints.documents.routes import documents_bp
+    from app.blueprints.intake.routes import intake_bp
     from app.blueprints.leipziger.routes import leipziger_bp
     from app.blueprints.office.routes import office_bp
     from app.blueprints.platform.routes import platform_bp
@@ -67,6 +68,7 @@ def create_app(config_object=None):
     app.register_blueprint(auth_bp)
     app.register_blueprint(portal_bp)
     app.register_blueprint(leipziger_bp)
+    app.register_blueprint(intake_bp)
     app.register_blueprint(bestand_bp)
     app.register_blueprint(chat_bp)
     app.register_blueprint(cockpit_bp)

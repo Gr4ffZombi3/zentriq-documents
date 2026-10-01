@@ -30,6 +30,7 @@ _TEXTS = {
     AuditEventType.MEMO_TRANSCRIBED: "Memo transkribiert",
     AuditEventType.LEIPZIGER_LIST_UPLOADED: "Leipziger Liste hochgeladen",
     AuditEventType.SESSIONS_REVOKED: "Andere Sitzungen abgemeldet",
+    AuditEventType.CUSTOMER_MERGED: "Kundendatensätze zusammengeführt",
 }
 
 

@@ -25,7 +25,7 @@
   {% if without_2fa %}
     {% call panel('Konten ohne Zwei-Faktor-Authentifizierung', 'Diese Konten müssen 2FA bei der nächsten Anmeldung einrichten.', flush=True) %}
       <div class="table-wrap">
-        <table class="data-table">
+        <table class="data-table table-stack-md">
           <thead><tr><th scope="col">E-Mail</th><th scope="col">Büro</th><th scope="col">Rolle</th><th scope="col">Letzte Anmeldung</th></tr></thead>
           <tbody>
             {% for item in without_2fa %}
@@ -45,7 +45,7 @@
   <div class="mt-5">
   {% call panel('Letzte Sicherheitsereignisse', flush=True) %}
     <div class="table-wrap">
-      <table class="data-table">
+      <table class="data-table table-stack-md">
         <thead><tr><th scope="col">Zeitpunkt</th><th scope="col">Ereignis</th><th scope="col">Konto</th><th scope="col">Büro</th><th scope="col">IP</th></tr></thead>
         <tbody>
           {% for event in events %}

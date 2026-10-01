@@ -35,7 +35,9 @@ COMMON_ALLOWED_ENDPOINTS = frozenset(
 
 # Blueprints, die Mitarbeiter vollstaendig erreichen duerfen (Admin-Unterseiten der
 # Zeiterfassung sind dort zusaetzlich per @admin_required abgesichert).
-EMPLOYEE_ALLOWED_BLUEPRINTS = frozenset({"timetracking"})
+# "intake": Universal-Upload (Mitarbeiter: nur Sprachnachrichten, Listen-Import bleibt
+# ueber /upload Buero-Admins vorbehalten).
+EMPLOYEE_ALLOWED_BLUEPRINTS = frozenset({"timetracking", "intake"})
 # "leipziger.index" zeigt Mitarbeitern ausschliesslich die ueber ihre eigene Vermittlernummer
 # zugeordneten Vorgaenge. Memo (dashboard.*) speichert nichts; der Kundenabgleich bleibt im
 # eigenen Mandanten.

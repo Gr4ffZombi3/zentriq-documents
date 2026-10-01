@@ -1,8 +1,16 @@
-from flask import Blueprint, render_template, request
-from flask_login import login_required
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 
+from app.auth.permissions import admin_required
 from app.models import Customer, DocumentCustomer, Task
 from app.models.enums import TaskStatus
+from app.services.customer_duplicates import (
+    MergeError,
+    compare_rows,
+    duplicate_reason,
+    link_counts,
+    merge_customers,
+)
 from app.services.customers import (
     DEFAULT_CUSTOMER_PAGE_SIZE,
     MAX_CUSTOMER_PAGE_SIZE,
@@ -60,3 +68,46 @@ def detail(customer_id):
         document_customers=document_customers,
         open_tasks=open_tasks,
     )
+
+
+def _duplicate_pair(customer_id: int, other_id: int):
+    """Beide Datensaetze aus dem eigenen Buero (sonst 404) und als Dublette erkannt."""
+    customer = get_or_404_scoped(Customer, customer_id)
+    other = get_or_404_scoped(Customer, other_id)
+    reason = duplicate_reason(customer, other)
+    if reason is None:
+        abort(404)
+    return customer, other, reason
+
+
+@customers_bp.get("/<int:customer_id>/dublette/<int:other_id>")
+@login_required
+@admin_required
+def compare(customer_id, other_id):
+    customer, other, reason = _duplicate_pair(customer_id, other_id)
+    return render_template(
+        "customers/compare.html",
+        customer=customer,
+        other=other,
+        reason=reason,
+        rows=compare_rows(customer, other),
+        counts=(link_counts(customer), link_counts(other)),
+    )
+
+
+@customers_bp.post("/<int:customer_id>/zusammenfuehren/<int:other_id>")
+@login_required
+@admin_required
+def merge(customer_id, other_id):
+    """Fuehrt `other` in `customer` zusammen - nur nach ausdruecklicher Bestaetigung."""
+    customer, other, _reason = _duplicate_pair(customer_id, other_id)
+    if request.form.get("bestaetigt") != "ja":
+        flash("Bitte bestätigen, dass es sich eindeutig um denselben Kunden handelt.", "error")
+        return redirect(url_for("customers.compare", customer_id=customer.id, other_id=other.id))
+    try:
+        merge_customers(customer, other, current_user)
+    except MergeError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("customers.compare", customer_id=customer.id, other_id=other.id))
+    flash("Die Datensätze wurden zusammengeführt. Alle Verknüpfungen sind erhalten.", "success")
+    return redirect(url_for("customers.detail", customer_id=customer_id))

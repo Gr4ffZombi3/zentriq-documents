@@ -11,6 +11,7 @@ Konto-Relationen (employee_profile) mandantenuebergreifend korrekt funktionieren
 
 import platform as python_platform
 import subprocess
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from importlib.metadata import PackageNotFoundError, version
 
@@ -90,7 +91,31 @@ def _user_counts() -> dict[int, dict]:
 
 @platform_bp.get("")
 def index():
-    return redirect(url_for("platform.offices"))
+    """Startseite des Plattformbetreibers: nur Kontoebene und Technik - keine Buerodaten."""
+    tenants = Tenant.query.all()
+    counts = _user_counts()
+    active_tenants = [tenant for tenant in tenants if tenant.status == TenantStatus.ACTIVE]
+    with bypass_tenant_scope():
+        active_users = User.query.filter(User.is_active.is_(True), User.deleted_at.is_(None)).all()
+        without_2fa = sum(1 for user in active_users if not user.two_factor_enabled)
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
+    failed_logins = AuditLog.query.filter(
+        AuditLog.event_type.in_((AuditEventType.LOGIN_FAILED, AuditEventType.TWO_FACTOR_FAILED)),
+        AuditLog.created_at >= since,
+    ).count()
+    errors = latest_errors(1)
+    return render_template(
+        "platform/home.html",
+        offices={
+            "active": len(active_tenants),
+            "suspended": len(tenants) - len(active_tenants),
+            "without_admin": sum(1 for tenant in active_tenants if not counts.get(tenant.id, {}).get("office_admins")),
+        },
+        users={"active": len(active_users), "total": sum(entry["total"] for entry in counts.values())},
+        security={"without_2fa": without_2fa, "failed_logins": failed_logins},
+        status=_platform_status(),
+        last_error=errors[0] if errors else None,
+    )
 
 
 # --- Bueros ---------------------------------------------------------------------------------

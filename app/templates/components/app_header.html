@@ -23,6 +23,9 @@
             <input type="search" name="q" aria-label="Suche" placeholder="Suchen" maxlength="60" autocomplete="off"
                    value="{{ request.args.get('q', '') if request.endpoint == 'search.search' else '' }}">
           </form>
+          <a href="{{ url_for('intake.index') }}" class="app-header-action app-upload-link {{ 'is-active' if request.endpoint == 'intake.index' else '' }}" title="Datei hochladen">
+            {{ icon('upload', class='h-4 w-4') }}<span class="app-header-action-label">Hochladen</span>
+          </a>
           <a href="{{ url_for('search.search') }}" class="app-header-action app-search-link {{ 'is-active' if request.endpoint == 'search.search' else '' }}" aria-label="Suche">
             {{ icon('search', class='h-4 w-4') }}
           </a>

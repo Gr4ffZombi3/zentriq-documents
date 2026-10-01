@@ -10,6 +10,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from app.extensions import db
 from app.models import Customer, DocumentCustomer
 from app.services.analysis.leipziger_liste_view import build_row_view
+from app.services.customer_duplicates import duplicate_map, find_duplicates
 from app.services.llm.schemas import ExtractedCustomer
 from app.tenancy import get_current_tenant_id
 
@@ -43,16 +44,6 @@ def normalize_postal_code(value: str | None) -> str:
     if not value:
         return ""
     return re.sub(r"\s+", "", value).lower()
-
-
-def _is_strong_customer_match(left: Customer, right: Customer) -> bool:
-    if left.date_of_birth and right.date_of_birth and left.date_of_birth == right.date_of_birth:
-        return True
-    return bool(
-        left.postal_code
-        and right.postal_code
-        and normalize_postal_code(left.postal_code) == normalize_postal_code(right.postal_code)
-    )
 
 
 class CustomerMatcher:
@@ -111,22 +102,6 @@ class CustomerMatcher:
         )
 
 
-def build_possible_duplicate_map(customers: list[Customer]) -> dict[int, list[Customer]]:
-    grouped: dict[str, list[Customer]] = defaultdict(list)
-    for customer in customers:
-        grouped[normalize_customer_name(customer.name)].append(customer)
-
-    duplicate_map: dict[int, list[Customer]] = {}
-    for group in grouped.values():
-        if len(group) < 2:
-            continue
-        for customer in group:
-            matches = [candidate for candidate in group if candidate.id != customer.id and not _is_strong_customer_match(customer, candidate)]
-            if matches:
-                duplicate_map[customer.id] = matches
-    return duplicate_map
-
-
 def build_customer_directory(*, page: int = 1, per_page: int = DEFAULT_CUSTOMER_PAGE_SIZE) -> dict:
     safe_per_page = max(1, min(per_page, MAX_CUSTOMER_PAGE_SIZE))
     query = Customer.query.options(
@@ -134,8 +109,9 @@ def build_customer_directory(*, page: int = 1, per_page: int = DEFAULT_CUSTOMER_
     ).order_by(Customer.name.asc(), Customer.id.asc())
     pagination = query.paginate(page=page, per_page=safe_per_page, error_out=False)
 
-    duplicate_map = build_possible_duplicate_map(Customer.query.order_by(Customer.id.asc()).all())
-    items = [_build_customer_summary(customer, duplicate_map.get(customer.id, [])) for customer in pagination.items]
+    # Dubletten nur fuer die angezeigte Seite (eine Abfrage ueber die indizierten Schluessel).
+    duplicates = duplicate_map(list(pagination.items))
+    items = [_build_customer_summary(customer, duplicates.get(customer.id, [])) for customer in pagination.items]
     return {"items": items, "pagination": pagination}
 
 
@@ -170,7 +146,6 @@ def build_customer_detail_context(customer: Customer) -> dict:
             if not row_view["has_start_date"] and row_view["status_key"] != "storno":
                 open_cases += 1
 
-    duplicate_map = build_possible_duplicate_map(Customer.query.order_by(Customer.id.asc()).all())
     return {
         "document_customers": document_customers,
         "case_rows": case_rows,
@@ -182,7 +157,7 @@ def build_customer_detail_context(customer: Customer) -> dict:
             "open_cases": open_cases,
             "stornos": stornos,
         },
-        "possible_duplicates": duplicate_map.get(customer.id, []),
+        "possible_duplicates": find_duplicates(customer),
     }
 
 

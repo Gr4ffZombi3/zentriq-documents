@@ -2,7 +2,6 @@
 {% from "ui/display.html" import page_header %}
 {% from "ui/forms.html" import button %}
 {% from "ui/portal.html" import panel, state_tag %}
-{% set weekday_names = {'1': 'Mo', '2': 'Di', '3': 'Mi', '4': 'Do', '5': 'Fr', '6': 'Sa', '7': 'So'} %}
 {% block title %}Benutzer – Zentriq{% endblock %}
 {% block content %}
 <div class="page-shell page-shell-wide">
@@ -11,42 +10,42 @@
   {% endcall %}
 
   {% call panel(flush=True) %}
+    {# Desktop/Laptop: kompakte Tabelle ohne seitliches Scrollen; unter 64rem Karten. #}
     <div class="table-wrap">
-      <table class="data-table table-stack">
+      <table class="data-table data-table-fit users-table table-stack-md">
         <thead>
           <tr>
-            <th scope="col">Name</th>
-            <th scope="col">E-Mail</th>
-            <th scope="col">Vermittlernummer</th>
+            <th scope="col">Name / E-Mail</th>
+            <th scope="col">Vermittlernr.</th>
             <th scope="col">Rolle</th>
             <th scope="col" class="num">Soll/Woche</th>
             <th scope="col">Arbeitstage</th>
             <th scope="col">Status</th>
             <th scope="col">2FA</th>
             <th scope="col">Letzte Anmeldung</th>
-            <th scope="col"><span class="sr-only">Aktion</span></th>
+            <th scope="col" class="text-right"><span class="sr-only">Aktionen</span></th>
           </tr>
         </thead>
         <tbody>
           {% for item in users %}
             {% set profile = item.employee_profile %}
             <tr class="{{ '' if item.is_active else 'is-muted' }}">
-              <th scope="row" class="cell-strong stack-full">
+              <th scope="row" class="cell-strong cell-person stack-full">
                 {{ profile.display_name if profile and profile.display_name else '–' }}
                 {% if profile and profile.personnel_number %}<span class="cell-sub">Nr. {{ profile.personnel_number }}</span>{% endif %}
+                <span class="cell-sub cell-email">{{ item.email }}{% if item.id == current_user.id %} · Sie{% endif %}</span>
               </th>
-              <td class="stack-full" data-label="E-Mail">{{ item.email }}{% if item.id == current_user.id %} <span class="cell-sub">Sie</span>{% endif %}</td>
-              <td class="whitespace-nowrap" data-label="Vermittlernummer">{{ item.vermittlernummer | vermittlernummer }}</td>
-              <td data-label="Rolle">{{ item.role.label }}</td>
-              <td class="num" data-label="Soll/Woche">{{ (profile.weekly_target_minutes * 60) | duration if profile else '–' }}</td>
-              <td data-label="Arbeitstage">{% if profile %}{% for ch in profile.workdays %}{{ weekday_names.get(ch, ch) }}{{ ', ' if not loop.last }}{% endfor %}{% else %}–{% endif %}</td>
+              <td class="whitespace-nowrap tabular-nums" data-label="Vermittlernr.">{{ item.vermittlernummer | vermittlernummer }}</td>
+              <td class="whitespace-nowrap" data-label="Rolle">{{ item.role.label }}</td>
+              <td class="num whitespace-nowrap" data-label="Soll/Woche">{{ profile.weekly_target_minutes | hours_short if profile else '–' }}</td>
+              <td class="whitespace-nowrap" data-label="Arbeitstage">{{ profile.workdays | workdays_short if profile else '–' }}</td>
               <td data-label="Status">{{ state_tag('Aktiv', 'success') if item.is_active else state_tag('Deaktiviert', 'neutral') }}</td>
-              <td data-label="2FA">{{ state_tag('Aktiv', 'success') if item.two_factor_enabled else state_tag('Nicht eingerichtet', 'warning') }}</td>
-              <td class="whitespace-nowrap" data-label="Letzte Anmeldung">{{ item.last_login_at | local_dt(default='noch nie') }}</td>
-              <td class="text-right whitespace-nowrap stack-full stack-actions">
+              <td data-label="2FA"><span title="{{ 'Zwei-Faktor-Authentifizierung eingerichtet' if item.two_factor_enabled else 'Zwei-Faktor-Authentifizierung nicht eingerichtet' }}">{{ state_tag('Aktiv', 'success') if item.two_factor_enabled else state_tag('Fehlt', 'warning') }}</span></td>
+              <td class="whitespace-nowrap tabular-nums" data-label="Letzte Anmeldung">{{ item.last_login_at | short_dt(default='noch nie') }}</td>
+              <td class="row-actions stack-full stack-actions">
                 <a class="table-action" href="{{ url_for('settings.user_edit', user_id=item.id) }}">Bearbeiten</a>
                 {% if item.id != current_user.id %}
-                  <form method="post" action="{{ url_for('settings.user_delete', user_id=item.id) }}" class="inline" onsubmit="return confirm('Mitarbeiter wirklich löschen?');">
+                  <form method="post" action="{{ url_for('settings.user_delete', user_id=item.id) }}" onsubmit="return confirm('Mitarbeiter wirklich löschen?');">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="table-action table-action-danger">Löschen</button>
                   </form>

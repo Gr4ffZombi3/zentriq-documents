@@ -11,10 +11,20 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from sqlalchemy import or_
+
 from app.models import Customer
 from app.services.customer_normalization import normalize_customer_name
+from app.utils.customer_keys import (  # noqa: F401 - auch von Tests/Schemas importiert
+    format_phone,
+    normalize_customer_number,
+    normalize_phone,
+)
 
 MAX_CANDIDATES = 5
+# Namensabgleich: hoechstens so viele Transkriptwoerter als Vorfilter, so viele Kandidaten.
+MAX_NAME_PROBES = 40
+MAX_NAME_ROWS = 2000
 
 # Ziffernfolgen mit ueblichen Trennzeichen, optional mit +49 / 0049 / (0).
 _PHONE_PATTERN = re.compile(r"(?<![\w+])(?:\+|00)?\d[\d \t\-/()]{4,22}\d(?!\w)")
@@ -24,38 +34,6 @@ _CUSTOMER_NUMBER_PATTERN = re.compile(
 )
 
 
-def normalize_phone(raw: str | None) -> str | None:
-    """Einheitliche Form "+49..." fuer deutsche Schreibweisen:
-    0171 1234567, 01711234567, +49 171 1234567, 0049 171 1234567, +49 (0)171 1234567."""
-    if not raw:
-        return None
-    text = raw.strip()
-    has_plus = text.startswith("+")
-    digits = re.sub(r"\D", "", text)
-    if has_plus:
-        pass
-    elif digits.startswith("00"):
-        digits = digits[2:]
-    elif digits.startswith("0"):
-        digits = "49" + digits[1:]
-    else:
-        # Ohne Vorwahl ist eine Nummer nicht eindeutig zuzuordnen.
-        return None
-    if digits.startswith("490"):
-        digits = "49" + digits[3:]
-    if not 9 <= len(digits) <= 15:
-        return None
-    return "+" + digits
-
-
-def format_phone(normalized: str) -> str:
-    """Lesbare Anzeige deutscher Nummern als 0171 1234567."""
-    if normalized.startswith("+49"):
-        national = "0" + normalized[3:]
-        return f"{national[:4]} {national[4:]}" if national.startswith("01") else national
-    return normalized
-
-
 def extract_phone_numbers(text: str | None) -> list[str]:
     found: list[str] = []
     for match in _PHONE_PATTERN.finditer(text or ""):
@@ -63,10 +41,6 @@ def extract_phone_numbers(text: str | None) -> list[str]:
         if normalized and normalized not in found:
             found.append(normalized)
     return found
-
-
-def normalize_customer_number(raw: str | None) -> str:
-    return re.sub(r"[^0-9A-Z]", "", (raw or "").upper())
 
 
 def extract_customer_numbers(text: str | None) -> list[str]:
@@ -90,43 +64,37 @@ class MatchResult:
 def _by_phone(phones: list[str]) -> list[Customer]:
     if not phones:
         return []
-    wanted = set(phones)
-    rows = Customer.query.with_entities(Customer.id, Customer.phone).filter(Customer.phone.isnot(None)).all()
-    ids = [row.id for row in rows if normalize_phone(row.phone) in wanted]
-    return _load(ids)
+    return _load(Customer.query.filter(Customer.phone_key.in_(phones)))
 
 
 def _by_customer_number(numbers: list[str]) -> list[Customer]:
     if not numbers:
         return []
-    wanted = set(numbers)
-    rows = (
-        Customer.query.with_entities(Customer.id, Customer.customer_number)
-        .filter(Customer.customer_number.isnot(None))
-        .all()
-    )
-    ids = [row.id for row in rows if normalize_customer_number(row.customer_number) in wanted]
-    return _load(ids)
+    return _load(Customer.query.filter(Customer.customer_number_key.in_(numbers)))
 
 
 def _by_name(text: str) -> list[Customer]:
     """Ein Kunde passt, wenn alle (mindestens zwei) Bestandteile seines Namens als Woerter im
-    Transkript vorkommen - Reihenfolge egal ("Mustermann, Max" findet "Max Mustermann")."""
-    words = set(normalize_customer_name(text).split())
+    Transkript vorkommen - Reihenfolge egal ("Mustermann, Max" findet "Max Mustermann").
+    Gelesen wird nur der vorberechnete Namensschluessel; Kandidaten werden in der Datenbank
+    auf Namen vorgefiltert, die mindestens ein Wort des Transkripts enthalten."""
+    words = {word for word in normalize_customer_name(text).split() if len(word) >= 2}
     if not words:
         return []
-    ids = []
-    for row in Customer.query.with_entities(Customer.id, Customer.name).all():
-        parts = [part for part in normalize_customer_name(row.name).split() if len(part) >= 2]
-        if len(parts) >= 2 and all(part in words for part in parts):
-            ids.append(row.id)
-    return _load(ids)
+    # Laengste Woerter zuerst: Nachnamen sind selten, Fuellwoerter ("ist", "die") kurz.
+    probes = sorted(words, key=len, reverse=True)[:MAX_NAME_PROBES]
+    rows = (
+        Customer.query.with_entities(Customer.id, Customer.name_key)
+        .filter(Customer.name_key.isnot(None), or_(*(Customer.name_key.like(f"%{word}%") for word in probes)))
+        .limit(MAX_NAME_ROWS)
+        .all()
+    )
+    ids = [row.id for row in rows if (parts := row.name_key.split()) and len(parts) >= 2 and all(part in words for part in parts)]
+    return _load(Customer.query.filter(Customer.id.in_(ids))) if ids else []
 
 
-def _load(ids: list[int]) -> list[Customer]:
-    if not ids:
-        return []
-    return Customer.query.filter(Customer.id.in_(ids[: MAX_CANDIDATES + 1])).order_by(Customer.name).all()
+def _load(query) -> list[Customer]:
+    return query.order_by(Customer.name, Customer.id).limit(MAX_CANDIDATES + 1).all()
 
 
 def match_customer(transcript: str | None) -> MatchResult:

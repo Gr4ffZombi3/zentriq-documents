@@ -7363,3 +7363,117 @@
   }
   .offline-shell p { max-width: 22rem; margin: 0; font-size: 0.9rem; color: var(--color-text-muted); }
 }
+
+/* ==========================================================================
+   Responsive Tabellen, Dubletten, Universal-Upload, Startseiten 10/2026.
+   ========================================================================== */
+@layer components {
+  /* --- Breite Tabellen: Desktop ohne seitliches Scrollen ------------------------- */
+  .data-table-fit { table-layout: auto; }
+  .data-table-fit thead th { white-space: nowrap; padding-inline: 0.6rem; }
+  .data-table-fit tbody td,
+  .data-table-fit tbody th { padding-inline: 0.6rem; }
+  .data-table-fit thead th:first-child,
+  .data-table-fit tbody tr > :first-child { padding-left: 1.15rem; }
+  .data-table-fit thead th:last-child,
+  .data-table-fit tbody tr > :last-child { padding-right: 1.15rem; }
+  .cell-person { min-width: 11rem; }
+  .cell-email { display: block; overflow-wrap: anywhere; font-weight: 400; }
+
+  /* Unter 75rem (Tablet, Smartphone) werden breite Tabellen zu Karten - nie seitlich scrollen. */
+  @media (max-width: 74.99rem) {
+    .table-stack-md { min-width: 0 !important; }
+    .table-stack-md tbody tr > :first-child { grid-column: 1 / -1; }
+    .table-stack-md tbody td.row-actions,
+    .table-stack-md tbody td.text-right:last-child { grid-column: 1 / -1; text-align: left; }
+    .table-stack-md .row-actions form,
+    .table-stack-md .row-actions .table-action { display: inline-block; margin: 0 1rem 0 0; }
+    .table-stack-md tbody td[colspan] { grid-column: 1 / -1; }
+
+    /* --- Breite Tabellen (.table-stack-md): Karten ------ */
+    .table-stack-md,
+    .table-stack-md tbody { display: block; width: 100%; }
+    .table-stack-md thead { display: none; }
+
+    .table-stack-md tbody tr {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.55rem 1rem;
+      border-bottom: 1px solid var(--color-border);
+      padding: 0.85rem 1.15rem;
+    }
+    .table-stack-md tbody tr:last-child { border-bottom: 0; }
+
+    .table-stack-md tbody td,
+    .table-stack-md tbody th {
+      display: block;
+      width: auto;
+      min-width: 0;
+      border: 0 !important;
+      padding: 0 !important;
+      white-space: normal;
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+    .table-stack-md tbody tr:hover td,
+    .table-stack-md tbody tr:hover th { background: transparent; }
+
+    .table-stack-md [data-label]::before {
+      content: attr(data-label);
+      display: block;
+      margin-bottom: 0.1rem;
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: var(--color-text-soft);
+    }
+    .table-stack-md .stack-full { grid-column: 1 / -1; }
+    .table-stack-md tbody .num { text-align: left; }
+    .table-stack-md .stack-actions:empty { display: none; }
+
+  }
+
+  /* Tablet: Karten mit vier Spalten, damit die Liste kompakt bleibt. */
+  @media (min-width: 48rem) and (max-width: 74.99rem) {
+    .table-stack-md tbody tr { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+
+  /* --- Kopfleiste: Hochladen ------------------------------------------------------ */
+  .app-upload-link { padding: 0 0.6rem; }
+  /* Nur Symbol (Beschriftung per title/aria): die Kopfleiste ist bei 1440 px voll. */
+  .app-header-action.app-upload-link .app-header-action-label { display: none; }
+
+  /* --- Universal-Upload: erkannter Dateityp vor der Verarbeitung ------------------ */
+  .intake-detected {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-muted);
+    padding: 1.1rem 1.2rem;
+  }
+  .intake-detected-label { margin: 0; font-size: 0.95rem; font-weight: 650; color: var(--color-text); }
+  .intake-detected-file { margin: 0; font-size: 0.82rem; color: var(--color-text-muted); overflow-wrap: anywhere; }
+  .intake-detected .form-actions { margin-top: 0.5rem; border-top: 0; padding-top: 0; }
+
+  /* --- Memo: erkannter Kunde ------------------------------------------------------ */
+  .memo-match-name { margin: 0.35rem 0 0; font-size: 0.95rem; font-weight: 650; color: var(--color-text); }
+  .memo-match-facts { display: flex; flex-wrap: wrap; gap: 0.15rem 1.25rem; margin: 0.25rem 0 0; font-size: 0.85rem; }
+  .memo-match-facts > div { display: flex; gap: 0.3rem; }
+  .memo-match-facts dt { color: var(--color-text-muted); }
+  .memo-match-facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .memo-match .form-actions { margin-top: 0.75rem; }
+  .memo-candidates li .table-action { margin-left: auto; }
+
+  /* --- Dubletten-Vergleich -------------------------------------------------------- */
+  .compare-table th[scope="row"] { width: 11rem; font-weight: 550; color: var(--color-text-muted); }
+  .compare-table tr.is-different td { background: color-mix(in oklab, var(--color-warning) 7%, var(--color-surface)); }
+  .merge-form .panel-body { display: flex; flex-direction: column; gap: 0.75rem; }
+  .merge-form .checkbox-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 550; }
+
+  /* --- Startseite Plattform: vier Bereiche ---------------------------------------- */
+  @media (min-width: 64rem) {
+    .dash-cards-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+}

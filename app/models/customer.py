@@ -1,11 +1,19 @@
 from datetime import datetime, timezone
 
+from sqlalchemy import event
+
 from app.extensions import db
 from app.tenancy import TenantScopedMixin
+from app.utils.customer_keys import customer_keys
 
 
 class Customer(TenantScopedMixin, db.Model):
     __tablename__ = "customers"
+    __table_args__ = (
+        db.Index("ix_customers_tenant_name_key", "tenant_id", "name_key"),
+        db.Index("ix_customers_tenant_phone_key", "tenant_id", "phone_key"),
+        db.Index("ix_customers_tenant_customer_number_key", "tenant_id", "customer_number_key"),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False, index=True)
@@ -17,6 +25,12 @@ class Customer(TenantScopedMixin, db.Model):
     phone = db.Column(db.String(50), nullable=True)
     # Kundennummer des Bueros (optional). Wird nur angezeigt/abgeglichen, wenn hinterlegt.
     customer_number = db.Column(db.String(50), nullable=True, index=True)
+
+    # Vergleichsschluessel (app/utils/customer_keys.py), automatisch gepflegt (siehe unten):
+    # Dubletten-Erkennung und Memo-Kundenerkennung laufen ueber diese Indizes.
+    name_key = db.Column(db.String(255), nullable=True)
+    phone_key = db.Column(db.String(20), nullable=True)
+    customer_number_key = db.Column(db.String(50), nullable=True)
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(
@@ -40,3 +54,11 @@ class Customer(TenantScopedMixin, db.Model):
 
     def __repr__(self):
         return f"<Customer {self.id} {self.name!r}>"
+
+
+@event.listens_for(Customer, "before_insert")
+@event.listens_for(Customer, "before_update")
+def _refresh_customer_keys(mapper, connection, customer):
+    for column, value in customer_keys(customer.name, customer.phone, customer.customer_number).items():
+        if getattr(customer, column) != value:
+            setattr(customer, column, value)

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% from "ui/portal.html" import state_tag %}
+{% block title %}Mögliche Dublette – Zentriq{% endblock %}
+{% block content %}
+{% set reason_labels = {'customer_number': 'gleiche Kundennummer', 'phone': 'gleiche Telefonnummer', 'name': 'gleicher Name'} %}
+<div class="page-shell">
+  <a class="back-link" href="{{ url_for('customers.detail', customer_id=customer.id) }}">← {{ customer.name }}</a>
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">Mögliche Dublette</h1>
+      <p class="page-subtitle">Erkannt über: {{ reason_labels[reason] }}. Bitte beide Datensätze vergleichen.</p>
+    </div>
+  </div>
+
+  <section class="panel" aria-label="Vergleich der Datensätze">
+    <div class="table-wrap">
+      <table class="data-table data-table-dense compare-table">
+        <thead>
+          <tr>
+            <th scope="col">Feld</th>
+            <th scope="col">Bleibt erhalten <span class="cell-sub">Nr. {{ customer.id }}</span></th>
+            <th scope="col">Wird übernommen <span class="cell-sub">Nr. {{ other.id }}</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr class="{{ 'is-different' if row.state == 'differ' else '' }}">
+              <th scope="row">{{ row.label }}</th>
+              <td>{{ row.target or '–' }}</td>
+              <td>{{ row.source or '–' }}{% if row.state == 'fill' %} <span class="cell-sub">wird ergänzt</span>{% elif row.state == 'differ' %} <span class="cell-sub">abweichend – bleibt im Verlauf erhalten</span>{% endif %}</td>
+            </tr>
+          {% endfor %}
+          {% for label, count in counts[0].items() %}
+            <tr>
+              <th scope="row">{{ label }}</th>
+              <td class="tabular-nums">{{ count }}</td>
+              <td class="tabular-nums">{{ counts[1][label] }}{% if counts[1][label] %} <span class="cell-sub">werden übernommen</span>{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <form method="post" action="{{ url_for('customers.merge', customer_id=customer.id, other_id=other.id) }}" class="panel merge-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="panel-body">
+      <p class="form-hint">Datensatz Nr. {{ other.id }} wird in Nr. {{ customer.id }} übernommen und danach entfernt. Gefüllte Felder werden nie durch leere Werte überschrieben; alle Verknüpfungen bleiben erhalten. Die Aktion wird im Aktivitätsprotokoll dokumentiert.</p>
+      <label class="checkbox-row">
+        <input type="checkbox" name="bestaetigt" value="ja" required>
+        Beide Datensätze gehören eindeutig zu demselben Kunden.
+      </label>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Zusammenführen</button>
+        <a class="btn btn-ghost" href="{{ url_for('customers.compare', customer_id=other.id, other_id=customer.id) }}">Richtung tauschen</a>
+        <a class="btn btn-ghost" href="{{ url_for('customers.detail', customer_id=customer.id) }}">Abbrechen</a>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

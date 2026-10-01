@@ -759,7 +759,23 @@
     });
   }
 
+  // Kartenansicht breiter Tabellen: fehlende Beschriftungen der Zellen aus dem Tabellenkopf.
+  function initStackTables(root) {
+    (root || document).querySelectorAll("table.table-stack, table.table-stack-md").forEach(function (table) {
+      var labels = Array.prototype.map.call(table.querySelectorAll("thead th"), function (th) {
+        return th.textContent.trim();
+      });
+      table.querySelectorAll("tbody tr").forEach(function (row) {
+        Array.prototype.forEach.call(row.children, function (cell, index) {
+          if (index === 0 || cell.hasAttribute("data-label") || cell.hasAttribute("colspan") || cell.classList.contains("row-actions") || !labels[index]) return;
+          cell.setAttribute("data-label", labels[index]);
+        });
+      });
+    });
+  }
+
   function boot(root) {
+    initStackTables(root);
     initScrollStrips(root);
     initUploadWidgets(root);
     initTableEnhancers(root);

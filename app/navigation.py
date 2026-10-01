@@ -1,6 +1,6 @@
 """Hauptnavigation des Portals, rollenabhaengig:
 
-- SUPER_ADMIN: Bueros, Benutzer, Systemeinstellungen, Sicherheit (keine Fachbereiche).
+- SUPER_ADMIN: Uebersicht, Bueros, Benutzer, Systemeinstellungen, Sicherheit (keine Fachbereiche).
 - OFFICE_ADMIN: Uebersicht, Leipziger Liste, Memo, Zeiterfassung, Mitarbeiter, Aktivitaeten,
   Einstellungen.
 - EMPLOYEE: Uebersicht, Leipziger Liste, Memo, Zeiterfassung.
@@ -59,6 +59,7 @@ TIME_ITEMS = (
 )
 
 PLATFORM_AREAS = (
+    NavArea("platform_home", "Übersicht", "platform.index", ("platform.index",), admin_only=False),
     NavArea("platform_offices", "Büros", "platform.offices", ("platform.office",), admin_only=False),
     NavArea("platform_users", "Benutzer", "platform.users", ("platform.user",), admin_only=False),
     NavArea("platform_system", "Systemeinstellungen", "platform.system", ("platform.system",), admin_only=False),
@@ -144,7 +145,7 @@ def display_name_for(user) -> str:
 def home_endpoint_for(user) -> str:
     """Startseite nach dem Login: Super-Admins landen in der Bueroverwaltung, alle Buero-Rollen
     auf ihrer persoenlichen Uebersicht (Fallback: Profil, falls ein Bereich nicht registriert ist)."""
-    candidates = ("platform.offices",) if user.is_super_admin else ("portal.overview",)
+    candidates = ("platform.index",) if user.is_super_admin else ("portal.overview",)
     for endpoint in (*candidates, "timetracking.index", "settings.profile"):
         if endpoint in current_app.view_functions:
             return endpoint

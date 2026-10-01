@@ -444,7 +444,7 @@ def test_super_admin_navigation(app, world):
 
 def test_super_admin_home_is_platform(app, world):
     resp = login(app, "justin@example.com").get("/")
-    assert resp.headers["Location"].endswith("/plattform/bueros")
+    assert resp.headers["Location"].endswith("/plattform")
 
 
 def test_super_admin_creates_office_with_office_admin(app, world):

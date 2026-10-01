@@ -52,6 +52,34 @@ def iso_date_de(value: str | None) -> str:
         return value
 
 
+_WEEKDAY_SHORT = {"1": "Mo", "2": "Di", "3": "Mi", "4": "Do", "5": "Fr", "6": "Sa", "7": "So"}
+
+
+def workdays_short(value: str | None) -> str:
+    """"12345" -> "Mo–Fr", "124" -> "Mo, Di, Do", "1234567" -> "Mo–So"."""
+    days = sorted({ch for ch in (value or "") if ch in _WEEKDAY_SHORT})
+    if not days:
+        return "–"
+    numbers = [int(day) for day in days]
+    if len(numbers) >= 3 and numbers == list(range(numbers[0], numbers[-1] + 1)):
+        return f"{_WEEKDAY_SHORT[days[0]]}–{_WEEKDAY_SHORT[days[-1]]}"
+    return ", ".join(_WEEKDAY_SHORT[day] for day in days)
+
+
+def hours_short(minutes: int | None) -> str:
+    """Wochenstunden kompakt: 2400 Minuten -> "40 h", 2250 -> "37,5 h"."""
+    if minutes is None:
+        return "–"
+    hours = minutes / 60
+    text = f"{hours:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+    return f"{text} h"
+
+
+def short_dt(value: datetime | None, default: str = "–") -> str:
+    """Kompakter Zeitpunkt: "01.10.26 · 20:34" (Ortszeit)."""
+    return local_dt(value, "%d.%m.%y · %H:%M", default)
+
+
 def weekday_short(value: date) -> str:
     return WEEKDAYS_SHORT[value.weekday()]
 
@@ -111,6 +139,9 @@ def register_template_filters(app) -> None:
     app.jinja_env.filters["local_time"] = local_time
     app.jinja_env.filters["iso_local_dt"] = iso_local_dt
     app.jinja_env.filters["iso_date_de"] = iso_date_de
+    app.jinja_env.filters["workdays_short"] = workdays_short
+    app.jinja_env.filters["hours_short"] = hours_short
+    app.jinja_env.filters["short_dt"] = short_dt
     app.jinja_env.filters["duration"] = format_duration
     app.jinja_env.filters["weekday_short"] = weekday_short
     app.jinja_env.filters["weekday_long"] = weekday_long

@@ -133,7 +133,7 @@ def test_memo_page_shows_only_existing_customer_data(app, db, world, monkeypatch
         data={"file": (io.BytesIO(b"ID3audio"), "anruf.mp3")},
         content_type="multipart/form-data",
     ).get_data(as_text=True)
-    assert "Kunde erkannt" in html and "Telefonnummer" in html
+    assert "Kunde erkannt" in html and "Telefon:" in html
     assert "Kundennummer</dt>" not in html and "nicht hinterlegt" not in html
 
 
@@ -147,7 +147,7 @@ def test_name_only_match_is_marked_as_possible_on_page(app, db, world, monkeypat
         data={"file": (io.BytesIO(b"ID3audio"), "anruf.mp3")},
         content_type="multipart/form-data",
     ).get_data(as_text=True)
-    assert "Möglicher Treffer" in html and "Kunde erkannt" not in html
+    assert "Möglicher Kunde" in html and "Kunde erkannt" not in html
 
 
 def test_no_match_is_reported_without_inventing_data(app, db, world):
@@ -246,7 +246,7 @@ def test_memo_without_javascript_renders_match_inline(app, db, world, monkeypatc
         data={"file": (io.BytesIO(b"ID3audio"), "anruf.mp3")},
         content_type="multipart/form-data",
     ).get_data(as_text=True)
-    assert "Kunde erkannt" in html and "123456789" in html and "Kundendaten öffnen" in html
+    assert "Kunde erkannt" in html and "123456789" in html and "Kunde öffnen" in html
 
 
 # --- Startseite ----------------------------------------------------------------------------

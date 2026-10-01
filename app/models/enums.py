@@ -170,6 +170,7 @@ class TimelineEventType(enum.Enum):
     TASK_CREATED = "task_created"
     TASK_STATUS_CHANGED = "task_status_changed"
     LIST_COMPARISON_CHANGE = "list_comparison_change"
+    CUSTOMER_MERGED = "customer_merged"
 
 
 class AnalysisRunStatus(enum.Enum):

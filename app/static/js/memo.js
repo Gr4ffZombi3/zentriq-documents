@@ -56,48 +56,54 @@
   }
 
   function customerFacts(customer) {
-    var list = el("dl", "fact-list fact-list-compact");
-    fact(list, "Name", customer.name);
+    matchBox.appendChild(el("p", "memo-match-name", customer.name));
+    var list = el("dl", "memo-match-facts");
     // Nur vorhandene Daten anzeigen.
-    if (customer.customer_number) fact(list, "Kundennummer", customer.customer_number);
-    if (customer.phone) fact(list, "Telefonnummer", customer.phone);
-    matchBox.appendChild(list);
+    if (customer.customer_number) fact(list, "Kundennummer:", customer.customer_number);
+    if (customer.phone) fact(list, "Telefon:", customer.phone);
+    if (list.childNodes.length) matchBox.appendChild(list);
+    var actions = el("div", "form-actions");
     if (customer.url) {
-      var link = el("a", "btn btn-secondary btn-sm", "Kundendaten öffnen");
+      var link = el("a", "btn btn-secondary btn-sm", "Kunde öffnen");
       link.href = customer.url;
-      matchBox.appendChild(link);
+      actions.appendChild(link);
     }
+    var copy = el("button", "btn btn-secondary btn-sm", "Text kopieren");
+    copy.type = "button";
+    copy.addEventListener("click", function () { copyTranscript(copy); });
+    actions.appendChild(copy);
+    matchBox.appendChild(actions);
   }
 
+  // Bewusst ohne Prozentwerte oder Trefferwahrscheinlichkeiten - nur die Grundlage des Treffers.
   function renderMatch(data) {
     matchBox.textContent = "";
     if (data.status === "unique") {
       matchBox.appendChild(title("Kunde erkannt", data.matched_by));
       customerFacts(data.customers[0]);
     } else if (data.status === "possible") {
-      matchBox.appendChild(el("p", "memo-match-title memo-match-possible", "Möglicher Treffer – nicht sicher zugeordnet"));
-      matchBox.appendChild(el("p", "form-hint", "Nur der Name stimmt überein. Bitte vor der Verwendung prüfen."));
+      var possible = el("p", "memo-match-title memo-match-possible", "Möglicher Kunde ");
+      possible.appendChild(el("span", "memo-match-basis", BASIS.name + " – bitte prüfen"));
+      matchBox.appendChild(possible);
       customerFacts(data.customers[0]);
     } else if (data.status === "multiple") {
-      matchBox.appendChild(title("Mehrere mögliche Kunden gefunden.", data.matched_by));
-      matchBox.appendChild(el("p", "form-hint", "Es wurde bewusst kein Kunde automatisch zugeordnet."));
+      matchBox.appendChild(title("Mehrere mögliche Kunden gefunden", data.matched_by));
       var ul = el("ul", "memo-candidates");
       data.customers.forEach(function (item) {
         var li = el("li");
-        if (item.url) {
-          var a = el("a", "table-link", item.name);
-          a.href = item.url;
-          li.appendChild(a);
-        } else {
-          li.appendChild(el("strong", null, item.name));
-        }
+        li.appendChild(el("strong", null, item.name));
         var details = [item.customer_number ? "Kundennr. " + item.customer_number : "", item.phone ? "Tel. " + item.phone : "", item.city || ""].filter(Boolean);
         if (details.length) li.appendChild(el("span", null, details.join(" · ")));
+        if (item.url) {
+          var a = el("a", "table-action", "Öffnen");
+          a.href = item.url;
+          li.appendChild(a);
+        }
         ul.appendChild(li);
       });
       matchBox.appendChild(ul);
     } else {
-      matchBox.appendChild(title("Kein vorhandener Kunde eindeutig erkannt."));
+      matchBox.appendChild(title("Kein vorhandener Kunde eindeutig erkannt"));
       if (data.detected_phones && data.detected_phones.length) {
         matchBox.appendChild(el("p", "form-hint", "Erkannte Telefonnummer: " + data.detected_phones.join(", ")));
       }
@@ -123,7 +129,7 @@
       });
   }
 
-  function upload(file) {
+  function transcribe(file) {
     if (!file || busy) return;
     showError("");
     setBusy(true, file.name);
@@ -149,6 +155,103 @@
       .finally(function () { setBusy(false); input.value = ""; });
   }
 
+  // --- Universal-Upload (nur mit data-detect-url): Dateityp erkennen, anzeigen, bestaetigen ---
+  var detectUrl = root.dataset.detectUrl;
+  var detectedBox = root.querySelector("[data-intake-detected]");
+  var pending = null;
+
+  function extensionOf(name) {
+    var dot = (name || "").lastIndexOf(".");
+    return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
+  }
+
+  function showDetected(label, file, actionLabel, action) {
+    detectedBox.querySelector("[data-intake-label]").textContent = label;
+    detectedBox.querySelector("[data-intake-file]").textContent = file.name;
+    var confirm = detectedBox.querySelector("[data-intake-confirm]");
+    confirm.textContent = actionLabel;
+    confirm.hidden = !action;
+    pending = action;
+    drop.hidden = true;
+    detectedBox.hidden = false;
+  }
+
+  function resetDetected() {
+    pending = null;
+    detectedBox.hidden = true;
+    drop.hidden = false;
+  }
+
+  function importList(file) {
+    busy = true;
+    var data = new FormData();
+    data.set("csrf_token", csrf);
+    data.set("file", file, file.name);
+    var confirm = detectedBox.querySelector("[data-intake-confirm]");
+    confirm.disabled = true;
+    confirm.textContent = "Wird hochgeladen …";
+    fetch(root.dataset.listUploadUrl, {
+      method: "POST", body: data, credentials: "same-origin",
+      headers: { Accept: "application/json", "X-Requested-With": "XMLHttpRequest" },
+    })
+      .then(function (resp) {
+        return resp.json().catch(function () { return {}; }).then(function (body) {
+          if (!resp.ok) throw new Error(body.error || "Der Upload ist fehlgeschlagen.");
+          return body;
+        });
+      })
+      .then(function () {
+        uploadBox.hidden = true;
+        var done = root.querySelector("[data-intake-done]");
+        done.querySelector("[data-intake-done-text]").textContent = "„" + file.name + "“ wurde hochgeladen und wird jetzt mit dem bestehenden Leipziger-Import ausgewertet. Das dauert in der Regel nur wenige Sekunden.";
+        done.hidden = false;
+      })
+      .catch(function (err) { resetDetected(); showError(err.message); })
+      .finally(function () { busy = false; confirm.disabled = false; input.value = ""; });
+  }
+
+  function intake(file) {
+    if (!file || busy) return;
+    showError("");
+    var ext = extensionOf(file.name);
+    var audio = (root.dataset.audioExtensions || "").split(",");
+    if (audio.indexOf(ext) !== -1) {
+      showDetected("Sprachnachricht erkannt", file, "Transkribieren", function () { resetDetected(); transcribe(file); });
+      return;
+    }
+    if (ext !== "pdf") {
+      showError("Diese Datei kann Zentriq nicht verarbeiten.");
+      input.value = "";
+      return;
+    }
+    busy = true;
+    label.textContent = "Datei wird geprüft …";
+    var data = new FormData();
+    data.set("csrf_token", csrf);
+    data.set("file", file, file.name);
+    fetch(detectUrl, { method: "POST", body: data, credentials: "same-origin", headers: { Accept: "application/json" } })
+      .then(function (resp) { return resp.json(); })
+      .then(function (body) {
+        if (!body.allowed || body.kind !== "leipziger" || !root.dataset.listUploadUrl) {
+          showError(body.label || body.error || "Diese Datei kann Zentriq nicht verarbeiten.");
+          return;
+        }
+        showDetected(body.label, file, "Importieren", function () { importList(file); });
+      })
+      .catch(function () { showError("Die Datei konnte nicht geprüft werden. Bitte erneut versuchen."); })
+      .finally(function () { busy = false; label.textContent = "Datei hier ablegen"; input.value = ""; });
+  }
+
+  function upload(file) {
+    if (detectUrl) intake(file);
+    else transcribe(file);
+  }
+
+  if (detectedBox) {
+    detectedBox.querySelector("[data-intake-confirm]").addEventListener("click", function () { if (pending) pending(); });
+    detectedBox.querySelector("[data-intake-cancel]").addEventListener("click", function () { resetDetected(); input.value = ""; });
+  }
+
   input.addEventListener("change", function () { upload(input.files[0]); });
   ["dragenter", "dragover"].forEach(function (name) {
     drop.addEventListener(name, function (event) { event.preventDefault(); drop.classList.add("is-dragover"); });
@@ -161,11 +264,11 @@
     upload(event.dataTransfer && event.dataTransfer.files[0]);
   });
 
-  copyButton.addEventListener("click", function () {
+  function copyTranscript(button) {
     var text = transcriptBox.textContent;
     var done = function () {
-      copyButton.textContent = "Kopiert";
-      setTimeout(function () { copyButton.textContent = "Text kopieren"; }, 1500);
+      button.textContent = "Kopiert";
+      setTimeout(function () { button.textContent = "Text kopieren"; }, 1500);
     };
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(text).then(done);
@@ -179,6 +282,13 @@
     document.execCommand("copy");
     selection.removeAllRanges();
     done();
+  }
+
+  copyButton.addEventListener("click", function () { copyTranscript(copyButton); });
+  // Kopieren-Schaltflaeche im serverseitig gerenderten Kundenabgleich (ohne JS-Abgleich).
+  matchBox.addEventListener("click", function (event) {
+    var button = event.target.closest("[data-memo-copy-again]");
+    if (button) copyTranscript(button);
   });
 
   root.querySelector("[data-memo-reset]").addEventListener("click", function (event) {

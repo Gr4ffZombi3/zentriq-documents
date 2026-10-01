@@ -201,3 +201,28 @@ def test_create_user_rejects_company_and_tenant_together(app, tenant, password_p
     result = _run(app, "--email", "x@example.com", "--company", "X", "--tenant", tenant.slug, "--role", "office_admin")
     assert result.exit_code != 0
     assert "Genau eine" in result.output
+
+
+def test_grant_super_admin_preview_and_execute(app, db, tenant, user):
+    from app.cli import grant_super_admin_command
+    from app.tenancy import set_current_tenant_id
+
+    second_admin = User(tenant_id=tenant.id, email="zweiter@example.com", role=UserRole.OFFICE_ADMIN, password_hash="x")
+    db.session.add(second_admin)
+    db.session.commit()
+    runner = app.test_cli_runner()
+
+    # Wie auf dem Server: ohne gesetzten Tenant-Kontext.
+    set_current_tenant_id(None)
+    preview = runner.invoke(grant_super_admin_command, ["--vermittlernummer", "VM-1001"])
+    assert preview.exit_code == 0, preview.output
+    assert "Vorschau" in preview.output
+    assert _find_user("test@example.com").role == UserRole.OFFICE_ADMIN
+
+    result = runner.invoke(grant_super_admin_command, ["--email", "TEST@example.com", "--execute"])
+    assert result.exit_code == 0, result.output
+    assert "ist jetzt SUPER_ADMIN" in result.output
+    promoted = _find_user("test@example.com")
+    assert promoted.role == UserRole.SUPER_ADMIN
+    assert promoted.check_password("testpassword123")
+    set_current_tenant_id(tenant.id)

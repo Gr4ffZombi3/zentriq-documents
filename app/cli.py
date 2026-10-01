@@ -304,7 +304,7 @@ def grant_super_admin_command(email: str | None, vermittlernummer: str | None, e
         if not execute:
             click.echo("Vorschau - nichts geaendert. Mit --execute ausfuehren.")
             return
-        old_role = user.role
+        old_role, user_id = user.role, user.id
         user.role = UserRole.SUPER_ADMIN
         user.is_active = True
         user.invalidate_sessions()
@@ -318,7 +318,7 @@ def grant_super_admin_command(email: str | None, vermittlernummer: str | None, e
                 "source": "cli grant-super-admin",
             },
         )
-    click.echo(f"Konto ID {user.id} ist jetzt SUPER_ADMIN.")
+    click.echo(f"Konto ID {user_id} ist jetzt SUPER_ADMIN.")
 
 
 def register_cli(app) -> None:

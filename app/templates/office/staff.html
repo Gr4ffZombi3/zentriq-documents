@@ -1,11 +1,12 @@
 {% extends "base.html" %}
-{% from "ui/portal.html" import state_tag %}
-{% from "timetracking/_macros.html" import presence %}
 {% block title %}Mitarbeiter – Zentriq{% endblock %}
 {% block content %}
 <div class="page-shell">
   <div class="page-toolbar">
-    <h1 class="page-toolbar-title">Mitarbeiter <span class="count-tag">{{ members | length }}</span></h1>
+    <div>
+      <h1 class="page-toolbar-title">Mitarbeiter <span class="count-tag">{{ members | length }}</span></h1>
+      <p class="page-subtitle">Konten Ihres Büros mit Anwesenheit und Arbeitszeit von heute.</p>
+    </div>
     <div class="page-toolbar-actions">
       <a class="btn btn-primary" href="{{ url_for('settings.user_create', von='mitarbeiter') }}">Mitarbeiter anlegen</a>
     </div>
@@ -13,24 +14,50 @@
 
   <section class="panel">
     {% if members %}
-      <ul class="person-list">
+      <div class="staff-table" role="table" aria-label="Mitarbeiter">
+        <div class="staff-head" role="row">
+          <span role="columnheader">Name</span>
+          <span role="columnheader">Rolle</span>
+          <span role="columnheader">Vermittlernummer</span>
+          <span role="columnheader">Status</span>
+          <span role="columnheader" class="num">Heute</span>
+          <span role="columnheader">Anwesenheit</span>
+          <span role="columnheader"><span class="sr-only">Aktion</span></span>
+        </div>
         {% for member in members %}
           {% set profile = member.employee_profile %}
           {% set row = rows.get(member.id) %}
-          <li class="person-row {{ 'is-inactive' if not member.is_active else '' }}">
-            <div class="person-main">
-              <a class="person-name" href="{{ url_for('office.staff_detail', user_id=member.id) }}">{{ profile.display_name if profile and profile.display_name else member.email }}</a>
-              <span class="person-sub">{{ member.role.label }}{% if member.id == current_user.id %} · Sie{% endif %}</span>
-            </div>
-            <dl class="person-facts">
-              <div><dt>Vermittlernummer</dt><dd>{{ member.vermittlernummer | vermittlernummer if member.vermittlernummer else '–' }}</dd></div>
-              <div><dt>Status</dt><dd>{{ state_tag('Aktiv', 'success') if member.is_active else state_tag('Deaktiviert', 'neutral') }}</dd></div>
-              <div><dt>Heute</dt><dd>{% if row %}{{ row.today.net_seconds | duration }} Std. {{ presence(row.state) }}{% else %}–{% endif %}</dd></div>
-            </dl>
-            <a class="btn btn-secondary btn-sm person-open" href="{{ url_for('office.staff_detail', user_id=member.id) }}">Öffnen</a>
-          </li>
+          {% set name = profile.display_name if profile and profile.display_name else member.email %}
+          {% set is_admin = member.role.name == 'OFFICE_ADMIN' %}
+          {% set parts = name.split('@')[0].split() %}
+          <div class="staff-row{{ ' is-admin' if is_admin else '' }}{{ ' is-inactive' if not member.is_active else '' }}" role="row">
+            <span class="staff-cell staff-person" role="cell">
+              <span class="staff-avatar" aria-hidden="true">{{ (parts[0][:1] ~ (parts[-1][:1] if parts | length > 1 else '')) | upper if parts else '?' }}</span>
+              <span class="staff-ident">
+                <a class="staff-name" href="{{ url_for('office.staff_detail', user_id=member.id) }}">{{ name }}</a>
+                {% if member.id == current_user.id %}<span class="staff-self">Sie</span>{% endif %}
+              </span>
+            </span>
+            <span class="staff-cell" role="cell" data-label="Rolle">
+              <span class="staff-role{{ ' is-admin' if is_admin else '' }}">{{ member.role.label }}</span>
+            </span>
+            <span class="staff-cell staff-mono" role="cell" data-label="Vermittlernummer">{{ member.vermittlernummer | vermittlernummer if member.vermittlernummer else '–' }}</span>
+            <span class="staff-cell" role="cell" data-label="Status">
+              <span class="staff-status{{ ' is-active' if member.is_active else '' }}">{{ 'Aktiv' if member.is_active else 'Deaktiviert' }}</span>
+            </span>
+            <span class="staff-cell num" role="cell" data-label="Heute">{% if row %}{{ row.today.net_seconds | duration }} Std.{% else %}–{% endif %}</span>
+            <span class="staff-cell" role="cell" data-label="Anwesenheit">
+              {% if row %}
+                {% set label = {'in': 'Anwesend', 'break': 'In Pause'}.get(row.state, 'Abwesend') %}
+                <span class="presence-dot presence-{{ row.state if row.state in ('in', 'break') else 'out' }}">{{ label }}</span>
+              {% else %}–{% endif %}
+            </span>
+            <span class="staff-cell staff-action" role="cell">
+              <a class="btn btn-secondary btn-sm" href="{{ url_for('office.staff_detail', user_id=member.id) }}">Öffnen</a>
+            </span>
+          </div>
         {% endfor %}
-      </ul>
+      </div>
     {% else %}
       <p class="empty-note">Noch keine Mitarbeiter angelegt.</p>
     {% endif %}

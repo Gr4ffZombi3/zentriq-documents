@@ -3,10 +3,12 @@
 {# Bewusst helles Erscheinungsbild; ein frueher gespeichertes dunkles Theme wird verworfen. #}
 <script>try { localStorage.removeItem("zentriq-theme"); } catch (e) {}</script>
 <meta name="csrf-token" content="{{ csrf_token() }}">
-{% set asset_rev = '20261001-design-2' %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=asset_rev) }}">
+{# Version aus dem Dateiinhalt (static_rev): neues CSS bekommt immer eine neue URL. Der feste Wert
+   greift nur, solange nach einem git pull noch der alte Python-Prozess laeuft. #}
+{% set _rev = static_rev if static_rev is defined else none %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=_rev('css/app.css') if _rev else '20261001-layout-1') }}">
 {# Lokal ausgeliefert und per defer geladen: kein blockierender Abruf von einem fremden CDN. #}
 <script defer src="{{ url_for('static', filename='vendor/htmx-2.0.4.min.js') }}"></script>
 <script defer src="{{ url_for('static', filename='vendor/alpine-3.14.9.min.js') }}"></script>
-<script defer src="{{ url_for('static', filename='js/htmx-csrf.js', v=asset_rev) }}"></script>
-<script defer src="{{ url_for('static', filename='js/app.js', v=asset_rev) }}"></script>
+<script defer src="{{ url_for('static', filename='js/htmx-csrf.js', v=_rev('js/htmx-csrf.js') if _rev else '20261001-layout-1') }}"></script>
+<script defer src="{{ url_for('static', filename='js/app.js', v=_rev('js/app.js') if _rev else '20261001-layout-1') }}"></script>

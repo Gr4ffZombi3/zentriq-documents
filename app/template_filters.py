@@ -2,6 +2,8 @@
 
 Gespeichert wird UTC; angezeigt wird in APP_TIMEZONE (Europe/Berlin)."""
 
+import hashlib
+import os
 from datetime import date, datetime
 
 from app.services.timetracking.calc import (
@@ -64,7 +66,34 @@ def break_duration(work_break) -> int:
     return break_seconds(work_break, utcnow_naive())
 
 
+def make_static_rev(static_folder: str):
+    """Versionskennung fuer statische Dateien aus dem Dateiinhalt.
+
+    Statische Dateien werden mit ?v=... ein Jahr lang als immutable gecacht. Eine von Hand
+    gepflegte Versionsnummer veraltet, sobald jemand vergisst sie zu erhoehen - dann behaelt
+    der Browser altes CSS zu neuen Templates. Der Hash aendert sich mit jedem neuen Build."""
+    cache: dict[str, tuple[tuple[int, int], str]] = {}
+
+    def static_rev(filename: str) -> str:
+        path = os.path.join(static_folder, filename)
+        try:
+            stat = os.stat(path)
+        except OSError:
+            return "0"
+        key = (stat.st_mtime_ns, stat.st_size)
+        hit = cache.get(filename)
+        if hit and hit[0] == key:
+            return hit[1]
+        with open(path, "rb") as handle:
+            digest = hashlib.sha256(handle.read()).hexdigest()[:12]
+        cache[filename] = (key, digest)
+        return digest
+
+    return static_rev
+
+
 def register_template_filters(app) -> None:
+    app.jinja_env.globals["static_rev"] = make_static_rev(app.static_folder)
     app.jinja_env.filters["break_duration"] = break_duration
     app.jinja_env.filters["session_net"] = session_net
     app.jinja_env.filters["session_breaks"] = session_breaks

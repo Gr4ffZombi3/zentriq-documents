@@ -5,6 +5,7 @@ import pytest
 
 from app.models.audit_log import AuditEventType, AuditLog
 from app.services.password_reset import build_reset_url, generate_reset_token, verify_reset_token
+from tests.two_factor_helpers import enable_two_factor, login, totp_code
 
 RESET_PATH = "/auth/reset-password"
 LINK_PREFIX = "https://zentriq.test/auth/reset-password#token="
@@ -23,6 +24,18 @@ def sent_mails(monkeypatch, app):
     return mails
 
 
+_TOTP = {}
+
+
+@pytest.fixture(autouse=True)
+def user_with_two_factor(user):
+    """Der Reset verlangt zusaetzlich den zweiten Faktor - das Testkonto hat 2FA aktiv."""
+    secret, recovery_codes = enable_two_factor(user)
+    _TOTP.update(user=user, secret=secret, recovery_codes=recovery_codes)
+    yield user
+    _TOTP.clear()
+
+
 def _token_from_mail(body):
     line = next(line for line in body.splitlines() if line.startswith(LINK_PREFIX))
     return line[len(LINK_PREFIX):]
@@ -32,10 +45,12 @@ def _reset_events(event_type):
     return AuditLog.query.filter_by(event_type=event_type).all()
 
 
-def _submit_reset(client, token, password, confirm=None):
+def _submit_reset(client, token, password, confirm=None, code=None):
+    if code is None:
+        code = totp_code(_TOTP["user"], _TOTP["secret"])
     return client.post(
         RESET_PATH,
-        data={"token": token, "password": password, "password_confirm": confirm or password},
+        data={"token": token, "code": code, "password": password, "password_confirm": confirm or password},
     )
 
 
@@ -193,12 +208,10 @@ def test_login_works_with_new_password_after_reset(client, user):
     assert old.status_code == 200
     assert "Anmeldedaten sind falsch" in old.get_data(as_text=True)
 
-    new = client.post(
-        "/auth/login",
-        data={"login_type": "email", "identifier": user.email, "password": "ganz-neues-passwort"},
-    )
+    new = login(client, user.email, "ganz-neues-passwort", _TOTP["secret"], user)
     assert new.status_code == 302
     assert client.get("/", follow_redirects=True).status_code == 200
+    assert "/auth/login" not in client.get("/").headers.get("Location", "")
 
 
 def test_reset_password_mismatch_is_rejected(client, user):

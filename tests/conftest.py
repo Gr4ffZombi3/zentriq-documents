@@ -56,7 +56,7 @@ def user(db, tenant):
         email="test@example.com",
         vermittlernummer="VM-1001",
         is_active=True,
-        role=UserRole.ADMIN,
+        role=UserRole.OFFICE_ADMIN,
     )
     test_user.set_password("testpassword123")
     db.session.add(test_user)
@@ -79,7 +79,7 @@ def auth_client(client, user):
 def employee(db, tenant):
     from app.models import User, UserRole
 
-    employee_user = User(tenant_id=tenant.id, email="mitarbeiter@example.com", is_active=True, role=UserRole.MITARBEITER)
+    employee_user = User(tenant_id=tenant.id, email="mitarbeiter@example.com", is_active=True, role=UserRole.EMPLOYEE)
     employee_user.set_password("mitarbeiterpass123")
     db.session.add(employee_user)
     db.session.commit()

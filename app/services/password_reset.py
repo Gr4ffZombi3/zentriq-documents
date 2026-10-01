@@ -51,8 +51,8 @@ def verify_reset_token(token: str | None) -> User | None:
 
     with bypass_tenant_scope():
         user = db.session.get(User, payload["uid"])
-    if user is None or not user.is_active:
-        return None
+        if user is None or not user.is_active or user.deleted_at is not None:
+            return None
     if not hmac.compare_digest(str(payload.get("pw", "")), _password_fingerprint(user)):
         return None
     return user
@@ -86,6 +86,20 @@ def is_reset_rate_limited(user: User) -> bool:
     return recent >= limit
 
 
+def is_ip_reset_rate_limited(ip_address: str | None) -> bool:
+    """Drosselt Reset-Anfragen pro Client-IP - unabhaengig davon, ob die Adresse existiert."""
+    if not ip_address:
+        return False
+    limit = current_app.config["PASSWORD_RESET_MAX_REQUESTS_PER_IP_PER_HOUR"]
+    since = datetime.now(timezone.utc) - timedelta(hours=1)
+    recent = AuditLog.query.filter(
+        AuditLog.ip_address == ip_address,
+        AuditLog.event_type == AuditEventType.PASSWORD_RESET_REQUESTED,
+        AuditLog.created_at >= since,
+    ).count()
+    return recent >= limit
+
+
 def build_reset_email_body(reset_url: str) -> str:
     minutes = current_app.config["PASSWORD_RESET_TOKEN_MAX_AGE_SECONDS"] // 60
     return (
@@ -93,6 +107,8 @@ def build_reset_email_body(reset_url: str) -> str:
         "für dein Konto bei Zentriq Documents wurde das Zurücksetzen des Passworts angefordert.\n"
         f"Über den folgenden Link kannst du innerhalb von {minutes} Minuten ein neues Passwort festlegen:\n\n"
         f"{reset_url}\n\n"
+        "Zur Bestätigung deiner Identität benötigst du zusätzlich den Code aus deiner "
+        "Authenticator-App (oder einen Wiederherstellungscode).\n\n"
         "Der Link ist nur einmal gültig. Falls du das nicht angefordert hast, kannst du diese "
         "E-Mail ignorieren – dein bisheriges Passwort bleibt unverändert.\n\n"
         "Zentriq Documents\n"

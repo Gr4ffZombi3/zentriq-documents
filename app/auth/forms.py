@@ -36,8 +36,20 @@ class ForgotPasswordForm(FlaskForm):
     submit = SubmitField("Link anfordern")
 
 
+class TwoFactorForm(FlaskForm):
+    code = StringField(
+        "Bestätigungscode",
+        validators=[DataRequired(message="Bitte den Code eingeben."), Length(max=32)],
+    )
+    submit = SubmitField("Bestätigen")
+
+
 class ResetPasswordForm(FlaskForm):
     token = HiddenField()
+    code = StringField(
+        "Code aus der Authenticator-App (oder Wiederherstellungscode)",
+        validators=[DataRequired(message="Bitte den Code eingeben."), Length(max=32)],
+    )
     password = PasswordField(
         "Neues Passwort", validators=[DataRequired(), Length(min=8, message="Mindestens 8 Zeichen.")]
     )

@@ -1,0 +1,28 @@
+{% extends "base_auth.html" %}
+{% from "ui/forms.html" import input_field, button %}
+{% block title %}Bestätigung – Zentriq{% endblock %}
+{% block content %}
+<div class="space-y-4">
+  <h1 class="auth-simple-title">Zwei-Faktor-Bestätigung</h1>
+  <p class="text-sm leading-6 text-text-muted">
+    Gib den 6-stelligen Code aus deiner Authenticator-App ein. Hast du keinen Zugriff auf die
+    App, kannst du einen deiner Wiederherstellungscodes verwenden.
+  </p>
+
+  <div class="surface-card p-5">
+    <form method="post" class="space-y-5" autocomplete="off">
+      {{ form.hidden_tag() }}
+      <div class="flex flex-col gap-2">
+        <label for="code" class="field-label">{{ form.code.label.text }}</label>
+        {{ form.code(id='code', class_='field-surface text-center text-lg tracking-widest', inputmode='text', autocomplete='one-time-code', autofocus=true, placeholder='123456') }}
+        {% for error in form.code.errors %}<span class="form-error">{{ error }}</span>{% endfor %}
+      </div>
+      {{ button(form.submit.label.text, variant='primary', type='submit', size='lg', extra_class='w-full') }}
+    </form>
+  </div>
+
+  <p class="text-center text-sm text-text-muted">
+    <a href="{{ url_for('auth.login') }}" class="font-medium text-primary hover:text-primary-hover">Abbrechen und zurück zur Anmeldung</a>
+  </p>
+</div>
+{% endblock %}

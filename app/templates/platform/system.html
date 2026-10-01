@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/portal.html" import panel %}
+{% block title %}Systemeinstellungen – Plattform – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell">
+  {% call page_header('Systemeinstellungen', 'Aktive Plattform-Konfiguration (nur lesend). Änderungen erfolgen über die Server-Konfiguration und ein Deployment.') %}{% endcall %}
+  {% call panel(flush=True) %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <tbody>
+          {% for label, value in settings %}
+            <tr><th scope="row" class="cell-strong">{{ label }}</th><td>{{ value }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endcall %}
+</div>
+{% endblock %}

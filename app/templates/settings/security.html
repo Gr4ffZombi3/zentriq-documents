@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/portal.html" import panel, state_tag %}
+{% block title %}Sicherheit – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell">
+  {% call page_header('Sicherheit', 'Zwei-Faktor-Authentifizierung per Authenticator-App (z. B. Microsoft Authenticator, Google Authenticator, 1Password).') %}{% endcall %}
+
+  {% if new_codes %}
+    {% call panel('Wiederherstellungscodes', 'Diese Codes werden nur jetzt angezeigt. Bewahren Sie sie sicher auf (z. B. ausgedruckt oder im Passwortmanager). Jeder Code funktioniert genau einmal.') %}
+      {% if just_enabled %}<p class="mb-4">{{ state_tag('Zwei-Faktor-Authentifizierung ist aktiv', 'success') }}</p>{% endif %}
+      <ul class="recovery-codes">
+        {% for code in new_codes %}<li><code>{{ code }}</code></li>{% endfor %}
+      </ul>
+      <p class="form-hint mt-3">Verlieren Sie Gerät und Codes, kann ein Administrator die Zwei-Faktor-Authentifizierung zurücksetzen.</p>
+      <div class="mt-4">
+        <a class="btn btn-primary h-10 px-4 text-sm" href="{{ url_for('portal.home') }}">Codes gesichert – weiter</a>
+      </div>
+    {% endcall %}
+  {% elif enabled %}
+    {% call panel('Zwei-Faktor-Authentifizierung') %}
+      <dl class="account-facts">
+        <div><dt>Status</dt><dd>{{ state_tag('Aktiv', 'success') }}</dd></div>
+        <div><dt>Eingerichtet am</dt><dd>{{ current_user.totp_enabled_at | local_dt }}</dd></div>
+        <div><dt>Unbenutzte Wiederherstellungscodes</dt><dd>{{ remaining }}</dd></div>
+      </dl>
+    {% endcall %}
+    <div class="mt-5">
+    {% call panel('Neue Wiederherstellungscodes erzeugen', 'Alle bisherigen Codes werden dabei ungültig. Zur Bestätigung den aktuellen Code aus der App eingeben.') %}
+      <form method="post" class="security-form" autocomplete="off">
+        {{ form.hidden_tag() }}
+        <div class="form-field">
+          <label class="field-label" for="code">{{ form.code.label.text }}</label>
+          {{ form.code(id='code', class_='field-surface', inputmode='numeric', autocomplete='one-time-code', placeholder='123456') }}
+          {% for error in form.code.errors %}<span class="form-error">{{ error }}</span>{% endfor %}
+        </div>
+        <button type="submit" class="btn btn-secondary h-10 px-4 text-sm">Codes neu erzeugen</button>
+      </form>
+    {% endcall %}
+    </div>
+  {% else %}
+    {% if enforced %}
+      <p class="security-notice">Zum Schutz der Daten ist die Zwei-Faktor-Authentifizierung verpflichtend. Bitte richten Sie sie jetzt ein, um fortzufahren.</p>
+    {% endif %}
+    {% call panel('Zwei-Faktor-Authentifizierung einrichten') %}
+      <div class="totp-setup">
+        <div class="totp-qr" aria-label="QR-Code für die Authenticator-App">{{ qr_svg | safe }}</div>
+        <ol class="totp-steps">
+          <li>Öffnen Sie Ihre Authenticator-App und fügen Sie ein neues Konto hinzu.</li>
+          <li>Scannen Sie den QR-Code. Alternativ den Schlüssel manuell eingeben:<br><code class="totp-secret">{{ secret }}</code></li>
+          <li>Geben Sie den 6-stelligen Code aus der App ein und bestätigen Sie.</li>
+        </ol>
+      </div>
+      <form method="post" class="security-form mt-4" autocomplete="off">
+        {{ form.hidden_tag() }}
+        <div class="form-field">
+          <label class="field-label" for="code">{{ form.code.label.text }}</label>
+          {{ form.code(id='code', class_='field-surface', inputmode='numeric', autocomplete='one-time-code', placeholder='123456', autofocus=true) }}
+          {% for error in form.code.errors %}<span class="form-error">{{ error }}</span>{% endfor %}
+        </div>
+        <button type="submit" class="btn btn-primary h-10 px-4 text-sm">Aktivieren</button>
+      </form>
+    {% endcall %}
+  {% endif %}
+</div>
+{% endblock %}

@@ -67,7 +67,7 @@ def test_new_users_default_to_least_privilege(db, tenant):
     user = User(tenant_id=tenant.id, email="neu@example.com", password_hash="x")
     db.session.add(user)
     db.session.commit()
-    assert user.role == UserRole.MITARBEITER
+    assert user.role == UserRole.EMPLOYEE
     assert user.is_admin is False
 
 

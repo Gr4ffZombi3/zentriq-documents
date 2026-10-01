@@ -1,0 +1,51 @@
+{# Formularfelder fuer Benutzeranlage/-bearbeitung (Buero-Admin und Super-Admin). #}
+{% from "ui/portal.html" import panel %}
+{% from "settings/_form_macros.html" import errors, text_input %}
+    {% call panel('Zugang') %}
+      <div class="form-grid form-grid-2">
+        {{ text_input(form.email, type='email') }}
+        {{ text_input(form.vermittlernummer) }}
+      </div>
+      <fieldset class="form-field mt-4">
+        <legend class="field-label">{{ form.role.label.text }}</legend>
+        <div class="checkbox-row mt-1">
+          {% for option in form.role %}
+            <label>{{ option() }} {{ option.label.text }}</label>
+          {% endfor %}
+        </div>
+        {{ errors(form.role) }}
+      </fieldset>
+      <div class="checkbox-row mt-4">
+        <label>{{ form.is_active() }} {{ form.is_active.label.text }}</label>
+      </div>
+      {% if edit_user and edit_user.id == current_user.id %}
+        <p class="form-hint mt-2">Ihr eigenes Konto kann weder deaktiviert noch auf „Mitarbeiter“ gesetzt werden.</p>
+      {% endif %}
+    {% endcall %}
+
+    {% call panel('Person und Sollarbeitszeit') %}
+      <div class="form-grid form-grid-3">
+        {{ text_input(form.display_name) }}
+        {{ text_input(form.personnel_number) }}
+        {{ text_input(form.weekly_hours, hint='In Stunden, z. B. 40 oder 38,5') }}
+      </div>
+      <fieldset class="form-field mt-4">
+        <legend class="field-label">{{ form.workdays.label.text }}</legend>
+        <div class="checkbox-row mt-1">
+          {% for option in form.workdays %}
+            <label>{{ option() }} {{ option.label.text }}</label>
+          {% endfor %}
+        </div>
+        <span class="form-hint">Das Tagessoll ergibt sich aus Wochensoll geteilt durch die Anzahl der Arbeitstage.</span>
+        {{ errors(form.workdays) }}
+      </fieldset>
+    {% endcall %}
+
+    {% if form.password is defined and form.password is not none %}
+    {% call panel('Passwort' if not edit_user else 'Neues Passwort setzen (optional)') %}
+      <div class="form-grid form-grid-2">
+        {{ text_input(form.password, type='password', autocomplete='new-password', hint='Mindestens 8 Zeichen.' if not edit_user else 'Leer lassen, um das bisherige Passwort zu behalten.') }}
+        {{ text_input(form.password_confirm, type='password', autocomplete='new-password') }}
+      </div>
+    {% endcall %}
+    {% endif %}

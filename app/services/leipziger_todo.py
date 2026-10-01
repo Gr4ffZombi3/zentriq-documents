@@ -14,7 +14,7 @@ from datetime import date
 from sqlalchemy.orm import load_only, selectinload
 
 from app.models import Document, DocumentCustomer, User
-from app.models.enums import DocStatus, DocType
+from app.models.enums import DocStatus, DocType, UserRole
 from app.services.analysis.leipziger_liste_view import row_status_key
 from app.utils.vermittlernummer import format_vermittlernummer, vermittlernummer_key
 
@@ -134,11 +134,16 @@ def user_display_name(user: User) -> str:
 
 
 def team_members() -> list[User]:
-    """Alle aktiven Benutzer des eigenen Mandanten mit Vermittlernummer (der Tenant-Filter
-    greift automatisch)."""
+    """Alle aktiven Buero-Mitglieder des eigenen Mandanten mit Vermittlernummer (der Tenant-
+    Filter greift automatisch; SUPER_ADMIN-Konten gehoeren nicht zum Buero)."""
     users = (
         User.query.options(selectinload(User.employee_profile))
-        .filter(User.is_active.is_(True), User.vermittlernummer.isnot(None))
+        .filter(
+            User.is_active.is_(True),
+            User.deleted_at.is_(None),
+            User.role != UserRole.SUPER_ADMIN,
+            User.vermittlernummer.isnot(None),
+        )
         .all()
     )
     users = [user for user in users if vermittlernummer_key(user.vermittlernummer)]

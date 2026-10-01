@@ -1,0 +1,11 @@
+{% macro errors(field) -%}
+  {% for error in field.errors %}<span class="form-error">{{ error }}</span>{% endfor %}
+{%- endmacro %}
+{% macro text_input(field, type='text', hint=None, autocomplete=None) -%}
+<div class="form-field">
+  <label class="field-label" for="{{ field.id }}">{{ field.label.text }}</label>
+  {{ field(class_='field-surface', type=type, autocomplete=autocomplete or 'off') }}
+  {% if hint %}<span class="form-hint">{{ hint }}</span>{% endif %}
+  {{ errors(field) }}
+</div>
+{%- endmacro %}

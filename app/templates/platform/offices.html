@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/forms.html" import button %}
+{% from "ui/portal.html" import kpi, panel, state_tag %}
+{% block title %}Büros – Plattform – Zentriq{% endblock %}
+{% block content %}
+{% set active_tenants = tenants | selectattr('status.value', 'equalto', 'active') | list %}
+<div class="page-shell page-shell-wide">
+  {% call page_header('Büros', 'Alle Mandanten der Plattform. Fachliche Daten der Büros sind hier bewusst nicht einsehbar.') %}
+    {{ button('Büro anlegen', href=url_for('platform.office_create'), variant='primary') }}
+  {% endcall %}
+
+  <div class="kpi-row">
+    {{ kpi('Büros gesamt', tenants | length) }}
+    {{ kpi('Aktiv', active_tenants | length, tone='success') }}
+    {{ kpi('Deaktiviert', tenants | length - active_tenants | length) }}
+  </div>
+
+  {% call panel(flush=True) %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th scope="col">Büro</th>
+            <th scope="col">Status</th>
+            <th scope="col" class="num">Benutzer</th>
+            <th scope="col" class="num">Aktiv</th>
+            <th scope="col" class="num">Büro-Admins</th>
+            <th scope="col">Angelegt</th>
+            <th scope="col"><span class="sr-only">Aktion</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tenant in tenants %}
+            {% set c = counts.get(tenant.id, {'total': 0, 'active': 0, 'office_admins': 0}) %}
+            <tr class="{{ '' if tenant.status.value == 'active' else 'is-muted' }}">
+              <th scope="row" class="cell-strong">
+                <a class="table-link" href="{{ url_for('platform.office_detail', tenant_id=tenant.id) }}">{{ tenant.name }}</a>
+                <span class="cell-sub">{{ tenant.slug }}</span>
+              </th>
+              <td>{{ state_tag(tenant.status.label, 'success' if tenant.status.value == 'active' else 'neutral') }}</td>
+              <td class="num">{{ c.total }}</td>
+              <td class="num">{{ c.active }}</td>
+              <td class="num">{% if tenant.status.value == 'active' and c.office_admins == 0 %}{{ state_tag('keiner', 'warning') }}{% else %}{{ c.office_admins }}{% endif %}</td>
+              <td class="whitespace-nowrap">{{ tenant.created_at | local_dt(fmt='%d.%m.%Y') }}</td>
+              <td class="text-right"><a class="table-action" href="{{ url_for('platform.office_detail', tenant_id=tenant.id) }}">Verwalten</a></td>
+            </tr>
+          {% else %}
+            <tr><td colspan="7" class="is-muted">Noch keine Büros.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endcall %}
+</div>
+{% endblock %}

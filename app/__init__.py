@@ -43,6 +43,7 @@ def create_app(config_object=None):
     from app.blueprints.documents.routes import documents_bp
     from app.blueprints.leipziger.routes import leipziger_bp
     from app.blueprints.mailbox.routes import mailbox_bp
+    from app.blueprints.platform.routes import platform_bp
     from app.blueprints.portal.routes import portal_bp
     from app.blueprints.potenziale.routes import potenziale_bp
     from app.blueprints.recommendations.routes import recommendations_bp
@@ -51,6 +52,7 @@ def create_app(config_object=None):
     from app.blueprints.tasks.routes import tasks_bp
     from app.blueprints.timetracking.routes import timetracking_bp
     from app.blueprints.upload.routes import upload_bp
+    from app.models import User
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(portal_bp)
@@ -69,6 +71,7 @@ def create_app(config_object=None):
     app.register_blueprint(settings_bp)
     app.register_blueprint(tasks_bp)
     app.register_blueprint(timetracking_bp)
+    app.register_blueprint(platform_bp)
 
     from app.cli import register_cli
 
@@ -90,24 +93,31 @@ def create_app(config_object=None):
 
     @login_manager.user_loader
     def load_user(user_id):
-        from app.models import User
+        from app.services.account_state import account_login_block_reason
+
+        # Session-ID hat das Format "<id>:<auth_version>". Aendert sich auth_version
+        # (Passwortaenderung, Deaktivierung, Loeschung, 2FA-Reset), sind alle bestehenden
+        # Sessions sofort ungueltig. Aeltere Sessions ohne Version werden verworfen.
+        raw_id, _, raw_version = str(user_id).partition(":")
+        if not raw_id.isdigit() or not raw_version.isdigit():
+            return None
 
         # Der eingeloggte Nutzer wird per ID aus der Session geladen, bevor sein eigener
         # Tenant-Kontext ueberhaupt bekannt ist - dieser eine Lookup ist deshalb bewusst
-        # ungescoped. tenant_id wird noch INNERHALB des bypass-Blocks gelesen: war das
-        # Objekt durch einen vorherigen Commit expired (SQLAlchemy expire_on_commit),
-        # loest erst der ERSTE Attributzugriff den Reload aus, nicht schon db.session.get()
-        # selbst - ausserhalb des Blocks wuerde das mangels Tenant-Kontext fehlschlagen.
+        # ungescoped. Alle benoetigten Attribute werden noch INNERHALB des bypass-Blocks
+        # gelesen: war das Objekt durch einen vorherigen Commit expired (SQLAlchemy
+        # expire_on_commit), loest erst der ERSTE Attributzugriff den Reload aus - ausserhalb
+        # des Blocks wuerde das mangels Tenant-Kontext fehlschlagen.
         with bypass_tenant_scope():
-            user = db.session.get(User, int(user_id))
-            tenant_id = user.tenant_id if user is not None else None
-            is_active = user.is_active if user is not None else False
-        if user is not None and not is_active:
-            # Von einem Admin deaktivierte Konten verlieren sofort den Zugriff, nicht erst
-            # beim naechsten Login.
-            return None
-        if user is not None:
-            set_current_tenant_id(tenant_id)
+            user = db.session.get(User, int(raw_id))
+            if user is None or (user.auth_version or 0) != int(raw_version):
+                return None
+            tenant_id = user.tenant_id
+            # Deaktivierte/geloeschte Konten und Konten deaktivierter Bueros verlieren sofort
+            # den Zugriff, nicht erst beim naechsten Login.
+            if account_login_block_reason(user) is not None:
+                return None
+        set_current_tenant_id(tenant_id)
         return user
 
     @app.before_request

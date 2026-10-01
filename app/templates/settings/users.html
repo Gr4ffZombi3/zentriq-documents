@@ -22,6 +22,7 @@
             <th scope="col" class="num">Soll/Woche</th>
             <th scope="col">Arbeitstage</th>
             <th scope="col">Status</th>
+            <th scope="col">2FA</th>
             <th scope="col">Letzte Anmeldung</th>
             <th scope="col"><span class="sr-only">Aktion</span></th>
           </tr>
@@ -40,8 +41,17 @@
               <td class="num">{{ (profile.weekly_target_minutes * 60) | duration if profile else '–' }}</td>
               <td>{% if profile %}{% for ch in profile.workdays %}{{ weekday_names.get(ch, ch) }}{{ ', ' if not loop.last }}{% endfor %}{% else %}–{% endif %}</td>
               <td>{{ state_tag('Aktiv', 'success') if item.is_active else state_tag('Deaktiviert', 'neutral') }}</td>
+              <td>{{ state_tag('Aktiv', 'success') if item.two_factor_enabled else state_tag('Nicht eingerichtet', 'warning') }}</td>
               <td class="whitespace-nowrap">{{ item.last_login_at | local_dt(default='noch nie') }}</td>
-              <td class="text-right"><a class="table-action" href="{{ url_for('settings.user_edit', user_id=item.id) }}">Bearbeiten</a></td>
+              <td class="text-right whitespace-nowrap">
+                <a class="table-action" href="{{ url_for('settings.user_edit', user_id=item.id) }}">Bearbeiten</a>
+                {% if item.id != current_user.id %}
+                  <form method="post" action="{{ url_for('settings.user_delete', user_id=item.id) }}" class="inline" onsubmit="return confirm('Mitarbeiter wirklich löschen?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="table-action table-action-danger">Löschen</button>
+                  </form>
+                {% endif %}
+              </td>
             </tr>
           {% endfor %}
         </tbody>

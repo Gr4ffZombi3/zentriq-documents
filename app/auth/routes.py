@@ -1,15 +1,30 @@
 import logging
-from datetime import datetime, timezone
+import time
+from datetime import datetime, timedelta, timezone
 
-from flask import Blueprint, abort, current_app, flash, make_response, redirect, render_template, url_for
+from flask import (
+    Blueprint,
+    abort,
+    current_app,
+    flash,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from flask_login import current_user, login_required, login_user, logout_user
 
-from app.auth.forms import ForgotPasswordForm, LoginForm, RegisterForm, ResetPasswordForm
+from app.auth.forms import ForgotPasswordForm, LoginForm, RegisterForm, ResetPasswordForm, TwoFactorForm
 from app.extensions import db
 from app.models import Tenant, User, UserRole
-from app.models.audit_log import AuditEventType
+from app.models.audit_log import AuditEventType, AuditLog
+from app.services import two_factor as two_factor_service
+from app.services.account_state import account_login_block_reason
 from app.services.audit import log_audit_event
 from app.services.password_reset import (
+    is_ip_reset_rate_limited,
     is_password_reset_available,
     is_reset_rate_limited,
     verify_reset_token,
@@ -23,6 +38,14 @@ from app.utils.vermittlernummer import format_vermittlernummer
 logger = logging.getLogger(__name__)
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
+
+PENDING_2FA_KEY = "_pending_2fa"
+
+BLOCKED_LOGIN_MESSAGES = {
+    "inactive": "Dieses Konto ist deaktiviert.",
+    "deleted": "Dieses Konto ist deaktiviert.",
+    "tenant_suspended": "Dieses Büro ist deaktiviert. Bitte wenden Sie sich an den Betreiber.",
+}
 
 RESET_REQUESTED_MESSAGE = (
     "Falls ein Konto mit dieser E-Mail-Adresse existiert, wurde eine Nachricht zum "
@@ -59,7 +82,7 @@ def register():
             db.session.flush()
 
             user = User(
-                tenant_id=tenant.id, email=email, vermittlernummer=vermittlernummer, role=UserRole.ADMIN
+                tenant_id=tenant.id, email=email, vermittlernummer=vermittlernummer, role=UserRole.OFFICE_ADMIN
             )
             user.set_password(form.password.data)
             db.session.add(user)
@@ -76,6 +99,28 @@ def register():
     return render_template("auth/register.html", form=form)
 
 
+def _is_login_rate_limited() -> bool:
+    """Brute-Force-Schutz pro Client-IP anhand der fehlgeschlagenen Anmeldungen."""
+    window = timedelta(minutes=current_app.config["LOGIN_FAILURE_WINDOW_MINUTES"])
+    since = datetime.now(timezone.utc) - window
+    failures = AuditLog.query.filter(
+        AuditLog.ip_address == request.remote_addr,
+        AuditLog.event_type.in_((AuditEventType.LOGIN_FAILED, AuditEventType.TWO_FACTOR_FAILED)),
+        AuditLog.created_at >= since,
+    ).count()
+    return failures >= current_app.config["LOGIN_MAX_FAILURES_PER_IP"]
+
+
+def _complete_login(user: User, details: dict | None = None):
+    session.pop(PENDING_2FA_KEY, None)
+    set_current_tenant_id(user.tenant_id)
+    login_user(user)
+    user.last_login_at = datetime.now(timezone.utc)
+    db.session.commit()
+    log_audit_event(AuditEventType.LOGIN_SUCCESS, tenant_id=user.tenant_id, user=user, details=details)
+    return redirect(url_for("portal.home"))
+
+
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
@@ -85,6 +130,10 @@ def login():
     if form.validate_on_submit():
         login_type = form.login_type.data
         identifier = form.identifier.data.strip()
+
+        if _is_login_rate_limited():
+            flash("Zu viele fehlgeschlagene Anmeldeversuche. Bitte versuchen Sie es später erneut.", "error")
+            return render_template("auth/login.html", form=form), 429
 
         with bypass_tenant_scope():
             if login_type == "vermittlernummer":
@@ -101,21 +150,63 @@ def login():
             flash("Anmeldedaten sind falsch.", "error")
             return render_template("auth/login.html", form=form)
 
-        if not user.is_active:
+        block_reason = account_login_block_reason(user)
+        if block_reason is not None:
             log_audit_event(
-                AuditEventType.LOGIN_FAILED, tenant_id=user.tenant_id, user=user, details={"reason": "inactive"}
+                AuditEventType.LOGIN_FAILED, tenant_id=user.tenant_id, user=user, details={"reason": block_reason}
             )
-            flash("Dieses Konto ist deaktiviert.", "error")
+            flash(BLOCKED_LOGIN_MESSAGES[block_reason], "error")
             return render_template("auth/login.html", form=form)
 
-        set_current_tenant_id(user.tenant_id)
-        login_user(user)
-        user.last_login_at = datetime.now(timezone.utc)
-        db.session.commit()
-        log_audit_event(AuditEventType.LOGIN_SUCCESS, tenant_id=user.tenant_id, user=user)
-        return redirect(url_for("portal.home"))
+        if user.two_factor_enabled:
+            # Passwort korrekt, aber noch NICHT angemeldet: erst nach gueltigem zweiten Faktor.
+            session[PENDING_2FA_KEY] = {"uid": user.id, "v": user.auth_version or 0, "ts": int(time.time())}
+            return redirect(url_for("auth.two_factor"))
+
+        return _complete_login(user)
 
     return render_template("auth/login.html", form=form)
+
+
+def _pending_two_factor_user() -> User | None:
+    pending = session.get(PENDING_2FA_KEY)
+    if not isinstance(pending, dict):
+        return None
+    max_age = current_app.config["TWO_FACTOR_PENDING_MAX_AGE_SECONDS"]
+    if not isinstance(pending.get("ts"), int) or time.time() - pending["ts"] > max_age:
+        session.pop(PENDING_2FA_KEY, None)
+        return None
+    with bypass_tenant_scope():
+        user = db.session.get(User, pending.get("uid"))
+        if user is None or (user.auth_version or 0) != pending.get("v") or not user.two_factor_enabled:
+            session.pop(PENDING_2FA_KEY, None)
+            return None
+        if account_login_block_reason(user) is not None:
+            session.pop(PENDING_2FA_KEY, None)
+            return None
+    return user
+
+
+@auth_bp.route("/2fa", methods=["GET", "POST"])
+def two_factor():
+    if current_user.is_authenticated:
+        return redirect(url_for("portal.home"))
+    user = _pending_two_factor_user()
+    if user is None:
+        flash("Bitte melde dich erneut an.", "error")
+        return redirect(url_for("auth.login"))
+
+    form = TwoFactorForm()
+    if form.validate_on_submit():
+        with use_tenant_id(user.tenant_id):
+            if two_factor_service.is_locked(user):
+                flash("Zu viele ungültige Codes. Bitte versuche es später erneut.", "error")
+                return render_template("auth/two_factor.html", form=form), 429
+            if two_factor_service.verify_second_factor(user, form.code.data, "login"):
+                return _complete_login(user, details={"two_factor": True})
+        flash("Der Code ist ungültig.", "error")
+
+    return render_template("auth/two_factor.html", form=form)
 
 
 @auth_bp.app_context_processor
@@ -138,7 +229,12 @@ def forgot_password():
 
         # Antwort ist fuer existierende, unbekannte, deaktivierte und gedrosselte Konten
         # identisch, damit sich keine Konten per Reset-Formular ermitteln lassen.
-        if user is not None and user.is_active and not is_reset_rate_limited(user):
+        if is_ip_reset_rate_limited(request.remote_addr):
+            logger.warning("Passwort-Reset fuer IP %s gedrosselt.", request.remote_addr)
+        elif user is None or account_login_block_reason(user) is not None:
+            # Auch unbekannte Adressen zaehlen fuer die IP-Drosselung (ohne Kontobezug).
+            log_audit_event(AuditEventType.PASSWORD_RESET_REQUESTED, details={"matched": False})
+        elif not is_reset_rate_limited(user):
             user_id, tenant_id = user.id, user.tenant_id
             with use_tenant_id(tenant_id):
                 log_audit_event(AuditEventType.PASSWORD_RESET_REQUESTED, tenant_id=tenant_id, user=user)
@@ -167,14 +263,30 @@ def reset_password():
         if user is None:
             flash("Der Link ist ungültig oder abgelaufen. Bitte fordere einen neuen an.", "error")
             return redirect(url_for("auth.forgot_password"))
+        if not user.two_factor_enabled:
+            # Ohne zweiten Faktor ist die Identitaet nicht ausreichend bestaetigt.
+            flash(
+                "Für dieses Konto ist keine Zwei-Faktor-Authentifizierung eingerichtet. Bitte wende "
+                "dich an den Administrator deines Büros, um ein neues Passwort zu erhalten.",
+                "error",
+            )
+            return redirect(url_for("auth.login"))
 
     if form.validate_on_submit():
         with use_tenant_id(user.tenant_id):
-            user.set_password(form.password.data)
-            db.session.commit()
-            log_audit_event(AuditEventType.PASSWORD_RESET_COMPLETED, tenant_id=user.tenant_id, user=user)
-        flash("Dein Passwort wurde geändert. Du kannst dich jetzt anmelden.", "success")
-        return redirect(url_for("auth.login"))
+            if two_factor_service.is_locked(user):
+                flash("Zu viele ungültige Codes. Bitte versuche es später erneut.", "error")
+            elif not two_factor_service.verify_second_factor(user, form.code.data, "password_reset"):
+                flash("Der Bestätigungscode ist ungültig.", "error")
+            else:
+                user.set_password(form.password.data)
+                # Beendet alle bestehenden Sessions; das Token ist durch den neuen Passwort-
+                # Hash ebenfalls sofort verbraucht.
+                user.invalidate_sessions()
+                db.session.commit()
+                log_audit_event(AuditEventType.PASSWORD_RESET_COMPLETED, tenant_id=user.tenant_id, user=user)
+                flash("Dein Passwort wurde geändert. Du kannst dich jetzt anmelden.", "success")
+                return redirect(url_for("auth.login"))
 
     response = make_response(render_template("auth/reset_password.html", form=form))
     # Seite verarbeitet ein Token: nicht an Dritte weitergeben und nicht zwischenspeichern.
@@ -188,5 +300,6 @@ def reset_password():
 def logout():
     log_audit_event(AuditEventType.LOGOUT, tenant_id=current_user.tenant_id, user=current_user)
     logout_user()
+    session.pop(PENDING_2FA_KEY, None)
     flash("Du wurdest abgemeldet.", "success")
     return redirect(url_for("auth.login"))

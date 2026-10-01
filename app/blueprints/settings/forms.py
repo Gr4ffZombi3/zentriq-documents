@@ -36,9 +36,19 @@ def _parse_hours(value: str) -> float:
     return float((value or "").strip().replace(",", "."))
 
 
+OFFICE_ROLE_CHOICES = [
+    ("office_admin", "Büro-Admin – verwaltet das Büro, alle Bereiche und alle Mitarbeiter"),
+    ("employee", "Mitarbeiter – Leipziger Liste und Zeiterfassung, jeweils nur eigene Daten"),
+]
+PLATFORM_ROLE_CHOICES = OFFICE_ROLE_CHOICES + [
+    ("super_admin", "Super-Admin – Plattformverwaltung, kein Zugriff auf Bürodaten"),
+]
+
+
 class UserForm(FlaskForm):
     """Anlage/Bearbeitung eines Benutzers durch einen Admin. Die Rolle hat bewusst keinen
-    Standardwert - sie muss ausdruecklich gewaehlt werden."""
+    Standardwert - sie muss ausdruecklich gewaehlt werden. Die Auswahl ist auf die Rollen
+    begrenzt, die der Akteur vergeben darf (RadioField lehnt andere Werte serverseitig ab)."""
 
     email = StringField("E-Mail (Login)", validators=[DataRequired(), Email(), Length(max=255)])
     display_name = StringField("Anzeigename", validators=[Optional(), Length(max=120)])
@@ -46,7 +56,7 @@ class UserForm(FlaskForm):
     vermittlernummer = StringField("Vermittlernummer (Zuordnung Leipziger Liste, alternativer Login)", validators=[Optional(), Length(max=50)])
     role = RadioField(
         "Rolle",
-        choices=[("admin", "Admin – alle Bereiche"), ("mitarbeiter", "Mitarbeiter – nur Zeiterfassung")],
+        choices=OFFICE_ROLE_CHOICES,
         validators=[DataRequired(message="Bitte eine Rolle auswählen.")],
     )
     weekly_hours = StringField("Sollstunden pro Woche", validators=[DataRequired()], default="40")
@@ -73,3 +83,31 @@ class UserForm(FlaskForm):
     @property
     def weekly_target_minutes(self) -> int:
         return round(_parse_hours(self.weekly_hours.data) * 60)
+
+
+class PlatformUserForm(UserForm):
+    """Benutzerverwaltung durch den SUPER_ADMIN: zusaetzlich die Rolle Super-Admin."""
+
+    role = RadioField(
+        "Rolle",
+        choices=PLATFORM_ROLE_CHOICES,
+        validators=[DataRequired(message="Bitte eine Rolle auswählen.")],
+    )
+
+
+class TenantForm(FlaskForm):
+    name = StringField("Name des Büros", validators=[DataRequired(), Length(max=255)])
+    is_active = BooleanField("Büro aktiv", default=True)
+    submit = SubmitField("Speichern")
+
+
+class TenantCreateForm(UserForm):
+    """Neues Buero inklusive erstem Buero-Admin."""
+
+    tenant_name = StringField("Name des Büros", validators=[DataRequired(), Length(max=255)])
+    role = RadioField("Rolle", choices=[("office_admin", "Büro-Admin")], default="office_admin")
+
+
+class TwoFactorCodeForm(FlaskForm):
+    code = StringField("Code aus der Authenticator-App", validators=[DataRequired(message="Bitte den Code eingeben."), Length(max=32)])
+    submit = SubmitField("Bestätigen")

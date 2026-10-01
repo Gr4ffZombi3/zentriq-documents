@@ -28,9 +28,9 @@ def _setup(db, tenant, tmp_path):
     bot = Tenant(name="bot", slug="bot")
     db.session.add_all([other, bot])
     db.session.flush()
-    admin = User(tenant_id=other.id, email="admin@example.com", vermittlernummer="08/0950-T", role=UserRole.MITARBEITER)
+    admin = User(tenant_id=other.id, email="admin@example.com", vermittlernummer="08/0950-T", role=UserRole.EMPLOYEE)
     admin.set_password("adminpass123")
-    bot_user = User(tenant_id=bot.id, email="bot@example.com", role=UserRole.ADMIN)
+    bot_user = User(tenant_id=bot.id, email="bot@example.com", role=UserRole.OFFICE_ADMIN)
     bot_user.set_password("botpass1234")
     upload = tmp_path / "liste.pdf"
     upload.write_bytes(b"%PDF")
@@ -84,7 +84,7 @@ def test_execute_aligns_admin_and_removes_business_data(app, db, tenant, tmp_pat
     with bypass_tenant_scope():
         admin = User.query.filter_by(email="admin@example.com").one()
         assert admin.tenant_id == tenant.id
-        assert admin.role == UserRole.ADMIN and admin.is_active
+        assert admin.role == UserRole.OFFICE_ADMIN and admin.is_active
         assert admin.vermittlernummer == "08/0950-T"
         assert not User.query.filter_by(email="bot@example.com").one().is_active
         assert Customer.query.count() == 0

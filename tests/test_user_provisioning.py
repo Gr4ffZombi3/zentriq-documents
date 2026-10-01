@@ -176,7 +176,7 @@ def test_create_user_for_new_company_becomes_admin(app, password_prompt):
     password_prompt(PASSWORD, PASSWORD)
     result = _run(app, "--email", "gruender@example.com", "--company", "Gruender GmbH")
     assert result.exit_code == 0, result.output
-    assert _find_user("gruender@example.com").role == UserRole.ADMIN
+    assert _find_user("gruender@example.com").role == UserRole.OFFICE_ADMIN
 
 
 def test_create_user_in_existing_tenant_requires_role(app, tenant, password_prompt):
@@ -189,15 +189,15 @@ def test_create_user_in_existing_tenant_requires_role(app, tenant, password_prom
 
 def test_create_user_in_existing_tenant_with_role(app, tenant, password_prompt):
     password_prompt(PASSWORD, PASSWORD)
-    result = _run(app, "--email", "ma@example.com", "--tenant", tenant.slug, "--role", "mitarbeiter")
+    result = _run(app, "--email", "ma@example.com", "--tenant", tenant.slug, "--role", "employee")
     assert result.exit_code == 0, result.output
     created = _find_user("ma@example.com")
     assert created.tenant_id == tenant.id
-    assert created.role == UserRole.MITARBEITER
+    assert created.role == UserRole.EMPLOYEE
     assert Tenant.query.count() == 1
 
 
 def test_create_user_rejects_company_and_tenant_together(app, tenant, password_prompt):
-    result = _run(app, "--email", "x@example.com", "--company", "X", "--tenant", tenant.slug, "--role", "admin")
+    result = _run(app, "--email", "x@example.com", "--company", "X", "--tenant", tenant.slug, "--role", "office_admin")
     assert result.exit_code != 0
     assert "Genau eine" in result.output

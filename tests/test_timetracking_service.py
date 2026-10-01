@@ -39,7 +39,7 @@ def clock(monkeypatch):
 
 @pytest.fixture()
 def worker(db, tenant):
-    worker_user = User(tenant_id=tenant.id, email="ma@example.com", password_hash="x", role=UserRole.MITARBEITER)
+    worker_user = User(tenant_id=tenant.id, email="ma@example.com", password_hash="x", role=UserRole.EMPLOYEE)
     db.session.add(worker_user)
     db.session.flush()
     db.session.add(EmployeeProfile(tenant_id=tenant.id, user_id=worker_user.id, weekly_target_minutes=2400))

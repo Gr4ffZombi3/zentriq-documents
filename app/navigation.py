@@ -1,8 +1,11 @@
-"""Hauptnavigation des Portals: Leipziger Liste, Memo, Zeiterfassung plus Einstellungen,
-rollenabhaengig.
+"""Hauptnavigation des Portals, rollenabhaengig:
+
+- SUPER_ADMIN: Bueros, Benutzer, Systemeinstellungen, Sicherheit (keine Fachbereiche).
+- OFFICE_ADMIN: Leipziger Liste, Memo, Zeiterfassung, Einstellungen.
+- EMPLOYEE: Leipziger Liste, Zeiterfassung, Konto.
 
 Die Sichtbarkeit hier ist nur Komfort - die eigentliche Absicherung erfolgt serverseitig in
-app/auth/permissions.py (Default-Deny fuer Mitarbeiter) und per @admin_required."""
+app/auth/permissions.py (Default-Deny je Rolle) und per @admin_required."""
 
 from dataclasses import dataclass, field
 
@@ -57,7 +60,15 @@ TIME_ITEMS = (
 
 SETTINGS_ITEMS = (
     NavItem("settings.profile", "Profil", ("settings.profile",)),
+    NavItem("settings.security", "Sicherheit", ("settings.security",)),
     NavItem("settings.users", "Benutzer", ("settings.users", "settings.user_"), admin_only=True),
+)
+
+PLATFORM_AREAS = (
+    NavArea("platform_offices", "Büros", "platform.offices", ("platform.office",), admin_only=False),
+    NavArea("platform_users", "Benutzer", "platform.users", ("platform.user",), admin_only=False),
+    NavArea("platform_system", "Systemeinstellungen", "platform.system", ("platform.system",), admin_only=False),
+    NavArea("platform_security", "Sicherheit", "platform.security", ("platform.security",), admin_only=False),
 )
 
 AREAS = (
@@ -86,12 +97,12 @@ def _visible(entry, is_admin: bool) -> bool:
 
 def build_navigation() -> dict:
     if not current_user.is_authenticated:
-        return {"nav_areas": [], "nav_active_area": None, "nav_subitems": []}
+        return {"nav_areas": [], "nav_active_area": None, "nav_subitems": [], "nav_settings_label": "Konto"}
     is_admin = current_user.is_admin
     endpoint = request.endpoint
     areas = []
     active_area = None
-    for area in AREAS:
+    for area in PLATFORM_AREAS if current_user.is_super_admin else AREAS:
         if not _visible(area, is_admin):
             continue
         active = _matches(endpoint, area.prefixes)
@@ -116,13 +127,19 @@ def build_navigation() -> dict:
         "nav_more_items": more_items,
         "nav_more_active": any(item["active"] for item in more_items),
         "nav_settings_active": active_area is SETTINGS_AREA,
+        # Buero-Admins verwalten hier auch Benutzer; fuer alle anderen ist es das eigene Konto.
+        "nav_settings_label": "Einstellungen" if is_admin else "Konto",
     }
 
 
 def home_endpoint_for(user) -> str:
-    """Startseite nach dem Login: Admins landen in der Leipziger Liste, Mitarbeiter in der
-    Zeiterfassung (Fallback: Profil, falls ein Bereich nicht registriert ist)."""
-    candidates = ("leipziger.index",) if user.is_admin else ()
+    """Startseite nach dem Login: Super-Admins landen in der Bueroverwaltung, Buero-Admins in
+    der Leipziger Liste, Mitarbeiter in der Zeiterfassung (Fallback: Profil, falls ein Bereich
+    nicht registriert ist)."""
+    if user.is_super_admin:
+        candidates = ("platform.offices",)
+    else:
+        candidates = ("leipziger.index",) if user.is_admin else ()
     for endpoint in (*candidates, "timetracking.index", "settings.profile"):
         if endpoint in current_app.view_functions:
             return endpoint

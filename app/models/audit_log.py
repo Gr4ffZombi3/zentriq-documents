@@ -15,6 +15,38 @@ class AuditEventType(enum.Enum):
     TIME_CORRECTED = "time_corrected"
     TIME_CORRECTION_REQUESTED = "time_correction_requested"
     TIME_CORRECTION_DECIDED = "time_correction_decided"
+    USER_DELETED = "user_deleted"
+    PASSWORD_CHANGED = "password_changed"
+    PASSWORD_RESET_TRIGGERED = "password_reset_triggered"
+    TWO_FACTOR_ENABLED = "two_factor_enabled"
+    TWO_FACTOR_RESET = "two_factor_reset"
+    TWO_FACTOR_FAILED = "two_factor_failed"
+    RECOVERY_CODE_USED = "recovery_code_used"
+    RECOVERY_CODES_REGENERATED = "recovery_codes_regenerated"
+    TENANT_CREATED = "tenant_created"
+    TENANT_UPDATED = "tenant_updated"
+
+
+# Sicherheitsrelevante Ereignisse ohne fachlichen Inhalt - nur diese sind fuer den
+# SUPER_ADMIN sichtbar (keine Zeiterfassungs-Events).
+SECURITY_EVENT_TYPES = (
+    AuditEventType.LOGIN_SUCCESS,
+    AuditEventType.LOGIN_FAILED,
+    AuditEventType.PASSWORD_RESET_REQUESTED,
+    AuditEventType.PASSWORD_RESET_COMPLETED,
+    AuditEventType.PASSWORD_RESET_TRIGGERED,
+    AuditEventType.PASSWORD_CHANGED,
+    AuditEventType.USER_CREATED,
+    AuditEventType.USER_UPDATED,
+    AuditEventType.USER_DELETED,
+    AuditEventType.TWO_FACTOR_ENABLED,
+    AuditEventType.TWO_FACTOR_RESET,
+    AuditEventType.TWO_FACTOR_FAILED,
+    AuditEventType.RECOVERY_CODE_USED,
+    AuditEventType.RECOVERY_CODES_REGENERATED,
+    AuditEventType.TENANT_CREATED,
+    AuditEventType.TENANT_UPDATED,
+)
 
 
 class AuditLog(db.Model):

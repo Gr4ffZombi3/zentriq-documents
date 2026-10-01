@@ -60,7 +60,7 @@ def _prompt_password(from_stdin: bool = False) -> str:
     "--role",
     type=click.Choice([role.value for role in UserRole]),
     default=None,
-    help="Rolle des Benutzers. Neuer Mandant: Standard admin. Bestehender Mandant: Pflicht.",
+    help="Rolle des Benutzers. Neuer Mandant: Standard office_admin. Bestehender Mandant: Pflicht.",
 )
 @click.option("--vermittlernummer", default=None, help="Optional: Vermittlernummer fuer den Login.")
 def create_user_command(
@@ -79,10 +79,12 @@ def create_user_command(
         company = company.strip()
         if not company or len(company) > 255:
             raise click.ClickException("--company darf nicht leer und hoechstens 255 Zeichen lang sein.")
-        user_role = UserRole(role) if role else UserRole.ADMIN
+        user_role = UserRole(role) if role else UserRole.OFFICE_ADMIN
     else:
         if not role:
-            raise click.ClickException("Fuer einen bestehenden Mandanten ist --role (admin/mitarbeiter) Pflicht.")
+            raise click.ClickException(
+                "Fuer einen bestehenden Mandanten ist --role (office_admin/employee/super_admin) Pflicht."
+            )
         user_role = UserRole(role)
         existing_tenant = Tenant.query.filter_by(slug=tenant_slug.strip()).first()
         if existing_tenant is None:
@@ -132,8 +134,8 @@ def _clean_vermittlernummer(value: str | None) -> str | None:
 @click.option("--tenant", "tenant_slug", default=None, help="Mandant (Slug) - nur noetig, wenn der Benutzer neu angelegt wird.")
 @click.option("--password-stdin", is_flag=True, help="Passwort als eine Zeile von stdin lesen statt verdeckt abzufragen.")
 def set_admin_command(email: str, vermittlernummer: str | None, tenant_slug: str | None, password_stdin: bool):
-    """Legt einen Admin an oder aktualisiert einen bestehenden Benutzer mit dieser E-Mail
-    (Rolle ADMIN, aktiv, Vermittlernummer, neues Passwort) - ohne Duplikat. Der Mandant eines
+    """Legt einen Buero-Admin an oder aktualisiert einen bestehenden Benutzer mit dieser E-Mail
+    (Rolle OFFICE_ADMIN, aktiv, Vermittlernummer, neues Passwort) - ohne Duplikat. Der Mandant eines
     bestehenden Benutzers bleibt unveraendert."""
     try:
         email = validate_email(email.strip(), check_deliverability=False).normalized.lower()
@@ -163,11 +165,13 @@ def set_admin_command(email: str, vermittlernummer: str | None, tenant_slug: str
             user = User(tenant_id=tenant.id, email=email)
             db.session.add(user)
         user.email = email
-        user.role = UserRole.ADMIN
+        user.role = UserRole.OFFICE_ADMIN
         user.is_active = True
+        user.deleted_at = None
         if vermittlernummer:
             user.vermittlernummer = vermittlernummer
         user.set_password(password)
+        user.invalidate_sessions()
         db.session.commit()
         user_id, tenant_id = user.id, user.tenant_id
 
@@ -238,7 +242,7 @@ def align_tenant_command(tenant_slug: str, admin_email: str, execute: bool):
         upload_paths = [_resolve_upload_path(document.file_path) for document in documents]
 
         admin.tenant_id = tenant.id
-        admin.role = UserRole.ADMIN
+        admin.role = UserRole.OFFICE_ADMIN
         admin.is_active = True
         for user in other_users:
             user.is_active = False
@@ -263,7 +267,62 @@ def align_tenant_command(tenant_slug: str, admin_email: str, execute: bool):
     click.echo(f"Ausgefuehrt. {moved} Upload-Datei(en) nach {archive_dir} verschoben.")
 
 
+@click.command("grant-super-admin")
+@click.option("--email", default=None, help="E-Mail-Adresse des Kontos.")
+@click.option("--vermittlernummer", default=None, help="Alternativ: Vermittlernummer des Kontos.")
+@click.option("--execute", is_flag=True, help="Ohne diese Option nur Vorschau.")
+def grant_super_admin_command(email: str | None, vermittlernummer: str | None, execute: bool):
+    """Macht ein bestehendes Konto zum SUPER_ADMIN (Plattformbetreiber). Passwort, Login und
+    2FA bleiben unveraendert. Achtung: ein SUPER_ADMIN hat danach KEINEN Zugriff mehr auf die
+    fachlichen Daten seines bisherigen Bueros."""
+    from app.models.audit_log import AuditEventType
+    from app.services.audit import log_audit_event
+
+    if bool(email) == bool(vermittlernummer):
+        raise click.ClickException("Genau eine der Optionen --email oder --vermittlernummer angeben.")
+    with bypass_tenant_scope():
+        if email:
+            user = User.query.filter(db.func.lower(User.email) == email.strip().lower()).first()
+        else:
+            user = find_user_by_vermittlernummer(vermittlernummer)
+        if user is None or user.deleted_at is not None:
+            raise click.ClickException("Konto nicht gefunden.")
+        click.echo(f"Konto ID {user.id}, Mandant-ID {user.tenant_id}, Rolle {user.role.label}, aktiv={user.is_active}")
+        if user.role == UserRole.SUPER_ADMIN:
+            click.echo("Konto ist bereits SUPER_ADMIN - nichts zu tun.")
+            return
+        remaining_admins = User.query.filter(
+            User.tenant_id == user.tenant_id,
+            User.id != user.id,
+            User.role == UserRole.OFFICE_ADMIN,
+            User.is_active.is_(True),
+            User.deleted_at.is_(None),
+        ).count()
+        click.echo(f"Verbleibende aktive Buero-Admins im bisherigen Mandanten: {remaining_admins}")
+        if remaining_admins == 0:
+            click.echo("WARNUNG: Das Buero haette danach keinen aktiven Buero-Admin mehr.")
+        if not execute:
+            click.echo("Vorschau - nichts geaendert. Mit --execute ausfuehren.")
+            return
+        old_role = user.role
+        user.role = UserRole.SUPER_ADMIN
+        user.is_active = True
+        user.invalidate_sessions()
+        db.session.commit()
+        log_audit_event(
+            AuditEventType.USER_UPDATED,
+            tenant_id=user.tenant_id,
+            details={
+                "target_user_id": user.id,
+                "changes": {"role": {"old": old_role.value, "new": UserRole.SUPER_ADMIN.value}},
+                "source": "cli grant-super-admin",
+            },
+        )
+    click.echo(f"Konto ID {user.id} ist jetzt SUPER_ADMIN.")
+
+
 def register_cli(app) -> None:
     app.cli.add_command(create_user_command)
     app.cli.add_command(set_admin_command)
     app.cli.add_command(align_tenant_command)
+    app.cli.add_command(grant_super_admin_command)

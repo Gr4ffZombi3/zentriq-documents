@@ -11,18 +11,18 @@
         <a href="{{ area.url }}" class="app-nav-link {{ 'is-active' if area.active else '' }}"{% if area.active %} aria-current="page"{% endif %}>{{ area.label }}</a>
       {% endfor %}
       <div class="app-nav-mobile-user">
-        <a href="{{ url_for('settings.index') }}" class="app-nav-link {{ 'is-active' if nav_settings_active else '' }}">Einstellungen</a>
+        <a href="{{ url_for('settings.index') }}" class="app-nav-link {{ 'is-active' if nav_settings_active else '' }}">{{ nav_settings_label }}</a>
       </div>
     </nav>
 
     {% if current_user.is_authenticated %}
       <div class="app-user">
         <div class="app-user-identity">
-          <span class="app-user-name" title="{{ current_user.email }}">{{ current_user.employee_profile.display_name if current_user.employee_profile and current_user.employee_profile.display_name else current_user.email }}</span>
+          <span class="app-user-name" title="{{ current_user.email }}">{{ current_user.employee_profile.display_name if not current_user.is_super_admin and current_user.employee_profile and current_user.employee_profile.display_name else current_user.email }}</span>
           <span class="app-role">{{ current_user.role.label }}</span>
         </div>
-        <a href="{{ url_for('settings.index') }}" class="app-header-action {{ 'is-active' if nav_settings_active else '' }}" title="Einstellungen" aria-label="Einstellungen">
-          {{ icon('settings', class='h-4 w-4') }}<span class="app-header-action-label">Einstellungen</span>
+        <a href="{{ url_for('settings.index') }}" class="app-header-action {{ 'is-active' if nav_settings_active else '' }}" title="{{ nav_settings_label }}" aria-label="{{ nav_settings_label }}">
+          {{ icon('settings', class='h-4 w-4') }}<span class="app-header-action-label">{{ nav_settings_label }}</span>
         </a>
         <button
           type="button"

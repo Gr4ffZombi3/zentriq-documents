@@ -149,7 +149,7 @@ def test_admin_cannot_see_other_tenant(auth_client, db):
     db.session.add(other)
     db.session.commit()
     with use_tenant_id(other.id):
-        stranger = User(tenant_id=other.id, email="fremd@example.com", password_hash="x", role=UserRole.MITARBEITER)
+        stranger = User(tenant_id=other.id, email="fremd@example.com", password_hash="x", role=UserRole.EMPLOYEE)
         db.session.add(stranger)
         db.session.commit()
         foreign_session = _closed_session(db, stranger)

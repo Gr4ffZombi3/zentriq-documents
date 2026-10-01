@@ -46,7 +46,7 @@ def _make_list(db, tenant, rows, name="liste.pdf", status=DocStatus.DONE):
     return document
 
 
-def _make_user(db, tenant, email, vm, name, role=UserRole.MITARBEITER, password="mitarbeiterpass123"):
+def _make_user(db, tenant, email, vm, name, role=UserRole.EMPLOYEE, password="mitarbeiterpass123"):
     user = User(tenant_id=tenant.id, email=email, vermittlernummer=vm, role=role, is_active=True)
     user.set_password(password)
     db.session.add(user)
@@ -185,7 +185,7 @@ def test_set_admin_updates_existing_user_without_duplicate(app, db, tenant, empl
     users = User.query.filter(User.email == employee.email).all()
     assert len(users) == 1
     user = users[0]
-    assert user.role == UserRole.ADMIN and user.is_active
+    assert user.role == UserRole.OFFICE_ADMIN and user.is_active
     assert user.vermittlernummer == "08/0950-T"
     assert user.password_hash.startswith("scrypt:") and "neuesSicheresPw1" not in user.password_hash
     assert user.check_password("neuesSicheresPw1")

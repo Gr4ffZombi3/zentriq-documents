@@ -88,6 +88,25 @@ class BaseConfig:
     # Passwort-Reset (fail-closed: ohne SMTP_HOST, MAIL_FROM und PUBLIC_URL wird nichts versendet)
     PASSWORD_RESET_TOKEN_MAX_AGE_SECONDS = int(os.environ.get("PASSWORD_RESET_TOKEN_MAX_AGE_SECONDS", "1800"))
     PASSWORD_RESET_MAX_REQUESTS_PER_HOUR = int(os.environ.get("PASSWORD_RESET_MAX_REQUESTS_PER_HOUR", "3"))
+    # Zusaetzliche Drosselung pro Client-IP (unabhaengig davon, ob die Adresse existiert).
+    PASSWORD_RESET_MAX_REQUESTS_PER_IP_PER_HOUR = int(
+        os.environ.get("PASSWORD_RESET_MAX_REQUESTS_PER_IP_PER_HOUR", "10")
+    )
+
+    # Zwei-Faktor-Authentifizierung (TOTP). Ist TWO_FACTOR_ENFORCED aktiv, muss jedes Konto
+    # 2FA einrichten, bevor es irgendeinen anderen Bereich erreicht. Konten MIT 2FA muessen
+    # den Code unabhaengig von diesem Schalter immer eingeben.
+    TWO_FACTOR_ENFORCED = os.environ.get("TWO_FACTOR_ENFORCED", "true").lower() == "true"
+    TWO_FACTOR_ISSUER = os.environ.get("TWO_FACTOR_ISSUER", "Zentriq")
+    TWO_FACTOR_MAX_FAILURES = int(os.environ.get("TWO_FACTOR_MAX_FAILURES", "5"))
+    TWO_FACTOR_LOCK_MINUTES = int(os.environ.get("TWO_FACTOR_LOCK_MINUTES", "15"))
+    # Wie lange nach korrektem Passwort der 2FA-Code eingegeben werden kann.
+    TWO_FACTOR_PENDING_MAX_AGE_SECONDS = int(os.environ.get("TWO_FACTOR_PENDING_MAX_AGE_SECONDS", "300"))
+    TWO_FACTOR_RECOVERY_CODE_COUNT = 10
+
+    # Brute-Force-Schutz fuer die Anmeldung (fehlgeschlagene Versuche pro Client-IP).
+    LOGIN_MAX_FAILURES_PER_IP = int(os.environ.get("LOGIN_MAX_FAILURES_PER_IP", "20"))
+    LOGIN_FAILURE_WINDOW_MINUTES = int(os.environ.get("LOGIN_FAILURE_WINDOW_MINUTES", "15"))
 
     # SMTP-Versand
     SMTP_HOST = os.environ.get("SMTP_HOST")
@@ -117,6 +136,9 @@ class TestingConfig(BaseConfig):
     MAILBOX_DRY_RUN = True
     HUK_AUTOMATION_ENABLED = False
     REGISTRATION_ENABLED = False
+    # Die bestehende Testsuite meldet Konten ohne 2FA an. Die Pflicht-Einrichtung wird in
+    # tests/test_two_factor.py gezielt mit TWO_FACTOR_ENFORCED = True geprueft.
+    TWO_FACTOR_ENFORCED = False
     PUBLIC_URL = "https://zentriq.test"
     SMTP_HOST = None
     MAIL_FROM = None

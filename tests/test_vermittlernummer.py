@@ -32,7 +32,7 @@ def test_unknown_formats_are_kept_readable():
 def test_login_with_other_spelling(client, db, tenant):
     from app.models import User, UserRole
 
-    user = User(tenant_id=tenant.id, email="vm@example.com", vermittlernummer="08/0950-T", role=UserRole.ADMIN)
+    user = User(tenant_id=tenant.id, email="vm@example.com", vermittlernummer="08/0950-T", role=UserRole.OFFICE_ADMIN)
     user.set_password("geheimespasswort1")
     db.session.add(user)
     db.session.commit()
@@ -58,7 +58,7 @@ def test_user_admin_rejects_duplicate_in_other_spelling(auth_client, db, tenant)
         data={
             "email": "neu@example.com",
             "vermittlernummer": "081777-B",
-            "role": "mitarbeiter",
+            "role": "employee",
             "is_active": "y",
             "password": "startpasswort123",
             "password_confirm": "startpasswort123",
@@ -78,7 +78,7 @@ def test_user_admin_stores_uniform_format(auth_client, db, tenant):
         data={
             "email": "dennis@example.com",
             "vermittlernummer": "081234a",
-            "role": "mitarbeiter",
+            "role": "employee",
             "is_active": "y",
             "password": "startpasswort123",
             "password_confirm": "startpasswort123",

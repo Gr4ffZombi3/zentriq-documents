@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/forms.html" import button %}
+{% from "ui/portal.html" import panel, state_tag %}
+{% from "settings/_form_macros.html" import text_input %}
+{% block title %}{{ tenant.name }} – Plattform – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell page-shell-wide">
+  <a class="back-link" href="{{ url_for('platform.offices') }}">← Büros</a>
+  {% call page_header(tenant.name, 'Büro ' ~ tenant.slug ~ ' · ' ~ tenant.status.label) %}
+    {{ button('Benutzer anlegen', href=url_for('platform.office_user_create', tenant_id=tenant.id), variant='primary') }}
+  {% endcall %}
+
+  {% call panel('Benutzer', 'Konten dieses Büros. Fachliche Daten (Leipziger Liste, Memo, Zeiterfassung) sind für den Plattformbetrieb nicht einsehbar.', flush=True) %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">E-Mail</th>
+            <th scope="col">Vermittlernummer</th>
+            <th scope="col">Rolle</th>
+            <th scope="col">Status</th>
+            <th scope="col">2FA</th>
+            <th scope="col">Letzte Anmeldung</th>
+            <th scope="col"><span class="sr-only">Aktion</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for member in members %}
+            {% set profile = member.employee_profile %}
+            <tr class="{{ '' if member.is_active else 'is-muted' }}">
+              <th scope="row" class="cell-strong">{{ profile.display_name if profile and profile.display_name else '–' }}</th>
+              <td>{{ member.email }}{% if member.id == current_user.id %} <span class="cell-sub">Sie</span>{% endif %}</td>
+              <td class="whitespace-nowrap">{{ member.vermittlernummer | vermittlernummer }}</td>
+              <td>{{ member.role.label }}</td>
+              <td>{{ state_tag('Aktiv', 'success') if member.is_active else state_tag('Deaktiviert', 'neutral') }}</td>
+              <td>{{ state_tag('Aktiv', 'success') if member.two_factor_enabled else state_tag('Nicht eingerichtet', 'warning') }}</td>
+              <td class="whitespace-nowrap">{{ member.last_login_at | local_dt(default='noch nie') }}</td>
+              <td class="text-right"><a class="table-action" href="{{ url_for('platform.user_edit', user_id=member.id) }}">Bearbeiten</a></td>
+            </tr>
+          {% else %}
+            <tr><td colspan="8" class="is-muted">Keine Benutzer.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endcall %}
+
+  <form method="post" class="mt-5" novalidate>
+    {{ form.hidden_tag() }}
+    {% call panel('Büro bearbeiten') %}
+      <div class="form-grid form-grid-2">
+        {{ text_input(form.name) }}
+      </div>
+      <div class="checkbox-row mt-4">
+        <label>{{ form.is_active() }} {{ form.is_active.label.text }}</label>
+      </div>
+      <p class="form-hint mt-2">Ist ein Büro deaktiviert, können sich seine Benutzer nicht mehr anmelden; laufende Sitzungen enden sofort. Daten bleiben erhalten.</p>
+      <div class="mt-4">
+        <button type="submit" class="btn btn-primary h-10 px-4 text-sm" onclick="return this.form.is_active.checked || confirm('Büro wirklich deaktivieren? Alle Benutzer dieses Büros werden abgemeldet.');">Speichern</button>
+      </div>
+    {% endcall %}
+  </form>
+</div>
+{% endblock %}

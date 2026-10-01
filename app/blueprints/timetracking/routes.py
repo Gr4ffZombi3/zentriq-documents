@@ -26,6 +26,7 @@ from app.services.timetracking import service
 from app.services.timetracking.calc import month_bounds, week_bounds
 from app.services.timetracking.clock import local_to_utc_naive, local_today, to_local, utcnow_naive
 from app.services.timetracking.service import TimeTrackingError
+from app.services.user_admin import get_office_member_or_404, office_members_query
 from app.tenancy import get_or_404_scoped
 
 timetracking_bp = Blueprint("timetracking", __name__, url_prefix="/zeiterfassung")
@@ -100,7 +101,9 @@ def _audit_time(event_type: AuditEventType, details: dict) -> None:
 
 
 def _employee_or_404(user_id: int) -> User:
-    return get_or_404_scoped(User, user_id)
+    # Nur Buero-Mitglieder des eigenen Mandanten; geloeschte Konten bleiben fuer die Historie
+    # erreichbar, SUPER_ADMIN-Konten nie.
+    return get_office_member_or_404(user_id, include_deleted=True)
 
 
 def _request_link(day: date) -> str:
@@ -272,7 +275,7 @@ def new_request():
 @login_required
 @admin_required
 def team():
-    users = User.query.filter_by(is_active=True).order_by(User.email).all()
+    users = office_members_query().filter(User.is_active.is_(True)).order_by(User.email).all()
     rows = service.build_team_overview(users)
     rows.sort(key=lambda row: (row.user.employee_profile.display_name if row.user.employee_profile and row.user.employee_profile.display_name else row.user.email).lower())
     return render_template(
@@ -603,7 +606,7 @@ def audit():
     query = TimeCorrection.query.order_by(TimeCorrection.created_at.desc(), TimeCorrection.id.desc())
     if user_filter:
         query = query.filter(TimeCorrection.user_id == user_filter)
-    users = User.query.order_by(User.email).all()
+    users = office_members_query(include_deleted=True).order_by(User.email).all()
     return render_template(
         "timetracking/audit.html",
         corrections=query.limit(500).all(),

@@ -1,20 +1,21 @@
 {% extends "base.html" %}
 {% from "ui/display.html" import page_header %}
-{% from "ui/portal.html" import panel %}
 {% set title = 'Benutzer bearbeiten' if edit_user else 'Benutzer anlegen' %}
-{% block title %}{{ title }} – Zentriq{% endblock %}
+{% block title %}{{ title }} – Plattform – Zentriq{% endblock %}
 {% block content %}
 <div class="page-shell">
-  <a class="back-link" href="{{ url_for('settings.users') }}">← Benutzer</a>
-  {% call page_header(title, edit_user.email if edit_user else 'Neue Benutzer werden in Ihrem Büro angelegt. Die Rolle muss ausdrücklich gewählt werden.') %}{% endcall %}
+  <a class="back-link" href="{{ url_for('platform.office_detail', tenant_id=tenant.id) }}">← {{ tenant.name }}</a>
+  {% call page_header(title, (edit_user.email ~ ' · ' if edit_user else '') ~ 'Büro ' ~ tenant.name) %}{% endcall %}
 
   <form method="post" class="flex flex-col gap-5" novalidate>
     {{ form.hidden_tag() }}
     {% include "settings/_user_fields.html" %}
-
+    {% if edit_user %}
+      <p class="form-hint">Passwörter bestehender Konten werden nicht vom Plattformbetrieb vergeben – nutzen Sie „Passwort-Reset per E-Mail senden“.</p>
+    {% endif %}
     <div class="flex gap-2">
       <button type="submit" class="btn btn-primary h-10 px-4 text-sm">{{ 'Speichern' if edit_user else 'Benutzer anlegen' }}</button>
-      <a class="btn btn-ghost h-10 px-4 text-sm" href="{{ url_for('settings.users') }}">Abbrechen</a>
+      <a class="btn btn-ghost h-10 px-4 text-sm" href="{{ url_for('platform.office_detail', tenant_id=tenant.id) }}">Abbrechen</a>
     </div>
   </form>
 

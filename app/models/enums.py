@@ -5,18 +5,35 @@ class TenantStatus(enum.Enum):
     ACTIVE = "active"
     SUSPENDED = "suspended"
 
+    @property
+    def label(self) -> str:
+        return {TenantStatus.ACTIVE: "Aktiv", TenantStatus.SUSPENDED: "Deaktiviert"}[self]
+
 
 class UserRole(enum.Enum):
-    """Portal-Rollen. ADMIN: alle Bereiche (Leipziger Liste, Sprachnachrichten, Zeiterfassung
-    inkl. Team-Verwaltung) des eigenen Mandanten. MITARBEITER: ausschliesslich die eigene
-    Zeiterfassung."""
+    """Plattform-Rollen.
 
-    ADMIN = "admin"
-    MITARBEITER = "mitarbeiter"
+    SUPER_ADMIN: Betreiber der Plattform - verwaltet Bueros (Mandanten) und Benutzer, sieht
+    aber KEINE fachlichen Daten eines Bueros (Leipziger Liste, Memo, Zeiterfassung).
+    OFFICE_ADMIN: verwaltet ausschliesslich den eigenen Mandanten inkl. aller Fachbereiche.
+    Ein Buero kann mehrere OFFICE_ADMINs haben.
+    EMPLOYEE: Leipziger Liste und Zeiterfassung, jeweils ausschliesslich eigene Daten."""
+
+    SUPER_ADMIN = "super_admin"
+    OFFICE_ADMIN = "office_admin"
+    EMPLOYEE = "employee"
 
     @property
     def label(self) -> str:
-        return {UserRole.ADMIN: "Admin", UserRole.MITARBEITER: "Mitarbeiter"}[self]
+        return {
+            UserRole.SUPER_ADMIN: "Super-Admin",
+            UserRole.OFFICE_ADMIN: "Büro-Admin",
+            UserRole.EMPLOYEE: "Mitarbeiter",
+        }[self]
+
+
+# Rollen, die ein OFFICE_ADMIN innerhalb seines Bueros vergeben darf.
+OFFICE_ASSIGNABLE_ROLES = (UserRole.OFFICE_ADMIN, UserRole.EMPLOYEE)
 
 
 class TimeEntrySource(enum.Enum):

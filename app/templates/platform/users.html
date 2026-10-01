@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/portal.html" import panel, state_tag %}
+{% block title %}Benutzer – Plattform – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell page-shell-wide">
+  {% call page_header('Benutzer', 'Alle Konten der Plattform mit Rolle, Status und Zwei-Faktor-Status.') %}
+    <form method="get" class="flex gap-2">
+      <label class="sr-only" for="buero">Büro</label>
+      <select id="buero" name="buero" class="field-surface h-10 text-sm" onchange="this.form.submit()">
+        <option value="">Alle Büros</option>
+        {% for tenant in tenants.values() | sort(attribute='name') %}
+          <option value="{{ tenant.id }}" {{ 'selected' if tenant_filter == tenant.id else '' }}>{{ tenant.name }}</option>
+        {% endfor %}
+      </select>
+      <noscript><button type="submit" class="btn btn-secondary h-10 px-4 text-sm">Filtern</button></noscript>
+    </form>
+  {% endcall %}
+
+  {% call panel(flush=True) %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th scope="col">E-Mail</th>
+            <th scope="col">Name</th>
+            <th scope="col">Büro</th>
+            <th scope="col">Rolle</th>
+            <th scope="col">Status</th>
+            <th scope="col">2FA</th>
+            <th scope="col">Letzte Anmeldung</th>
+            <th scope="col"><span class="sr-only">Aktion</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in users %}
+            {% set profile = item.employee_profile %}
+            {% set tenant = tenants.get(item.tenant_id) %}
+            <tr class="{{ '' if item.is_active else 'is-muted' }}">
+              <th scope="row" class="cell-strong">{{ item.email }}{% if item.id == current_user.id %} <span class="cell-sub">Sie</span>{% endif %}</th>
+              <td>{{ profile.display_name if profile and profile.display_name else '–' }}</td>
+              <td>{% if tenant %}<a class="table-link" href="{{ url_for('platform.office_detail', tenant_id=tenant.id) }}">{{ tenant.name }}</a>{% else %}–{% endif %}</td>
+              <td>{{ item.role.label }}</td>
+              <td>{{ state_tag('Aktiv', 'success') if item.is_active else state_tag('Deaktiviert', 'neutral') }}</td>
+              <td>{{ state_tag('Aktiv', 'success') if item.two_factor_enabled else state_tag('Nicht eingerichtet', 'warning') }}</td>
+              <td class="whitespace-nowrap">{{ item.last_login_at | local_dt(default='noch nie') }}</td>
+              <td class="text-right"><a class="table-action" href="{{ url_for('platform.user_edit', user_id=item.id) }}">Bearbeiten</a></td>
+            </tr>
+          {% else %}
+            <tr><td colspan="8" class="is-muted">Keine Benutzer.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endcall %}
+</div>
+{% endblock %}

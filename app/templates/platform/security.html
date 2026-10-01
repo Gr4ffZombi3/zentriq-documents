@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/portal.html" import kpi, panel, state_tag %}
+{% set event_labels = {
+  'login_success': 'Anmeldung', 'login_failed': 'Anmeldung fehlgeschlagen',
+  'password_reset_requested': 'Passwort-Reset angefordert', 'password_reset_completed': 'Passwort zurückgesetzt',
+  'password_reset_triggered': 'Passwort-Reset administrativ angestoßen', 'password_changed': 'Passwort geändert',
+  'user_created': 'Benutzer angelegt', 'user_updated': 'Benutzer geändert', 'user_deleted': 'Benutzer gelöscht',
+  'two_factor_enabled': '2FA eingerichtet', 'two_factor_reset': '2FA zurückgesetzt', 'two_factor_failed': '2FA-Code ungültig',
+  'recovery_code_used': 'Wiederherstellungscode verwendet', 'recovery_codes_regenerated': 'Wiederherstellungscodes erneuert',
+  'tenant_created': 'Büro angelegt', 'tenant_updated': 'Büro geändert',
+} %}
+{% set danger_events = ['login_failed', 'two_factor_failed'] %}
+{% block title %}Sicherheit – Plattform – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell page-shell-wide">
+  {% call page_header('Sicherheit', 'Zwei-Faktor-Status der Konten und sicherheitsrelevante Ereignisse (ohne fachliche Inhalte).') %}{% endcall %}
+
+  <div class="kpi-row">
+    {{ kpi('Aktive Konten', active_count) }}
+    {{ kpi('Mit 2FA', active_count - without_2fa | length, tone='success') }}
+    {{ kpi('Ohne 2FA', without_2fa | length, tone='warning' if without_2fa else None) }}
+  </div>
+
+  {% if without_2fa %}
+    {% call panel('Konten ohne Zwei-Faktor-Authentifizierung', 'Diese Konten müssen 2FA bei der nächsten Anmeldung einrichten.', flush=True) %}
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th scope="col">E-Mail</th><th scope="col">Büro</th><th scope="col">Rolle</th><th scope="col">Letzte Anmeldung</th></tr></thead>
+          <tbody>
+            {% for item in without_2fa %}
+              <tr>
+                <th scope="row" class="cell-strong"><a class="table-link" href="{{ url_for('platform.user_edit', user_id=item.id) }}">{{ item.email }}</a></th>
+                <td>{{ tenants[item.tenant_id].name if item.tenant_id in tenants else '–' }}</td>
+                <td>{{ item.role.label }}</td>
+                <td class="whitespace-nowrap">{{ item.last_login_at | local_dt(default='noch nie') }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endcall %}
+  {% endif %}
+
+  <div class="mt-5">
+  {% call panel('Letzte Sicherheitsereignisse', flush=True) %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th scope="col">Zeitpunkt</th><th scope="col">Ereignis</th><th scope="col">Konto</th><th scope="col">Büro</th><th scope="col">IP</th></tr></thead>
+        <tbody>
+          {% for event in events %}
+            <tr>
+              <td class="whitespace-nowrap">{{ event.created_at | local_dt }}</td>
+              <td>{% if event.event_type.value in danger_events %}{{ state_tag(event_labels.get(event.event_type.value, event.event_type.value), 'danger') }}{% else %}{{ event_labels.get(event.event_type.value, event.event_type.value) }}{% endif %}</td>
+              <td>{{ event.actor_email_snapshot or '–' }}</td>
+              <td>{{ tenants[event.tenant_id].name if event.tenant_id in tenants else '–' }}</td>
+              <td class="whitespace-nowrap">{{ event.ip_address or '–' }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="5" class="is-muted">Keine Ereignisse.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endcall %}
+  </div>
+</div>
+{% endblock %}

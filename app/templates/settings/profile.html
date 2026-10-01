@@ -22,9 +22,19 @@
           <dd>{{ current_user.email }}</dd>
         </div>
         <div class="info-item">
-          <dt>Firma</dt>
+          <dt>Büro</dt>
           <dd>{{ tenant.name if tenant else '-' }}</dd>
         </div>
+        <div class="info-item">
+          <dt>Rolle</dt>
+          <dd>{{ current_user.role.label }}</dd>
+        </div>
+        {% if current_user.vermittlernummer %}
+        <div class="info-item">
+          <dt>Vermittlernummer</dt>
+          <dd>{{ current_user.vermittlernummer | vermittlernummer }}</dd>
+        </div>
+        {% endif %}
       </div>
     {% endcall %}
 
@@ -49,9 +59,12 @@
         <div class="section-heading">
           <div>
             <h2 class="section-title">Zwei-Faktor-Authentifizierung</h2>
-            <p class="section-copy">Zusaetzlicher Schutz per Authenticator-App.</p>
+            <p class="section-copy">Zusätzlicher Schutz per Authenticator-App.</p>
           </div>
-          {{ badge('Bald verfügbar', variant='muted', icon_name='clock') }}
+          {{ badge('Aktiv' if current_user.two_factor_enabled else 'Nicht eingerichtet', variant='success' if current_user.two_factor_enabled else 'muted', icon_name='lock') }}
+        </div>
+        <div class="mt-4">
+          {{ button('Sicherheit verwalten' if current_user.two_factor_enabled else 'Jetzt einrichten', href=url_for('settings.security'), variant='secondary') }}
         </div>
       {% endcall %}
 

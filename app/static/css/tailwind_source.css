@@ -5954,3 +5954,87 @@
   .auth-simple-title { font-size: 1.15rem; font-weight: 650; }
   .auth-simple .surface-card { border-radius: var(--radius-sm); box-shadow: none; }
 }
+
+@layer components {
+  /* --- Konto, Sicherheit und Zwei-Faktor-Authentifizierung ------------------ */
+  .account-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: 0.75rem 1.5rem;
+  }
+  .account-facts dt { color: var(--color-text-soft); font-size: 0.75rem; margin-bottom: 0.2rem; }
+  .account-facts dd { font-size: 0.875rem; }
+
+  .account-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+
+  .security-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+  }
+  .security-form .form-field { flex: 1 1 12rem; max-width: 16rem; }
+
+  .security-notice {
+    margin-bottom: 1rem;
+    padding: 0.65rem 0.85rem;
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--color-warning);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    font-size: 0.875rem;
+  }
+
+  .totp-setup {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 1.25rem;
+  }
+  .totp-qr {
+    flex: none;
+    padding: 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    line-height: 0;
+  }
+  .totp-qr svg { width: 11rem; height: 11rem; }
+  .totp-steps {
+    flex: 1 1 16rem;
+    list-style: decimal;
+    padding-left: 1.1rem;
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+  .totp-steps li + li { margin-top: 0.4rem; }
+  .totp-secret {
+    display: inline-block;
+    margin-top: 0.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    letter-spacing: 0.04em;
+    word-break: break-all;
+  }
+
+  .recovery-codes {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+    gap: 0.4rem;
+  }
+  .recovery-codes code {
+    display: block;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-muted);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    text-align: center;
+  }
+}

@@ -1,0 +1,36 @@
+{# Kontoaktionen fuer einen bestehenden Benutzer. Erwartet: edit_user, action_urls (dict mit
+   reset_2fa, password_reset, delete), password_reset_available. #}
+{% from "ui/portal.html" import panel, state_tag %}
+{% set urls = action_urls if action_urls is defined else {
+  'reset_2fa': url_for('settings.user_reset_two_factor', user_id=edit_user.id),
+  'password_reset': url_for('settings.user_send_password_reset', user_id=edit_user.id),
+  'delete': url_for('settings.user_delete', user_id=edit_user.id),
+} %}
+<div class="mt-5">
+{% call panel('Konto und Sicherheit') %}
+  <dl class="account-facts">
+    <div><dt>Status</dt><dd>{{ state_tag('Aktiv', 'success') if edit_user.is_active else state_tag('Deaktiviert', 'neutral') }}</dd></div>
+    <div><dt>Zwei-Faktor</dt><dd>{{ state_tag('Aktiv', 'success') if edit_user.two_factor_enabled else state_tag('Nicht eingerichtet', 'warning') }}</dd></div>
+    <div><dt>Letzte Anmeldung</dt><dd>{{ edit_user.last_login_at | local_dt(default='noch nie') }}</dd></div>
+  </dl>
+  <div class="account-actions">
+    {% if edit_user.two_factor_enabled %}
+      <form method="post" action="{{ urls.reset_2fa }}" onsubmit="return confirm('Zwei-Faktor-Authentifizierung wirklich zurücksetzen? Der Benutzer wird abgemeldet und muss sie neu einrichten.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-secondary h-9 px-3.5 text-sm">2FA zurücksetzen</button>
+      </form>
+    {% endif %}
+    {% if password_reset_available and edit_user.two_factor_enabled %}
+      <form method="post" action="{{ urls.password_reset }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-secondary h-9 px-3.5 text-sm">Passwort-Reset per E-Mail senden</button>
+      </form>
+    {% endif %}
+    <form method="post" action="{{ urls.delete }}" onsubmit="return confirm('Mitarbeiter wirklich löschen?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-danger h-9 px-3.5 text-sm">Mitarbeiter löschen</button>
+    </form>
+  </div>
+  <p class="form-hint mt-3">Gelöschte Mitarbeiter können sich nicht mehr anmelden. Arbeitszeiten und Protokolle bleiben erhalten.</p>
+{% endcall %}
+</div>

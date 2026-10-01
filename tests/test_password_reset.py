@@ -131,13 +131,16 @@ def test_forgot_password_is_rate_limited_per_account(client, app, user, sent_mai
 
 
 @pytest.mark.parametrize("missing", ["SMTP_HOST", "MAIL_FROM", "PUBLIC_URL"])
-def test_reset_is_unavailable_without_complete_mail_config(app, client, user, sent_mails, missing):
+def test_reset_entry_visible_but_nothing_sent_without_mail_config(app, client, user, sent_mails, missing):
+    """Der Einstieg bleibt sichtbar und antwortet neutral; ohne vollstaendige Mailkonfiguration
+    wird aber nichts versendet und kein Reset-Link akzeptiert."""
     app.config[missing] = None
     login_html = client.get("/auth/login")
     assert login_html.status_code == 200
-    assert "Passwort vergessen?" not in login_html.get_data(as_text=True)
-    assert client.get("/auth/forgot-password").status_code == 404
-    assert client.post("/auth/forgot-password", data={"email": user.email}).status_code == 404
+    assert "Passwort vergessen?" in login_html.get_data(as_text=True)
+    assert client.get("/auth/forgot-password").status_code == 200
+    resp = client.post("/auth/forgot-password", data={"email": user.email}, follow_redirects=True)
+    assert password_reset_message() in resp.get_data(as_text=True)
     assert client.get(RESET_PATH).status_code == 404
     assert _submit_reset(client, generate_reset_token(user), "ganz-neues-passwort").status_code == 404
     assert user.check_password("testpassword123")
@@ -145,13 +148,9 @@ def test_reset_is_unavailable_without_complete_mail_config(app, client, user, se
     assert _reset_events(AuditEventType.PASSWORD_RESET_REQUESTED) == []
 
 
-def test_login_template_only_builds_reset_url_when_available(app):
-    """Hotfix-Absicherung: login.html ruft url_for('auth.forgot_password') nur auf, wenn
-    password_reset_available gesetzt ist - ein Prozess ohne diese Variable (z. B. ein noch
-    laufender Altstand ohne Reset-Route) rendert die Seite daher ohne BuildError."""
-    source = app.jinja_loader.get_source(app.jinja_env, "auth/login.html")[0]
-    guard = source.index("{% if password_reset_available %}")
-    assert guard < source.index("url_for('auth.forgot_password')") < source.index("{% endif %}", guard)
+def test_forgot_password_prefills_email_from_login(client):
+    html = client.get("/auth/forgot-password?email=dennis%40example.com").get_data(as_text=True)
+    assert 'value="dennis@example.com"' in html
 
 
 def test_send_task_is_fail_closed_without_mail_config(app, user, sent_mails):

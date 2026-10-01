@@ -1,4 +1,6 @@
-from flask import Flask, g, render_template, request
+import os
+
+from flask import Flask, g, render_template, request, send_from_directory
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.celery_app import make_celery
@@ -90,6 +92,13 @@ def create_app(config_object=None):
     register_http_performance(app)
 
     app.context_processor(build_navigation)
+
+    @app.get("/favicon.ico")
+    def favicon():
+        # Browser fragen /favicon.ico direkt an (ohne <link>); ohne Antwort zeigen sie ein Globus-Symbol.
+        return send_from_directory(
+            os.path.join(app.static_folder, "img"), "favicon.ico", mimetype="image/x-icon", max_age=86400
+        )
 
     @login_manager.user_loader
     def load_user(user_id):

@@ -7,6 +7,10 @@
    greift nur, solange nach einem git pull noch der alte Python-Prozess laeuft. #}
 {% set _rev = static_rev if static_rev is defined else none %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=_rev('css/app.css') if _rev else '20261001-layout-1') }}">
+{# Favicon: SVG fuer aktuelle Browser, ICO/PNG als Rueckfall; ?v= aus dem Dateiinhalt. #}
+<link rel="icon" href="{{ url_for('static', filename='img/favicon.svg', v=_rev('img/favicon.svg') if _rev else '1') }}" type="image/svg+xml">
+<link rel="icon" href="{{ url_for('static', filename='img/favicon-32.png', v=_rev('img/favicon-32.png') if _rev else '1') }}" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png', v=_rev('img/apple-touch-icon.png') if _rev else '1') }}">
 {# Lokal ausgeliefert und per defer geladen: kein blockierender Abruf von einem fremden CDN. #}
 <script defer src="{{ url_for('static', filename='vendor/htmx-2.0.4.min.js') }}"></script>
 <script defer src="{{ url_for('static', filename='vendor/alpine-3.14.9.min.js') }}"></script>

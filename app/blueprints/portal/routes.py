@@ -6,7 +6,7 @@ from flask_login import current_user, login_required
 
 from app.models import AuditLog, CorrectionRequestStatus, TimeCorrectionRequest, User
 from app.models.audit_log import OFFICE_ACTIVITY_EVENT_TYPES
-from app.navigation import display_name_for, home_endpoint_for
+from app.navigation import home_endpoint_for
 from app.services import leipziger_todo
 from app.services.activity import describe_activities
 from app.services.timetracking import service as time_service
@@ -34,8 +34,13 @@ def _greeting(now) -> str:
 
 
 def _first_name(user) -> str:
-    name = display_name_for(user)
-    return name.split("@")[0].split()[0] if name else ""
+    """Vorname aus dem Anzeigenamen - nie aus E-Mail-Adresse oder technischem Benutzernamen.
+    Ohne verwertbaren Namen lautet die Begruessung nur "Guten Abend"."""
+    profile = user.employee_profile
+    name = (profile.display_name or "").strip() if profile is not None else ""
+    if not name or "@" in name:
+        return ""
+    return name.split()[0]
 
 
 @portal_bp.get("/uebersicht")

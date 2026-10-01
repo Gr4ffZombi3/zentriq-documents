@@ -49,7 +49,7 @@ BLOCKED_LOGIN_MESSAGES = {
 }
 
 RESET_REQUESTED_MESSAGE = (
-    "Falls ein Konto mit dieser E-Mail-Adresse existiert, wurde eine Nachricht zum "
+    "Wenn für diese E-Mail-Adresse ein Konto existiert, wurde eine Nachricht zum "
     "Zurücksetzen des Passworts versendet."
 )
 
@@ -218,13 +218,20 @@ def _inject_password_reset_available():
 
 @auth_bp.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
-    if not is_password_reset_available():
-        abort(404)
     if current_user.is_authenticated:
         return redirect(url_for("portal.home"))
 
     form = ForgotPasswordForm()
+    if request.method == "GET" and not form.email.data:
+        # Vom Login uebernommene Adresse vorbelegen (nur Anzeige, keine Pruefung).
+        form.email.data = (request.args.get("email") or "").strip()[:255]
     if form.validate_on_submit():
+        if not is_password_reset_available():
+            # Einstieg bleibt sichtbar; ohne SMTP_HOST/MAIL_FROM/PUBLIC_URL wird nichts versendet.
+            # Antwort identisch zum Normalfall, damit sich keine Konten ermitteln lassen.
+            logger.warning("Passwort-Reset angefordert, aber Mailversand ist nicht konfiguriert - nichts versendet.")
+            flash(RESET_REQUESTED_MESSAGE, "success")
+            return redirect(url_for("auth.login"))
         email = form.email.data.lower().strip()
         with bypass_tenant_scope():
             user = User.query.filter_by(email=email).first()

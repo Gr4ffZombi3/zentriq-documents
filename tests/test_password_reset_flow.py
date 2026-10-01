@@ -16,7 +16,7 @@ from app.tenancy import bypass_tenant_scope, use_tenant_id
 from tests.two_factor_helpers import enable_two_factor, totp_code
 
 LINK_PREFIX = "https://zentriq.test/auth/reset-password#token="
-GENERIC = "Falls ein Konto mit dieser E-Mail-Adresse existiert"
+GENERIC = "Wenn für diese E-Mail-Adresse ein Konto existiert"
 PASSWORD = "altes-passwort-1"
 
 

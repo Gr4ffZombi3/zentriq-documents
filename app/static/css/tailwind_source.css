@@ -6858,17 +6858,6 @@
   }
 
   .dash-card-head { display: flex; align-items: center; gap: 0.7rem; min-width: 0; }
-  .dash-card-icon {
-    display: inline-flex;
-    height: 2.25rem;
-    width: 2.25rem;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    border-radius: 8px;
-    background: var(--color-primary-soft);
-    color: var(--color-primary);
-  }
   .dash-card-title { font-size: 0.95rem; font-weight: 650; color: var(--color-text); }
   .dash-card-link {
     margin-left: auto;
@@ -7060,4 +7049,114 @@
     .staff-person { grid-column: 1 / 5; grid-row: 1; }
     .staff-action { grid-column: 5; grid-row: 1; justify-self: end; align-self: center; }
   }
+}
+
+/* ==========================================================================
+   Feinschliff 10/2026: Wortmarke, Anmeldung, kompaktere Uebersicht.
+   ========================================================================== */
+@layer components {
+  /* --- Wortmarke: rein typografisch, ohne Bildzeichen -------------------------- */
+  .wordmark {
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--color-primary-strong);
+  }
+  .wordmark-lg { font-size: 1.5rem; }
+  .app-brand { text-decoration: none; }
+  .app-brand:hover .wordmark { color: var(--color-primary); }
+
+  /* --- Anmeldung ------------------------------------------------------------------ */
+  .auth-simple { padding: 2rem 1rem; }
+  .auth-simple-inner { max-width: 23rem; }
+  .auth-simple-brand { justify-content: center; margin-bottom: 1.75rem; }
+
+  .auth-card,
+  .auth-simple .surface-card {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 12px rgba(16, 24, 40, 0.04);
+  }
+  .auth-card { padding: 1.6rem 1.6rem 1.75rem; }
+  .auth-simple-title { margin-bottom: 1.25rem; font-size: 1.1rem; font-weight: 650; letter-spacing: -0.01em; }
+
+  .auth-form { display: flex; flex-direction: column; gap: 1.1rem; }
+  .auth-lead { margin: -0.5rem 0 1.25rem; font-size: 0.85rem; line-height: 1.55; color: var(--color-text-muted); }
+  .auth-hint { font-size: 0.78rem; color: var(--color-text-soft); }
+
+  .auth-toggle {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.2rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-muted);
+    padding: 0.2rem;
+  }
+  .auth-toggle-option {
+    cursor: pointer;
+    border-radius: calc(var(--radius-sm) - 2px);
+    padding: 0.4rem 0.5rem;
+    text-align: center;
+    font-size: 0.82rem;
+    font-weight: 550;
+    color: var(--color-text-muted);
+  }
+  .auth-toggle-option:hover { color: var(--color-text); }
+  .auth-toggle-option.is-active {
+    background: var(--color-surface);
+    color: var(--color-text);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+  }
+  .auth-toggle-option:has(input:focus-visible) { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+
+  .auth-field { display: flex; flex-direction: column; gap: 0.35rem; }
+  .auth-input { position: relative; }
+  .auth-input .field-surface { min-height: 2.5rem; padding-left: 2.25rem; }
+  .auth-input-icon {
+    pointer-events: none;
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    display: flex;
+    transform: translateY(-50%);
+    color: var(--color-text-soft);
+    opacity: 0.75;
+  }
+
+  .auth-forgot {
+    align-self: flex-end;
+    margin-top: 0.15rem;
+    font-size: 0.8rem;
+    font-weight: 550;
+    color: var(--color-primary);
+    text-decoration: none;
+  }
+  .auth-forgot:hover { text-decoration: underline; }
+
+  .auth-submit { width: 100%; min-height: 2.6rem; margin-top: 0.25rem; font-size: 0.9rem; }
+
+  .auth-footnote { margin-top: 1.25rem; text-align: center; font-size: 0.85rem; color: var(--color-text-muted); }
+  .auth-footnote a { font-weight: 600; color: var(--color-primary); text-decoration: none; }
+
+  /* --- Uebersicht: kompakter, Information vor Dekoration ------------------------- */
+  .dash-head { gap: 0.1rem; }
+  .dash-greeting { font-size: 1.3rem; }
+  .dash-cards { gap: 1rem; }
+  .dash-card { gap: 0.75rem; padding: 1rem 1.15rem 1.1rem; }
+  .dash-card-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+  .dash-card-body { gap: 0.2rem; }
+  .dash-card-value { font-size: 1.5rem; }
+  .dash-card-value.is-text { font-size: 0.95rem; }
+  .dash-card-actions .btn { min-width: 0; }
+  .btn-block { min-height: 2.4rem; font-size: 0.875rem; }
+  .dash-split { gap: 1rem; }
+  .dash-stat { padding: 0.8rem 1.15rem; }
+  .dash-stat-value { font-size: 1.3rem; }
 }

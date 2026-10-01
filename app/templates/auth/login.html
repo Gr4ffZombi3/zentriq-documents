@@ -1,65 +1,61 @@
 {% extends "base_auth.html" %}
 {% from "ui/icons.html" import icon %}
-{% from "ui/forms.html" import input_field, button, field_errors %}
+{% from "ui/forms.html" import field_errors %}
 {% block title %}Anmelden – Zentriq{% endblock %}
 {% block content %}
-<div class="space-y-4">
+{% set forgot_url = url_for('auth.forgot_password') %}
+<div class="auth-card">
   <h1 class="auth-simple-title">Anmelden</h1>
 
-  <div class="surface-card p-5">
-    <form method="post" class="space-y-5" x-data="{ type: '{{ form.login_type.data or 'email' }}' }">
-      {{ form.hidden_tag() }}
+  <form method="post" class="auth-form"
+        x-data="{ type: {{ (form.login_type.data or 'email') | tojson | forceescape }}, ident: {{ (form.identifier.data or '') | tojson | forceescape }} }">
+    {{ form.hidden_tag() }}
 
-      <div class="space-y-2">
-        <label class="field-label">Anmeldemodus</label>
-        <div class="segmented-shell grid grid-cols-2">
-          {% for subfield in form.login_type %}
-            <label
-              class="cursor-pointer rounded-[0.95rem] px-3 py-2 text-center text-sm font-medium transition duration-200"
-              :class="type === '{{ subfield.data }}' ? 'bg-surface text-text shadow-soft' : 'text-text-muted hover:text-text'"
-            >
-              {{ subfield(**{'x-model': 'type', 'class': 'sr-only'}) }}
-              {{ subfield.label.text }}
-            </label>
-          {% endfor %}
-        </div>
+    <div class="auth-toggle" role="radiogroup" aria-label="Anmelden mit">
+      {% for subfield in form.login_type %}
+        <label class="auth-toggle-option" :class="type === '{{ subfield.data }}' && 'is-active'">
+          {{ subfield(**{'x-model': 'type', 'class': 'sr-only'}) }}
+          {{ subfield.label.text }}
+        </label>
+      {% endfor %}
+    </div>
+
+    <div class="auth-field">
+      <label for="identifier" class="field-label" x-text="type === 'email' ? 'E-Mail' : 'Vermittlernummer'">E-Mail</label>
+      <div class="auth-input">
+        <span class="auth-input-icon" aria-hidden="true">
+          <template x-if="type === 'email'">{{ icon('mail', class='w-4 h-4', stroke_width='1.75') }}</template>
+          <template x-if="type === 'vermittlernummer'">{{ icon('key', class='w-4 h-4', stroke_width='1.75') }}</template>
+        </span>
+        {{ form.identifier(
+          id='identifier',
+          class_='field-surface',
+          autocomplete='username',
+          **{'x-model': 'ident', ':placeholder': "type === 'email' ? 'name@firma.de' : 'z. B. 08/1234-A'"}
+        ) }}
       </div>
+      {{ field_errors(form.identifier) }}
+    </div>
 
-      <div class="flex flex-col gap-2">
-        <label for="identifier" class="field-label" x-text="type === 'email' ? 'E-Mail' : 'Vermittlernummer'"></label>
-        <div class="relative">
-          <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-text-soft">
-            <template x-if="type === 'email'">{{ icon('mail', class='w-4 h-4') }}</template>
-            <template x-if="type === 'vermittlernummer'">{{ icon('key', class='w-4 h-4') }}</template>
-          </span>
-          {{ form.identifier(
-            id='identifier',
-            class_='field-surface pl-11 text-sm',
-            **{':placeholder': "type === 'email' ? 'du@firma.de' : 'z.B. 123456'"}
-          ) }}
-        </div>
-        {{ field_errors(form.identifier) }}
+    <div class="auth-field">
+      <label for="{{ form.password.id }}" class="field-label">{{ form.password.label.text }}</label>
+      <div class="auth-input">
+        <span class="auth-input-icon" aria-hidden="true">{{ icon('lock', class='w-4 h-4', stroke_width='1.75') }}</span>
+        {{ form.password(class_='field-surface', autocomplete='current-password') }}
       </div>
+      {{ field_errors(form.password) }}
+      <a class="auth-forgot" href="{{ forgot_url }}"
+         :href="type === 'email' && ident.includes('@') ? '{{ forgot_url }}?email=' + encodeURIComponent(ident.trim()) : '{{ forgot_url }}'">Passwort vergessen?</a>
+    </div>
 
-      {{ input_field(form.password, icon_name='lock', autocomplete='current-password') }}
-
-      <div class="space-y-3 pt-2">
-        {{ button(form.submit.label.text, variant='primary', type='submit', size='lg', extra_class='w-full') }}
-        {% if password_reset_available %}
-        <a href="{{ url_for('auth.forgot_password') }}" class="btn btn-ghost h-10 w-full justify-center text-sm font-medium">Passwort vergessen?</a>
-        {% endif %}
-        <p class="text-xs leading-6 text-text-muted">
-          Zugriff nur für autorisierte Versicherungs- und Kfz-Teams.
-        </p>
-      </div>
-    </form>
-  </div>
-
-  {% if config.REGISTRATION_ENABLED %}
-  <p class="text-center text-sm text-text-muted">
-    Noch kein Konto?
-    <a href="{{ url_for('auth.register') }}" class="font-medium text-primary hover:text-primary-hover">Jetzt registrieren</a>
-  </p>
-  {% endif %}
+    <button type="submit" class="btn btn-primary auth-submit">{{ form.submit.label.text }}</button>
+  </form>
 </div>
+
+{% if config.REGISTRATION_ENABLED %}
+<p class="auth-footnote">
+  Noch kein Konto?
+  <a href="{{ url_for('auth.register') }}">Jetzt registrieren</a>
+</p>
+{% endif %}
 {% endblock %}

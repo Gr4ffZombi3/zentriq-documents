@@ -58,7 +58,7 @@
     <header class="panel-header"><h2 class="panel-title">Aktive Sitzungen</h2></header>
     {% if sessions %}
       <div class="table-wrap">
-        <table class="data-table">
+        <table class="data-table table-stack">
           <thead>
             <tr>
               <th scope="col">Gerät</th>
@@ -70,10 +70,10 @@
           <tbody>
             {% for item in sessions %}
               <tr>
-                <th scope="row" class="cell-strong">{{ describe_user_agent(item.user_agent) }}{% if item.id == current_session_id %} {{ state_tag('Diese Sitzung', 'info') }}{% endif %}</th>
-                <td>{{ item.ip_address or '–' }}</td>
-                <td class="whitespace-nowrap">{{ item.created_at | local_dt }}</td>
-                <td class="whitespace-nowrap">{{ item.last_seen_at | local_dt }}</td>
+                <th scope="row" class="cell-strong stack-full">{{ describe_user_agent(item.user_agent) }}{% if item.id == current_session_id %} {{ state_tag('Diese Sitzung', 'info') }}{% endif %}</th>
+                <td data-label="IP-Adresse">{{ item.ip_address or '–' }}</td>
+                <td class="whitespace-nowrap" data-label="Angemeldet">{{ item.created_at | local_dt }}</td>
+                <td class="whitespace-nowrap" data-label="Zuletzt aktiv">{{ item.last_seen_at | local_dt }}</td>
               </tr>
             {% endfor %}
           </tbody>

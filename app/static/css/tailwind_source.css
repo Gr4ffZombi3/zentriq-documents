@@ -7181,3 +7181,94 @@
   .import-info-warn { color: var(--color-warning-text); font-weight: 550; }
   .import-info-action { margin-left: auto; }
 }
+
+/* ==========================================================================
+   Mobile Ansicht 10/2026: Tabellen als Karten, Reiterleisten mit Randverlauf,
+   Suche und Zeitraumwahl einzeilig.
+   ========================================================================== */
+@layer components {
+  /* --- Reiterleisten: Verlauf am Rand, solange noch Reiter verdeckt sind ---------- */
+  .app-subnav-tabs.has-more-end,
+  .panel-tabs.has-more-end {
+    mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+  }
+  .app-subnav-tabs.has-more-start,
+  .panel-tabs.has-more-start {
+    mask-image: linear-gradient(to right, transparent, #000 2.5rem);
+  }
+  .app-subnav-tabs.has-more-start.has-more-end,
+  .panel-tabs.has-more-start.has-more-end {
+    mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
+  }
+
+  @media (max-width: 39.99rem) {
+    .app-subnav-inner { gap: 0.25rem; }
+    .app-subnav-more { border-left: 1px solid var(--color-border); padding-left: 0.25rem; }
+
+    /* --- Tabellen mit .table-stack: jede Zeile als beschriftete Karte -------------- */
+    .table-stack,
+    .table-stack tbody { display: block; width: 100%; }
+    .table-stack thead { display: none; }
+
+    .table-stack tbody tr {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.55rem 1rem;
+      border-bottom: 1px solid var(--color-border);
+      padding: 0.85rem 1.15rem;
+    }
+    .table-stack tbody tr:last-child { border-bottom: 0; }
+
+    .table-stack tbody td,
+    .table-stack tbody th {
+      display: block;
+      width: auto;
+      min-width: 0;
+      border: 0 !important;
+      padding: 0 !important;
+      white-space: normal;
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+    .table-stack tbody tr:hover td,
+    .table-stack tbody tr:hover th { background: transparent; }
+
+    .table-stack [data-label]::before {
+      content: attr(data-label);
+      display: block;
+      margin-bottom: 0.1rem;
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: var(--color-text-soft);
+    }
+    .table-stack .stack-full { grid-column: 1 / -1; }
+    .table-stack tbody .num { text-align: left; }
+    .table-stack .stack-actions:empty { display: none; }
+
+    /* Leipziger Liste: Nummer | Status, Kunde, Art | Datum | Vermittler - kompakt. */
+    .worklist.table-stack tbody tr {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.4rem 0.75rem;
+      padding-block: 0.7rem;
+    }
+    .worklist.table-stack .worklist-number { grid-column: span 2; }
+
+    /* Leipziger Liste: weitere Vorgaenge desselben Kunden enger an den vorigen. */
+    .worklist.table-stack tr.worklist-same-customer {
+      border-top: 1px dashed var(--color-border);
+      margin-top: -1px;
+    }
+
+    /* --- Suche: Feld und Schaltflaeche in einer Zeile ------------------------------ */
+    .search-input { flex: 1 1 10rem; min-width: 0; }
+
+    /* --- Zeitraumwahl: Zurueck | Zeitraum | Weiter, darunter Aktuell/Heute ---------- */
+    .period-nav:has(> .period-nav-label) {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      width: 100%;
+    }
+    .period-nav-label { min-width: 0; font-size: 0.875rem; }
+    .period-nav:has(> .period-nav-label) > :nth-child(4) { grid-column: 1 / -1; justify-self: center; }
+  }
+}

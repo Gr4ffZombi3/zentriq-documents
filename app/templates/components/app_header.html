@@ -1,5 +1,5 @@
 {% from "ui/icons.html" import icon %}
-<header class="app-header">
+<header class="app-header" x-on:click.outside="navOpen = false" x-on:keydown.escape.window="navOpen = false">
   <div class="app-header-inner">
     <a href="{{ url_for('portal.home') }}" class="app-brand" aria-label="Zentriq – Startseite">
       <span class="wordmark">Zentriq</span>

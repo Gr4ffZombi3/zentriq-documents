@@ -23,7 +23,7 @@
 {% macro entry_table(entries, with_date=True, broker_names=None, empty_text='Keine Einträge.') -%}
 {% if entries %}
   <div class="table-wrap">
-  <table class="data-table worklist">
+  <table class="data-table worklist table-stack">
     <thead>
       <tr>
         <th scope="col">Nummer</th>
@@ -38,12 +38,12 @@
       {% for entry in entries %}
         {% set same_customer = loop.previtem is defined and loop.previtem.customer and loop.previtem.customer == entry.customer %}
         <tr class="{{ 'worklist-same-customer' if same_customer else '' }}">
-          <td class="worklist-number">{{ entry.number }}</td>
-          <td class="whitespace-nowrap"><span title="{{ entry.label }}">{{ entry.status_code or entry.label }}</span></td>
-          <td>{{ entry.customer or '–' }}</td>
-          <td class="whitespace-nowrap">{{ entry.art or '–' }}</td>
-          <td class="whitespace-nowrap tabular-nums">{{ entry_date(entry) }}</td>
-          <td class="whitespace-nowrap">
+          <td class="worklist-number" data-label="Nummer">{{ entry.number }}</td>
+          <td class="whitespace-nowrap" data-label="Status"><span title="{{ entry.label }}">{{ entry.status_code or entry.label }}</span></td>
+          <td class="stack-full" data-label="Kunde">{{ entry.customer or '–' }}</td>
+          <td class="whitespace-nowrap" data-label="Art">{{ entry.art or '–' }}</td>
+          <td class="whitespace-nowrap tabular-nums" data-label="Datum">{{ entry_date(entry) }}</td>
+          <td class="whitespace-nowrap" data-label="Vermittler">
             <span class="tabular-nums">{{ entry.broker_number or '–' }}</span>
             {% if broker_names and broker_names.get(entry.broker_key) %}<span class="worklist-broker-name">{{ broker_names.get(entry.broker_key) }}</span>{% endif %}
           </td>

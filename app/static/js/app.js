@@ -725,7 +725,42 @@
     (root || document).querySelectorAll("[data-table-enhanced]").forEach(initTableEnhancer);
   }
 
+  // Waagerecht scrollende Reiterleisten (Handy): aktiven Reiter sichtbar machen und am
+  // Rand per Verlauf anzeigen, dass es links/rechts weitergeht.
+  function updateScrollEdges(strip) {
+    var maxScroll = strip.scrollWidth - strip.clientWidth;
+    strip.classList.toggle("has-more-start", strip.scrollLeft > 2);
+    strip.classList.toggle("has-more-end", maxScroll - strip.scrollLeft > 2);
+  }
+
+  function initScrollStrips(root) {
+    (root || document).querySelectorAll(".app-subnav-tabs, .panel-tabs").forEach(function (strip) {
+      if (strip.dataset.scrollStrip) {
+        return;
+      }
+      strip.dataset.scrollStrip = "1";
+
+      var active = strip.querySelector(".is-active");
+      if (active && strip.scrollWidth > strip.clientWidth) {
+        var stripBox = strip.getBoundingClientRect();
+        var activeBox = active.getBoundingClientRect();
+        if (activeBox.right > stripBox.right || activeBox.left < stripBox.left) {
+          strip.scrollLeft += activeBox.left - stripBox.left - (stripBox.width - activeBox.width) / 2;
+        }
+      }
+
+      updateScrollEdges(strip);
+      strip.addEventListener("scroll", function () {
+        updateScrollEdges(strip);
+      }, { passive: true });
+      window.addEventListener("resize", function () {
+        updateScrollEdges(strip);
+      });
+    });
+  }
+
   function boot(root) {
+    initScrollStrips(root);
     initUploadWidgets(root);
     initTableEnhancers(root);
     initDocumentToolbar(root);

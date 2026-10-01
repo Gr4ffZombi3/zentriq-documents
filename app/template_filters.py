@@ -80,6 +80,16 @@ def short_dt(value: datetime | None, default: str = "–") -> str:
     return local_dt(value, "%d.%m.%y · %H:%M", default)
 
 
+def email_wrap(value: str | None):
+    """E-Mail mit Umbruchmoeglichkeit vor dem "@" statt mitten im Wort."""
+    from markupsafe import Markup, escape
+
+    if not value or "@" not in value:
+        return value or ""
+    local, domain = value.split("@", 1)
+    return Markup(f"{escape(local)}<wbr>@{escape(domain)}")
+
+
 def weekday_short(value: date) -> str:
     return WEEKDAYS_SHORT[value.weekday()]
 
@@ -142,6 +152,7 @@ def register_template_filters(app) -> None:
     app.jinja_env.filters["workdays_short"] = workdays_short
     app.jinja_env.filters["hours_short"] = hours_short
     app.jinja_env.filters["short_dt"] = short_dt
+    app.jinja_env.filters["email_wrap"] = email_wrap
     app.jinja_env.filters["duration"] = format_duration
     app.jinja_env.filters["weekday_short"] = weekday_short
     app.jinja_env.filters["weekday_long"] = weekday_long

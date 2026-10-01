@@ -7477,3 +7477,91 @@
     .dash-cards-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   }
 }
+
+/* ==========================================================================
+   Feinschliff 10/2026: kompakte Kopfleiste, Benutzerverwaltung.
+   ========================================================================== */
+@layer components {
+  /* --- Konto: Name und Rolle in einem Element ------------------------------------ */
+  .app-header-action.app-header-account { gap: 0.5rem; max-width: 15rem; padding: 0 0.65rem; }
+  .app-account-text { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; line-height: 1.15; }
+  .app-account-text .app-user-name {
+    display: block;
+    max-width: 10.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+  .app-account-text .app-role { display: block; font-size: 0.66rem; font-weight: 550; letter-spacing: 0; color: var(--color-text-soft); }
+  .app-header-account.is-active .app-user-name { color: var(--color-primary-strong); }
+
+  /* Abmelden: auf Laptop-Breiten nur als Symbol (Beschriftung per title). */
+  .app-header-action.app-logout { padding: 0 0.6rem; }
+  .app-logout .app-header-action-label { display: none; }
+  @media (min-width: 90rem) {
+    .app-logout .app-header-action-label { display: inline; }
+  }
+  @media (max-width: 39.99rem) {
+    .app-account-text { display: none; }
+  }
+
+  /* --- Navigation passt nicht in die Zeile: Menue statt Abschneiden ----------------
+     app.js setzt .is-compact, sobald die Bereiche neben Suche und Konto keinen Platz haben. */
+  @media (min-width: 75rem) {
+    .app-header.is-compact .app-nav { display: none; }
+    .app-header.is-compact .app-nav.is-open {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.15rem;
+      max-height: calc(100dvh - var(--header-height));
+      overflow-y: auto;
+      border-bottom: 1px solid var(--color-border);
+      background: var(--color-surface);
+      padding: 0.5rem clamp(1rem, 2.5vw, 2rem) 0.75rem;
+      box-shadow: 0 10px 20px -14px var(--color-shadow-strong);
+    }
+    .app-header.is-compact .app-nav.is-open .app-nav-link { height: 2.75rem; padding: 0 0.85rem; }
+    .app-header.is-compact .app-nav-link.is-active::after { display: none; }
+    .app-header.is-compact .app-nav-toggle { display: inline-flex; }
+  }
+
+  /* --- Tabellenkopf klar vom Inhalt abgesetzt ------------------------------------- */
+  .data-table-fit thead th {
+    border-bottom: 1px solid var(--color-border-strong);
+    background: var(--color-surface-muted);
+    color: var(--color-text-muted);
+  }
+  .data-table-fit thead th.text-right { text-align: right; }
+
+  /* --- Benutzerverwaltung ---------------------------------------------------------- */
+  .users-header { align-items: center; }
+  .users-header .btn { flex-shrink: 0; }
+
+  @media (min-width: 75rem) {
+    /* Feste, ausgewogene Spaltenanteile ueber die volle Breite (colgroup im Template). */
+    .users-table { table-layout: fixed; }
+    .users-table tbody td,
+    .users-table tbody th { padding-top: 0.8rem; padding-bottom: 0.8rem; vertical-align: middle; }
+    .users-table .cell-person { min-width: 0; overflow-wrap: break-word; }
+    .users-table .cell-email { overflow-wrap: break-word; }
+  }
+
+  /* Spaltenkoepfe duerfen umbrechen statt abgeschnitten zu werden. */
+  .users-table thead th { white-space: normal; line-height: 1.3; vertical-align: bottom; }
+
+  /* Aktionen nebeneinander (eigener Container - die Zelle bleibt Tabellenzelle), Loeschen dezent rot. */
+  .row-actions-inline { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.35rem 0.9rem; }
+  .row-actions-inline form { display: inline-flex; margin: 0; }
+  .row-actions-inline .table-action { display: inline; margin: 0; white-space: nowrap; }
+  @media (max-width: 74.99rem) {
+    .row-actions-inline { justify-content: flex-start; }
+  }
+}

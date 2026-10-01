@@ -1,29 +1,33 @@
 {% extends "base.html" %}
-{% from "ui/display.html" import page_header %}
 {% from "ui/forms.html" import button %}
 {% from "ui/portal.html" import panel, state_tag %}
 {% block title %}Benutzer – Zentriq{% endblock %}
 {% block content %}
 <div class="page-shell page-shell-wide">
-  {% call page_header('Benutzer') %}
+  <div class="page-toolbar users-header">
+    <h1 class="page-toolbar-title">Benutzer</h1>
     {{ button('Benutzer anlegen', href=url_for('settings.user_create'), variant='primary') }}
-  {% endcall %}
+  </div>
 
   {% call panel(flush=True) %}
     {# Desktop/Laptop: kompakte Tabelle ohne seitliches Scrollen; unter 64rem Karten. #}
     <div class="table-wrap">
       <table class="data-table data-table-fit users-table table-stack-md">
+        <colgroup>
+          <col style="width: 19%"><col style="width: 10%"><col style="width: 9%"><col style="width: 7%">
+          <col style="width: 8%"><col style="width: 8%"><col style="width: 12%"><col style="width: 11%"><col style="width: 16%">
+        </colgroup>
         <thead>
           <tr>
             <th scope="col">Name / E-Mail</th>
             <th scope="col">Vermittlernr.</th>
             <th scope="col">Rolle</th>
-            <th scope="col" class="num">Soll/Woche</th>
+            <th scope="col" class="num">Soll/<wbr>Woche</th>
             <th scope="col">Arbeitstage</th>
             <th scope="col">Status</th>
             <th scope="col">2FA</th>
             <th scope="col">Letzte Anmeldung</th>
-            <th scope="col" class="text-right"><span class="sr-only">Aktionen</span></th>
+            <th scope="col" class="text-right">Aktionen</th>
           </tr>
         </thead>
         <tbody>
@@ -33,23 +37,25 @@
               <th scope="row" class="cell-strong cell-person stack-full">
                 {{ profile.display_name if profile and profile.display_name else '–' }}
                 {% if profile and profile.personnel_number %}<span class="cell-sub">Nr. {{ profile.personnel_number }}</span>{% endif %}
-                <span class="cell-sub cell-email">{{ item.email }}{% if item.id == current_user.id %} · Sie{% endif %}</span>
+                <span class="cell-sub cell-email">{{ item.email | email_wrap }}{% if item.id == current_user.id %} · Sie{% endif %}</span>
               </th>
               <td class="whitespace-nowrap tabular-nums" data-label="Vermittlernr.">{{ item.vermittlernummer | vermittlernummer }}</td>
               <td class="whitespace-nowrap" data-label="Rolle">{{ item.role.label }}</td>
               <td class="num whitespace-nowrap" data-label="Soll/Woche">{{ profile.weekly_target_minutes | hours_short if profile else '–' }}</td>
               <td class="whitespace-nowrap" data-label="Arbeitstage">{{ profile.workdays | workdays_short if profile else '–' }}</td>
               <td data-label="Status">{{ state_tag('Aktiv', 'success') if item.is_active else state_tag('Deaktiviert', 'neutral') }}</td>
-              <td data-label="2FA"><span title="{{ 'Zwei-Faktor-Authentifizierung eingerichtet' if item.two_factor_enabled else 'Zwei-Faktor-Authentifizierung nicht eingerichtet' }}">{{ state_tag('Aktiv', 'success') if item.two_factor_enabled else state_tag('Fehlt', 'warning') }}</span></td>
+              <td data-label="2FA"><span title="{{ 'Zwei-Faktor-Authentifizierung eingerichtet' if item.two_factor_enabled else 'Zwei-Faktor-Authentifizierung nicht eingerichtet' }}">{{ state_tag('Aktiv', 'success') if item.two_factor_enabled else state_tag('Nicht eingerichtet', 'warning') }}</span></td>
               <td class="whitespace-nowrap tabular-nums" data-label="Letzte Anmeldung">{{ item.last_login_at | short_dt(default='noch nie') }}</td>
               <td class="row-actions stack-full stack-actions">
-                <a class="table-action" href="{{ url_for('settings.user_edit', user_id=item.id) }}">Bearbeiten</a>
-                {% if item.id != current_user.id %}
-                  <form method="post" action="{{ url_for('settings.user_delete', user_id=item.id) }}" onsubmit="return confirm('Mitarbeiter wirklich löschen?');">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="table-action table-action-danger">Löschen</button>
-                  </form>
-                {% endif %}
+                <div class="row-actions-inline">
+                  <a class="table-action" href="{{ url_for('settings.user_edit', user_id=item.id) }}">Bearbeiten</a>
+                  {% if item.id != current_user.id %}
+                    <form method="post" action="{{ url_for('settings.user_delete', user_id=item.id) }}" onsubmit="return confirm('Mitarbeiter wirklich löschen?');">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button type="submit" class="table-action table-action-danger">Löschen</button>
+                    </form>
+                  {% endif %}
+                </div>
               </td>
             </tr>
           {% endfor %}

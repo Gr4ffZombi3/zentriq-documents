@@ -774,6 +774,36 @@
     });
   }
 
+  // Kopfleiste: passen die Bereiche nicht neben Suche und Konto, wird die Navigation in das
+  // Menue verlegt (.is-compact) - sie wird nie abgeschnitten und erzeugt keinen Scrollbalken.
+  function initHeaderFit() {
+    var header = document.querySelector(".app-header");
+    var nav = header && header.querySelector(".app-nav");
+    var user = header && header.querySelector(".app-user");
+    var inner = header && header.querySelector(".app-header-inner");
+    if (!nav || !user || !inner) {
+      return;
+    }
+
+    function fit() {
+      header.classList.remove("is-compact");
+      if (window.getComputedStyle(nav).position === "absolute" || window.getComputedStyle(nav).display === "none") {
+        return;
+      }
+      var tooTight =
+        inner.scrollWidth > inner.clientWidth + 1 ||
+        nav.scrollWidth > nav.clientWidth + 1 ||
+        nav.getBoundingClientRect().right > user.getBoundingClientRect().left - 12;
+      header.classList.toggle("is-compact", tooTight);
+    }
+
+    fit();
+    window.addEventListener("resize", fit);
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(fit);
+    }
+  }
+
   function boot(root) {
     initStackTables(root);
     initScrollStrips(root);
@@ -786,9 +816,11 @@
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", function () {
+      initHeaderFit();
       boot(document);
     });
   } else {
+    initHeaderFit();
     boot(document);
   }
 

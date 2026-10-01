@@ -116,6 +116,9 @@
     font-size: 0.9375rem;
     background: var(--color-bg);
     color: var(--color-text);
+    /* Ein Wort, das nicht in seinen Kasten passt (lange E-Mail, Schluessel, Kompositum),
+       bricht um statt in den Nachbarn zu laufen. Wirkt nur im Notfall. */
+    overflow-wrap: break-word;
   }
 
   ::selection {
@@ -1053,7 +1056,6 @@
 
   .document-list-head {
     display: none;
-    grid-template-columns: minmax(0, 1.8fr) minmax(10rem, 0.8fr) minmax(10rem, 0.8fr) minmax(10rem, 0.8fr) minmax(0, 1.1fr) auto;
     gap: 1rem;
     border-bottom: 1px solid color-mix(in oklab, var(--color-border) 90%, transparent);
     background: color-mix(in oklab, var(--color-surface-muted) 90%, var(--color-bg) 10%);
@@ -3752,6 +3754,10 @@
   }
 
   .document-list-shell {
+    /* Eine Spaltendefinition fuer Kopf und Zeilen. Die Dokumentspalte behaelt immer
+       Platz fuer den Namen, Datum und Status nie weniger als ihren Inhalt; schmaler
+       als 64rem wird jede Zeile ohnehin einspaltig. */
+    --document-columns: minmax(12rem, 2fr) minmax(6rem, 0.8fr) minmax(max-content, 0.9fr) minmax(max-content, 0.8fr) minmax(10rem, 1.3fr) auto;
     overflow: hidden;
     border: 1px solid color-mix(in oklab, var(--color-border) 96%, transparent);
     border-radius: 1rem;
@@ -3761,7 +3767,7 @@
 
   .document-list-head {
     display: grid;
-    grid-template-columns: minmax(0, 1.5fr) minmax(10rem, 0.72fr) minmax(11rem, 0.9fr) minmax(11rem, 0.9fr) minmax(14rem, 1fr) auto;
+    grid-template-columns: var(--document-columns);
     gap: 1rem;
     align-items: center;
     border-bottom: 1px solid color-mix(in oklab, var(--color-border) 96%, transparent);
@@ -3807,7 +3813,7 @@
 
   .document-row-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.5fr) minmax(10rem, 0.72fr) minmax(11rem, 0.9fr) minmax(11rem, 0.9fr) minmax(14rem, 1fr) auto;
+    grid-template-columns: var(--document-columns);
     gap: 1rem;
     align-items: center;
     padding: 1rem 1.15rem;
@@ -6438,6 +6444,8 @@
   .fact-list > div:last-child { border-bottom: 0; }
   .fact-list dt { color: var(--color-text-muted); }
   .fact-list dd { margin: 0; min-width: 0; overflow-wrap: anywhere; font-weight: 550; }
+  /* Statusangaben im Wertfeld sind teils ganze Saetze: umbrechen statt ueber den Rand. */
+  .fact-list dd .state-tag { max-width: 100%; white-space: normal; }
   .fact-list-compact > div { padding-inline: 0; }
 
   .person-list { margin: 0; padding: 0; list-style: none; }
@@ -7204,7 +7212,11 @@
   @media (max-width: 39.99rem) {
     .app-subnav-inner { gap: 0.25rem; }
     .app-subnav-more { border-left: 1px solid var(--color-border); padding-left: 0.25rem; }
+  }
 
+  /* Unter 48rem passen die Tabellen nicht mehr nebeneinander (zwischen 40 und 48rem
+     scrollten sie sonst seitlich) - deshalb Karten schon ab hier. */
+  @media (max-width: 47.99rem) {
     /* --- Tabellen mit .table-stack: jede Zeile als beschriftete Karte -------------- */
     .table-stack,
     .table-stack tbody { display: block; width: 100%; }
@@ -7226,7 +7238,10 @@
       min-width: 0;
       border: 0 !important;
       padding: 0 !important;
-      white-space: normal;
+      /* !important: Zellen tragen fuer die Tabellenansicht oft "whitespace-nowrap", und
+         Utilities gewinnen gegen diese Komponenten-Ebene - in der Karte liefe Text sonst
+         ueber den Rand. */
+      white-space: normal !important;
       text-align: left;
       overflow-wrap: anywhere;
     }
@@ -7258,7 +7273,9 @@
       border-top: 1px dashed var(--color-border);
       margin-top: -1px;
     }
+  }
 
+  @media (max-width: 39.99rem) {
     /* --- Listenauswahl: Auswahlfeld nimmt die verfuegbare Breite ein --------------- */
     .toolbar-form { width: 100%; }
     .toolbar-form .toolbar-select { min-width: 0; max-width: none; flex: 1 1 auto; }
@@ -7411,7 +7428,7 @@
       min-width: 0;
       border: 0 !important;
       padding: 0 !important;
-      white-space: normal;
+      white-space: normal !important; /* siehe .table-stack */
       text-align: left;
       overflow-wrap: anywhere;
     }
@@ -7545,9 +7562,14 @@
   .users-header { align-items: center; }
   .users-header .btn { flex-shrink: 0; }
 
-  @media (min-width: 75rem) {
-    /* Feste, ausgewogene Spaltenanteile ueber die volle Breite (colgroup im Template). */
+  /* Feste, ausgewogene Spaltenanteile ueber die volle Breite (colgroup im Template) erst
+     ab 85rem - darunter reichen die Anteile nicht fuer Spaltenkoepfe und Badges, dann
+     verteilt der Browser nach Inhalt. */
+  @media (min-width: 85rem) {
     .users-table { table-layout: fixed; }
+  }
+
+  @media (min-width: 75rem) {
     .users-table tbody td,
     .users-table tbody th { padding-top: 0.8rem; padding-bottom: 0.8rem; vertical-align: middle; }
     .users-table .cell-person { min-width: 0; overflow-wrap: break-word; }

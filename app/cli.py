@@ -1,13 +1,32 @@
 """CLI-Befehle (`flask <befehl>`), z. B. fuer die Anlage von Benutzern ohne offene Registrierung."""
 
 import getpass
+import shutil
 import sys
+from datetime import datetime, timezone
+from pathlib import Path
 
 import click
 from email_validator import EmailNotValidError, validate_email
+from flask import current_app
 
 from app.extensions import db
-from app.models import Tenant, User, UserRole
+from app.models import (
+    AnalysisRun,
+    Customer,
+    CustomerTimelineEvent,
+    Document,
+    DocumentCustomer,
+    ListComparison,
+    ListComparisonEntry,
+    Recommendation,
+    RecommendationFeedback,
+    Task,
+    Tenant,
+    TenantStatus,
+    User,
+    UserRole,
+)
 from app.services.user_admin import find_user_by_vermittlernummer
 from app.tenancy import bypass_tenant_scope
 from app.utils.slugs import unique_tenant_slug
@@ -156,6 +175,95 @@ def set_admin_command(email: str, vermittlernummer: str | None, tenant_slug: str
     click.echo(f"Admin {email} (ID {user_id}, Mandant-ID {tenant_id}) {action}.")
 
 
+# Fachdaten (Importe und daraus abgeleitete Daten), die align-tenant entfernt - in
+# Loeschreihenfolge (abhaengige Tabellen zuerst). Benutzer, Mandanten, Audit-Log, Zeiterfassung
+# (Buchungen werden nie geloescht) und Sprachnachrichten/Postfach bleiben unangetastet.
+BUSINESS_DATA_MODELS = (
+    RecommendationFeedback,
+    CustomerTimelineEvent,
+    ListComparisonEntry,
+    ListComparison,
+    DocumentCustomer,
+    AnalysisRun,
+    Task,
+    Recommendation,
+    Document,
+    Customer,
+)
+
+
+def _resolve_upload_path(file_path: str) -> Path:
+    path = Path(file_path)
+    if path.is_absolute():
+        return path
+    return Path(current_app.root_path).parent / path
+
+
+@click.command("align-tenant")
+@click.option("--tenant", "tenant_slug", required=True, help="Slug des einzigen produktiven Mandanten.")
+@click.option("--admin-email", required=True, help="Admin, der diesem Mandanten zugeordnet wird.")
+@click.option("--execute", is_flag=True, help="Aenderungen wirklich ausfuehren (ohne: nur Vorschau).")
+def align_tenant_command(tenant_slug: str, admin_email: str, execute: bool):
+    """Richtet die Datenbasis auf genau einen produktiven Mandanten aus: ordnet den Admin
+    diesem Mandanten zu, entfernt alle importierten Fachdaten (Kunden, Dokumente, Aufgaben,
+    Empfehlungen, Listen-Vergleiche - in allen Mandanten), deaktiviert alle Benutzer anderer
+    Mandanten und setzt diese Mandanten auf SUSPENDED. Upload-Dateien entfernter Dokumente
+    werden nach storage/backups/ verschoben, nicht geloescht. Ohne --execute nur Vorschau."""
+    admin_email = admin_email.strip().lower()
+    with bypass_tenant_scope():
+        tenant = Tenant.query.filter_by(slug=tenant_slug.strip()).first()
+        if tenant is None:
+            raise click.ClickException(f"Mandant '{tenant_slug}' nicht gefunden.")
+        admin = User.query.filter(db.func.lower(User.email) == admin_email).first()
+        if admin is None:
+            raise click.ClickException(f"Benutzer '{admin_email}' nicht gefunden.")
+
+        other_users = User.query.filter(User.tenant_id != tenant.id, User.id != admin.id).all()
+        other_tenants = Tenant.query.filter(Tenant.id != tenant.id).all()
+        documents = Document.query.all()
+        counts = {model.__tablename__: model.query.count() for model in BUSINESS_DATA_MODELS}
+
+        click.echo(f"Ziel-Mandant: {tenant.slug} (ID {tenant.id})")
+        click.echo(f"Admin {admin.email}: Mandant-ID {admin.tenant_id} -> {tenant.id}, Rolle ADMIN, aktiv")
+        for table, count in counts.items():
+            click.echo(f"  entferne {count:>5} Zeilen aus {table}")
+        for user in other_users:
+            click.echo(f"  deaktiviere Benutzer {user.email} (Mandant-ID {user.tenant_id})")
+        for other in other_tenants:
+            click.echo(f"  setze Mandant {other.slug} (ID {other.id}) auf SUSPENDED")
+        if not execute:
+            click.echo("Vorschau - nichts geaendert. Mit --execute ausfuehren.")
+            return
+
+        upload_paths = [_resolve_upload_path(document.file_path) for document in documents]
+
+        admin.tenant_id = tenant.id
+        admin.role = UserRole.ADMIN
+        admin.is_active = True
+        for user in other_users:
+            user.is_active = False
+        for other in other_tenants:
+            other.status = TenantStatus.SUSPENDED
+        for model in BUSINESS_DATA_MODELS:
+            db.session.execute(model.__table__.delete())
+        db.session.commit()
+
+    archive_dir = (
+        Path(current_app.root_path).parent
+        / "storage"
+        / "backups"
+        / f"uploads-archiv-{datetime.now(timezone.utc):%Y%m%d-%H%M%S}"
+    )
+    moved = 0
+    for path in upload_paths:
+        if path.is_file():
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(path), archive_dir / path.name)
+            moved += 1
+    click.echo(f"Ausgefuehrt. {moved} Upload-Datei(en) nach {archive_dir} verschoben.")
+
+
 def register_cli(app) -> None:
     app.cli.add_command(create_user_command)
     app.cli.add_command(set_admin_command)
+    app.cli.add_command(align_tenant_command)

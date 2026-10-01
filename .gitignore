@@ -36,3 +36,6 @@ tools/
 # Lokale Server-Artefakte (Secrets-Kopie, Celery-Beat-Zustand)
 .env.save
 celerybeat-schedule
+
+# Datenbank-Backups und archivierte Uploads (enthalten Produktionsdaten)
+storage/backups/

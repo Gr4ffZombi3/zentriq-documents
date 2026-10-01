@@ -18,9 +18,13 @@ echo "[pre-start] Projektverzeichnis: $APP_DIR"
 #    Unterscheidung wuerde z.B. der Start von zentriq-worker den gerade erst gestarteten,
 #    gesunden zentriq-api-Gunicorn toeten (und umgekehrt), weil beide Prozesse dasselbe
 #    Arbeitsverzeichnis haben.
+#    Jeder Dienst bekommt ein eigenes, eindeutiges Muster; unbekannte Units beenden nichts
+#    (frueher fiel zentriq-beat in den Standardzweig und toetete den API-Gunicorn).
 case "${1:-}" in
-    *worker*) PATTERNS=("celery.*celery_worker.celery") ;;
-    *)        PATTERNS=("gunicorn.*wsgi:app") ;;
+    *worker*) PATTERNS=("celery.*celery_worker.celery worker") ;;
+    *beat*)   PATTERNS=("celery.*celery_worker.celery beat") ;;
+    *api*|"") PATTERNS=("gunicorn.*wsgi:app") ;;
+    *)        PATTERNS=() ;;
 esac
 for pattern in "${PATTERNS[@]}"; do
     STALE_PIDS=$(pgrep -f "$pattern" || true)

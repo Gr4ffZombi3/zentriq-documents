@@ -7160,3 +7160,24 @@
   .dash-stat { padding: 0.8rem 1.15rem; }
   .dash-stat-value { font-size: 1.3rem; }
 }
+
+/* --- Leipziger Liste: Einzelvorgaenge und Importkennzahlen --------------------- */
+@layer components {
+  .worklist td { vertical-align: top; }
+  .worklist-number { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 550; }
+  /* Weitere Vorgaenge desselben Kunden: duenne Trennlinie statt voller Zeilentrennung. */
+  .worklist tr.worklist-same-customer td { border-top-color: transparent; }
+  .worklist-broker-name { display: block; font-size: 0.75rem; color: var(--color-text-soft); }
+
+  .import-info {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 1rem;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+  }
+  .import-info > span + span::before { content: "·"; margin-right: 1rem; color: var(--color-text-soft); }
+  .import-info-warn { color: var(--color-warning-text); font-weight: 550; }
+  .import-info-action { margin-left: auto; }
+}

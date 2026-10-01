@@ -6,7 +6,7 @@ from app.models.audit_log import AuditEventType
 from app.models.enums import DocStatus, ListScope, ListType
 from app.services.audit import log_audit_event
 from app.services.document_progress import make_progress_snapshot, merge_progress_into_extra_data
-from app.services.documents import create_document
+from app.services.documents import create_document, find_identical_document
 from app.services.storage import save_pdf
 from app.tasks.document_tasks import process_document
 from app.utils.validation import InvalidPDFError, validate_pdf
@@ -72,6 +72,22 @@ def upload_document():
         if _is_async_request():
             return jsonify({"error": str(exc)}), 400
         return render_template("components/upload_widget.html", error=str(exc)), 400
+
+    duplicate = find_identical_document(file_bytes)
+    if duplicate is not None:
+        current_app.logger.info(
+            "document.upload.rejected tenant_id=%s user_id=%s reason=duplicate existing_document_id=%s",
+            current_user.tenant_id,
+            current_user.id,
+            duplicate.id,
+        )
+        message = (
+            "Diese PDF wurde bereits importiert. Zum erneuten Auswerten bitte in der Leipziger Liste "
+            "„Liste neu einlesen“ verwenden."
+        )
+        if _is_async_request():
+            return jsonify({"error": message, "existing_document_id": duplicate.id}), 409
+        return render_template("components/upload_widget.html", error=message), 409
 
     list_scope = {
         ListType.OWN: ListScope.OWN,

@@ -5,7 +5,7 @@ from celery import shared_task
 from flask import current_app
 
 from app.extensions import db
-from app.models import AnalysisRun, DocStatus, Document
+from app.models import AnalysisRun, CustomerTimelineEvent, DocStatus, Document
 from app.models.enums import AnalysisRunStatus, ComparisonKind, DocType
 from app.services.analysis.layout import detect_layout
 from app.services.analysis.list_scope_detection import detect_list_scope
@@ -13,8 +13,10 @@ from app.services.analysis.report import build_analysis_report
 from app.services.analysis.tables import detect_tables
 from app.services.document_progress import STEP_KEYS, make_progress_snapshot, merge_progress_into_extra_data
 from app.services.documents import apply_extraction, apply_leipziger_liste_extraction
+from app.services.leipziger_parser import is_wm312_list, parse_pages, to_extraction
 from app.services.list_comparison import compare_leipziger_liste, find_paired_gs_or_own_document
 from app.services.llm.extraction import extract_document_data, extract_leipziger_liste_rows
+from app.services.llm.schemas import DocumentExtraction
 from app.services.ocr.pipeline import extract_text
 from app.tenancy import bypass_tenant_scope, use_tenant_id
 
@@ -111,6 +113,8 @@ def _run_pipeline(document: Document) -> None:
             total_ms,
         )
 
+    # Verlaufseintraege einer frueheren Auswertung dieses Dokuments werden neu erzeugt.
+    CustomerTimelineEvent.query.filter_by(document_id=document.id).delete(synchronize_session=False)
     document.recommendations = []
     document.document_customers = []
     document.tasks = []
@@ -239,8 +243,40 @@ def _run_pipeline(document: Document) -> None:
 
     stage_start = time.monotonic()
     try:
-        extraction = extract_document_data(raw_text)
-        leipziger_extraction = extract_leipziger_liste_rows(page_texts) if extraction.doc_type == DocType.LEIPZIGER_LISTE else None
+        if is_wm312_list(page_texts):
+            # Leipziger Liste im Format *WM312-L*: deterministisch aus dem PDF-Text, ohne KI.
+            parse_result = parse_pages(page_texts)
+            extraction = DocumentExtraction(doc_type=DocType.LEIPZIGER_LISTE)
+            leipziger_extraction = to_extraction(parse_result)
+            stats = parse_result.stats()
+            current_app.logger.info(
+                "leipziger.import.parsed tenant_id=%s document_id=%s pdf_pages=%s records=%s with_date=%s "
+                "without_date=%s duplicates=%s unreadable=%s unreadable_lines=%s uncertain_records=%s flag_lines=%s",
+                document.tenant_id,
+                document.id,
+                stats["pdf_pages"],
+                stats["records"],
+                stats["with_date"],
+                stats["without_date"],
+                stats["duplicates"],
+                stats["unreadable"],
+                stats["unreadable_lines"],
+                stats["uncertain_records"],
+                stats["flag_lines"],
+            )
+            if parse_result.unreadable_lines:
+                # Nur Positionen, kein Zeileninhalt (Personendaten).
+                current_app.logger.warning(
+                    "leipziger.import.unreadable_lines tenant_id=%s document_id=%s positions=%s",
+                    document.tenant_id,
+                    document.id,
+                    parse_result.unreadable_lines[:50],
+                )
+        else:
+            extraction = extract_document_data(raw_text)
+            leipziger_extraction = (
+                extract_leipziger_liste_rows(page_texts) if extraction.doc_type == DocType.LEIPZIGER_LISTE else None
+            )
     except Exception as exc:
         stage_durations["ai"] = round((time.monotonic() - stage_start) * 1000, 1)
         stage_durations["extraction_and_rules"] = stage_durations["ai"]
@@ -278,7 +314,10 @@ def _run_pipeline(document: Document) -> None:
     stage_start = time.monotonic()
     try:
         if extraction.doc_type == DocType.LEIPZIGER_LISTE and leipziger_extraction is not None:
-            apply_stats = apply_leipziger_liste_extraction(document, leipziger_extraction)
+            parsed = "parser_stats" in (leipziger_extraction.analysis_meta or {})
+            # Der Parser hat exakt identische Zeilen schon entfernt; jeder weitere Vorgang bleibt
+            # eigenstaendig (gleicher Kunde, gleiche Nummer mit anderer Sparte usw.).
+            apply_stats = apply_leipziger_liste_extraction(document, leipziger_extraction, deduplicate=not parsed)
             analysis_meta = _build_leipziger_analysis_meta(page_texts, leipziger_extraction, apply_stats)
             document.extra_data = {
                 **(document.extra_data or {}),
@@ -413,4 +452,5 @@ def _build_leipziger_analysis_meta(page_texts: list[str], extraction, apply_stat
         "is_complete": is_complete,
         "completion_label": completion_label,
         "page_batch_size": int(analysis_meta.get("batch_size", 1)),
+        "parser": analysis_meta.get("parser_stats"),
     }

@@ -99,12 +99,17 @@ def apply_extraction(document: Document, extraction: DocumentExtraction) -> None
     create_tasks_from_recommendations(document, document.customer, recommendations)
 
 
-def apply_leipziger_liste_extraction(document: Document, extraction: LeipzigerListeExtraction) -> dict:
+def apply_leipziger_liste_extraction(
+    document: Document, extraction: LeipzigerListeExtraction, *, deduplicate: bool = True
+) -> dict:
     matcher = CustomerMatcher()
     document.doc_type = DocType.LEIPZIGER_LISTE
     document.raw_json = extraction.model_dump(mode="json")
 
-    prepared_rows, duplicate_count = _deduplicate_leipziger_rows(extraction.rows)
+    if deduplicate:
+        prepared_rows, duplicate_count = _deduplicate_leipziger_rows(extraction.rows)
+    else:
+        prepared_rows, duplicate_count = list(extraction.rows), 0
     prepared_extraction = LeipzigerListeExtraction(rows=prepared_rows, analysis_meta=extraction.analysis_meta)
 
     for key, value in compute_document_flags(prepared_extraction).items():
@@ -289,3 +294,25 @@ def _row_status_code(row) -> str:
 
 def _normalized_text(value) -> str:
     return str(value or "").strip().lower()
+
+
+def find_identical_document(file_bytes: bytes) -> Document | None:
+    """Bereits hochgeladene, byte-identische PDF im eigenen Mandanten (Tenant-Filter greift
+    automatisch). Fehlgeschlagene Verarbeitungen zaehlen nicht - die duerfen erneut hochgeladen
+    werden. Ohne Hash-Spalte: die wenigen gespeicherten Dateien werden direkt verglichen."""
+    import hashlib
+
+    from app.services.storage import resolve_document_path
+
+    digest = hashlib.sha256(file_bytes).hexdigest()
+    candidates = Document.query.filter(Document.status != DocStatus.FAILED).order_by(Document.id.desc()).all()
+    for candidate in candidates:
+        try:
+            path = resolve_document_path(candidate.file_path)
+            if path.stat().st_size != len(file_bytes):
+                continue
+            if hashlib.sha256(path.read_bytes()).hexdigest() == digest:
+                return candidate
+        except (OSError, ValueError):
+            continue
+    return None

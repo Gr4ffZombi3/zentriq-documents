@@ -20,28 +20,51 @@ def _render_pages(file_path: str, zoom: float = 2.0) -> list[Image.Image]:
         doc.close()
 
 
+def _native_page_texts(file_path: str) -> list[str]:
+    """Eingebetteter (maschinenlesbarer) Text je Seite - zeilentreu, ohne OCR."""
+    doc = fitz.open(file_path)
+    try:
+        return [page.get_text("text") for page in doc]
+    finally:
+        doc.close()
+
+
 def extract_text(file_path: str) -> tuple[str, OcrEngine, float | None, list[str]]:
-    """Extrahiert Text aus einer PDF: Tesseract primaer, OpenAI Vision als Fallback pro Seite
-    bei niedriger Konfidenz oder zu kurzem Text. Gibt (text, engine_used, avg_confidence,
-    page_texts) zurueck - page_texts (M12) haelt die Seitengrenzen fest, die im verbundenen
-    `text` verloren gehen, fuer die Mehrseitige-Eintraege-Heuristik in app/services/analysis/."""
+    """Extrahiert Text aus einer PDF - immer alle Seiten. Pro Seite zuerst der eingebettete
+    PDF-Text; nur Seiten ohne ausreichenden Text (Scans) gehen durch Tesseract, bei niedriger
+    Konfidenz oder zu kurzem Ergebnis zusaetzlich durch OpenAI Vision.
+
+    Hintergrund: Tesseract liest breite Tabellen spaltenweise (erst alle Nummern, dann alle
+    Namen, dann alle Daten) - die Zeilenzuordnung ginge verloren. Der native Text behaelt sie.
+    Gibt (text, engine_used, avg_confidence, page_texts) zurueck; engine_used ist NONE, wenn
+    keine Seite OCR brauchte."""
     min_confidence = current_app.config["OCR_MIN_CONFIDENCE"]
     min_text_length = current_app.config["OCR_MIN_TEXT_LENGTH"]
 
-    page_texts = []
+    page_texts = _native_page_texts(file_path)
     confidences = []
+    used_ocr = False
     used_vision = False
 
-    for image in _render_pages(file_path):
-        text, confidence = tesseract_ocr.ocr_image(image)
-        if len(text.strip()) < min_text_length or confidence < min_confidence:
-            text = vision_ocr.ocr_image(image)
-            used_vision = True
-        else:
-            confidences.append(confidence)
-        page_texts.append(text)
+    ocr_pages = [index for index, text in enumerate(page_texts) if len(text.strip()) < min_text_length]
+    if ocr_pages:
+        images = _render_pages(file_path)
+        for index in ocr_pages:
+            used_ocr = True
+            text, confidence = tesseract_ocr.ocr_image(images[index])
+            if len(text.strip()) < min_text_length or confidence < min_confidence:
+                text = vision_ocr.ocr_image(images[index])
+                used_vision = True
+            else:
+                confidences.append(confidence)
+            page_texts[index] = text
 
-    engine_used = OcrEngine.VISION if used_vision else OcrEngine.TESSERACT
+    if used_vision:
+        engine_used = OcrEngine.VISION
+    elif used_ocr:
+        engine_used = OcrEngine.TESSERACT
+    else:
+        engine_used = OcrEngine.NONE
     avg_confidence = sum(confidences) / len(confidences) if confidences else None
     full_text = "\n\n".join(page_texts)
     return full_text, engine_used, avg_confidence, page_texts

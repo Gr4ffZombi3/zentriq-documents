@@ -45,6 +45,11 @@ class Entry:
     broker_number: str | None
     broker_key: str | None
     status_key: str = "unklar"
+    status_code: str | None = None
+    customer: str | None = None
+    art: str | None = None
+    # Reihenfolge wie in der PDF (Seite, Zeile): Vorgaenge eines Kunden stehen untereinander.
+    position: tuple = (10**6, 10**6)
 
     @property
     def has_date(self) -> bool:
@@ -131,6 +136,7 @@ def _read_entries(document: Document) -> list[Entry]:
             if not number:
                 number = customer_name or "Ohne Vertragsnummer"
             raw_broker = row.get("broker_number")
+            row_customer = row.get("customer") if isinstance(row.get("customer"), dict) else {}
             entries.append(
                 Entry(
                     number=number,
@@ -139,9 +145,21 @@ def _read_entries(document: Document) -> list[Entry]:
                     broker_number=format_vermittlernummer(raw_broker),
                     broker_key=vermittlernummer_key(raw_broker),
                     status_key=status_key,
+                    status_code=(row.get("status_code") or "").strip().upper() or None,
+                    customer=(row_customer.get("name") or customer_name or "").strip() or None,
+                    art=(row.get("product_line") or "").strip() or None,
+                    position=(_int_or_max(row.get("source_page")), _int_or_max(row.get("source_row"))),
                 )
             )
     return entries
+
+
+def _int_or_max(value) -> int:
+    return value if isinstance(value, int) else 10**6
+
+
+def _list_order(entry: Entry) -> tuple:
+    return (*entry.position, entry.number)
 
 
 def open_entries(entries: list[Entry], broker_key: str | None = None, *, all_brokers: bool = False) -> list[Entry]:
@@ -149,15 +167,14 @@ def open_entries(entries: list[Entry], broker_key: str | None = None, *, all_bro
     fehlt diese, gibt es bewusst keine Treffer statt aller Zeilen."""
     return sorted(
         (e for e in entries if not e.has_date and (all_brokers or (broker_key and e.broker_key == broker_key))),
-        key=lambda e: e.number,
+        key=_list_order,
     )
 
 
 def done_entries(entries: list[Entry], broker_key: str | None) -> list[Entry]:
     return sorted(
         (e for e in entries if e.has_date and broker_key and e.broker_key == broker_key),
-        key=lambda e: (e.date, e.number),
-        reverse=True,
+        key=_list_order,
     )
 
 
@@ -207,15 +224,17 @@ def visible_entries(entries: list[Entry], broker_key: str | None, *, all_brokers
 
 
 def search_entries(entries: list[Entry], query: str | None) -> list[Entry]:
-    """Suche nach Vertrags- oder Vermittlernummer, unabhaengig von Leerzeichen, Strichen und
-    Gross-/Kleinschreibung."""
+    """Suche nach Vertrags-, Vermittlernummer oder Kundenname, unabhaengig von Leerzeichen,
+    Strichen und Gross-/Kleinschreibung."""
     needle = _search_key(query)
     if not needle:
         return entries
     return [
         entry
         for entry in entries
-        if needle in _search_key(entry.number) or (entry.broker_key and needle in entry.broker_key)
+        if needle in _search_key(entry.number)
+        or (entry.broker_key and needle in entry.broker_key)
+        or (entry.customer and needle in _search_key(entry.customer))
     ]
 
 
@@ -224,11 +243,13 @@ def _search_key(value: str | None) -> str:
 
 
 def tab_entries(entries: list[Entry], tab: str) -> list[Entry]:
+    """Jeder Reiter zeigt Einzelvorgaenge in PDF-Reihenfolge - mehrere Vorgaenge eines Kunden
+    stehen damit direkt untereinander."""
     if tab == "mit-datum":
-        return sorted((e for e in entries if e.has_date), key=lambda e: (e.date, e.number), reverse=True)
+        return sorted((e for e in entries if e.has_date), key=_list_order)
     if tab == "ohne-datum":
-        return sorted((e for e in entries if not e.has_date), key=lambda e: e.number)
-    return sorted((e for e in entries if e.is_todo), key=lambda e: e.number)
+        return sorted((e for e in entries if not e.has_date), key=_list_order)
+    return sorted((e for e in entries if e.is_todo), key=_list_order)
 
 
 def tab_counts(entries: list[Entry]) -> dict[str, int]:
@@ -238,3 +259,11 @@ def tab_counts(entries: list[Entry]) -> dict[str, int]:
         "ohne-datum": sum(1 for e in entries if not e.has_date),
     }
 
+
+
+def import_stats(document: Document | None) -> dict | None:
+    """Kennzahlen des letzten Imports (nur fuer Admins angezeigt)."""
+    if document is None:
+        return None
+    meta = (document.extra_data or {}).get("leipziger_analysis") or {}
+    return meta.get("parser") or None

@@ -16,10 +16,11 @@
 {%- endmacro %}
 
 {% macro entry_date(entry) -%}
-{{ entry.date.strftime('%d.%m.%Y') if entry.date and entry.date.year > 1 else 'vorhanden' }}
+{{ entry.date.strftime('%d.%m.%Y') if entry.date and entry.date.year > 1 else ('vorhanden' if entry.date else '–') }}
 {%- endmacro %}
 
-{% macro entry_table(entries, with_date=False, broker_names=None, empty_text='Keine Einträge.') -%}
+{# Ein Einzelvorgang je Zeile: NUMMER | STATUS | KUNDE | ART | DATUM | VERMITTLER. #}
+{% macro entry_table(entries, with_date=True, broker_names=None, empty_text='Keine Einträge.') -%}
 {% if entries %}
   <div class="table-wrap">
   <table class="data-table worklist">
@@ -27,19 +28,25 @@
       <tr>
         <th scope="col">Nummer</th>
         <th scope="col">Status</th>
-        {% if with_date %}<th scope="col">Datum</th>{% endif %}
-        {% if broker_names is not none %}<th scope="col">Vermittler</th>{% endif %}
+        <th scope="col">Kunde</th>
+        <th scope="col">Art</th>
+        <th scope="col">Datum</th>
+        <th scope="col">Vermittler</th>
       </tr>
     </thead>
     <tbody>
       {% for entry in entries %}
-        <tr>
+        {% set same_customer = loop.previtem is defined and loop.previtem.customer and loop.previtem.customer == entry.customer %}
+        <tr class="{{ 'worklist-same-customer' if same_customer else '' }}">
           <td class="worklist-number">{{ entry.number }}</td>
-          <td>{{ entry.label }}</td>
-          {% if with_date %}<td class="whitespace-nowrap">{{ entry_date(entry) }}</td>{% endif %}
-          {% if broker_names is not none %}
-            <td class="is-muted whitespace-nowrap">{{ broker_names.get(entry.broker_key) or entry.broker_number or '–' }}</td>
-          {% endif %}
+          <td class="whitespace-nowrap"><span title="{{ entry.label }}">{{ entry.status_code or entry.label }}</span></td>
+          <td>{{ entry.customer or '–' }}</td>
+          <td class="whitespace-nowrap">{{ entry.art or '–' }}</td>
+          <td class="whitespace-nowrap tabular-nums">{{ entry_date(entry) }}</td>
+          <td class="whitespace-nowrap">
+            <span class="tabular-nums">{{ entry.broker_number or '–' }}</span>
+            {% if broker_names and broker_names.get(entry.broker_key) %}<span class="worklist-broker-name">{{ broker_names.get(entry.broker_key) }}</span>{% endif %}
+          </td>
         </tr>
       {% endfor %}
     </tbody>

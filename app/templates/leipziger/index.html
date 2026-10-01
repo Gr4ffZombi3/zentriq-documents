@@ -18,12 +18,32 @@
   <form method="get" action="{{ url_for('leipziger.index') }}" class="search-bar" role="search">
     {% if document and documents | length > 1 %}<input type="hidden" name="document_id" value="{{ document.id }}">{% endif %}
     <input type="hidden" name="tab" value="{{ tab }}">
-    <label class="sr-only" for="leipziger-suche">Vermittlernummer oder Vertragsnummer suchen</label>
+    <label class="sr-only" for="leipziger-suche">Vertragsnummer, Kunde oder Vermittlernummer suchen</label>
     <input class="field-surface search-input" type="search" id="leipziger-suche" name="q" value="{{ query }}"
-           placeholder="Vermittlernummer / Vertragsnummer suchen" autocomplete="off" maxlength="60">
+           placeholder="Vertragsnummer, Kunde oder Vermittlernummer" autocomplete="off" maxlength="60">
     <button type="submit" class="btn btn-primary">Suchen</button>
     {% if query %}<a class="btn btn-ghost" href="{{ url_for('leipziger.index', tab=tab, document_id=base_args.document_id) }}">Zurücksetzen</a>{% endif %}
   </form>
+
+  {% if current_user.is_admin and document %}
+    <div class="import-info">
+      {% if import_stats %}
+        <span>{{ import_stats.pdf_pages }} {{ 'Seite' if import_stats.pdf_pages == 1 else 'Seiten' }}</span>
+        <span>{{ import_stats.records }} Vorgänge</span>
+        <span>{{ import_stats.with_date }} mit Datum</span>
+        <span>{{ import_stats.without_date }} ohne Datum</span>
+        {% if import_stats.duplicates %}<span>{{ import_stats.duplicates }} Duplikate entfernt</span>{% endif %}
+        {% if import_stats.unreadable %}<span class="import-info-warn">{{ import_stats.unreadable }} nicht eindeutig lesbar</span>{% endif %}
+      {% else %}
+        <span>Diese Liste wurde noch mit dem früheren Verfahren ausgewertet.</span>
+      {% endif %}
+      <form method="post" action="{{ url_for('leipziger.reimport', document_id=document.id) }}" class="import-info-action"
+            onsubmit="return confirm('Die bisherige Auswertung dieser Liste wird gelöscht und dieselbe PDF vollständig neu eingelesen. Fortfahren?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-ghost btn-sm">Liste neu einlesen</button>
+      </form>
+    </div>
+  {% endif %}
 
   <section class="panel">
     <nav class="panel-tabs" aria-label="Ansicht">
@@ -41,7 +61,7 @@
         'mit-datum': 'Keine Vorgänge mit Datum vorhanden.',
         'ohne-datum': 'Keine Vorgänge ohne Datum vorhanden.',
       } %}
-      {{ entry_table(items, with_date=(tab == 'mit-datum'), broker_names=broker_names if current_user.is_admin else none,
+      {{ entry_table(items, broker_names=broker_names if current_user.is_admin else none,
                      empty_text=('Keine Treffer für „' ~ query ~ '“.') if query else empty_texts[tab]) }}
       {% if pages > 1 %}
         <nav class="pager" aria-label="Seiten">

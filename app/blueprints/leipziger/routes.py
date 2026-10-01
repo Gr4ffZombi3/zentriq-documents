@@ -1,8 +1,17 @@
-from flask import Blueprint, abort, render_template, request
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.auth.permissions import admin_required
+from app.extensions import db
+from app.models import DocStatus, Document
+from app.models.audit_log import AuditEventType
+from app.models.enums import DocType
 from app.services import leipziger_todo
+from app.services.audit import log_audit_event
+from app.services.document_progress import make_progress_snapshot, merge_progress_into_extra_data
+from app.services.storage import resolve_document_path
+from app.tasks.document_tasks import process_document
+from app.tenancy import get_or_404_scoped
 from app.utils.vermittlernummer import vermittlernummer_key
 
 leipziger_bp = Blueprint("leipziger", __name__, url_prefix="/leipziger-liste")
@@ -47,6 +56,7 @@ def index():
         query=query,
         broker_names=leipziger_todo.broker_names(leipziger_todo.team_members()) if current_user.is_admin else {},
         has_own_number=own_key is not None,
+        import_stats=leipziger_todo.import_stats(document) if current_user.is_admin else None,
     )
 
 
@@ -84,3 +94,43 @@ def team():
         selected=selected,
         view=view,
     )
+
+
+@leipziger_bp.post("/<int:document_id>/neu-einlesen")
+@login_required
+@admin_required
+def reimport(document_id):
+    """Verwirft die bisherige Auswertung dieser Liste (Vorgaenge, Aufgaben, Empfehlungen) und
+    liest dieselbe PDF vollstaendig neu ein. Die PDF selbst bleibt unveraendert gespeichert."""
+    document = get_or_404_scoped(Document, document_id)
+    if document.doc_type != DocType.LEIPZIGER_LISTE:
+        abort(404)
+    try:
+        if not resolve_document_path(document.file_path).is_file():
+            raise FileNotFoundError(document.file_path)
+    except (ValueError, FileNotFoundError):
+        flash("Die PDF dieser Liste ist nicht mehr vorhanden. Bitte die Liste neu hochladen.", "error")
+        return redirect(url_for("leipziger.index"))
+
+    document.status = DocStatus.PENDING
+    document.error_message = None
+    document.retry_count += 1
+    document.extra_data = merge_progress_into_extra_data(
+        document.extra_data,
+        make_progress_snapshot(
+            completed=["uploaded"],
+            active="ocr",
+            percent=12,
+            headline="Neu einlesen eingeplant",
+            detail="Die Liste wird vollstaendig neu ausgewertet.",
+        ),
+    )
+    db.session.commit()
+    log_audit_event(
+        AuditEventType.LEIPZIGER_LIST_UPLOADED,
+        user=current_user,
+        details={"document_id": document.id, "reimport": True},
+    )
+    process_document.delay(document.id)
+    flash("Die Liste wird neu eingelesen. Das dauert in der Regel nur wenige Sekunden – bitte die Seite danach neu laden.", "success")
+    return redirect(url_for("leipziger.index"))

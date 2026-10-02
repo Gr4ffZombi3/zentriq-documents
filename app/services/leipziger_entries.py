@@ -16,7 +16,6 @@ from sqlalchemy import select
 
 from app.extensions import db
 from app.models import Document, LeipzigerEntry
-from app.models.enums import DocStatus, DocType
 from app.utils.vermittlernummer import format_vermittlernummer, vermittlernummer_key
 
 # Felder, deren Aenderung zwischen zwei Importen angezeigt wird (Feld -> Bezeichnung).
@@ -93,18 +92,11 @@ def rebuild_entries(document: Document) -> int:
 
 
 def find_previous_document(document: Document) -> Document | None:
-    """Zuletzt vor diesem Dokument hochgeladene, fertig ausgewertete Liste desselben Bueros
-    (Mandantenfilter ueber den globalen Listener)."""
-    return (
-        Document.query.filter(
-            Document.doc_type == DocType.LEIPZIGER_LISTE,
-            Document.status == DocStatus.DONE,
-            Document.id != document.id,
-            Document.uploaded_at < document.uploaded_at,
-        )
-        .order_by(Document.uploaded_at.desc(), Document.id.desc())
-        .first()
-    )
+    """Vorangehende, fertig ausgewertete Liste desselben Bueros - nach Berichtsdatum
+    (Kalenderwoche), nicht nach Upload-Zeitpunkt (siehe list_comparison.find_previous_list)."""
+    from app.services.list_comparison import find_previous_list
+
+    return find_previous_list(document)
 
 
 _COMPARE_COLUMNS = (
@@ -179,9 +171,9 @@ def compare_entries(current_rows: list, previous_rows: list) -> dict:
     return {**counts, "changes": changes}
 
 
-def compare_with_previous(document: Document) -> dict | None:
+def compare_with_previous(document: Document, previous: Document | None = None) -> dict | None:
     """Kennzahlen gegenueber der vorherigen Liste; None, wenn es keine vorherige Liste gibt."""
-    previous = find_previous_document(document)
+    previous = previous or find_previous_document(document)
     if previous is None:
         return None
     result = compare_entries(

@@ -47,11 +47,22 @@ def normalize_customer_number(raw: str | None) -> str:
     return re.sub(r"[^0-9A-Z]", "", (raw or "").upper())
 
 
+_UMLAUT_SPELLING = re.compile(r"([aou])e")
+
+
 def name_key(raw: str | None) -> str:
     """Name ohne Akzente/Satzzeichen, Bestandteile sortiert: "Mustermann, Max" und
-    "Max Mustermann" ergeben denselben Schluessel. Einzelbuchstaben zaehlen nicht."""
-    parts = sorted(part for part in normalize_customer_name(raw).split() if len(part) >= 2)
-    return " ".join(parts)
+    "Max Mustermann" ergeben denselben Schluessel. Einzelbuchstaben zaehlen nicht.
+
+    Umlaute werden auf den Grundbuchstaben gefaltet: "Löwenstein", "Loewenstein" und
+    "Lowenstein" (OCR verliert die Punkte) ergeben denselben Schluessel. Ein gleicher Name
+    allein fuehrt nirgends zu einer Zuordnung - dafuer braucht es immer weitere Merkmale."""
+    return " ".join(sorted(name_parts(raw)))
+
+
+def name_parts(raw: str | None) -> list[str]:
+    """Bestandteile eines Namens bzw. Textes in derselben Form wie im name_key."""
+    return [_UMLAUT_SPELLING.sub(r"\1", part) for part in normalize_customer_name(raw).split() if len(part) >= 2]
 
 
 def customer_keys(name: str | None, phone: str | None, customer_number: str | None) -> dict:

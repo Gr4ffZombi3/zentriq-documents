@@ -14,9 +14,9 @@ from dataclasses import dataclass, field
 from sqlalchemy import or_
 
 from app.models import Customer
-from app.services.customer_normalization import normalize_customer_name
 from app.utils.customer_keys import (  # noqa: F401 - auch von Tests/Schemas importiert
     format_phone,
+    name_parts,
     normalize_customer_number,
     normalize_phone,
 )
@@ -78,7 +78,7 @@ def _by_name(text: str) -> list[Customer]:
     Transkript vorkommen - Reihenfolge egal ("Mustermann, Max" findet "Max Mustermann").
     Gelesen wird nur der vorberechnete Namensschluessel; Kandidaten werden in der Datenbank
     auf Namen vorgefiltert, die mindestens ein Wort des Transkripts enthalten."""
-    words = {word for word in normalize_customer_name(text).split() if len(word) >= 2}
+    words = set(name_parts(text))
     if not words:
         return []
     # Laengste Woerter zuerst: Nachnamen sind selten, Fuellwoerter ("ist", "die") kurz.

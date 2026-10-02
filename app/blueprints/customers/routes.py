@@ -7,6 +7,7 @@ from app.models.enums import TaskStatus
 from app.navigation import display_name_for
 from app.services import customer_sources
 from app.services.customer_duplicates import (
+    REASON_LABELS,
     MergeError,
     compare_rows,
     duplicate_reason,
@@ -105,6 +106,7 @@ def compare(customer_id, other_id):
         customer=customer,
         other=other,
         reason=reason,
+        reason_label=REASON_LABELS[reason],
         rows=compare_rows(customer, other),
         counts=(link_counts(customer), link_counts(other)),
     )

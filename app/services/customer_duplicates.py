@@ -4,7 +4,8 @@ Bueros (globaler Tenant-Filter, zusaetzlich explizite tenant_id-Bedingungen).
 Abgleich in dieser Reihenfolge ueber die indizierten Schluessel (app/utils/customer_keys.py):
 1. Kundennummer, 2. Telefonnummer, 3. Name. Telefon- und Namenstreffer gelten nicht, wenn beide
 Datensaetze unterschiedliche Kundennummern (bzw. beim Namen: unterschiedliche Geburtsdaten)
-haben - dann handelt es sich erkennbar um verschiedene Personen.
+haben - dann handelt es sich erkennbar um verschiedene Personen. Ausnahme: gleicher Name und
+gleiche PLZ bei abweichendem Geburtsdatum wird als unklarer Fall zur Pruefung angezeigt.
 
 Es wird nie automatisch zusammengefuehrt. Beim Zusammenfuehren bleiben alle Verknuepfungen
 erhalten, leere Werte ueberschreiben nie gefuellte, und abweichende Werte des aufgeloesten
@@ -39,6 +40,7 @@ REASON_LABELS = {
     "customer_number": "gleiche Kundennummer",
     "phone": "gleiche Telefonnummer",
     "name": "gleicher Name",
+    "name_postal": "gleicher Name und PLZ, abweichendes Geburtsdatum – bitte prüfen",
 }
 
 # Felder, die beim Zusammenfuehren uebernommen werden (Feld -> Bezeichnung).
@@ -90,6 +92,16 @@ def duplicate_reason(customer: Customer, other: Customer) -> str | None:
         and not _conflict(customer.date_of_birth, other.date_of_birth)
     ):
         return "name"
+    # Unklar (z. B. Geburtsdatum aus einer OCR-gelesenen Liste falsch): nie automatisch
+    # zusammengefuehrt, aber zur Pruefung angezeigt.
+    if (
+        customer.name_key
+        and customer.name_key == other.name_key
+        and not numbers_conflict
+        and customer.postal_code
+        and (customer.postal_code or "").replace(" ", "") == (other.postal_code or "").replace(" ", "")
+    ):
+        return "name_postal"
     return None
 
 

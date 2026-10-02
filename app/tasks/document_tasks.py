@@ -22,6 +22,12 @@ from app.services.analysis.layout import detect_layout
 from app.services.analysis.list_scope_detection import detect_list_scope
 from app.services.analysis.report import build_analysis_report
 from app.services.analysis.tables import detect_tables
+from app.services.customer_lock import (
+    NamedLock,
+    customer_creation_lock,
+    document_processing_lock,
+    fresh_transaction,
+)
 from app.services.document_progress import (
     EXTRACTION_FAILED_MESSAGE,
     OCR_FAILED_MESSAGE,
@@ -33,8 +39,12 @@ from app.services.document_progress import (
 )
 from app.services.documents import apply_extraction, apply_leipziger_liste_extraction
 from app.services.leipziger_entries import compare_with_previous, rebuild_entries
-from app.services.leipziger_parser import is_wm312_list, parse_pages, to_extraction
-from app.services.list_comparison import compare_leipziger_liste, find_paired_gs_or_own_document
+from app.services.leipziger_parser import detect_report_date, is_wm312_list, parse_pages, to_extraction
+from app.services.list_comparison import (
+    compare_leipziger_liste,
+    find_paired_gs_or_own_document,
+    refresh_following_list,
+)
 from app.services.llm.extraction import extract_document_data, extract_leipziger_liste_rows
 from app.services.llm.schemas import DocumentExtraction
 from app.services.ocr.pipeline import extract_text
@@ -163,6 +173,19 @@ def _compute_overall_confidence(document: Document) -> float | None:
 
 
 def _run_pipeline(document: Document) -> None:
+    # Dasselbe Dokument nie zweimal gleichzeitig auswerten (z. B. doppelter Klick auf "Neu
+    # einlesen"); die Kundenanlage je Buero serialisieren (app/services/customer_lock.py).
+    customer_lock = customer_creation_lock(document.tenant_id)
+    try:
+        with document_processing_lock(document.id):
+            # Aktuellen Stand lesen - ein paralleler Lauf kann gerade fertig geworden sein.
+            fresh_transaction()
+            _run_pipeline_steps(document, customer_lock)
+    finally:
+        customer_lock.release()
+
+
+def _run_pipeline_steps(document: Document, customer_lock: NamedLock) -> None:
     # Idempotent machen: bei einem (Retry-)Durchlauf duerfen keine Reste aus einer
     # vorherigen Verarbeitung (z.B. document_customers) uebrig bleiben, sonst verletzt ein
     # erneuter Insert den Unique-Constraint auf (tenant_id, document_id, customer_id).
@@ -426,6 +449,9 @@ def _run_pipeline(document: Document) -> None:
     )
     _commit_with_timing("grouping_started")
 
+    # Ab hier werden Kunden gesucht und angelegt: Sperre vor dem ersten Lesen holen und erst
+    # nach dem Commit wieder freigeben.
+    customer_lock.acquire()
     stage_start = time.monotonic()
     try:
         if extraction.doc_type == DocType.LEIPZIGER_LISTE and leipziger_extraction is not None:
@@ -458,6 +484,8 @@ def _run_pipeline(document: Document) -> None:
                     compare_leipziger_liste(
                         document, previous_document=paired_document, comparison_kind=ComparisonKind.OWN_VS_GS
                     )
+                # Die in der Berichtsreihenfolge folgende Liste neu gegen diese vergleichen.
+                refresh_following_list(document)
         else:
             apply_extraction(document, extraction)
     except Exception:
@@ -478,6 +506,7 @@ def _run_pipeline(document: Document) -> None:
             state="failed",
         )
         _commit_with_timing("post_processing_failed")
+        customer_lock.release()
         current_app.logger.exception(
             "document.analysis.post_processing_failed tenant_id=%s document_id=%s",
             document.tenant_id,
@@ -516,6 +545,7 @@ def _run_pipeline(document: Document) -> None:
         )
     document.processed_at = datetime.now(timezone.utc)
     _commit_with_timing("analysis_completed")
+    customer_lock.release()
     current_app.logger.info(
         "document.analysis.completed tenant_id=%s document_id=%s status=%s duration_ms=%s",
         document.tenant_id,
@@ -561,7 +591,15 @@ def _build_leipziger_analysis_meta(page_texts: list[str], extraction, apply_stat
     else:
         completion_label = f"Teilweise ausgewertet - {processed_pages} von {total_pages} Seiten verarbeitet"
 
+    report_date = detect_report_date(page_texts)
+    report_year, report_week, _ = report_date.isocalendar() if report_date else (None, None, None)
+
     return {
+        # Berichtsdatum/-woche aus dem Listenkopf: bestimmt die Reihenfolge der Listen beim
+        # Vergleich (nicht der Upload-Zeitpunkt), siehe app/services/list_comparison.py.
+        "report_date": report_date.isoformat() if report_date else None,
+        "report_year": report_year,
+        "report_week": report_week,
         "total_pages": total_pages,
         "processed_pages": processed_pages,
         "processed_page_numbers": processed_page_numbers,

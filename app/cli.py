@@ -351,9 +351,40 @@ def send_test_mail_command(recipient: str):
     click.echo(f"Testmail an {recipient} uebergeben. Reset-Links verweisen auf {public_url}.")
 
 
+@click.command("leipziger-vergleiche-neu")
+@click.option("--tenant", "tenant_slug", required=True, help="Mandant (Slug), dessen Listen neu verglichen werden.")
+def recompare_lists_command(tenant_slug: str):
+    """Berechnet die Listenvergleiche aller fertig ausgewerteten Leipziger Listen eines
+    Bueros in Berichtsreihenfolge (Kalenderwoche) neu. Kunden und Vorgaenge bleiben
+    unveraendert; nur Vergleiche und deren Verlaufseintraege werden ersetzt."""
+    from app.models.enums import DocStatus, DocType
+    from app.services.list_comparison import find_previous_list, list_report_date, recompare_list
+    from app.tenancy import use_tenant_id
+
+    with bypass_tenant_scope():
+        tenant = Tenant.query.filter_by(slug=tenant_slug).first()
+    if tenant is None:
+        raise click.ClickException(f"Mandant '{tenant_slug}' nicht gefunden.")
+    with use_tenant_id(tenant.id):
+        documents = Document.query.filter(
+            Document.doc_type == DocType.LEIPZIGER_LISTE, Document.status == DocStatus.DONE
+        ).all()
+        for document in documents:
+            previous = find_previous_list(document)
+            comparison = recompare_list(document, previous_document=previous)
+            db.session.commit()
+            report_date = list_report_date(document)
+            week = f"KW{report_date.isocalendar()[1]:02d}/{report_date.year}" if report_date else "ohne Berichtsdatum"
+            click.echo(
+                f"Dokument {document.id} ({week}): "
+                + (f"verglichen mit Dokument {previous.id}" if comparison is not None else "kein Vorgaenger")
+            )
+
+
 def register_cli(app) -> None:
     app.cli.add_command(create_user_command)
     app.cli.add_command(set_admin_command)
     app.cli.add_command(align_tenant_command)
     app.cli.add_command(grant_super_admin_command)
     app.cli.add_command(send_test_mail_command)
+    app.cli.add_command(recompare_lists_command)

@@ -5,8 +5,12 @@ gegen das zuletzt verarbeitete Leipziger-Liste-Dokument desselben Tenants) und O
 Eigene Liste gegen Geschäftsstellen-Liste, expliziter previous_document-Override). Rein
 additiv - beruehrt weder die Extraktion noch die Recommendation-/Task-Erzeugung."""
 
+from datetime import date, datetime
+
+from sqlalchemy.orm import load_only
+
 from app.extensions import db
-from app.models import Document, ListComparison, ListComparisonEntry
+from app.models import CustomerTimelineEvent, Document, ListComparison, ListComparisonEntry
 from app.models.enums import ComparisonKind, DocStatus, DocType, ListChangeType, ListScope, TimelineEventType
 from app.services.customer_normalization import normalize_customer_name, normalize_postal_code
 from app.services.timeline import log_timeline_event
@@ -93,17 +97,49 @@ def _group_document_customers(document_customers) -> dict[tuple, dict]:
     return grouped
 
 
-def _find_previous_leipziger_liste(document: Document) -> Document | None:
+def list_report_date(document: Document) -> date | None:
+    """Berichtsdatum aus dem Listenkopf (beim Import gespeichert), sonst None."""
+    value = ((document.extra_data or {}).get("leipziger_analysis") or {}).get("report_date")
+    try:
+        return date.fromisoformat(value) if value else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _list_order_key(document: Document) -> tuple:
+    """Reihenfolge der Listen: Berichtsdatum (Berichtsjahr/Kalenderwoche), ohne erkanntes
+    Berichtsdatum ersatzweise der Upload-Tag. Eine spaeter hochgeladene aeltere Woche wird so
+    korrekt einsortiert, statt gegen die neuere Liste verglichen zu werden."""
+    uploaded_at = (document.uploaded_at or datetime.min).replace(tzinfo=None)
+    return (list_report_date(document) or uploaded_at.date(), uploaded_at, document.id or 0)
+
+
+def _comparable_lists(document: Document) -> list[Document]:
     return (
-        Document.query.filter(
+        Document.query.options(
+            load_only(Document.id, Document.uploaded_at, Document.extra_data, Document.original_filename)
+        )
+        .filter(
             Document.doc_type == DocType.LEIPZIGER_LISTE,
             Document.status == DocStatus.DONE,
             Document.id != document.id,
-            Document.uploaded_at < document.uploaded_at,
         )
-        .order_by(Document.uploaded_at.desc())
-        .first()
+        .all()
     )
+
+
+def find_previous_list(document: Document) -> Document | None:
+    """Die unmittelbar vorangehende, fertig ausgewertete Liste desselben Bueros."""
+    own_key = _list_order_key(document)
+    earlier = [other for other in _comparable_lists(document) if _list_order_key(other) < own_key]
+    return max(earlier, key=_list_order_key, default=None)
+
+
+def find_next_list(document: Document) -> Document | None:
+    """Die unmittelbar folgende, fertig ausgewertete Liste desselben Bueros."""
+    own_key = _list_order_key(document)
+    later = [other for other in _comparable_lists(document) if _list_order_key(other) > own_key]
+    return min(later, key=_list_order_key, default=None)
 
 
 def find_paired_gs_or_own_document(document: Document) -> Document | None:
@@ -146,7 +182,7 @@ def compare_leipziger_liste(
         ListComparison.query.filter(ListComparison.id.in_(existing_ids)).delete(synchronize_session=False)
 
     if previous_document is None:
-        previous_document = _find_previous_leipziger_liste(document)
+        previous_document = find_previous_list(document)
     if previous_document is None:
         return None
 
@@ -185,9 +221,22 @@ def compare_leipziger_liste(
                 extra_data=details,
             )
 
+    # Beide Listen sind demselben Kundenstamm zugeordnet: dieselbe Kunden-ID ist derselbe Kunde,
+    # auch wenn eine Liste z. B. kein Geburtsdatum oder eine andere Schreibweise enthaelt.
+    # Sonst (Zeilen ohne eindeutige Zuordnung) wie bisher ueber Name + Geburtsdatum/PLZ.
+    previous_key_by_customer_id = {
+        record["customer_id"]: key for key, record in previous_by_customer.items() if record["customer_id"]
+    }
+    matched_previous_keys: set[tuple] = set()
+
     for customer_key, doc_customer in new_by_customer.items():
         new_signature = _row_signature(doc_customer["row_data"])
-        previous_doc_customer = previous_by_customer.get(customer_key)
+        previous_key = previous_key_by_customer_id.get(doc_customer["customer_id"])
+        if previous_key is None or previous_key in matched_previous_keys:
+            previous_key = customer_key if customer_key not in matched_previous_keys else None
+        previous_doc_customer = previous_by_customer.get(previous_key) if previous_key else None
+        if previous_doc_customer is not None:
+            matched_previous_keys.add(previous_key)
 
         if previous_doc_customer is None:
             add_entry(doc_customer, ListChangeType.NEW_CUSTOMER, {"new": new_signature})
@@ -215,7 +264,7 @@ def compare_leipziger_liste(
             )
 
     for customer_key, previous_doc_customer in previous_by_customer.items():
-        if customer_key not in new_by_customer:
+        if customer_key not in matched_previous_keys:
             add_entry(previous_doc_customer, ListChangeType.REMOVED_CUSTOMER, {"old": _row_signature(previous_doc_customer["row_data"])})
 
     for field, value in counters.items():
@@ -223,3 +272,45 @@ def compare_leipziger_liste(
 
     return comparison
 
+
+def refresh_following_list(document: Document) -> Document | None:
+    """Nach dem (Neu-)Import von `document`: die in der Berichtsreihenfolge folgende Liste
+    wird neu gegen `document` verglichen - z. B. wenn KW37 erst nach KW38 hochgeladen wurde
+    oder eine aeltere Liste neu eingelesen wird. `document` wird ausdruecklich als Vorgaenger
+    uebergeben, weil es waehrend der eigenen Auswertung noch nicht als fertig markiert ist."""
+    following = find_next_list(document)
+    if following is None:
+        return None
+    previous = find_previous_list(following)
+    if previous is not None and _list_order_key(previous) > _list_order_key(document):
+        return None  # zwischen beiden liegt eine weitere Liste - deren Vergleich bleibt gueltig
+    recompare_list(following, previous_document=document)
+    return following
+
+
+def recompare_list(document: Document, previous_document: Document | None = None) -> ListComparison | None:
+    """Berechnet alle Vergleiche einer bereits ausgewerteten Liste neu (zeitlich und - falls
+    vorhanden - Eigene/GS-Liste), ohne Kunden oder Vorgaenge anzufassen. Die zugehoerigen
+    Verlaufseintraege des alten Vergleichs werden ersetzt, nicht verdoppelt."""
+    from app.services.leipziger_entries import compare_with_previous
+
+    previous_document = previous_document or find_previous_list(document)
+    CustomerTimelineEvent.query.filter(
+        CustomerTimelineEvent.document_id == document.id,
+        CustomerTimelineEvent.event_type == TimelineEventType.LIST_COMPARISON_CHANGE,
+    ).delete(synchronize_session=False)
+    # Ohne vorherige Liste entfernt compare_leipziger_liste nur den alten Vergleich.
+    comparison = compare_leipziger_liste(document, previous_document=previous_document)
+    meta = (document.extra_data or {}).get("leipziger_analysis")
+    if meta is not None:
+        document.extra_data = {
+            **document.extra_data,
+            "leipziger_analysis": {
+                **meta,
+                "import_comparison": compare_with_previous(document, previous=previous_document),
+            },
+        }
+    paired = find_paired_gs_or_own_document(document)
+    if paired is not None:
+        compare_leipziger_liste(document, previous_document=paired, comparison_kind=ComparisonKind.OWN_VS_GS)
+    return comparison

@@ -27,6 +27,7 @@ from app.models import Customer, CustomerMemo
 from app.models.audit_log import AuditEventType
 from app.services import customer_sources
 from app.services.audit import log_audit_event
+from app.services.customer_lock import CustomerLockTimeout, customer_creation_lock, fresh_transaction
 from app.services.memo_customer_match import (
     MatchResult,
     extract_customer_numbers,
@@ -213,6 +214,31 @@ def create_customer_from_memo(
     if not (keys["phone_key"] or keys["customer_number_key"]):
         raise MemoAssignmentError("Bitte eine Telefonnummer oder Kundennummer angeben.")
 
+    # Pruefen und Anlegen unter der Kundensperre des Bueros: zwei gleichzeitige Anfragen (oder
+    # eine parallel laufende Listenauswertung) legen sonst denselben Kunden doppelt an.
+    lock = customer_creation_lock(user.tenant_id, timeout_seconds=20)
+    try:
+        lock.acquire()
+    except CustomerLockTimeout:
+        raise MemoAssignmentError(
+            "Gerade werden Kundendaten gespeichert. Bitte in einigen Sekunden erneut versuchen."
+        ) from None
+    try:
+        fresh_transaction()
+        return _create_customer_locked(
+            name=name,
+            phone=phone,
+            customer_number=customer_number,
+            keys=keys,
+            transcript=transcript,
+            user=user,
+            confirm_same_name=confirm_same_name,
+        )
+    finally:
+        lock.release()
+
+
+def _create_customer_locked(*, name, phone, customer_number, keys, transcript, user, confirm_same_name):
     conflict = find_conflicts(name, phone, customer_number)
     if conflict is not None and (conflict.blocking or not confirm_same_name):
         raise conflict

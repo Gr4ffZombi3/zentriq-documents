@@ -2,13 +2,12 @@
 {% from "ui/portal.html" import state_tag %}
 {% block title %}Mögliche Dublette – Zentriq{% endblock %}
 {% block content %}
-{% set reason_labels = {'customer_number': 'gleiche Kundennummer', 'phone': 'gleiche Telefonnummer', 'name': 'gleicher Name'} %}
 <div class="page-shell">
   <a class="back-link" href="{{ url_for('customers.detail', customer_id=customer.id) }}">← {{ customer.name }}</a>
   <div class="page-toolbar">
     <div>
       <h1 class="page-toolbar-title">Mögliche Dublette</h1>
-      <p class="page-subtitle">Erkannt über: {{ reason_labels[reason] }}. Bitte beide Datensätze vergleichen.</p>
+      <p class="page-subtitle">Erkannt über: {{ reason_label }}. Bitte beide Datensätze vergleichen.</p>
     </div>
   </div>
 

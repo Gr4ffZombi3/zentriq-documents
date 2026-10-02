@@ -58,9 +58,11 @@ class CustomerMatcher:
 
     Abgleich ueber die indizierten Schluessel (app/utils/customer_keys.py) in dieser Reihenfolge:
     1. Kundennummer, 2. Telefonnummer, 3. dieselbe Vorgangsnummer aus einer frueheren Liste bei
-    gleichem Namen, 4. Name + Geburtsdatum, 5. Name + PLZ (nur ohne abweichendes
-    Geburtsdatum). Ein gleicher Name allein fuehrt nie zu einer Zuordnung, und abweichende
-    Kundennummern bzw. Geburtsdaten schliessen eine Zuordnung immer aus. So legt eine neue
+    gleichem Namen (ohne abweichende PLZ), 4. Name + Geburtsdatum, 5. Name + PLZ (nur ohne
+    abweichendes Geburtsdatum). Ein gleicher Name allein fuehrt nie zu einer Zuordnung, und
+    abweichende Kundennummern schliessen eine Zuordnung immer aus. Gleicher Name und gleiche PLZ
+    bei abweichendem Geburtsdatum ist unklar: es wird ein eigener Kunde angelegt und als
+    moegliche Dublette zur Pruefung angezeigt (app/services/customer_duplicates.py). So legt eine neue
     Wochenliste fuer bereits bekannte Kunden keinen weiteren Datensatz an.
     Geladen werden nur Kunden des eigenen Bueros (globaler Tenant-Filter)."""
 
@@ -119,10 +121,15 @@ class CustomerMatcher:
         same_name = [c for c in self._by_key["name_key"].get(keys["name_key"], []) if not number_conflict(c)]
         owners = self._contract_owners(contract_number)
         if owners:
+            # Gleicher Name und dieselbe Vorgangsnummer wie in einer frueheren Liste: derselbe
+            # Kunde - auch wenn das Geburtsdatum abweicht (typischer OCR-Lesefehler einer
+            # frueheren Liste). Eine abweichende PLZ schliesst die Zuordnung aber aus.
+            postal_code = normalize_postal_code(data.postal_code)
             matched = [
                 c
                 for c in same_name
-                if c.id in owners and not (data.date_of_birth and c.date_of_birth and c.date_of_birth != data.date_of_birth)
+                if c.id in owners
+                and not (postal_code and c.postal_code and normalize_postal_code(c.postal_code) != postal_code)
             ]
             if len(matched) == 1:
                 return matched[0]

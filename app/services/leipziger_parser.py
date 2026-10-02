@@ -33,6 +33,8 @@ PERSON = re.compile(r"^(?P<name>\S.*?)\s+(?P<plz>\d{5})\s+(?P<city>\S.*?)\s+GEB\
 LABELS = ("GEB.-DAT.:", "BEGINN:", "ABO:", "VM-NR.:")
 DATE = re.compile(r"^(\d{2})\.(\d{2})\.(\d{4})$")
 BROKER = re.compile(r"^\d{2}/\d{4}-[A-Z0-9]{1,2}$")
+# Berichtsdatum im Seitenkopf: "*WM312-L* ... GS 08   COBURG, 19.07.2026   SEITE 64".
+REPORT_DATE = re.compile(r"[A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.\- ]*,\s*(\d{2}\.\d{2}\.\d{4})\b")
 
 HEADER_LINES = (
     re.compile(r"^\s*\*WM\d+"),
@@ -142,6 +144,20 @@ def _parse_date(value: str | None) -> date | None:
         return date(year, month, day)
     except ValueError:
         return None
+
+
+def detect_report_date(page_texts: list[str]) -> date | None:
+    """Berichtsdatum der Liste aus der ersten Kopfzeile ("ORT, TT.MM.JJJJ") - Grundlage fuer
+    Berichtsjahr/Kalenderwoche und damit fuer die Wahl der Vorgaengerliste beim Vergleich.
+    Gesucht wird nur in den Kopfzeilen vor dem ersten Vorgang, nie in Vorgangszeilen."""
+    for text in page_texts[:2]:
+        for line in (text or "").splitlines():
+            if RECORD_START.match(line):
+                break
+            match = REPORT_DATE.search(line)
+            if match and (found := _parse_date(match.group(1))):
+                return found
+    return None
 
 
 def _labeled_value(text: str, label: str) -> str | None:

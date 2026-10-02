@@ -258,3 +258,39 @@ def test_worker_log_never_contains_the_transcript(app):
 
     logged = saferepr({"transcript": "Geheimer Inhalt der Sprachnachricht"}, transcribe_memo.resultrepr_maxsize)
     assert "Geheimer" not in logged
+
+
+def test_expired_session_is_reported_as_json_not_redirect(client, fake_transcription):
+    # memo.js meldet "Anmeldung abgelaufen" nur noch auf diese eindeutige Antwort hin.
+    resp = _upload(client)
+    assert resp.status_code == 401
+    assert resp.get_json()["code"] == "login_required"
+    assert resp.headers["X-Zentriq-App"] == "1"
+    # Seitenaufrufe werden weiterhin zur Anmeldung umgeleitet.
+    page = client.get("/sprachnachrichten")
+    assert page.status_code == 302 and "/auth/login" in page.headers["Location"]
+
+
+def test_csrf_failure_is_a_distinct_json_error(app, auth_client, fake_transcription):
+    app.config["WTF_CSRF_ENABLED"] = True
+    resp = _upload(auth_client)
+    assert resp.status_code == 400
+    assert resp.get_json()["code"] == "csrf"
+    assert fake_transcription == []
+
+
+def test_forbidden_json_request_gets_json_403(app, auth_client, monkeypatch):
+    monkeypatch.setattr("app.auth.permissions.is_endpoint_allowed", lambda *a: False)
+    resp = auth_client.get("/sprachnachrichten/transkription/x", headers=JSON)
+    assert resp.status_code == 403
+    assert resp.get_json()["code"] == "forbidden"
+
+
+def test_foreign_upload_response_is_logged_without_content(app, employee_client, caplog):
+    resp = employee_client.post(
+        "/sprachnachrichten/diagnose",
+        json={"status": 403, "redirected": True, "url": "https://www.zentriqai.de/blocked\nx", "server": "Proxy"},
+    )
+    assert resp.status_code == 204
+    line = next(r.getMessage() for r in caplog.records if "foreign_response" in r.getMessage())
+    assert "status=403" in line and "server=Proxy" in line and "\n" not in line

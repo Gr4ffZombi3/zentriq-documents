@@ -1,6 +1,6 @@
 import os
 
-from flask import Flask, g, render_template, request, send_from_directory
+from flask import Flask, flash, g, redirect, render_template, request, send_from_directory
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.celery_app import make_celery
@@ -166,9 +166,42 @@ def create_app(config_object=None):
     # Tenant-Kontext des Nutzers.
     app.before_request(enforce_role_access)
 
+    from flask_login.utils import login_url
+    from flask_wtf.csrf import CSRFError
+
+    def _wants_json() -> bool:
+        return request.accept_mimetypes.best == "application/json"
+
+    # JSON-Aufrufe (fetch) bekommen eindeutige Fehler mit "code" statt einer HTML-Seite oder
+    # einer Weiterleitung - nur so kann der Browser einen echten Sitzungsablauf von anderen
+    # Fehlern unterscheiden (siehe responseError in memo.js).
+    @login_manager.unauthorized_handler
+    def _unauthorized():
+        if _wants_json():
+            return {"error": "Die Anmeldung ist abgelaufen. Bitte die Seite neu laden und erneut anmelden.", "code": "login_required"}, 401
+        flash(login_manager.login_message, login_manager.login_message_category)
+        return redirect(login_url(login_manager.login_view, next_url=request.url))
+
+    @app.errorhandler(CSRFError)
+    def _csrf_error(error):
+        app.logger.warning("csrf.rejected endpoint=%s reason=%s", request.endpoint, error.description)
+        message = "Die Seite ist veraltet (Sicherheitstoken ungültig). Bitte die Seite neu laden und erneut versuchen."
+        if _wants_json():
+            return {"error": message, "code": "csrf"}, 400
+        return render_template("errors/error.html", title="Seite veraltet", message=message), 400
+
     @app.errorhandler(403)
     def _forbidden(error):
+        if _wants_json():
+            return {"error": "Für diese Aktion fehlt die Berechtigung.", "code": "forbidden"}, 403
         return render_template("errors/403.html"), 403
+
+    @app.after_request
+    def _mark_app_response(response):
+        # Kennzeichnet Antworten dieses Servers. Fehlt die Kennung, stammt eine Antwort von
+        # einer Stelle dazwischen (Proxy, Firewall, Virenscanner) - memo.js meldet das so.
+        response.headers["X-Zentriq-App"] = "1"
+        return response
 
     # Verstaendliche Fehlerseiten ohne technische Details (keine Stacktraces im Frontend).
     @app.errorhandler(404)

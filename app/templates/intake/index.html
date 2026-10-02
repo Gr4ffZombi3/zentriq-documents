@@ -9,6 +9,7 @@
      data-match-url="{{ url_for('dashboard.match') }}"
      data-assign-url="{{ url_for('dashboard.assign') }}"
      data-create-url="{{ url_for('dashboard.create_customer') }}"
+     data-diagnose-url="{{ url_for('dashboard.upload_diagnosis') }}"
      data-detect-url="{{ url_for('intake.check') }}"
      data-list-upload-url="{{ url_for('upload.upload_document') if current_user.is_office_admin else '' }}"
      data-list-url="{{ url_for('leipziger.index') }}"

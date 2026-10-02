@@ -113,6 +113,26 @@ def transcribe():
     return jsonify({"status": "pending", "status_url": url_for("dashboard.transcription_status", job=token)}), 202
 
 
+@dashboard_bp.post("/sprachnachrichten/diagnose")
+@login_required
+@office_member_required
+def upload_diagnosis():
+    """Protokolliert, welche Antwort der Browser auf den Upload erhalten hat, wenn sie nicht
+    von diesem Server stammt (z. B. Proxy, Firewall, Virenscanner). Nur Metadaten, kein Inhalt."""
+    data = request.get_json(silent=True) or {}
+
+    def clean(key, limit=120):
+        value = data.get(key)
+        return "".join(ch for ch in str("" if value is None else value)[:limit] if ch.isprintable())
+
+    current_app.logger.warning(
+        "memo.upload.foreign_response status=%s redirected=%s url=%s content_type=%s server=%s via=%s size=%s",
+        clean("status", 5), clean("redirected", 5), clean("url", 200), clean("content_type"),
+        clean("server"), clean("via"), clean("size", 12),
+    )
+    return "", 204
+
+
 def _job_serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(current_app.config["SECRET_KEY"], salt=JOB_SALT)
 

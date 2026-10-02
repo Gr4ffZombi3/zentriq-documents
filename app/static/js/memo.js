@@ -261,10 +261,38 @@
   var FAILED = "Die Transkription ist fehlgeschlagen. Bitte erneut versuchen.";
   var MAX_BYTES = 25 * 1024 * 1024;
 
+  // Antworten dieses Servers tragen X-Zentriq-App (auch Fehlerseiten der App). Ohne die Kennung
+  // hat eine Stelle dazwischen geantwortet (Proxy, Firewall, Virenscanner, Browser-Erweiterung).
+  function fromApp(resp) {
+    return resp.headers.get("X-Zentriq-App") === "1";
+  }
+
+  // Meldet nur Metadaten der fremden Antwort an den Server, damit sie im Log nachvollziehbar ist.
+  function reportForeign(resp) {
+    var target = "";
+    try { var u = new URL(resp.url); target = u.origin + u.pathname; } catch (e) { target = ""; }
+    fetch(root.dataset.diagnoseUrl, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", Accept: "application/json", "X-CSRFToken": csrf },
+      body: JSON.stringify({
+        status: resp.status, redirected: resp.redirected, url: target,
+        content_type: resp.headers.get("Content-Type") || "", server: resp.headers.get("Server") || "",
+        via: resp.headers.get("Via") || "", size: resp.headers.get("Content-Length") || "",
+      }),
+    }).catch(function () {});
+  }
+
   // Verstaendliche Meldung auch dann, wenn der Server (oder nginx) kein JSON liefert.
+  // "Anmeldung abgelaufen" nur, wenn der Server das ausdruecklich meldet (code login_required).
   function responseError(resp, body, fallback) {
     if (body && body.error) return body.error;
-    if (resp.redirected || resp.status === 401 || resp.status === 403) return "Die Anmeldung ist abgelaufen. Bitte die Seite neu laden und erneut anmelden.";
+    if (!fromApp(resp) && resp.status !== 502 && resp.status !== 503 && resp.status !== 504 && resp.status !== 413) {
+      reportForeign(resp);
+      return "Der Upload wurde nicht vom Zentriq-Server beantwortet (HTTP " + resp.status + (resp.redirected ? ", umgeleitet" : "") +
+        "). Vermutlich hat eine Firewall, ein Proxy, ein Virenscanner oder eine Browser-Erweiterung die Übertragung der Audiodatei blockiert. Bitte die IT bzw. den Virenscanner prüfen oder es in einem anderen Netz (z. B. Handy-Hotspot) versuchen.";
+    }
+    if (resp.redirected) return "Die Anmeldung ist abgelaufen. Bitte die Seite neu laden und erneut anmelden.";
     if (resp.status === 413) return "Die Datei ist zu groß (maximal 25 MB).";
     if (resp.status === 502 || resp.status === 503) return "Der Server ist gerade nicht erreichbar. Bitte in einer Minute erneut versuchen.";
     if (resp.status === 504) return "Der Server hat nicht rechtzeitig geantwortet. Bitte erneut versuchen.";

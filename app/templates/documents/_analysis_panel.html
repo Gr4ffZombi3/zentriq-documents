@@ -58,7 +58,7 @@
     <div class="inline-alert inline-alert-warning mt-6">
       <div class="flex flex-wrap items-center gap-3 text-sm text-warning-text">
         {{ icon('alert-triangle', class='w-4 h-4') }}
-        <span class="font-semibold">{{ document.error_message or 'Analyse nur teilweise abgeschlossen.' }}</span>
+        <span class="font-semibold">{{ public_error_message(document.error_message) or 'Analyse nur teilweise abgeschlossen.' }}</span>
       </div>
       <form method="post" action="{{ url_for('documents.retry', document_id=document.id) }}" class="mt-4">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -84,7 +84,7 @@
   <div class="inline-alert inline-alert-danger mt-6">
     <p class="flex items-center gap-2 text-sm font-semibold text-error">
       {{ icon('alert-circle', class='w-4 h-4') }}
-      {{ document.error_message or 'Unbekannter Fehler.' }}
+      {{ public_error_message(document.error_message) or 'Unbekannter Fehler.' }}
     </p>
     <form method="post" action="{{ url_for('documents.retry', document_id=document.id) }}" class="mt-4">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

@@ -3,15 +3,34 @@ from datetime import datetime, timezone
 
 from celery import shared_task
 from flask import current_app
+from sqlalchemy import or_, select
 
 from app.extensions import db
-from app.models import AnalysisRun, CustomerTimelineEvent, DocStatus, Document, LeipzigerEntry
+from app.models import (
+    AnalysisRun,
+    CustomerTimelineEvent,
+    DocStatus,
+    Document,
+    LeipzigerEntry,
+    ListComparison,
+    ListComparisonEntry,
+    Recommendation,
+    Task,
+)
 from app.models.enums import AnalysisRunStatus, ComparisonKind, DocType
 from app.services.analysis.layout import detect_layout
 from app.services.analysis.list_scope_detection import detect_list_scope
 from app.services.analysis.report import build_analysis_report
 from app.services.analysis.tables import detect_tables
-from app.services.document_progress import STEP_KEYS, make_progress_snapshot, merge_progress_into_extra_data
+from app.services.document_progress import (
+    EXTRACTION_FAILED_MESSAGE,
+    OCR_FAILED_MESSAGE,
+    SAVE_FAILED_MESSAGE,
+    STEP_KEYS,
+    UNEXPECTED_FAILURE_MESSAGE,
+    make_progress_snapshot,
+    merge_progress_into_extra_data,
+)
 from app.services.documents import apply_extraction, apply_leipziger_liste_extraction
 from app.services.leipziger_entries import compare_with_previous, rebuild_entries
 from app.services.leipziger_parser import is_wm312_list, parse_pages, to_extraction
@@ -24,7 +43,14 @@ from app.tenancy import bypass_tenant_scope, use_tenant_id
 
 # Feste Bezeichnungen der Abbruchstellen (Praefix von document.error_message) fuer das
 # technische Fehlerprotokoll.
-_FAILURE_STAGES = frozenset({"OCR fehlgeschlagen", "KI-Analyse fehlgeschlagen", "Speichern der Analyse fehlgeschlagen"})
+_FAILURE_STAGES = frozenset(
+    {
+        "OCR fehlgeschlagen",
+        "KI-Analyse fehlgeschlagen",
+        "Speichern der Analyse fehlgeschlagen",
+        "Auswertung fehlgeschlagen",
+    }
+)
 
 
 @shared_task(bind=True)
@@ -43,7 +69,85 @@ def process_document(self, document_id: int):
         return
 
     with use_tenant_id(document.tenant_id):
-        _run_pipeline(document)
+        try:
+            _run_pipeline(document)
+        except Exception:
+            # Letzte Sicherung fuer Fehler ausserhalb der stufenweisen Behandlung (z.B. beim
+            # Zuruecksetzen einer frueheren Auswertung): nichts Halbfertiges festschreiben und
+            # das Dokument nicht im Status "in Verarbeitung" haengen lassen.
+            db.session.rollback()
+            current_app.logger.exception(
+                "document.analysis.unexpected_failure tenant_id=%s document_id=%s",
+                document.tenant_id,
+                document.id,
+            )
+            _mark_unexpected_failure(document.id)
+
+
+def _mark_unexpected_failure(document_id: int) -> None:
+    try:
+        document = db.session.get(Document, document_id)
+        if document is None:
+            return
+        document.status = DocStatus.FAILED
+        document.error_message = UNEXPECTED_FAILURE_MESSAGE
+        document.extra_data = merge_progress_into_extra_data(
+            document.extra_data,
+            make_progress_snapshot(
+                completed=["uploaded"],
+                failed="done",
+                percent=100,
+                headline="Auswertung fehlgeschlagen",
+                detail=UNEXPECTED_FAILURE_MESSAGE,
+                state="failed",
+            ),
+        )
+        for run in AnalysisRun.query.filter_by(document_id=document_id, status=AnalysisRunStatus.RUNNING).all():
+            run.status = AnalysisRunStatus.FAILED
+            run.finished_at = datetime.now(timezone.utc)
+            run.error_message = UNEXPECTED_FAILURE_MESSAGE
+        db.session.commit()
+        record_system_error(
+            "import",
+            "Auswertung fehlgeschlagen",
+            location="Leipziger Liste" if document.doc_type == DocType.LEIPZIGER_LISTE else "Dokumentanalyse",
+            tenant_id=document.tenant_id,
+        )
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("document.analysis.failure_not_recorded document_id=%s", document_id)
+
+
+def _reset_previous_results(document: Document) -> None:
+    """Entfernt alle Ergebnisse einer frueheren Auswertung dieses Dokuments, damit ein erneuter
+    Durchlauf (Retry, Neu einlesen) keine Kunden-Zuordnungen, Vergleiche oder Aenderungs-
+    eintraege doppelt anlegt. Kunden selbst bleiben erhalten und werden beim erneuten Einlesen
+    ueber den CustomerMatcher wiedererkannt."""
+    task_ids = select(Task.id).where(Task.document_id == document.id)
+    recommendation_ids = select(Recommendation.id).where(Recommendation.document_id == document.id)
+    # Verlaufseintraege "Aufgabe erstellt" tragen keine document_id, verweisen aber per FK auf
+    # die Aufgaben dieses Dokuments - ohne sie zu entfernen scheitert das Loeschen der Aufgaben.
+    CustomerTimelineEvent.query.filter(
+        or_(CustomerTimelineEvent.document_id == document.id, CustomerTimelineEvent.task_id.in_(task_ids))
+    ).delete(synchronize_session=False)
+    # Aufgaben anderer Herkunft, die auf eine Empfehlung dieses Dokuments verweisen, behalten
+    # (nur der Verweis wird geloest) - sonst blockiert der FK das Loeschen der Empfehlungen.
+    Task.query.filter(
+        Task.recommendation_id.in_(recommendation_ids),
+        or_(Task.document_id.is_(None), Task.document_id != document.id),
+    ).update({Task.recommendation_id: None}, synchronize_session=False)
+    comparison_ids = select(ListComparison.id).where(ListComparison.document_id == document.id)
+    ListComparisonEntry.query.filter(ListComparisonEntry.list_comparison_id.in_(comparison_ids)).delete(
+        synchronize_session=False
+    )
+    ListComparison.query.filter(ListComparison.document_id == document.id).delete(synchronize_session=False)
+    LeipzigerEntry.query.filter_by(document_id=document.id).delete(synchronize_session=False)
+    # Aufgaben vor den Empfehlungen entfernen (FK tasks.recommendation_id).
+    document.tasks = []
+    db.session.flush()
+    document.recommendations = []
+    document.document_customers = []
+    document.customer = None
 
 
 def _compute_overall_confidence(document: Document) -> float | None:
@@ -119,13 +223,8 @@ def _run_pipeline(document: Document) -> None:
             total_ms,
         )
 
-    # Verlaufseintraege einer frueheren Auswertung dieses Dokuments werden neu erzeugt.
-    CustomerTimelineEvent.query.filter_by(document_id=document.id).delete(synchronize_session=False)
-    LeipzigerEntry.query.filter_by(document_id=document.id).delete(synchronize_session=False)
-    document.recommendations = []
-    document.document_customers = []
-    document.tasks = []
-    document.customer = None
+    # Ergebnisse einer frueheren Auswertung dieses Dokuments werden neu erzeugt.
+    _reset_previous_results(document)
     document.raw_json = None
     document.extra_data = None
     document.processed_at = None
@@ -189,10 +288,10 @@ def _run_pipeline(document: Document) -> None:
     stage_start = time.monotonic()
     try:
         raw_text, engine_used, confidence, page_texts = extract_text(document.file_path)
-    except Exception as exc:
+    except Exception:
         db.session.rollback()
         document.status = DocStatus.FAILED
-        document.error_message = f"OCR fehlgeschlagen: {exc}"
+        document.error_message = OCR_FAILED_MESSAGE
         _set_progress(
             completed=["uploaded"],
             failed="ocr",
@@ -293,12 +392,12 @@ def _run_pipeline(document: Document) -> None:
             leipziger_extraction = (
                 extract_leipziger_liste_rows(page_texts) if extraction.doc_type == DocType.LEIPZIGER_LISTE else None
             )
-    except Exception as exc:
+    except Exception:
         stage_durations["ai"] = round((time.monotonic() - stage_start) * 1000, 1)
         stage_durations["extraction_and_rules"] = stage_durations["ai"]
         db.session.rollback()
         document.status = DocStatus.FAILED
-        document.error_message = f"KI-Analyse fehlgeschlagen: {exc}"
+        document.error_message = EXTRACTION_FAILED_MESSAGE
         _set_progress(
             completed=["uploaded", "ocr", "parser"],
             failed="ai",
@@ -361,7 +460,7 @@ def _run_pipeline(document: Document) -> None:
                     )
         else:
             apply_extraction(document, extraction)
-    except Exception as exc:
+    except Exception:
         stage_durations["post_processing"] = round((time.monotonic() - stage_start) * 1000, 1)
         stage_durations["extraction_and_rules"] = round(
             stage_durations.get("ai", 0.0) + stage_durations["post_processing"],
@@ -369,7 +468,7 @@ def _run_pipeline(document: Document) -> None:
         )
         db.session.rollback()
         document.status = DocStatus.FAILED
-        document.error_message = f"Speichern der Analyse fehlgeschlagen: {exc}"
+        document.error_message = SAVE_FAILED_MESSAGE
         _set_progress(
             completed=["uploaded", "ocr", "parser", "ai"],
             failed="grouping",

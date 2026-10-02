@@ -63,11 +63,20 @@ def verify_reset_token(token: str | None) -> User | None:
     return user
 
 
+def missing_reset_settings() -> list[str]:
+    """Namen der Einstellungen, ohne die keine Reset-Mail versendet werden kann (nur Namen,
+    nie Werte - fuer Server-Log und Fehlerprotokoll)."""
+    config = current_app.config
+    missing = [name for name in ("SMTP_HOST", "MAIL_FROM", "PUBLIC_URL") if not config.get(name)]
+    public_url = config.get("PUBLIC_URL") or ""
+    if public_url and not public_url.startswith(("https://", "http://")):
+        missing.append("PUBLIC_URL (mit https:// angeben)")
+    return missing
+
+
 def is_password_reset_available() -> bool:
     """Der Reset wird nur angeboten, wenn Reset-Mails tatsaechlich versendet werden koennen."""
-    from app.services.mailer import is_mail_configured
-
-    return bool(is_mail_configured() and current_app.config.get("PUBLIC_URL"))
+    return not missing_reset_settings()
 
 
 def build_reset_url(token: str) -> str:

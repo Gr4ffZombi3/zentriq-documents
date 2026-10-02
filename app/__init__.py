@@ -5,7 +5,11 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.celery_app import make_celery
 from app.extensions import csrf, db, login_manager, migrate
-from app.services.document_progress import build_document_progress, is_document_active_status
+from app.services.document_progress import (
+    build_document_progress,
+    is_document_active_status,
+    public_error_message,
+)
 from app.tenancy import (
     begin_request_tenant_scope,
     bypass_tenant_scope,
@@ -96,6 +100,7 @@ def create_app(config_object=None):
 
     app.jinja_env.globals["build_document_progress"] = build_document_progress
     app.jinja_env.globals["is_document_active_status"] = is_document_active_status
+    app.jinja_env.globals["public_error_message"] = public_error_message
 
     from app.navigation import build_navigation
     from app.template_filters import register_template_filters

@@ -5,6 +5,41 @@ from typing import Any
 
 from app.models.enums import DocStatus
 
+# Fuer Nutzer sichtbare Fehlertexte der Analyse-Pipeline (document.error_message,
+# Fortschrittsanzeige). Bewusst ohne den Text der Exception: Datenbankfehler enthalten SQL und
+# Parameter mit Kundendaten. Die technischen Details stehen nur im Server-Log.
+OCR_FAILED_MESSAGE = (
+    "OCR fehlgeschlagen: Der Text der PDF konnte nicht gelesen werden. Bitte die Datei prüfen "
+    "und erneut hochladen."
+)
+EXTRACTION_FAILED_MESSAGE = (
+    "KI-Analyse fehlgeschlagen: Die Inhalte der Liste konnten nicht ausgewertet werden. Bitte "
+    "später erneut versuchen."
+)
+SAVE_FAILED_MESSAGE = (
+    "Speichern der Analyse fehlgeschlagen: Es wurden keine Teilergebnisse übernommen. Bitte "
+    "erneut versuchen oder den Support informieren."
+)
+UNEXPECTED_FAILURE_MESSAGE = (
+    "Auswertung fehlgeschlagen: Ein interner Fehler ist aufgetreten, es wurden keine "
+    "Teilergebnisse übernommen. Bitte erneut versuchen oder den Support informieren."
+)
+_FAILURE_MESSAGE_BY_STAGE = {
+    message.split(":", 1)[0]: message
+    for message in (OCR_FAILED_MESSAGE, EXTRACTION_FAILED_MESSAGE, SAVE_FAILED_MESSAGE, UNEXPECTED_FAILURE_MESSAGE)
+}
+
+
+def public_error_message(message: str | None) -> str | None:
+    """Ersetzt aeltere, roh gespeicherte Fehlertexte ("<Stufe>: <Exception-Text>") durch die
+    feste Meldung der jeweiligen Stufe. Andere Texte (z.B. "Teilweise ausgewertet - ...")
+    bleiben unveraendert."""
+    if not message:
+        return message
+    stage = message.split(":", 1)[0]
+    return _FAILURE_MESSAGE_BY_STAGE.get(stage, message)
+
+
 STEP_DEFINITIONS = [
     {
         "key": "uploaded",
@@ -129,7 +164,7 @@ def _normalize_snapshot(snapshot: dict[str, Any], document) -> dict[str, Any]:
         "state": snapshot.get("state", "done" if getattr(document.status, "value", document.status) == "done" else "running"),
         "percent": max(0, min(int(snapshot.get("percent", 0)), 100)),
         "headline": snapshot.get("headline") or _fallback_progress(document)["headline"],
-        "detail": snapshot.get("detail", ""),
+        "detail": public_error_message(snapshot.get("detail", "")),
         "updated_at": snapshot.get("updated_at"),
         "stage_durations": dict(snapshot.get("stage_durations") or {}),
         "steps": normalized_steps,
@@ -178,7 +213,7 @@ def _fallback_progress(document) -> dict[str, Any]:
             failed="ai",
             percent=100,
             headline="Analyse fehlgeschlagen",
-            detail=error_message or "Die Verarbeitung konnte nicht abgeschlossen werden.",
+            detail=public_error_message(error_message) or "Die Verarbeitung konnte nicht abgeschlossen werden.",
             state="failed",
         )
     return make_progress_snapshot(

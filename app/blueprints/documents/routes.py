@@ -11,6 +11,7 @@ from app.services.document_progress import (
     is_document_active_status,
     make_progress_snapshot,
     merge_progress_into_extra_data,
+    public_error_message,
 )
 from app.services.storage import resolve_document_path
 from app.tasks.document_tasks import process_document
@@ -162,7 +163,7 @@ def analysis_runs(document_id):
                 "duration_ms": run.duration_ms,
                 "stage_durations": run.stage_durations,
                 "overall_confidence": run.overall_confidence,
-                "error_message": run.error_message,
+                "error_message": public_error_message(run.error_message),
                 "summary": run.summary,
             }
             for run in runs

@@ -139,6 +139,22 @@ Die frühere Mailbox-Automation (Placetel-Postfach, KI-Klassifizierung, HUK-Rüc
 entfernt; die zugehörigen `PLACETEL_*`-, `HUK_*`- und `MAILBOX_*`-Einträge (außer `MAILBOX_OPENAI_BASE_URL`) in der `.env` werden
 nicht mehr gelesen. Die Tabellen `mailbox_*` bleiben mit ihren Altdaten unverändert bestehen.
 
+## E-Mail-Versand (Passwort vergessen)
+
+Reset-Mails werden nur versendet, wenn in `.env` `SMTP_HOST`, `MAIL_FROM` und `PUBLIC_URL`
+(z. B. `https://www.zentriqai.de`) gesetzt sind; fehlt etwas, protokolliert Zentriq die Namen
+der fehlenden Einstellungen im Server-Log und im Fehlerprotokoll (Quelle `mail`), die Antwort im
+Formular bleibt neutral. Reset-Links sind `PASSWORD_RESET_TOKEN_MAX_AGE_SECONDS` (Standard
+30 Minuten) gueltig, nur einmal verwendbar und erfordern eingerichtete 2FA.
+
+Nach Aenderungen an `.env` beide Dienste neu starten (`zentriq-api`, `zentriq-worker` - die
+Mail versendet der Worker) und pruefen:
+
+```bash
+set -a && . ./.env && set +a
+.venv/bin/flask send-test-mail --to <eigene-adresse>
+```
+
 ## Lokale Entwicklung vor jedem Commit
 
 ```powershell

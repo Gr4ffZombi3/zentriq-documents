@@ -28,8 +28,10 @@ from app.services.password_reset import (
     is_ip_reset_rate_limited,
     is_password_reset_available,
     is_reset_rate_limited,
+    missing_reset_settings,
     verify_reset_token,
 )
+from app.services.system_errors import record_system_error
 from app.services.user_admin import find_user_by_vermittlernummer
 from app.tasks.auth_tasks import send_password_reset_email
 from app.tenancy import bypass_tenant_scope, set_current_tenant_id, use_tenant_id
@@ -229,7 +231,13 @@ def forgot_password():
         if not is_password_reset_available():
             # Einstieg bleibt sichtbar; ohne SMTP_HOST/MAIL_FROM/PUBLIC_URL wird nichts versendet.
             # Antwort identisch zum Normalfall, damit sich keine Konten ermitteln lassen.
-            logger.warning("Passwort-Reset angefordert, aber Mailversand ist nicht konfiguriert - nichts versendet.")
+            missing = ", ".join(missing_reset_settings())
+            logger.error(
+                "Passwort-Reset angefordert, aber Mailversand ist nicht konfiguriert - nichts versendet. "
+                "Fehlende Einstellungen: %s",
+                missing,
+            )
+            record_system_error("mail", "Reset-Mail nicht konfiguriert", location=f"Passwort vergessen ({missing})")
             flash(RESET_REQUESTED_MESSAGE, "success")
             return redirect(url_for("auth.login"))
         email = form.email.data.lower().strip()
@@ -246,6 +254,7 @@ def forgot_password():
         elif not user.two_factor_enabled:
             # Reset per E-Mail nur mit eingerichteter 2FA - die Identitaet muss zusaetzlich
             # bestaetigt werden koennen. Kein Versand, aber identische Antwort.
+            logger.warning("Passwort-Reset fuer User %s nicht versendet: keine 2FA eingerichtet.", user.id)
             with use_tenant_id(user.tenant_id):
                 log_audit_event(
                     AuditEventType.PASSWORD_RESET_REQUESTED,

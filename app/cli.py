@@ -321,8 +321,39 @@ def grant_super_admin_command(email: str | None, vermittlernummer: str | None, e
     click.echo(f"Konto ID {user_id} ist jetzt SUPER_ADMIN.")
 
 
+@click.command("send-test-mail")
+@click.option("--to", "recipient", required=True, help="Empfaengeradresse der Testmail.")
+def send_test_mail_command(recipient: str):
+    """Prueft den SMTP-Versand (wie fuer Passwort-Reset-Mails) mit einer Testmail. Gibt nur
+    Namen fehlender Einstellungen und Fehlerklassen aus, nie Zugangsdaten."""
+    from app.services.mailer import send_email
+    from app.services.password_reset import missing_reset_settings
+
+    try:
+        recipient = validate_email(recipient, check_deliverability=False).normalized
+    except EmailNotValidError as exc:
+        raise click.ClickException(f"Ungueltige E-Mail-Adresse: {exc}") from None
+    missing = missing_reset_settings()
+    if missing:
+        raise click.ClickException("Mailversand nicht konfiguriert, es fehlt: " + ", ".join(missing))
+    public_url = current_app.config["PUBLIC_URL"]
+    try:
+        send_email(
+            recipient,
+            "Testmail – Zentriq",
+            "Diese Testmail bestaetigt, dass Zentriq E-Mails versenden kann.\n\n"
+            f"Links in E-Mails (z. B. Passwort-Reset) verweisen auf: {public_url}\n",
+        )
+    except Exception as exc:
+        smtp_code = getattr(exc, "smtp_code", None)
+        detail = f", SMTP {smtp_code}" if smtp_code else ""
+        raise click.ClickException(f"Versand fehlgeschlagen ({type(exc).__name__}{detail}).") from None
+    click.echo(f"Testmail an {recipient} uebergeben. Reset-Links verweisen auf {public_url}.")
+
+
 def register_cli(app) -> None:
     app.cli.add_command(create_user_command)
     app.cli.add_command(set_admin_command)
     app.cli.add_command(align_tenant_command)
     app.cli.add_command(grant_super_admin_command)
+    app.cli.add_command(send_test_mail_command)

@@ -258,17 +258,65 @@
       });
   }
 
+  var FAILED = "Die Transkription ist fehlgeschlagen. Bitte erneut versuchen.";
+  var MAX_BYTES = 25 * 1024 * 1024;
+
+  // Verstaendliche Meldung auch dann, wenn der Server (oder nginx) kein JSON liefert.
+  function responseError(resp, body, fallback) {
+    if (body && body.error) return body.error;
+    if (resp.redirected || resp.status === 401 || resp.status === 403) return "Die Anmeldung ist abgelaufen. Bitte die Seite neu laden und erneut anmelden.";
+    if (resp.status === 413) return "Die Datei ist zu groß (maximal 25 MB).";
+    if (resp.status === 502 || resp.status === 503) return "Der Server ist gerade nicht erreichbar. Bitte in einer Minute erneut versuchen.";
+    if (resp.status === 504) return "Der Server hat nicht rechtzeitig geantwortet. Bitte erneut versuchen.";
+    return fallback + " (Fehler " + resp.status + ")";
+  }
+
+  function readJson(resp, fallback) {
+    return resp.json().catch(function () { return null; }).then(function (body) {
+      if (!body || resp.redirected || (!resp.ok && resp.status !== 202)) throw new Error(responseError(resp, body, fallback));
+      body._status = resp.status;
+      return body;
+    });
+  }
+
+  function networkError(err) {
+    // fetch() selbst schlaegt nur ohne Verbindung fehl (TypeError).
+    if (err && err.name === "TypeError") return new Error("Keine Verbindung zum Server. Bitte die Internetverbindung prüfen und erneut versuchen.");
+    return err;
+  }
+
+  function wait(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+
+  function minutes(seconds) {
+    seconds = Math.max(0, Math.round(seconds || 0));
+    return Math.floor(seconds / 60) + ":" + ("0" + (seconds % 60)).slice(-2);
+  }
+
+  // Die Transkription laeuft im Hintergrund; der Stand wird abgefragt, bis das Ergebnis da ist.
+  function poll(url, filename, retries) {
+    return wait(1500)
+      .then(function () { return fetch(url, { headers: { Accept: "application/json" }, credentials: "same-origin" }); })
+      .then(function (resp) { return readJson(resp, FAILED); }, function (err) {
+        if (retries < 3) return { _status: 202, _retry: true };
+        throw networkError(err);
+      })
+      .then(function (body) {
+        if (body._status !== 202) return body;
+        if (body.waited != null) label.textContent = "„" + filename + "“ wird transkribiert … " + minutes(body.waited);
+        return poll(url, filename, body._retry ? retries + 1 : 0);
+      });
+  }
+
   function transcribe(file) {
     if (!file || busy) return;
     showError("");
+    if (file.size > MAX_BYTES) { showError("Die Datei ist zu groß (maximal 25 MB)."); return; }
     setBusy(true, file.name);
     var data = new FormData(form);
     data.set("file", file, file.name);
     fetch(form.action, { method: "POST", body: data, headers: { Accept: "application/json" }, credentials: "same-origin" })
-      .then(function (resp) {
-        return resp.json().catch(function () { return { error: "Die Transkription ist fehlgeschlagen. Bitte erneut versuchen." }; })
-          .then(function (body) { if (!resp.ok) throw new Error(body.error || "Die Transkription ist fehlgeschlagen."); return body; });
-      })
+      .then(function (resp) { return readJson(resp, FAILED); }, function (err) { throw networkError(err); })
+      .then(function (body) { return body._status === 202 ? poll(body.status_url, file.name, 0) : body; })
       .then(function (body) {
         var uploaded = new Date(body.uploaded_at);
         current = { transcript: body.transcript, token: body.token || "" };
@@ -282,8 +330,154 @@
         // Erst nach der Anzeige des Transkripts.
         matchCustomer();
       })
-      .catch(function (err) { showError(err.message); })
+      .catch(function (err) { showError((err && err.message) || FAILED); })
       .finally(function () { setBusy(false); input.value = ""; });
+  }
+
+  // --- Mikrofonaufnahme: Aufnahme starten -> Stoppen -> (anhoeren) -> Transkribieren ---------
+  var recorderBox = root.querySelector("[data-memo-recorder]");
+  if (recorderBox) setupRecorder(recorderBox);
+
+  function setupRecorder(box) {
+    var startBtn = box.querySelector("[data-rec-start]");
+    var stopBtn = box.querySelector("[data-rec-stop]");
+    var sendBtn = box.querySelector("[data-rec-send]");
+    var discardBtn = box.querySelector("[data-rec-discard]");
+    var stateText = box.querySelector("[data-rec-state]");
+    var timeText = box.querySelector("[data-rec-time]");
+    var preview = box.querySelector("[data-rec-preview]");
+    var infoText = box.querySelector("[data-rec-info]");
+    var maxSeconds = (parseInt(box.dataset.maxMinutes, 10) || 20) * 60;
+    // Reihenfolge: Opus/WebM (Chrome, Edge, Firefox), Ogg/Opus, MP4/AAC (Safari, iPhone).
+    var TYPES = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/aac"];
+    var recorder = null, stream = null, chunks = [], blob = null, timer = null, startedAt = 0, recordedSeconds = 0;
+
+    function unsupported() {
+      if (!window.isSecureContext) return "Mikrofonaufnahmen sind nur über eine sichere Verbindung (HTTPS) möglich.";
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+        return "Dieser Browser unterstützt keine Mikrofonaufnahme. Bitte eine aktuelle Version von Edge, Chrome, Firefox oder Safari verwenden.";
+      }
+      return "";
+    }
+
+    function setState(name, text) {
+      box.dataset.state = name;
+      stateText.textContent = text;
+      startBtn.hidden = name === "recording";
+      stopBtn.hidden = name !== "recording";
+      sendBtn.hidden = name !== "recorded";
+      discardBtn.hidden = name !== "recorded";
+      startBtn.textContent = name === "recorded" ? "Neu aufnehmen" : "Aufnahme starten";
+    }
+
+    function micError(err) {
+      var name = err && err.name;
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        return "Der Zugriff auf das Mikrofon wurde nicht erlaubt. Bitte in der Adressleiste (Schloss-Symbol) das Mikrofon für diese Seite erlauben und erneut versuchen.";
+      }
+      if (name === "NotFoundError" || name === "OverconstrainedError") return "Es wurde kein Mikrofon gefunden. Bitte ein Mikrofon anschließen.";
+      if (name === "NotReadableError" || name === "AbortError") return "Das Mikrofon ist nicht verfügbar – wird es gerade von einer anderen Anwendung (z. B. Teams) verwendet?";
+      return "Die Aufnahme konnte nicht gestartet werden.";
+    }
+
+    function extensionFor(type) {
+      if (type.indexOf("webm") !== -1) return "webm";
+      if (type.indexOf("ogg") !== -1) return "ogg";
+      if (type.indexOf("aac") !== -1) return "aac";
+      return "m4a";
+    }
+
+    function formatLabel(type) {
+      var base = (type || "").split(";")[0].replace("audio/", "").toUpperCase();
+      if (type.indexOf("opus") !== -1) return base + " (Opus)";
+      if (type.indexOf("mp4") !== -1) return base + " (AAC)";
+      return base || "unbekannt";
+    }
+
+    function stopStream() {
+      if (stream) stream.getTracks().forEach(function (track) { track.stop(); });
+      stream = null;
+    }
+
+    function clearPreview() {
+      if (preview.src) URL.revokeObjectURL(preview.src);
+      preview.removeAttribute("src");
+      preview.hidden = true;
+      infoText.textContent = "";
+      blob = null;
+    }
+
+    function tick() {
+      recordedSeconds = (Date.now() - startedAt) / 1000;
+      timeText.textContent = minutes(recordedSeconds);
+      if (recordedSeconds >= maxSeconds) stop();
+    }
+
+    function start() {
+      if (busy) return;
+      showError("");
+      clearPreview();
+      navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+        .then(function (media) {
+          stream = media;
+          var type = TYPES.filter(function (t) { return MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t); })[0];
+          recorder = type ? new MediaRecorder(stream, { mimeType: type }) : new MediaRecorder(stream);
+          chunks = [];
+          recorder.addEventListener("dataavailable", function (event) { if (event.data && event.data.size) chunks.push(event.data); });
+          recorder.addEventListener("stop", finish);
+          recorder.start(1000);
+          startedAt = Date.now();
+          timeText.textContent = "0:00";
+          timer = setInterval(tick, 250);
+          setState("recording", "Aufnahme läuft …");
+        })
+        .catch(function (err) { stopStream(); setState("idle", "Bereit"); showError(micError(err)); });
+    }
+
+    function stop() {
+      if (recorder && recorder.state !== "inactive") recorder.stop();
+      clearInterval(timer);
+    }
+
+    function finish() {
+      stopStream();
+      var type = recorder.mimeType || (chunks[0] && chunks[0].type) || "audio/webm";
+      blob = new Blob(chunks, { type: type });
+      chunks = [];
+      if (!blob.size) { setState("idle", "Bereit"); showError("Die Aufnahme ist leer. Bitte erneut versuchen."); return; }
+      preview.src = URL.createObjectURL(blob);
+      preview.hidden = false;
+      infoText.textContent = minutes(recordedSeconds) + " Min. · " + formatLabel(type) + " · " + Math.max(1, Math.round(blob.size / 1024)) + " KB";
+      setState("recorded", "Aufnahme beendet – jetzt anhören oder transkribieren.");
+    }
+
+    function send() {
+      if (!blob || busy) return;
+      var stamp = new Date();
+      var pad = function (n) { return ("0" + n).slice(-2); };
+      var name = "Aufnahme " + stamp.getFullYear() + "-" + pad(stamp.getMonth() + 1) + "-" + pad(stamp.getDate()) + " " +
+        pad(stamp.getHours()) + "-" + pad(stamp.getMinutes()) + "." + extensionFor(blob.type);
+      var file = new File([blob], name, { type: blob.type });
+      transcribe(file);
+    }
+
+    var reason = unsupported();
+    if (reason) {
+      startBtn.disabled = true;
+      setState("idle", reason);
+      return;
+    }
+    // Hinweis, falls das Mikrofon fuer diese Seite bereits blockiert ist.
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: "microphone" }).then(function (status) {
+        if (status.state === "denied") setState("idle", "Das Mikrofon ist für diese Seite blockiert – bitte in den Website-Einstellungen des Browsers erlauben.");
+      }).catch(function () { /* nicht in jedem Browser verfuegbar */ });
+    }
+    setState("idle", "Bereit");
+    startBtn.addEventListener("click", start);
+    stopBtn.addEventListener("click", stop);
+    sendBtn.addEventListener("click", send);
+    discardBtn.addEventListener("click", function () { clearPreview(); timeText.textContent = "0:00"; setState("idle", "Bereit"); });
   }
 
   // --- Universal-Upload (nur mit data-detect-url): Dateityp erkennen, anzeigen, bestaetigen ---
@@ -351,7 +545,8 @@
       return;
     }
     if (ext !== "pdf") {
-      showError("Diese Datei kann Zentriq nicht verarbeiten.");
+      showError((ext ? "Das Dateiformat ." + ext + " wird nicht unterstützt." : "Die Datei hat keine erkennbare Dateiendung.") +
+        " Möglich sind PDF (Leipziger Liste) und Sprachnachrichten: " + audio.join(", ").toUpperCase() + ".");
       input.value = "";
       return;
     }
@@ -373,7 +568,25 @@
       .finally(function () { busy = false; label.textContent = "Datei hier ablegen"; input.value = ""; });
   }
 
+  // Audiodateien ohne bzw. mit unbekannter Endung (z. B. aus Messenger- oder Handy-Exporten)
+  // anhand des Dateityps erkennen und mit passender Endung weiterreichen.
+  var AUDIO_TYPES = {
+    "audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/mp4": "m4a", "audio/x-m4a": "m4a", "audio/m4a": "m4a",
+    "audio/aac": "aac", "audio/ogg": "ogg", "audio/opus": "opus", "audio/wav": "wav", "audio/x-wav": "wav",
+    "audio/wave": "wav", "audio/webm": "webm", "audio/flac": "flac", "audio/x-flac": "flac",
+  };
+
+  function normalizeAudio(file) {
+    if (!file) return file;
+    var audio = (root.dataset.audioExtensions || "").split(",");
+    var ext = extensionOf(file.name);
+    var mapped = AUDIO_TYPES[(file.type || "").split(";")[0].toLowerCase()];
+    if (audio.indexOf(ext) !== -1 || !mapped || audio.indexOf(mapped) === -1) return file;
+    return new File([file], (file.name || "Sprachnachricht") + "." + mapped, { type: file.type });
+  }
+
   function upload(file) {
+    file = normalizeAudio(file);
     if (detectUrl) intake(file);
     else transcribe(file);
   }

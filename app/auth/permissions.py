@@ -49,6 +49,7 @@ EMPLOYEE_ALLOWED_ENDPOINTS = frozenset(
         "leipziger.index",
         "dashboard.index",
         "dashboard.transcribe",
+        "dashboard.transcription_status",
         "dashboard.match",
         # Memo einem Kunden zuordnen bzw. daraus anlegen (nur eigenes Buero, ohne Kundenakte).
         "dashboard.assign",

@@ -91,7 +91,7 @@ def test_detected_pdf_is_imported_with_existing_leipziger_import(app, db, office
 
 
 def test_detected_audio_is_transcribed_with_existing_memo(app, office, monkeypatch):
-    monkeypatch.setattr("app.blueprints.dashboard.routes.transcribe_audio", lambda filename, content: "Hallo, hier ist Max.")
+    monkeypatch.setattr("app.services.memo.transcribe_file", lambda path: "Hallo, hier ist Max.")
     client = _login(app, "dennis@example.org")
     assert _check(client, "memo.m4a", b"\x00" * 128)["kind"] == "memo"
     resp = client.post("/sprachnachrichten/transkribieren", data={"file": (io.BytesIO(b"\x00" * 128), "memo.m4a")},
@@ -132,7 +132,7 @@ def test_memo_page_shows_multiple_candidates_compactly(app, db, office, monkeypa
             Customer(tenant_id=office.id, name="Erika Mustermann", phone="0171 1234567", customer_number="K-2"),
         ])
         db.session.commit()
-    monkeypatch.setattr("app.blueprints.dashboard.routes.transcribe_audio", lambda f, c: "Rückruf an 0171 1234567 bitte.")
+    monkeypatch.setattr("app.services.memo.transcribe_file", lambda path: "Rückruf an 0171 1234567 bitte.")
     client = _login(app, "admin@example.org")
     html = client.post("/sprachnachrichten/transkribieren", data={"file": (io.BytesIO(b"\x00" * 64), "a.m4a")},
                        content_type="multipart/form-data").get_data(as_text=True)

@@ -213,7 +213,7 @@ def test_memo_summary_only_sends_on_explicit_request(app, world, enabled, monkey
     """Die Transkription loest nie eine KI-Anfrage aus; die Kurzfassung nur auf Klick."""
     import io
 
-    monkeypatch.setattr("app.blueprints.dashboard.routes.transcribe_audio", lambda filename, content: USER_TEXT)
+    monkeypatch.setattr("app.services.memo.transcribe_file", lambda path: USER_TEXT)
     client = login(app, "dennis@example.com")
     resp = client.post(
         "/sprachnachrichten/transkribieren",

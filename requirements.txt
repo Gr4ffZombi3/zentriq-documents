@@ -10,6 +10,10 @@ celery[redis]>=5.4
 redis>=5.0
 openai>=1.50
 anthropic>=1.11
+# Lokale Memo-Transkription. PyAV < 16: faster-whisper 1.2 nutzt av.open(metadata_errors=...),
+# das in PyAV 16+ entfernt wurde (Decodierung brach sonst ab).
+faster-whisper>=1.2,<2
+av>=14,<16
 phonenumbers>=8.13
 playwright>=1.48
 pydantic>=2.9

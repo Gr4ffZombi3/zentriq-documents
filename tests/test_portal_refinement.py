@@ -127,7 +127,7 @@ def test_customer_number_has_priority_over_phone(app, db, world):
 
 def test_memo_page_shows_only_existing_customer_data(app, db, world, monkeypatch):
     _customer(db, world.tenant_a, "Max Mustermann", phone="0171 1234567")
-    monkeypatch.setattr("app.blueprints.dashboard.routes.transcribe_audio", lambda filename, content: TRANSCRIPT)
+    monkeypatch.setattr("app.services.memo.transcribe_file", lambda path: TRANSCRIPT)
     html = login(app, "admin-a@example.com").post(
         "/sprachnachrichten/transkribieren",
         data={"file": (io.BytesIO(b"ID3audio"), "anruf.mp3")},
@@ -140,7 +140,7 @@ def test_memo_page_shows_only_existing_customer_data(app, db, world, monkeypatch
 def test_name_only_match_is_marked_as_possible_on_page(app, db, world, monkeypatch):
     _customer(db, world.tenant_a, "Max Mustermann")
     monkeypatch.setattr(
-        "app.blueprints.dashboard.routes.transcribe_audio", lambda filename, content: "Hier ist Max Mustermann."
+        "app.services.memo.transcribe_file", lambda path: "Hier ist Max Mustermann."
     )
     html = login(app, "dennis@example.com").post(
         "/sprachnachrichten/transkribieren",
@@ -199,7 +199,7 @@ def test_match_rejects_empty_payload(app, world):
 
 def test_transcription_does_not_wait_for_customer_match(app, world, monkeypatch):
     """Das Transkript wird ohne Kundenabgleich ausgeliefert; der Abgleich ist eine eigene Anfrage."""
-    monkeypatch.setattr("app.blueprints.dashboard.routes.transcribe_audio", lambda filename, content: TRANSCRIPT)
+    monkeypatch.setattr("app.services.memo.transcribe_file", lambda path: TRANSCRIPT)
 
     def must_not_run(*args, **kwargs):
         raise AssertionError("Kundenabgleich darf die Transkription nicht blockieren")
@@ -213,11 +213,11 @@ def test_transcription_does_not_wait_for_customer_match(app, world, monkeypatch)
     )
     assert resp.status_code == 200
     # "token": berechtigt nur zum Zuordnen genau dieses Transkripts (app/services/memo_customers.py).
-    assert set(resp.get_json()) == {"transcript", "filename", "uploaded_at", "token"}
+    assert set(resp.get_json()) == {"status", "transcript", "filename", "uploaded_at", "token"}
 
 
 def test_memo_transcription_is_logged_without_content(app, world, monkeypatch):
-    monkeypatch.setattr("app.blueprints.dashboard.routes.transcribe_audio", lambda filename, content: TRANSCRIPT)
+    monkeypatch.setattr("app.services.memo.transcribe_file", lambda path: TRANSCRIPT)
     login(app, "dennis@example.com").post(
         "/sprachnachrichten/transkribieren",
         data={"file": (io.BytesIO(b"ID3audio"), "anruf.mp3")},
@@ -241,7 +241,7 @@ def test_memo_page_offers_drag_and_drop_and_file_selection(app, world):
 
 def test_memo_without_javascript_renders_match_inline(app, db, world, monkeypatch):
     _customer(db, world.tenant_a, "Max Mustermann", phone="0171 1234567", number="123456789")
-    monkeypatch.setattr("app.blueprints.dashboard.routes.transcribe_audio", lambda filename, content: TRANSCRIPT)
+    monkeypatch.setattr("app.services.memo.transcribe_file", lambda path: TRANSCRIPT)
     html = login(app, "admin-a@example.com").post(
         "/sprachnachrichten/transkribieren",
         data={"file": (io.BytesIO(b"ID3audio"), "anruf.mp3")},

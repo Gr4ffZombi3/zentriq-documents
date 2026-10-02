@@ -77,7 +77,7 @@ def _memos(tenant):
 
 
 def _transcribe(client, monkeypatch, transcript):
-    monkeypatch.setattr("app.blueprints.dashboard.routes.transcribe_audio", lambda filename, content: transcript)
+    monkeypatch.setattr("app.services.memo.transcribe_file", lambda path: transcript)
     resp = client.post(
         "/sprachnachrichten/transkribieren",
         data={"file": (io.BytesIO(b"ID3audio"), "anruf.mp3")},

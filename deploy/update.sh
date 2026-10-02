@@ -21,6 +21,11 @@ source .env
 set +a
 flask db upgrade
 
+# Lokales Whisper-Modell fuer die Memo-Transkription (idempotent; nur beim ersten Mal ein Download).
+if ! flask whisper-download; then
+    echo "    WARNUNG: Whisper-Modell konnte nicht geladen werden - wird bei der ersten Transkription nachgeladen." >&2
+fi
+
 echo "==> [4/6] Statische Assets..."
 CSS_FILE="app/static/css/app.css"
 if [ ! -f "$CSS_FILE" ]; then

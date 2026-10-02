@@ -10,6 +10,7 @@ from config import TestingConfig
 def app(tmp_path):
     application = create_app(TestingConfig)
     application.config["UPLOAD_FOLDER"] = str(tmp_path / "uploads")
+    application.config["TRANSCRIPTION_TMP_DIR"] = str(tmp_path / "memo-tmp")
     application.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{tmp_path / 'test.db'}"
     with application.app_context():
         _db.create_all()

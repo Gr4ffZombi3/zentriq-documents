@@ -21,10 +21,18 @@ class BaseConfig:
     OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL")
     OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
     OPENAI_VISION_MODEL = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o")
-    OPENAI_TRANSCRIPTION_MODEL = os.environ.get("OPENAI_TRANSCRIPTION_MODEL", "gpt-4o-mini-transcribe")
-    # Optional eigener Endpoint NUR fuer die Memo-Transkription. OPENAI_BASE_URL gilt dagegen
-    # global (auch fuer die Leipziger-Liste-Extraktion).
-    MAILBOX_OPENAI_BASE_URL = os.environ.get("MAILBOX_OPENAI_BASE_URL")
+
+    # Memo-Transkription: lokal mit faster-whisper (app/services/memo.py), ohne externe API.
+    # "small" (int8): ca. 6x schneller als Echtzeit auf 2 vCPU, ~650 MB RAM nur waehrend der
+    # Transkription (eigener Prozess). Alternativen: "base" (schneller, ungenauer), "medium".
+    WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")
+    WHISPER_MODEL_DIR = os.environ.get("WHISPER_MODEL_DIR", str(BASE_DIR / "storage" / "models" / "whisper"))
+    WHISPER_COMPUTE_TYPE = os.environ.get("WHISPER_COMPUTE_TYPE", "int8")
+    WHISPER_CPU_THREADS = int(os.environ.get("WHISPER_CPU_THREADS", str(os.cpu_count() or 2)))
+    WHISPER_BEAM_SIZE = int(os.environ.get("WHISPER_BEAM_SIZE", "1"))
+    TRANSCRIPTION_TMP_DIR = os.environ.get("TRANSCRIPTION_TMP_DIR", str(BASE_DIR / "storage" / "tmp" / "memo"))
+    TRANSCRIPTION_MAX_MINUTES = int(os.environ.get("TRANSCRIPTION_MAX_MINUTES", "20"))
+    TRANSCRIPTION_TIMEOUT_SECONDS = int(os.environ.get("TRANSCRIPTION_TIMEOUT_SECONDS", "900"))
 
     # KI-Assistent (app/services/assistant.py): Anthropic API, ausschliesslich serverseitig.
     # Ohne ANTHROPIC_API_KEY ist der Assistent ausgeblendet; ASSISTANT_ENABLED=false schaltet

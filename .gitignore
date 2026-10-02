@@ -40,3 +40,6 @@ celerybeat-schedule
 
 # Datenbank-Backups und archivierte Uploads (enthalten Produktionsdaten)
 storage/backups/
+# Lokales Whisper-Modell und temporaere Memo-Audiodateien
+storage/models/
+storage/tmp/

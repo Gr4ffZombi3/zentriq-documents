@@ -1,6 +1,10 @@
 """Memo: Sprachnachricht hochladen -> Transkript anzeigen. Keine Speicherung, keine Folgeaktion."""
 
 import io
+import json
+import struct
+import wave
+from pathlib import Path
 
 import pytest
 
@@ -11,14 +15,21 @@ JSON = {"Accept": "application/json"}
 
 @pytest.fixture()
 def fake_transcription(monkeypatch):
+    """Ersetzt nur die eigentliche Whisper-Transkription; Upload, temporaere Datei, Celery-Task
+    (eager) und Antwort laufen echt. Aufgezeichnet wird der Inhalt der temporaeren Datei."""
     calls = []
 
-    def fake(filename, content):
-        calls.append((filename, content))
+    def fake(path):
+        with open(path, "rb") as handle:
+            calls.append(handle.read())
         return "Guten Tag, hier ist Herr Müller. Ich wollte mich bezüglich meines Vertrages melden."
 
-    monkeypatch.setattr("app.blueprints.dashboard.routes.transcribe_audio", fake)
+    monkeypatch.setattr("app.services.memo.transcribe_file", fake)
     return calls
+
+
+def _tmp_audio_files(app):
+    return list(Path(app.config["TRANSCRIPTION_TMP_DIR"]).glob("*.audio"))
 
 
 def _upload(client, filename="nachricht.mp3", content=b"ID3audio", headers=JSON):
@@ -47,7 +58,8 @@ def test_upload_returns_transcript_as_json(auth_client, fake_transcription):
     assert body["transcript"].startswith("Guten Tag, hier ist Herr Müller.")
     assert body["filename"] == "nachricht.mp3"
     assert body["uploaded_at"]
-    assert fake_transcription == [("nachricht.mp3", b"ID3audio")]
+    assert body["token"]
+    assert fake_transcription == [b"ID3audio"]
 
 
 def test_upload_without_javascript_renders_transcript_page(auth_client, fake_transcription):
@@ -61,9 +73,12 @@ def test_upload_without_javascript_renders_transcript_page(auth_client, fake_tra
     assert "Neue Sprachnachricht" in html
 
 
-def test_upload_stores_nothing_and_triggers_nothing(auth_client, fake_transcription):
+def test_upload_stores_nothing_and_triggers_nothing(app, auth_client, fake_transcription):
     _upload(auth_client)
+    _upload(auth_client, headers={})
     assert MailboxCase.query.count() == 0
+    # Die temporaere Audiodatei ist nach der Transkription wieder geloescht.
+    assert _tmp_audio_files(app) == []
 
 
 @pytest.mark.parametrize(
@@ -81,36 +96,143 @@ def test_invalid_upload_is_rejected(auth_client, fake_transcription, filename, c
     assert fake_transcription == []
 
 
-def test_transcription_failure_returns_readable_error(auth_client, monkeypatch):
-    def broken(filename, content):
-        raise RuntimeError("API down")
+def test_transcription_failure_returns_readable_error(app, auth_client, monkeypatch):
+    def broken(path):
+        raise RuntimeError("Whisper kaputt")
 
-    monkeypatch.setattr("app.blueprints.dashboard.routes.transcribe_audio", broken)
+    monkeypatch.setattr("app.services.memo.transcribe_file", broken)
     resp = _upload(auth_client)
     assert resp.status_code == 502
     assert "fehlgeschlagen" in resp.get_json()["error"]
-    assert "API down" not in resp.get_data(as_text=True)
+    assert "Whisper kaputt" not in resp.get_data(as_text=True)
+    assert _tmp_audio_files(app) == []
 
 
-def test_transcribe_audio_passes_file_to_transcription_api(app, monkeypatch):
+def test_unreadable_audio_returns_specific_message(app, auth_client, monkeypatch):
+    from app.services.memo import MemoError
+
+    def unreadable(path):
+        raise MemoError("Die Audiodatei konnte nicht gelesen werden.")
+
+    monkeypatch.setattr("app.services.memo.transcribe_file", unreadable)
+    resp = _upload(auth_client)
+    assert resp.status_code == 422
+    assert resp.get_json()["error"] == "Die Audiodatei konnte nicht gelesen werden."
+
+
+def test_microphone_formats_are_accepted(auth_client, fake_transcription):
+    # Chrome/Edge/Firefox nehmen WebM/Ogg (Opus) auf, Safari MP4/AAC.
+    for name in ("Aufnahme 2026-10-02 08-15.webm", "Aufnahme.ogg", "Aufnahme.m4a", "Aufnahme.aac", "Aufnahme.opus"):
+        assert _upload(auth_client, filename=name).status_code == 200, name
+
+
+class FakeResult:
+    def __init__(self, task_id, value=None, ready=False, failed=False):
+        self.id = task_id
+        self.value = value
+        self._ready = ready
+        self._failed = failed
+        self.forgotten = False
+
+    def ready(self):
+        return self._ready
+
+    def failed(self):
+        return self._failed
+
+    def get(self, timeout=None, propagate=True):
+        return self.value
+
+    def forget(self):
+        self.forgotten = True
+
+
+def test_background_transcription_is_polled_by_the_starting_user_only(app, auth_client, employee_client, monkeypatch):
+    """Ohne Eager-Modus: 202 + signierte Status-URL; das Ergebnis bekommt nur, wer es gestartet hat."""
+    from app.tasks.memo_tasks import transcribe_memo
+
+    started = []
+    monkeypatch.setattr(transcribe_memo, "delay", lambda path: started.append(path) or FakeResult("job-1"))
+    resp = _upload(auth_client)
+    assert resp.status_code == 202
+    status_url = resp.get_json()["status_url"]
+    assert status_url.startswith("/sprachnachrichten/transkription/")
+    assert len(started) == 1 and Path(started[0]).read_bytes() == b"ID3audio"
+
+    results = {"job-1": FakeResult("job-1")}
+    monkeypatch.setattr(app.extensions["celery"], "AsyncResult", lambda task_id: results[task_id])
+    pending = auth_client.get(status_url, headers=JSON)
+    assert pending.status_code == 202 and pending.get_json()["status"] == "pending"
+
+    results["job-1"] = FakeResult("job-1", {"transcript": "Hallo aus dem Worker."}, ready=True)
+    assert employee_client.get(status_url, headers=JSON).status_code == 404
+    assert auth_client.get(status_url + "x", headers=JSON).status_code == 404
+    done = auth_client.get(status_url, headers=JSON)
+    assert done.status_code == 200
+    body = done.get_json()
+    assert body["transcript"] == "Hallo aus dem Worker." and body["filename"] == "nachricht.mp3" and body["token"]
+    assert results["job-1"].forgotten  # Ergebnis wird aus dem Result-Backend entfernt
+
+    results["job-1"] = FakeResult("job-1", {"error": "In der Aufnahme wurde keine Sprache erkannt."}, ready=True)
+    failed = auth_client.get(status_url, headers=JSON)
+    assert failed.status_code == 422 and "keine Sprache" in failed.get_json()["error"]
+
+
+def test_unavailable_queue_gives_readable_message(app, auth_client, monkeypatch):
+    from app.tasks.memo_tasks import transcribe_memo
+
+    def down(path):
+        raise ConnectionError("redis down")
+
+    monkeypatch.setattr(transcribe_memo, "delay", down)
+    resp = _upload(auth_client)
+    assert resp.status_code == 422
+    assert "nicht erreichbar" in resp.get_json()["error"]
+    assert _tmp_audio_files(app) == []
+
+
+def _wav(path: Path, seconds: float) -> None:
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(16000)
+        handle.writeframes(struct.pack("<h", 0) * int(16000 * seconds))
+
+
+def test_local_runner_reports_unreadable_and_empty_audio(app, tmp_path):
+    """Echter Runner-Prozess (ohne Modell): Decoder-Fehler und leere Aufnahme werden erkannt."""
     from app.services import memo
 
-    captured = {}
+    garbage = tmp_path / "kaputt.mp3"
+    garbage.write_bytes(b"keine audiodaten" * 100)
+    with pytest.raises(memo.MemoError, match="nicht gelesen"):
+        memo.transcribe_file(str(garbage))
 
-    class FakeTranscriptions:
-        def create(self, **kwargs):
-            captured.update(kwargs)
-            return type("Resp", (), {"text": "  Hallo Welt  "})()
+    short = tmp_path / "kurz.wav"
+    _wav(short, 0.1)
+    with pytest.raises(memo.MemoError, match="keine Sprache"):
+        memo.transcribe_file(str(short))
 
-    class FakeClient:
-        audio = type("Audio", (), {"transcriptions": FakeTranscriptions()})()
 
-    monkeypatch.setattr(memo, "get_openai_client", lambda **kwargs: FakeClient())
-    with app.app_context():
-        assert memo.transcribe_audio("a.wav", b"RIFF") == "Hallo Welt"
-    assert captured["language"] == "de"
-    assert captured["file"].name == "a.wav"
-    assert captured["file"].read() == b"RIFF"
+def test_runner_decodes_to_16khz_mono(tmp_path):
+    from app.services.transcription_runner import decode_audio
+
+    path = tmp_path / "zwei.wav"
+    _wav(path, 2.0)
+    audio = decode_audio(str(path), max_seconds=60)
+    assert audio.dtype.name == "float32" and abs(audio.shape[0] - 32000) < 400
+    with pytest.raises(OverflowError):
+        decode_audio(str(path), max_seconds=1)
+
+
+def test_runner_job_uses_local_model_settings(app):
+    from app.services import memo
+
+    with app.test_request_context():
+        job = memo._runner_job("/tmp/x.audio")
+    assert job["model"] == app.config["WHISPER_MODEL"] == "small"
+    assert job["compute_type"] == "int8" and job["language"] == "de"
+    assert json.dumps(job)  # wird als JSON an den Runner uebergeben
 
 
 def test_employee_can_use_memo(employee_client, fake_transcription):
@@ -127,3 +249,12 @@ def test_anonymous_cannot_use_memo(client, fake_transcription):
     assert client.get("/sprachnachrichten").status_code in (302, 401)
     assert _upload(client).status_code in (302, 401)
     assert fake_transcription == []
+
+
+def test_worker_log_never_contains_the_transcript(app):
+    from celery.utils.saferepr import saferepr
+
+    from app.tasks.memo_tasks import transcribe_memo
+
+    logged = saferepr({"transcript": "Geheimer Inhalt der Sprachnachricht"}, transcribe_memo.resultrepr_maxsize)
+    assert "Geheimer" not in logged

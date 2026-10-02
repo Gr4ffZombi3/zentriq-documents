@@ -30,7 +30,7 @@
           <span class="memo-drop-title" data-memo-label>Datei hier ablegen</span>
           <span class="memo-drop-or">oder</span>
           <span class="btn btn-primary">Datei auswählen</span>
-          <span class="memo-drop-hint">{{ 'PDF (Leipziger Liste) · ' if current_user.is_office_admin else '' }}MP3, M4A, WAV, OGG, WEBM, MP4, FLAC · max. 25 MB</span>
+          <span class="memo-drop-hint">{{ 'PDF (Leipziger Liste) · ' if current_user.is_office_admin else '' }}MP3, M4A, WAV, OGG, OPUS, WEBM, MP4, AAC, FLAC · max. 25 MB</span>
           <input type="file" name="file" accept="{{ '.pdf,application/pdf,' if current_user.is_office_admin else '' }}audio/*,.{{ audio_extensions | join(',.') }}" class="sr-only" data-memo-input>
         </label>
       </form>

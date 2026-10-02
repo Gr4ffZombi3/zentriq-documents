@@ -381,6 +381,19 @@ def recompare_lists_command(tenant_slug: str):
             )
 
 
+@click.command("whisper-download")
+def whisper_download_command():
+    """Laedt das lokale Whisper-Modell (WHISPER_MODEL) vorab herunter, damit die erste
+    Memo-Transkription nicht auf den Download (~250-500 MB) warten muss. Idempotent."""
+    from faster_whisper.utils import download_model
+
+    model = current_app.config["WHISPER_MODEL"]
+    target = current_app.config["WHISPER_MODEL_DIR"]
+    Path(target).mkdir(parents=True, exist_ok=True)
+    path = download_model(model, cache_dir=target)
+    click.echo(f"Whisper-Modell '{model}' bereit: {path}")
+
+
 def register_cli(app) -> None:
     app.cli.add_command(create_user_command)
     app.cli.add_command(set_admin_command)
@@ -388,3 +401,4 @@ def register_cli(app) -> None:
     app.cli.add_command(grant_super_admin_command)
     app.cli.add_command(send_test_mail_command)
     app.cli.add_command(recompare_lists_command)
+    app.cli.add_command(whisper_download_command)

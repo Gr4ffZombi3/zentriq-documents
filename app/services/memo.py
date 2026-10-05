@@ -24,6 +24,24 @@ ALLOWED_AUDIO_EXTENSIONS = frozenset(
     {"mp3", "mp4", "mpeg", "mpga", "m4a", "aac", "wav", "webm", "ogg", "oga", "opus", "flac"}
 )
 MAX_AUDIO_BYTES = 25 * 1024 * 1024
+# Vom Browser angegebene Typen ausser audio/*: Container, die Browser als Video melden
+# (.mp4/.mpeg/.webm/.ogg), sowie "unbekannt" (z. B. .opus unter Windows). Alles andere (PDF, Text,
+# Bilder, Programme) wird abgelehnt - massgeblich bleibt die Pruefung des Dateiinhalts.
+ALLOWED_NON_AUDIO_MIME_TYPES = frozenset(
+    {"video/mp4", "video/mpeg", "video/webm", "video/ogg", "application/ogg", "application/octet-stream", ""}
+)
+# Dateiendung -> erlaubte Container (erkannt am Dateianfang, siehe _audio_container).
+CONTAINERS_BY_EXTENSION = {
+    "mp3": {"mpeg"}, "mpeg": {"mpeg"}, "mpga": {"mpeg"},
+    "aac": {"mpeg", "aac", "mp4"},
+    "m4a": {"mp4"}, "mp4": {"mp4"},
+    "wav": {"wav"},
+    "ogg": {"ogg"}, "oga": {"ogg"}, "opus": {"ogg"},
+    "webm": {"webm"},
+    "flac": {"flac"},
+}
+# Erste Box einer MP4/M4A-Datei (ISO-BMFF): normalerweise "ftyp", bei aelteren Dateien auch andere.
+_MP4_BOXES = (b"ftyp", b"moov", b"mdat", b"free", b"wide", b"skip")
 RUNNER = Path(__file__).with_name("transcription_runner.py")
 # Temporaere Audiodateien, die (z. B. nach einem Worker-Absturz) liegen geblieben sind.
 STALE_TMP_SECONDS = 3600
@@ -40,7 +58,30 @@ class MemoError(ValueError):
     """Fehler mit einer fuer den Nutzer verstaendlichen Meldung."""
 
 
-def validate_audio(filename: str | None, content: bytes) -> str:
+def _audio_container(content: bytes) -> str | None:
+    """Container anhand der Signatur am Dateianfang - unabhaengig von Name und angegebenem Typ."""
+    head = content[:16]
+    if head.startswith(b"ID3"):
+        return "mpeg"
+    if len(head) >= 2 and head[0] == 0xFF and head[1] & 0xE0 == 0xE0:
+        return "mpeg"  # MPEG-Audio-Frame (MP3) bzw. ADTS (AAC)
+    if head.startswith(b"ADIF"):
+        return "aac"
+    if head.startswith(b"RIFF") and head[8:12] == b"WAVE":
+        return "wav"
+    if head.startswith(b"OggS"):
+        return "ogg"
+    if head.startswith(b"\x1a\x45\xdf\xa3"):
+        return "webm"
+    if head.startswith(b"fLaC"):
+        return "flac"
+    if head[4:8] in _MP4_BOXES:
+        return "mp4"
+    return None
+
+
+def validate_audio(filename: str | None, content: bytes, mimetype: str | None = None) -> str:
+    """Prueft Dateiendung, den vom Browser angegebenen Typ und den tatsaechlichen Inhalt."""
     filename = os.path.basename(filename or "").strip()
     if not filename:
         raise MemoError("Bitte eine Audiodatei auswählen.")
@@ -51,6 +92,14 @@ def validate_audio(filename: str | None, content: bytes) -> str:
         raise MemoError("Die Datei ist leer.")
     if len(content) > MAX_AUDIO_BYTES:
         raise MemoError("Die Datei ist zu groß (maximal 25 MB).")
+    mimetype = (mimetype or "").split(";")[0].strip().lower()
+    if not (mimetype.startswith("audio/") or mimetype in ALLOWED_NON_AUDIO_MIME_TYPES):
+        raise MemoError("Die Datei ist keine Audiodatei.")
+    if _audio_container(content) not in CONTAINERS_BY_EXTENSION[extension]:
+        raise MemoError(
+            "Der Inhalt passt nicht zur Dateiendung oder ist keine unterstützte Audiodatei. "
+            "Bitte die Originaldatei bzw. einen Export als MP3 oder M4A verwenden."
+        )
     return filename
 
 

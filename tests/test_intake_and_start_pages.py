@@ -28,6 +28,9 @@ def office(app, db, tenant):
         db.session.commit()
     return tenant
 
+# Gueltiger M4A-Dateianfang (ISO-BMFF "ftyp"), damit die Inhaltspruefung des Memo-Uploads greift.
+M4A = b"\x00\x00\x00\x1cftypM4A " + b"\x00" * 100
+
 
 def _plain_pdf(text="Rechnung Nr. 4711"):
     doc = fitz.open()
@@ -94,7 +97,7 @@ def test_detected_audio_is_transcribed_with_existing_memo(app, office, monkeypat
     monkeypatch.setattr("app.services.memo.transcribe_file", lambda path: "Hallo, hier ist Max.")
     client = _login(app, "dennis@example.org")
     assert _check(client, "memo.m4a", b"\x00" * 128)["kind"] == "memo"
-    resp = client.post("/sprachnachrichten/transkribieren", data={"file": (io.BytesIO(b"\x00" * 128), "memo.m4a")},
+    resp = client.post("/sprachnachrichten/transkribieren", data={"file": (io.BytesIO(M4A), "memo.m4a")},
                        content_type="multipart/form-data", headers={"Accept": "application/json"})
     assert resp.get_json()["transcript"] == "Hallo, hier ist Max."
 
@@ -134,7 +137,7 @@ def test_memo_page_shows_multiple_candidates_compactly(app, db, office, monkeypa
         db.session.commit()
     monkeypatch.setattr("app.services.memo.transcribe_file", lambda path: "Rückruf an 0171 1234567 bitte.")
     client = _login(app, "admin@example.org")
-    html = client.post("/sprachnachrichten/transkribieren", data={"file": (io.BytesIO(b"\x00" * 64), "a.m4a")},
+    html = client.post("/sprachnachrichten/transkribieren", data={"file": (io.BytesIO(M4A), "a.m4a")},
                        content_type="multipart/form-data").get_data(as_text=True)
     assert "Mehrere mögliche Kunden gefunden" in html
     assert "Max Mustermann" in html and "Erika Mustermann" in html

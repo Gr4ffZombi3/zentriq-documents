@@ -30,7 +30,7 @@
         </label>
         <noscript><div class="form-actions"><button type="submit" class="btn btn-primary">Transkribieren</button></div></noscript>
       </form>
-      <p class="form-error memo-error" data-memo-error role="alert" {% if not error %}hidden{% endif %}>{{ error or '' }}</p>
+      <div class="form-error memo-error" data-memo-error role="alert" {% if not error %}hidden{% endif %}>{{ error or '' }}</div>
     </div>
   </section>
 

@@ -44,6 +44,36 @@
     errorBox.hidden = !message;
   }
 
+  function fileSize(bytes) {
+    if (bytes < 1048576) return Math.max(1, Math.round(bytes / 1024)) + " KB";
+    return (bytes / 1048576).toFixed(1).replace(".", ",") + " MB";
+  }
+
+  // Upload unterwegs abgefangen (Firmen-Proxy, Firewall, Virenscanner): kurze Meldung, die
+  // technischen Angaben fuer die IT erst auf Klick.
+  function showBlocked(info, file) {
+    errorBox.textContent = "";
+    var head = el("p");
+    head.appendChild(el("strong", null, "Upload durch das Netzwerk blockiert."));
+    errorBox.appendChild(head);
+    errorBox.appendChild(el("p", "form-hint", "Die Datei konnte Zentriq nicht erreichen. Bitte Netzwerkfreigabe prüfen oder ein anderes zugelassenes Netzwerk verwenden."));
+    var details = el("details", "memo-error-details");
+    details.appendChild(el("summary", null, "Technische Details"));
+    var list = el("ul", "form-hint");
+    [
+      "HTTP-Status: " + info.status + (info.redirected ? " (umgeleitet)" : ""),
+      "Antwort von: " + (info.via || "unbekannt (kein Via-Header)"),
+      info.title ? "Seite: „" + info.title + "“" : "",
+      "Ziel: POST " + info.url + " (multipart/form-data)",
+      file ? "Datei: " + file.name + " · " + fileSize(file.size) + " · " + (file.type || "Typ unbekannt") : "",
+      "Zeitpunkt: " + info.time.toLocaleString("de-DE") + " (UTC " + info.time.toISOString().slice(0, 19).replace("T", " ") + ")",
+      "Die Antwort stammt nicht vom Zentriq-Server; die Anfrage hat ihn nicht erreicht.",
+    ].forEach(function (line) { if (line) list.appendChild(el("li", null, line)); });
+    details.appendChild(list);
+    errorBox.appendChild(details);
+    errorBox.hidden = false;
+  }
+
   function setBusy(state, filename) {
     busy = state;
     drop.setAttribute("aria-busy", state ? "true" : "false");
@@ -294,18 +324,25 @@
     }).catch(function () {});
   }
 
+  // Antwort ohne Kennung dieses Servers (nginx-Fehlerseiten 413/502-504 ausgenommen).
+  function isForeign(resp) {
+    return !fromApp(resp) && [413, 502, 503, 504].indexOf(resp.status) === -1;
+  }
+
+  function blockedError(resp, text) {
+    var title = pageTitle(text);
+    var target = "";
+    try { var u = new URL(resp.url); target = u.origin + u.pathname; } catch (e) { target = resp.url || ""; }
+    reportForeign(resp, title);
+    var err = new Error("Upload durch das Netzwerk blockiert.");
+    err.blocked = { status: resp.status, redirected: resp.redirected, via: resp.headers.get("Via") || "", title: title, url: target, time: new Date() };
+    return err;
+  }
+
   // Verstaendliche Meldung auch dann, wenn der Server (oder nginx) kein JSON liefert.
   // "Anmeldung abgelaufen" nur, wenn der Server das ausdruecklich meldet (code login_required).
-  function responseError(resp, body, fallback, text) {
+  function responseError(resp, body, fallback) {
     if (body && body.error) return body.error;
-    if (!fromApp(resp) && resp.status !== 502 && resp.status !== 503 && resp.status !== 504 && resp.status !== 413) {
-      var title = pageTitle(text);
-      var via = resp.headers.get("Via") || "";
-      reportForeign(resp, title);
-      return "Der Upload wurde nicht vom Zentriq-Server beantwortet, sondern unterwegs abgefangen (HTTP " + resp.status +
-        (resp.redirected ? ", umgeleitet" : "") + (via ? ", über " + via : "") + ")" + (title ? ": „" + title + "“" : "") +
-        ". Ihre Anmeldung bei Zentriq ist davon nicht betroffen. Vermutlich blockiert eine Firewall, ein Web-Proxy oder ein Virenscanner das Hochladen von Audiodateien – bitte die IT bitten, Uploads an www.zentriqai.de freizugeben, oder es in einem anderen Netz (z. B. Handy-Hotspot) versuchen.";
-    }
     if (resp.redirected) return "Die Anmeldung ist abgelaufen. Bitte die Seite neu laden und erneut anmelden.";
     if (resp.status === 413) return "Die Datei ist zu groß (maximal 25 MB).";
     if (resp.status === 502 || resp.status === 503) return "Der Server ist gerade nicht erreichbar. Bitte in einer Minute erneut versuchen.";
@@ -317,7 +354,10 @@
     return resp.text().catch(function () { return ""; }).then(function (text) {
       var body = null;
       try { body = JSON.parse(text); } catch (e) { body = null; }
-      if (!body || resp.redirected || (!resp.ok && resp.status !== 202)) throw new Error(responseError(resp, body, fallback, text));
+      if (!body || resp.redirected || (!resp.ok && resp.status !== 202)) {
+        if (!(body && body.error) && isForeign(resp)) throw blockedError(resp, text);
+        throw new Error(responseError(resp, body, fallback));
+      }
       body._status = resp.status;
       return body;
     });
@@ -374,7 +414,10 @@
         // Erst nach der Anzeige des Transkripts.
         matchCustomer();
       })
-      .catch(function (err) { showError((err && err.message) || FAILED); })
+      .catch(function (err) {
+        if (err && err.blocked) showBlocked(err.blocked, file);
+        else showError((err && err.message) || FAILED);
+      })
       .finally(function () { setBusy(false); input.value = ""; });
   }
 

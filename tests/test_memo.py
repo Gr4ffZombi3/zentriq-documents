@@ -32,10 +32,11 @@ def _tmp_audio_files(app):
     return list(Path(app.config["TRANSCRIPTION_TMP_DIR"]).glob("*.audio"))
 
 
-def _upload(client, filename="nachricht.mp3", content=b"ID3audio", headers=JSON):
+def _upload(client, filename="nachricht.mp3", content=b"ID3audio", headers=JSON, mimetype=None):
+    file = (io.BytesIO(content), filename) if mimetype is None else (io.BytesIO(content), filename, mimetype)
     return client.post(
         "/sprachnachrichten/transkribieren",
-        data={"file": (io.BytesIO(content), filename)},
+        data={"file": file},
         content_type="multipart/form-data",
         headers=headers,
     )
@@ -63,7 +64,7 @@ def test_upload_returns_transcript_as_json(auth_client, fake_transcription):
 
 
 def test_upload_without_javascript_renders_transcript_page(auth_client, fake_transcription):
-    resp = _upload(auth_client, filename="anruf.m4a", headers={})
+    resp = _upload(auth_client, filename="anruf.m4a", content=b"\x00\x00\x00\x1cftypM4A " + b"\x00" * 64, headers={})
     html = resp.get_data(as_text=True)
     assert resp.status_code == 200
     assert "Transkript" in html
@@ -87,6 +88,11 @@ def test_upload_stores_nothing_and_triggers_nothing(app, auth_client, fake_trans
         ("liste.pdf", b"%PDF", "Dateiformat"),
         ("leer.mp3", b"", "leer"),
         ("", b"abc", "Audiodatei auswählen"),
+        # Umbenannte Dateien: Inhalt passt nicht zur Endung.
+        ("rechnung.mp3", b"%PDF-1.7 ...", "passt nicht zur Dateiendung"),
+        ("programm.m4a", b"MZ\x90\x00" + b"\x00" * 20, "passt nicht zur Dateiendung"),
+        ("aufnahme.m4a", b"ID3audio", "passt nicht zur Dateiendung"),
+        ("aufnahme.wav", b"OggS\x00\x02" + b"\x00" * 10, "passt nicht zur Dateiendung"),
     ],
 )
 def test_invalid_upload_is_rejected(auth_client, fake_transcription, filename, content, message):
@@ -120,10 +126,52 @@ def test_unreadable_audio_returns_specific_message(app, auth_client, monkeypatch
     assert resp.get_json()["error"] == "Die Audiodatei konnte nicht gelesen werden."
 
 
+# Dateianfang je Format, wie ihn echte Dateien bzw. Mikrofonaufnahmen haben.
+SIGNATURES = {
+    "mp3": b"ID3\x04\x00\x00\x00\x00", "mpeg": b"\xff\xfb\x90\x64\x00", "mpga": b"\xff\xf3\x40\xc4",
+    "m4a": b"\x00\x00\x00\x1cftypM4A ", "mp4": b"\x00\x00\x00\x1cftypisom", "aac": b"\xff\xf1\x5c\x40",
+    "wav": b"RIFF\x24\x00\x00\x00WAVEfmt ", "ogg": b"OggS\x00\x02", "oga": b"OggS\x00\x02",
+    "opus": b"OggS\x00\x02", "webm": b"\x1a\x45\xdf\xa3\x9f", "flac": b"fLaC\x00\x00\x00\x22",
+}
+
+
+def test_every_allowed_format_has_a_signature_check():
+    from app.services.memo import ALLOWED_AUDIO_EXTENSIONS, CONTAINERS_BY_EXTENSION
+
+    assert set(CONTAINERS_BY_EXTENSION) == set(ALLOWED_AUDIO_EXTENSIONS) == set(SIGNATURES)
+
+
+@pytest.mark.parametrize("extension", sorted(SIGNATURES))
+def test_all_audio_formats_are_accepted(auth_client, fake_transcription, extension):
+    content = SIGNATURES[extension] + b"\x00" * 64
+    assert _upload(auth_client, filename=f"Aufnahme.{extension}", content=content).status_code == 200
+
+
 def test_microphone_formats_are_accepted(auth_client, fake_transcription):
-    # Chrome/Edge/Firefox nehmen WebM/Ogg (Opus) auf, Safari MP4/AAC.
-    for name in ("Aufnahme 2026-10-02 08-15.webm", "Aufnahme.ogg", "Aufnahme.m4a", "Aufnahme.aac", "Aufnahme.opus"):
-        assert _upload(auth_client, filename=name).status_code == 200, name
+    # Chrome/Edge/Firefox nehmen WebM/Ogg (Opus) auf, Safari MP4/AAC - Browser melden dafuer
+    # teils Video-Typen oder gar keinen Typ.
+    for name, mimetype in (
+        ("Aufnahme 2026-10-02 08-15.webm", "video/webm"), ("Aufnahme.ogg", "audio/ogg;codecs=opus"),
+        ("Aufnahme.m4a", "audio/mp4"), ("Aufnahme.aac", "audio/aac"), ("Aufnahme.opus", "application/octet-stream"),
+        ("Sprachmemo.m4a", "audio/x-m4a"), ("Video.mp4", "video/mp4"), ("Nachricht.mp3", ""),
+    ):
+        content = SIGNATURES[name.rsplit(".", 1)[1]] + b"\x00" * 64
+        assert _upload(auth_client, filename=name, content=content, mimetype=mimetype).status_code == 200, name
+
+
+@pytest.mark.parametrize("mimetype", ["application/pdf", "text/html", "image/jpeg", "application/x-msdownload"])
+def test_non_audio_mime_type_is_rejected(auth_client, fake_transcription, mimetype):
+    resp = _upload(auth_client, content=SIGNATURES["mp3"], mimetype=mimetype)
+    assert resp.status_code == 400
+    assert "keine Audiodatei" in resp.get_json()["error"]
+    assert fake_transcription == []
+
+
+def test_too_large_upload_is_rejected_with_json(app, auth_client, fake_transcription):
+    resp = _upload(auth_client, content=SIGNATURES["mp3"] + b"\x00" * (25 * 1024 * 1024))
+    assert resp.status_code == 413
+    assert resp.headers.get("X-Zentriq-App") == "1"
+    assert fake_transcription == []
 
 
 class FakeResult:

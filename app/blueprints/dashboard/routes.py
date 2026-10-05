@@ -88,7 +88,7 @@ def transcribe():
     filename = upload.filename if upload else None
     content = upload.read() if upload else b""
     try:
-        filename = validate_audio(filename, content)
+        filename = validate_audio(filename, content, upload.mimetype if upload else None)
     except MemoError as exc:
         return _error(str(exc), 400, wants_json, filename)
     try:

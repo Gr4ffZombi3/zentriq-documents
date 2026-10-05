@@ -16,9 +16,9 @@ from flask import (
 )
 from flask_login import current_user, login_required, login_user, logout_user
 
-from app.auth.forms import ForgotPasswordForm, LoginForm, RegisterForm, ResetPasswordForm, TwoFactorForm
+from app.auth.forms import ForgotPasswordForm, LoginForm, ResetPasswordForm, TwoFactorForm
 from app.extensions import db
-from app.models import Tenant, User, UserRole
+from app.models import User
 from app.models.audit_log import AuditEventType, AuditLog
 from app.services import two_factor as two_factor_service
 from app.services import user_sessions
@@ -35,8 +35,6 @@ from app.services.system_errors import record_system_error
 from app.services.user_admin import find_user_by_vermittlernummer
 from app.tasks.auth_tasks import send_password_reset_email
 from app.tenancy import bypass_tenant_scope, set_current_tenant_id, use_tenant_id
-from app.utils.slugs import unique_tenant_slug
-from app.utils.vermittlernummer import format_vermittlernummer
 
 logger = logging.getLogger(__name__)
 
@@ -54,52 +52,6 @@ RESET_REQUESTED_MESSAGE = (
     "Wenn für diese E-Mail-Adresse ein Konto existiert, wurde eine Nachricht zum "
     "Zurücksetzen des Passworts versendet."
 )
-
-
-@auth_bp.route("/register", methods=["GET", "POST"])
-def register():
-    if not current_app.config.get("REGISTRATION_ENABLED"):
-        abort(404)
-    if current_user.is_authenticated:
-        return redirect(url_for("portal.home"))
-
-    form = RegisterForm()
-    if form.validate_on_submit():
-        email = form.email.data.lower().strip()
-        vermittlernummer = format_vermittlernummer(form.vermittlernummer.data)
-
-        with bypass_tenant_scope():
-            existing = User.query.filter_by(email=email).first()
-        if existing is not None:
-            flash("Diese E-Mail-Adresse ist bereits registriert.", "error")
-            return render_template("auth/register.html", form=form)
-
-        existing_vm = find_user_by_vermittlernummer(vermittlernummer)
-        if existing_vm is not None:
-            flash("Diese Vermittlernummer ist bereits registriert.", "error")
-            return render_template("auth/register.html", form=form)
-
-        with bypass_tenant_scope():
-            tenant = Tenant(name=form.company_name.data, slug=unique_tenant_slug(form.company_name.data))
-            db.session.add(tenant)
-            db.session.flush()
-
-            user = User(
-                tenant_id=tenant.id, email=email, vermittlernummer=vermittlernummer, role=UserRole.OFFICE_ADMIN
-            )
-            user.set_password(form.password.data)
-            db.session.add(user)
-            db.session.commit()
-
-        set_current_tenant_id(tenant.id)
-        login_user(user)
-        log_audit_event(
-            AuditEventType.LOGIN_SUCCESS, tenant_id=tenant.id, user=user, details={"reason": "registration"}
-        )
-        flash("Willkommen bei Zentriq Documents!", "success")
-        return redirect(url_for("portal.home"))
-
-    return render_template("auth/register.html", form=form)
 
 
 def _is_login_rate_limited() -> bool:

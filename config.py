@@ -66,10 +66,6 @@ class BaseConfig:
     SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true"
     PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
 
-    # Offene Selbstregistrierung (legt pro Registrierung einen neuen Mandanten an). Standard:
-    # aus. Benutzer werden dann per `flask create-user` angelegt.
-    REGISTRATION_ENABLED = os.environ.get("REGISTRATION_ENABLED", "false").lower() == "true"
-
     # Oeffentliche Basis-URL fuer Links in E-Mails. Bewusst NICHT aus dem Host-Header des
     # Requests abgeleitet, damit Reset-Links nicht per Host-Header-Injection umgelenkt werden.
     PUBLIC_URL = os.environ.get("PUBLIC_URL", "").rstrip("/")
@@ -121,7 +117,6 @@ class TestingConfig(BaseConfig):
     # Verhindert echte/gemockte OpenAI-Aufrufe fuer den Analysebericht-Text in der gesamten
     # bestehenden Testsuite; der Narrativ-Pfad wird gezielt in test_analysis_report.py getestet.
     ANALYSIS_NARRATIVE_ENABLED = False
-    REGISTRATION_ENABLED = False
     # Die bestehende Testsuite meldet Konten ohne 2FA an. Die Pflicht-Einrichtung wird in
     # tests/test_two_factor.py gezielt mit TWO_FACTOR_ENFORCED = True geprueft.
     TWO_FACTOR_ENFORCED = False

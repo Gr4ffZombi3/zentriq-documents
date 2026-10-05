@@ -54,7 +54,11 @@ def _prompt_password(from_stdin: bool = False) -> str:
 
 @click.command("create-user")
 @click.option("--email", required=True, help="E-Mail-Adresse (Login) des neuen Benutzers.")
-@click.option("--company", default=None, help="Firmenname; dafuer wird ein neuer Mandant angelegt.")
+@click.option(
+    "--company",
+    default=None,
+    help="Firmenname; legt den ersten Mandanten an - nur bei der Ersteinrichtung (noch kein Mandant vorhanden).",
+)
 @click.option("--tenant", "tenant_slug", default=None, help="Slug eines bestehenden Mandanten (statt --company).")
 @click.option(
     "--role",
@@ -66,9 +70,10 @@ def _prompt_password(from_stdin: bool = False) -> str:
 def create_user_command(
     email: str, company: str | None, tenant_slug: str | None, role: str | None, vermittlernummer: str | None
 ):
-    """Legt einen Benutzer an - entweder mit neuem Mandanten (--company) oder in einem
-    bestehenden Mandanten (--tenant). Das Passwort wird verdeckt abgefragt. Hauptweg fuer
-    weitere Benutzer ist die Admin-Seite Einstellungen -> Benutzer."""
+    """Legt einen Benutzer an - bei der Ersteinrichtung mit dem ersten Mandanten (--company),
+    sonst in einem bestehenden Mandanten (--tenant). Das Passwort wird verdeckt abgefragt.
+    Weitere Bueros legt ausschliesslich der SUPER_ADMIN unter Plattform -> Bueros an, weitere
+    Benutzer der Buero-Admin unter Einstellungen -> Benutzer."""
     try:
         email = validate_email(email.strip(), check_deliverability=False).normalized.lower()
     except EmailNotValidError as exc:
@@ -79,6 +84,13 @@ def create_user_command(
         company = company.strip()
         if not company or len(company) > 255:
             raise click.ClickException("--company darf nicht leer und hoechstens 255 Zeichen lang sein.")
+        with bypass_tenant_scope():
+            if Tenant.query.first() is not None:
+                raise click.ClickException(
+                    "--company ist nur bei der Ersteinrichtung moeglich. Neue Bueros legt der "
+                    "Plattformbetreiber (SUPER_ADMIN) unter Plattform -> Bueros an; Benutzer in einem "
+                    "bestehenden Buero mit --tenant <slug> --role ... anlegen."
+                )
         user_role = UserRole(role) if role else UserRole.OFFICE_ADMIN
     else:
         if not role:

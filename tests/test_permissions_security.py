@@ -302,6 +302,57 @@ USER_FORM = {
 }
 
 
+@pytest.mark.parametrize("email", ["admin-a@example.com", "dennis@example.com"])
+def test_only_super_admin_creates_offices(app, world, email):
+    """Neue Bueros legt ausschliesslich der SUPER_ADMIN an - weder Buero-Admin noch Mitarbeiter."""
+    with bypass_tenant_scope():
+        before = Tenant.query.count()
+    client = login(app, email)
+    assert client.get("/plattform/bueros/neu").status_code == 403
+    resp = client.post(
+        "/plattform/bueros/neu",
+        data={**USER_FORM, "tenant_name": "Eigenes Buero", "email": "fremd@example.com", "role": "office_admin"},
+    )
+    assert resp.status_code == 403
+    with bypass_tenant_scope():
+        assert Tenant.query.count() == before
+        assert User.query.filter_by(email="fremd@example.com").first() is None
+
+
+def test_employee_cannot_create_users(app, world):
+    client = login(app, "dennis@example.com")
+    assert client.get("/settings/users/new").status_code == 403
+    resp = client.post("/settings/users/new", data={**USER_FORM, "role": "employee"})
+    assert resp.status_code == 403
+    with bypass_tenant_scope():
+        assert User.query.filter_by(email="neu@example.com").first() is None
+
+
+def test_office_admin_creates_users_only_in_own_office(app, world):
+    client = login(app, "admin-a@example.com")
+    resp = client.post(
+        "/settings/users/new", data={**USER_FORM, "role": "employee", "tenant_id": str(world.tenant_b.id)}
+    )
+    assert resp.status_code == 302
+    with bypass_tenant_scope():
+        created = User.query.filter_by(email="neu@example.com").one()
+    assert created.tenant_id == world.admin_a.tenant_id and created.role == UserRole.EMPLOYEE
+
+
+def test_tenants_are_only_created_by_platform_and_initial_setup():
+    """Im Anwendungscode entstehen Mandanten nur ueber Plattform -> Bueros (SUPER_ADMIN) und
+    die CLI-Ersteinrichtung. Ein neuer Weg muss hier bewusst ergaenzt werden."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent / "app"
+    creators = sorted(
+        str(path.relative_to(root))
+        for path in root.rglob("*.py")
+        if re.search(r"\bTenant\(", path.read_text(encoding="utf-8")) and "models" not in path.parts
+    )
+    assert creators == ["blueprints/platform/routes.py", "cli.py"]
+
+
 def test_office_admin_cannot_create_super_admin(app, world):
     client = login(app, "admin-a@example.com")
     resp = client.post("/settings/users/new", data={**USER_FORM, "role": "super_admin"})

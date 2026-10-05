@@ -34,6 +34,13 @@ def password_prompt(monkeypatch):
     return configure
 
 
+@pytest.fixture()
+def fresh_install(db):
+    """Ersteinrichtung: noch kein Mandant vorhanden (entfernt den Default-Mandanten der Test-DB)."""
+    Tenant.query.delete()
+    db.session.commit()
+
+
 def _run(app, *args):
     return app.test_cli_runner().invoke(create_user_command, list(args))
 
@@ -43,37 +50,31 @@ def _find_user(email):
         return User.query.filter_by(email=email).first()
 
 
-# --- Registrierung abgeschaltet (Standard) -----------------------------------------------
+# --- Keine Selbstregistrierung ----------------------------------------------------------
 
 
-def test_registration_disabled_by_default(app):
-    assert app.config["REGISTRATION_ENABLED"] is False
-
-
-def test_register_returns_404_when_disabled(client):
+@pytest.mark.parametrize("flag", [None, True])
+def test_register_does_not_exist(app, client, flag):
+    """Es gibt keine oeffentliche Registrierung - auch nicht ueber einen (frueheren) Schalter."""
+    if flag is not None:
+        app.config["REGISTRATION_ENABLED"] = flag
+    assert "auth.register" not in app.view_functions
     assert client.get("/auth/register").status_code == 404
-    resp = client.post("/auth/register", data=REGISTER_DATA)
-    assert resp.status_code == 404
+    assert client.post("/auth/register", data=REGISTER_DATA).status_code == 404
     assert _find_user(REGISTER_DATA["email"]) is None
     assert Tenant.query.filter_by(name=REGISTER_DATA["company_name"]).first() is None
 
 
-def test_login_hides_register_link_when_disabled(client):
+def test_login_has_no_register_link(client):
     html = client.get("/auth/login").get_data(as_text=True)
     assert "/auth/register" not in html
-    assert "Jetzt registrieren" not in html
-
-
-def test_register_available_when_enabled(app, client):
-    app.config["REGISTRATION_ENABLED"] = True
-    assert client.get("/auth/register").status_code == 200
-    assert "/auth/register" in client.get("/auth/login").get_data(as_text=True)
+    assert "registrieren" not in html.lower()
 
 
 # --- flask create-user ---------------------------------------------------------------------
 
 
-def test_create_user_creates_tenant_and_user(app, client, password_prompt):
+def test_create_user_creates_tenant_and_user(app, fresh_install, client, password_prompt):
     prompts = password_prompt(PASSWORD, PASSWORD)
     result = _run(app, "--email", " Chef@Firma.DE ", "--company", "Meine Firma GmbH", "--vermittlernummer", "VM-1")
     assert result.exit_code == 0, result.output
@@ -94,7 +95,7 @@ def test_create_user_creates_tenant_and_user(app, client, password_prompt):
     assert login.status_code == 302
 
 
-def test_create_user_never_outputs_or_logs_password(app, password_prompt, caplog):
+def test_create_user_never_outputs_or_logs_password(app, fresh_install, password_prompt, caplog):
     password_prompt(PASSWORD, PASSWORD)
     with caplog.at_level(logging.DEBUG):
         result = _run(app, "--email", "leise@example.com", "--company", "Leise AG")
@@ -110,15 +111,19 @@ def test_create_user_has_no_password_option(app):
     assert _find_user("x@example.com") is None
 
 
-def test_create_user_uses_separate_tenant_per_company(app, user, password_prompt):
-    password_prompt(PASSWORD, PASSWORD)
-    result = _run(app, "--email", "neu@example.com", "--company", "Default Tenant")
-    assert result.exit_code == 0, result.output
-    created = _find_user("neu@example.com")
-    assert created.tenant_id != user.tenant_id
+def test_create_user_company_only_for_initial_setup(app, user, password_prompt):
+    """Gibt es bereits einen Mandanten, legt die CLI kein weiteres Buero an - neue Bueros
+    entstehen ausschliesslich ueber den SUPER_ADMIN (Plattform -> Bueros)."""
+    prompts = password_prompt(PASSWORD, PASSWORD)
+    result = _run(app, "--email", "neu@example.com", "--company", "Zweites Buero")
+    assert result.exit_code != 0
+    assert "Ersteinrichtung" in result.output
+    assert prompts == []
+    assert _find_user("neu@example.com") is None
+    assert Tenant.query.count() == 1
 
 
-def test_create_user_rejects_password_mismatch(app, password_prompt):
+def test_create_user_rejects_password_mismatch(app, fresh_install, password_prompt):
     password_prompt(PASSWORD, "etwas-anderes-123")
     result = _run(app, "--email", "mismatch@example.com", "--company", "Firma")
     assert result.exit_code != 0
@@ -127,7 +132,7 @@ def test_create_user_rejects_password_mismatch(app, password_prompt):
     assert Tenant.query.filter_by(name="Firma").first() is None
 
 
-def test_create_user_rejects_short_password(app, password_prompt):
+def test_create_user_rejects_short_password(app, fresh_install, password_prompt):
     password_prompt("kurz")
     result = _run(app, "--email", "kurz@example.com", "--company", "Firma")
     assert result.exit_code != 0
@@ -145,17 +150,17 @@ def test_create_user_rejects_invalid_email(app, password_prompt):
 
 def test_create_user_rejects_duplicate_email(app, user, password_prompt):
     prompts = password_prompt(PASSWORD, PASSWORD)
-    result = _run(app, "--email", user.email.upper(), "--company", "Zweite Firma")
+    result = _run(app, "--email", user.email.upper(), "--tenant", "default", "--role", "employee")
     assert result.exit_code != 0
     assert "bereits registriert" in result.output
     assert prompts == []
-    assert Tenant.query.filter_by(name="Zweite Firma").first() is None
 
 
 def test_create_user_rejects_duplicate_vermittlernummer(app, user, password_prompt):
     password_prompt(PASSWORD, PASSWORD)
     result = _run(
-        app, "--email", "anders@example.com", "--company", "Firma", "--vermittlernummer", user.vermittlernummer
+        app, "--email", "anders@example.com", "--tenant", "default", "--role", "employee",
+        "--vermittlernummer", user.vermittlernummer,
     )
     assert result.exit_code != 0
     assert "bereits registriert" in result.output
@@ -172,7 +177,7 @@ def test_create_user_is_registered_as_flask_command(app):
 # --- Rollen / bestehender Mandant -------------------------------------------------------
 
 
-def test_create_user_for_new_company_becomes_admin(app, password_prompt):
+def test_create_user_for_new_company_becomes_admin(app, fresh_install, password_prompt):
     password_prompt(PASSWORD, PASSWORD)
     result = _run(app, "--email", "gruender@example.com", "--company", "Gruender GmbH")
     assert result.exit_code == 0, result.output

@@ -326,7 +326,6 @@ def user_send_password_reset(user_id):
 def system():
     config = current_app.config
     settings = [
-        ("Offene Registrierung", "aktiv" if config.get("REGISTRATION_ENABLED") else "aus"),
         ("E-Mail-Versand", "konfiguriert" if is_mail_configured() else "nicht konfiguriert"),
         ("Passwort vergessen", "verfügbar" if is_password_reset_available() else "nicht verfügbar"),
         ("Öffentliche URL", config.get("PUBLIC_URL") or "–"),

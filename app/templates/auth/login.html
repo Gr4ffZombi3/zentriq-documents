@@ -52,10 +52,4 @@
   </form>
 </div>
 
-{% if config.REGISTRATION_ENABLED %}
-<p class="auth-footnote">
-  Noch kein Konto?
-  <a href="{{ url_for('auth.register') }}">Jetzt registrieren</a>
-</p>
-{% endif %}
 {% endblock %}

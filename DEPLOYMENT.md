@@ -117,14 +117,17 @@ nur für die Transkription setzen.
 
 ## KI-Assistent (Anthropic API)
 
-Der Assistent (Button „Assistent“ oben rechts, nur OFFICE_ADMIN und EMPLOYEE) ruft die Anthropic
-API ausschließlich serverseitig auf. Übertragen wird nur der Text, den der Benutzer absendet;
-Eingaben und Antworten werden nicht gespeichert, protokolliert werden nur Schnellaktion und
-Fehlerart. Konfiguration in der `.env`:
+Der Assistent (Werkzeuge → Assistent) ist ein reines Textwerkzeug. Nutzen dürfen ihn nur
+OFFICE_ADMIN und EMPLOYEE eines Büros, für das er freigegeben ist (Plattform → Büros →
+„Assistent freigegeben“, Spalte `tenants.assistant_enabled`; Standard aus, Büro „heller“ per
+Migration `b7d1e2f3a4c5` freigegeben). Alle anderen – auch der SUPER_ADMIN – erhalten auf Seite
+und API 403. Die Anthropic API wird ausschließlich serverseitig aufgerufen. Übertragen wird nur
+der Text, den der Benutzer absendet; Eingaben und Antworten werden nicht gespeichert,
+protokolliert werden nur Aktion und Fehlerart. Konfiguration in der `.env`:
 
 | Variable | Standard | Zweck |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | – | Pflicht. Ohne Key ist der Assistent ausgeblendet. |
+| `ANTHROPIC_API_KEY` | – | Pflicht. Ohne Key bleibt der Menüpunkt (bei freigegebenen Büros) sichtbar; die Seite zeigt „Der Assistent ist derzeit nicht verfügbar.“ |
 | `ASSISTANT_ENABLED` | `true` | `false` schaltet den Assistenten auch mit Key ab. |
 | `ASSISTANT_MODEL` | `claude-opus-5-5` | Modell |
 | `ASSISTANT_EFFORT` | `low` | Denkaufwand (`low`/`medium`/`high`) |

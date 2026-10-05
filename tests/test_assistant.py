@@ -1,9 +1,11 @@
 # ruff: noqa: F811  (Fixture "world" wird aus test_permissions_security importiert)
-"""KI-Assistent: Rollen, Datensparsamkeit, API-Fehler, kein API-Key im Client, Plattform-Panel.
+"""Textassistent: Freigabe je Buero, Rollen, Seite, Datensparsamkeit, API-Fehler, kein API-Key
+im Client, Plattform-Panel.
 
 Der Anthropic-Client wird durch eine Attrappe ersetzt - es gibt nie einen echten API-Aufruf.
 Zwei-Bueros-Szenario aus test_permissions_security (Buero A: Admin A, Dennis, Laura,
-SUPER_ADMIN Justin; Buero B: Admin B, Bob)."""
+SUPER_ADMIN Justin; Buero B: Admin B, Bob). Buero A hat den Assistenten freigegeben (wie
+Buero Heller), Buero B nicht."""
 
 import logging
 from types import SimpleNamespace
@@ -44,6 +46,13 @@ def _response(text="Betreff: Änderung Ihrer Fahrleistung\n\nSehr geehrte Damen 
     return SimpleNamespace(content=[SimpleNamespace(type="text", text=text)], stop_reason=stop_reason)
 
 
+@pytest.fixture(autouse=True)
+def office_a_enabled(world, db):
+    """Buero A ist fuer den Assistenten freigegeben, Buero B nicht (Standard)."""
+    world.tenant_a.assistant_enabled = True
+    db.session.commit()
+
+
 @pytest.fixture()
 def enabled(app, monkeypatch):
     app.config["ANTHROPIC_API_KEY"] = SECRET_KEY
@@ -53,7 +62,7 @@ def enabled(app, monkeypatch):
     return client
 
 
-def _ask(client, action="email", text=USER_TEXT):
+def _ask(client, action="erstellen", text=USER_TEXT):
     return client.post("/assistent/anfrage", json={"action": action, "text": text})
 
 
@@ -62,23 +71,75 @@ def _audit():
         return AuditLog.query.filter_by(event_type=AuditEventType.ASSISTANT_USED).all()
 
 
-# --- Rollen ---------------------------------------------------------------------------------
+# --- Freigabe je Buero und Rollen -------------------------------------------------------------
 
 
-def test_office_admin_and_employee_can_use_assistant(app, world, enabled):
-    for email in ("admin-a@example.com", "dennis@example.com", "bob@example.com"):
-        resp = _ask(login(app, email))
-        assert resp.status_code == 200, email
-        assert resp.get_json()["result"].startswith("Betreff:")
+def test_new_offices_have_assistant_disabled(app, db):
+    from app.models import Tenant
+
+    tenant = Tenant(name="Neues Buero", slug="neues-buero")
+    db.session.add(tenant)
+    db.session.commit()
+    assert tenant.assistant_enabled is False
 
 
-def test_super_admin_cannot_use_assistant(app, world, enabled):
+@pytest.mark.parametrize("email", ["admin-a@example.com", "dennis@example.com"])
+def test_enabled_office_admin_and_employee_have_access(app, world, enabled, email):
+    client = login(app, email)
+    page = client.get("/assistent")
+    assert page.status_code == 200
+    html = page.get_data(as_text=True)
+    assert "Professionelle Texte schnell formulieren." in html and "Text erstellen" in html
+    assert 'href="/assistent"' in client.get("/werkzeuge").get_data(as_text=True)
+    resp = _ask(client)
+    assert resp.status_code == 200
+    assert resp.get_json()["result"].startswith("Betreff:")
+
+
+@pytest.mark.parametrize("email", ["admin-b@example.com", "bob@example.com"])
+def test_other_office_gets_403_and_no_menu_entry(app, world, enabled, email):
+    client = login(app, email)
+    assert client.get("/assistent").status_code == 403
+    assert _ask(client).status_code == 403
+    resp = client.post("/assistent/anfrage", json={"action": "erstellen", "text": USER_TEXT}, headers={"Accept": "application/json"})
+    assert resp.status_code == 403
+    assert resp.get_json()["code"] == "forbidden"
+    for path in ("/", "/werkzeuge", "/zeiterfassung"):
+        html = client.get(path, follow_redirects=True).get_data(as_text=True)
+        assert 'href="/assistent"' not in html, path
+    assert enabled.beta.messages.calls == []
+
+
+def test_super_admin_has_no_automatic_access(app, world, enabled):
+    """Justin (SUPER_ADMIN) gehoert technisch zu Buero A, das freigegeben ist - trotzdem kein Zugriff."""
     client = login(app, "justin@example.com")
+    assert client.get("/assistent").status_code == 403
     assert _ask(client).status_code == 403
     assert enabled.beta.messages.calls == []
-    resp = client.get("/plattform")
-    assert resp.status_code == 200
-    assert "data-assistant-toggle" not in resp.get_data(as_text=True)
+    html = client.get("/plattform").get_data(as_text=True)
+    assert 'href="/assistent"' not in html
+
+
+def test_menu_entry_does_not_depend_on_api_key(app, world):
+    app.config["ANTHROPIC_API_KEY"] = None
+    client = login(app, "dennis@example.com")
+    assert '<a href="/assistent"' in client.get("/", follow_redirects=True).get_data(as_text=True)
+
+
+def test_platform_toggle_controls_office_access(app, world, db, enabled):
+    root = login(app, "justin@example.com")
+    resp = root.post(
+        f"/plattform/bueros/{world.tenant_b.id}",
+        data={"name": world.tenant_b.name, "is_active": "y", "assistant_enabled": "y"},
+    )
+    assert resp.status_code == 302
+    with bypass_tenant_scope():
+        update = AuditLog.query.filter_by(event_type=AuditEventType.TENANT_UPDATED, tenant_id=world.tenant_b.id).one()
+    assert update.details == {"changes": {"assistant_enabled": {"old": False, "new": True}}}
+    assert _ask(login(app, "bob@example.com")).status_code == 200
+    assert root.get("/assistent").status_code == 403  # Freischalten gibt dem Betreiber keinen Zugriff
+    root.post(f"/plattform/bueros/{world.tenant_b.id}", data={"name": world.tenant_b.name, "is_active": "y"})
+    assert _ask(login(app, "bob@example.com")).status_code == 403
 
 
 def test_assistant_requires_login(app, world, enabled):
@@ -94,11 +155,11 @@ def test_only_user_text_and_fixed_instruction_are_sent(app, world, db, enabled):
     with use_tenant_id(world.tenant_a.id):
         db.session.add(Customer(tenant_id=world.tenant_a.id, name="Geheim Kundin", phone="0171 9999999", customer_number="KD-777"))
         db.session.commit()
-    assert _ask(login(app, "dennis@example.com"), action="gespraechsnotiz").status_code == 200
+    assert _ask(login(app, "dennis@example.com"), action="kuerzer").status_code == 200
 
     call = enabled.beta.messages.calls[0]
     assert call["messages"] == [{"role": "user", "content": USER_TEXT}]
-    assert call["system"] == f"{assistant.BASE_INSTRUCTION}\n\nAufgabe: {assistant.ACTIONS['gespraechsnotiz'].instruction}"
+    assert call["system"] == f"{assistant.BASE_INSTRUCTION}\n\nAufgabe: {assistant.ACTIONS['kuerzer'].instruction}"
     sent = repr(call)
     for private in ("Geheim Kundin", "0171 9999999", "KD-777", "dennis@example.com", "Dennis", "Buero"):
         assert private not in sent
@@ -109,7 +170,7 @@ def test_nothing_is_stored_except_content_free_audit_event(app, world, enabled):
     _ask(login(app, "dennis@example.com"))
     events = _audit()
     assert len(events) == 1
-    assert events[0].details == {"action": "email", "ok": True}
+    assert events[0].details == {"action": "erstellen", "ok": True}
     assert events[0].tenant_id == world.tenant_a.id
     assert USER_TEXT not in repr([event.details for event in events])
 
@@ -156,7 +217,7 @@ def test_api_errors_are_handled_without_content(app, world, enabled, caplog, err
     assert message and "Fehler" not in message and SECRET_KEY not in message
     assert USER_TEXT not in caplog.text and SECRET_KEY not in caplog.text
     if status >= 500:
-        assert _audit()[-1].details == {"action": "email", "ok": False, "error": error_type}
+        assert _audit()[-1].details == {"action": "erstellen", "ok": False, "error": error_type}
 
 
 def test_refusal_and_empty_answer(app, world, enabled):
@@ -170,29 +231,49 @@ def test_refusal_and_empty_answer(app, world, enabled):
 def test_disabled_or_unconfigured_assistant(app, world, enabled):
     client = login(app, "dennis@example.com")
     app.config["ASSISTANT_ENABLED"] = False
-    assert _ask(client).status_code == 503
-    assert "data-assistant-toggle" not in client.get("/sprachnachrichten").get_data(as_text=True)
+    resp = _ask(client)
+    assert resp.status_code == 503
+    assert resp.get_json()["error"] == "Der Assistent ist derzeit nicht verfügbar."
     app.config["ASSISTANT_ENABLED"] = True
     app.config["ANTHROPIC_API_KEY"] = None
     resp = _ask(client)
     assert resp.status_code == 503
-    assert "nicht eingerichtet" in resp.get_json()["error"]
+    assert resp.get_json()["error"] == "Der Assistent ist derzeit nicht verfügbar."
     assert enabled.beta.messages.calls == []
 
 
-# --- UI und API-Key -------------------------------------------------------------------------
+@pytest.mark.parametrize("email", ["admin-a@example.com", "dennis@example.com"])
+def test_page_without_api_key_shows_only_notice(app, world, email):
+    app.config["ANTHROPIC_API_KEY"] = None
+    resp = login(app, email).get("/assistent")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Der Assistent ist derzeit nicht verfügbar." in html
+    assert "data-assistant-form" not in html and "assistant.js" not in html
 
 
-def test_panel_rendered_for_office_roles_without_api_key(app, world, enabled):
-    for email in ("dennis@example.com", "admin-a@example.com"):
-        client = login(app, email)
-        html = client.get("/sprachnachrichten").get_data(as_text=True)
-        assert 'data-assistant-toggle' in html and 'id="assistent"' in html
-        assert "Freie Frage" in html and "Gesprächsnotiz erstellen" in html
-        assert "Kurzfassung erstellen" in html
-        assert SECRET_KEY not in html
-        js = client.get("/static/js/assistant.js").get_data(as_text=True)
-        assert SECRET_KEY not in js and "anthropic" not in js.lower()
+def test_page_with_api_key_offers_text_actions(app, world, enabled):
+    html = login(app, "dennis@example.com").get("/assistent").get_data(as_text=True)
+    assert "Der Assistent ist derzeit nicht verfügbar." not in html
+    for label in ("Text erstellen", "Kopieren", "Kürzer", "Freundlicher", "Professioneller", "Neu formulieren"):
+        assert label in html, label
+    assert SECRET_KEY not in html
+    js = login(app, "dennis@example.com").get("/static/js/assistant.js").get_data(as_text=True)
+    assert SECRET_KEY not in js and "anthropic" not in js.lower()
+
+
+@pytest.mark.parametrize("action", ["erstellen", "kuerzer", "freundlicher", "professioneller", "neu"])
+def test_text_generation_and_refinements(app, world, enabled, action):
+    resp = _ask(login(app, "admin-a@example.com"), action=action)
+    assert resp.status_code == 200 and resp.get_json()["result"]
+    call = enabled.beta.messages.calls[-1]
+    assert call["system"].endswith(assistant.ACTIONS[action].instruction)
+
+
+def test_assistant_is_text_only():
+    """Die Arbeitsanweisung haelt den Assistenten beim Text: nichts versenden oder ausfuehren."""
+    assert "nichts versenden" in assistant.BASE_INSTRUCTION
+    assert set(assistant.REFINE_ACTIONS) <= set(assistant.ACTIONS)
 
 
 def test_api_key_never_reaches_any_page(app, world, enabled):
@@ -234,7 +315,7 @@ def test_memo_summary_only_sends_on_explicit_request(app, world, enabled, monkey
 def test_platform_panel_shows_only_technical_status(app, world, enabled):
     _ask(login(app, "dennis@example.com"))
     enabled.beta.messages.behaviour = anthropic.APITimeoutError(request=_request())
-    _ask(login(app, "bob@example.com"))
+    _ask(login(app, "laura@example.com"))
 
     client = login(app, "justin@example.com")
     html = client.get("/plattform/system").get_data(as_text=True)

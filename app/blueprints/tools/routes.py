@@ -10,7 +10,7 @@ Assistenten uebernehmen."""
 from flask import Blueprint, abort, render_template, request
 from flask_login import current_user, login_required
 
-from app.navigation import assistant_available
+from app.navigation import assistant_allowed, assistant_available
 from app.services.anonymize import (
     IMAGE_EXTENSIONS,
     MAX_INPUT_CHARS,
@@ -34,7 +34,7 @@ def _office_members_only():
 
 @tools_bp.get("")
 def index():
-    return render_template("tools/index.html", assistant_enabled=assistant_available(current_user))
+    return render_template("tools/index.html", assistant_allowed=assistant_allowed(current_user))
 
 
 @tools_bp.route("/anonymisieren", methods=["GET", "POST"])

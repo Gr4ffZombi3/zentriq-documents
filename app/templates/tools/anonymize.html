@@ -32,7 +32,7 @@
         <div class="panel-actions">
           <button type="button" class="btn btn-primary btn-sm" data-copy="#anon-result">Kopieren</button>
           {% if assistant_enabled %}
-            <button type="button" class="btn btn-secondary btn-sm" data-assistant-insert="#anon-result">Im Assistenten verwenden</button>
+            <a class="btn btn-secondary btn-sm" href="{{ url_for('assistant.index') }}" data-assistant-handoff="#anon-result">Im Assistenten verwenden</a>
           {% endif %}
         </div>
       </header>

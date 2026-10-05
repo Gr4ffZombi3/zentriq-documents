@@ -11,17 +11,15 @@
 
   <section class="panel">
     <ul class="tool-list">
-      <li class="tool-row">
-        <div class="tool-text">
-          <h2 class="tool-name">Assistent</h2>
-          <p class="tool-desc">Text schreiben, verbessern oder zusammenfassen.</p>
-        </div>
-        {% if assistant_enabled %}
-          <button type="button" class="btn btn-secondary btn-sm" data-assistant-toggle aria-controls="assistent" aria-expanded="false">Öffnen</button>
-        {% else %}
-          <span class="tool-note">Nicht eingerichtet</span>
-        {% endif %}
-      </li>
+      {% if assistant_allowed %}
+        <li class="tool-row">
+          <div class="tool-text">
+            <h2 class="tool-name">Assistent</h2>
+            <p class="tool-desc">Professionelle Texte schnell formulieren.</p>
+          </div>
+          <a class="btn btn-secondary btn-sm" href="{{ url_for('assistant.index') }}">Öffnen</a>
+        </li>
+      {% endif %}
       <li class="tool-row">
         <div class="tool-text">
           <h2 class="tool-name">Dokument anonymisieren</h2>

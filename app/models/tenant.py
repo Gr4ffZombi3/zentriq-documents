@@ -11,6 +11,9 @@ class Tenant(db.Model):
     name = db.Column(db.String(255), nullable=False)
     slug = db.Column(db.String(100), nullable=False, unique=True, index=True)
     status = db.Column(db.Enum(TenantStatus), nullable=False, default=TenantStatus.ACTIVE)
+    # Textassistent (Werkzeuge -> Assistent) fuer dieses Buero freigegeben. Standard: aus;
+    # schaltet nur der SUPER_ADMIN unter Plattform -> Bueros (ohne selbst Zugriff zu erhalten).
+    assistant_enabled = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(

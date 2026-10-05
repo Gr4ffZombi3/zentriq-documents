@@ -112,9 +112,6 @@ def create_app(config_object=None):
     register_http_performance(app)
 
     app.context_processor(build_navigation)
-    from app.navigation import assistant_panel_actions
-
-    app.jinja_env.globals["assistant_panel_actions"] = assistant_panel_actions
 
     @app.get("/favicon.ico")
     def favicon():

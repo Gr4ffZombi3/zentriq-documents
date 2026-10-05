@@ -98,6 +98,7 @@ class PlatformUserForm(UserForm):
 class TenantForm(FlaskForm):
     name = StringField("Name des Büros", validators=[DataRequired(), Length(max=255)])
     is_active = BooleanField("Büro aktiv", default=True)
+    assistant_enabled = BooleanField("Assistent freigegeben", default=False)
     submit = SubmitField("Speichern")
 
 

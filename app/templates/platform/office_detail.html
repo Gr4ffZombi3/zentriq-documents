@@ -67,6 +67,10 @@
         <label>{{ form.is_active() }} {{ form.is_active.label.text }}</label>
       </div>
       <p class="form-hint mt-2">Ist ein Büro deaktiviert, können sich seine Benutzer nicht mehr anmelden; laufende Sitzungen enden sofort. Daten bleiben erhalten.</p>
+      <div class="checkbox-row mt-4">
+        <label>{{ form.assistant_enabled() }} {{ form.assistant_enabled.label.text }}</label>
+      </div>
+      <p class="form-hint mt-2">Büro-Admin und Mitarbeiter dieses Büros können den Textassistenten unter Werkzeuge → Assistent verwenden. Der Plattformbetreiber erhält dadurch keinen Zugriff.</p>
       <div class="mt-4">
         <button type="submit" class="btn btn-primary h-10 px-4 text-sm" onclick="return this.form.is_active.checked || confirm('Büro wirklich deaktivieren? Alle Benutzer dieses Büros werden abgemeldet.');">Speichern</button>
       </div>

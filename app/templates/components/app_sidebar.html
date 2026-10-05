@@ -42,11 +42,7 @@
         <ul class="app-sidebar-list">
           {% for entry in group.entries %}
             <li>
-              {% if entry.kind == 'assistant' %}
-                <button type="button" class="app-sidebar-link" data-assistant-toggle aria-controls="assistent" aria-expanded="false">{{ entry.label }}</button>
-              {% else %}
-                <a href="{{ entry.url }}" class="app-sidebar-link {{ 'is-active' if entry.active else '' }}"{% if entry.active %} aria-current="page"{% endif %}>{{ entry.label }}</a>
-              {% endif %}
+              <a href="{{ entry.url }}" class="app-sidebar-link {{ 'is-active' if entry.active else '' }}"{% if entry.active %} aria-current="page"{% endif %}>{{ entry.label }}</a>
             </li>
           {% endfor %}
         </ul>

@@ -830,6 +830,19 @@
     if (source) copyText(source.matches("textarea, input") ? source.value : source.innerText, button);
   });
 
+  // <a data-assistant-handoff="#selector" href="/assistent">: Text (z. B. die anonymisierte Fassung)
+  // an die Assistent-Seite uebergeben. Nur im sessionStorage dieses Tabs; die Seite uebernimmt ihn
+  // ins Eingabefeld, loescht ihn sofort und sendet nichts ab.
+  document.addEventListener("click", function (event) {
+    var link = event.target.closest ? event.target.closest("[data-assistant-handoff]") : null;
+    if (!link) return;
+    var source = document.querySelector(link.getAttribute("data-assistant-handoff"));
+    if (!source) return;
+    try {
+      sessionStorage.setItem("zentriq-assistant-handoff", source.matches("textarea, input") ? source.value : source.innerText);
+    } catch (e) { /* ohne sessionStorage: Seite oeffnet sich leer */ }
+  });
+
   function boot(root) {
     initStackTables(root);
     initScrollStrips(root);

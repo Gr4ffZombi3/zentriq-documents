@@ -160,7 +160,13 @@ def office_create():
 def office_detail(tenant_id):
     tenant = _tenant_or_404(tenant_id)
     form = TenantForm(
-        data=None if request.method == "POST" else {"name": tenant.name, "is_active": tenant.status == TenantStatus.ACTIVE}
+        data=None
+        if request.method == "POST"
+        else {
+            "name": tenant.name,
+            "is_active": tenant.status == TenantStatus.ACTIVE,
+            "assistant_enabled": tenant.assistant_enabled,
+        }
     )
     if form.validate_on_submit():
         new_status = TenantStatus.ACTIVE if form.is_active.data else TenantStatus.SUSPENDED
@@ -171,6 +177,9 @@ def office_detail(tenant_id):
         if new_status != tenant.status:
             changes["status"] = {"old": tenant.status.value, "new": new_status.value}
             tenant.status = new_status
+        if bool(form.assistant_enabled.data) != tenant.assistant_enabled:
+            changes["assistant_enabled"] = {"old": tenant.assistant_enabled, "new": bool(form.assistant_enabled.data)}
+            tenant.assistant_enabled = bool(form.assistant_enabled.data)
         if changes:
             log_audit_event(
                 AuditEventType.TENANT_UPDATED, tenant_id=tenant.id, user=current_user, details={"changes": changes}

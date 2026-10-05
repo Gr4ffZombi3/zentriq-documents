@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from flask import current_app, request, url_for
 from flask_login import current_user
 
+from app.extensions import db
+
 
 @dataclass(frozen=True)
 class NavItem:
@@ -35,7 +37,6 @@ class NavArea:
     prefixes: tuple[str, ...]
     admin_only: bool
     items: tuple[NavItem, ...] = field(default_factory=tuple)
-    # "assistant": kein Link, sondern der Schalter fuer das Assistent-Panel.
     kind: str = "link"
 
 
@@ -110,7 +111,8 @@ OFFICE_GROUPS = (
         "tools",
         "Werkzeuge",
         (
-            NavArea("assistant", "Assistent", "assistant.generate", (), admin_only=False, kind="assistant"),
+            # Nur fuer freigegebene Bueros (assistant_allowed), unabhaengig vom API-Key.
+            NavArea("assistant", "Assistent", "assistant.index", ("assistant.",), admin_only=False, kind="assistant"),
             NavArea("anonymize", "Dokument anonymisieren", "tools.anonymize_document", ("tools.anonymize",), admin_only=False),
             # Fuer Mitarbeiter waere der Universal-Upload nur ein zweiter Memo-Upload (sie duerfen
             # keine Listen importieren) - deshalb nur fuer Buero-Admins in der Navigation.
@@ -150,6 +152,7 @@ def build_navigation() -> dict:
     # Benutzerformulare, die von der Mitarbeiterseite aus geoeffnet wurden.
     from_staff = bool(endpoint and endpoint.startswith("settings.user") and request.values.get("von") == "mitarbeiter")
     has_assistant = assistant_available(current_user)
+    show_assistant = assistant_allowed(current_user)
     groups = []
     active_area = None
     for group in PLATFORM_GROUPS if current_user.is_super_admin else OFFICE_GROUPS:
@@ -157,9 +160,7 @@ def build_navigation() -> dict:
             continue
         entries = []
         for area in group.areas:
-            if area.kind == "assistant":
-                if has_assistant:
-                    entries.append({"label": area.label, "url": None, "active": False, "key": area.key, "kind": area.kind})
+            if area.kind == "assistant" and not show_assistant:
                 continue
             if not _visible(area, is_admin):
                 continue
@@ -204,17 +205,25 @@ def build_navigation() -> dict:
     }
 
 
-def assistant_panel_actions() -> list[tuple[str, str]]:
-    from app.services.assistant import ACTIONS, PANEL_ACTIONS
 
-    return [(key, ACTIONS[key].label) for key in PANEL_ACTIONS]
+def assistant_allowed(user) -> bool:
+    """Darf `user` den Textassistenten verwenden? Nur Buero-Admin und Mitarbeiter eines Bueros,
+    fuer das der Assistent freigegeben ist (Tenant.assistant_enabled). SUPER_ADMIN nie. Haengt
+    bewusst NICHT vom API-Key ab - ohne Key zeigt die Seite nur einen Hinweis."""
+    if not getattr(user, "is_authenticated", False) or not (user.is_office_admin or user.is_employee):
+        return False
+    from app.models import Tenant
+
+    tenant = db.session.get(Tenant, user.tenant_id) if user.tenant_id else None
+    return bool(tenant is not None and tenant.assistant_enabled)
 
 
 def assistant_available(user) -> bool:
-    """KI-Assistent nur fuer Buero-Rollen und nur, wenn er eingerichtet und aktiviert ist."""
+    """Assistent erlaubt UND technisch einsatzbereit (API-Key gesetzt, nicht abgeschaltet) -
+    fuer Zusatzfunktionen wie die Memo-Kurzfassung, die nur mit Antwort sinnvoll sind."""
     from app.services.assistant import is_enabled
 
-    return bool((user.is_office_admin or user.is_employee) and is_enabled())
+    return assistant_allowed(user) and is_enabled()
 
 
 def display_name_for(user) -> str:

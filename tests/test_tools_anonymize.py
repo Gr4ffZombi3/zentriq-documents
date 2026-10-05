@@ -163,25 +163,35 @@ def test_unsupported_file_and_empty_input(app, world):
     assert resp.status_code == 400 and "Bitte eine Datei auswählen oder Text einfügen." in resp.get_data(as_text=True)
 
 
-def test_result_offers_copy_and_assistant_without_sending(app, world):
+def test_result_offers_copy_and_assistant_without_sending(app, world, db):
+    world.tenant_a.assistant_enabled = True
+    db.session.commit()
     app.config["ANTHROPIC_API_KEY"] = "sk-ant-test"
     app.config["ASSISTANT_ENABLED"] = True
     html = login(app, "dennis@example.com").post("/werkzeuge/anonymisieren", data={"text": EXAMPLE}).get_data(as_text=True)
     # Beide Aktionen beziehen sich ausschliesslich auf das Feld mit der anonymisierten Fassung.
     assert 'data-copy="#anon-result"' in html
-    assert 'data-assistant-insert="#anon-result"' in html
+    assert 'data-assistant-handoff="#anon-result"' in html
     assert 'id="anon-result" rows="14">[KUNDE]' in html
     app.config["ASSISTANT_ENABLED"] = False
     html = login(app, "dennis@example.com").post("/werkzeuge/anonymisieren", data={"text": EXAMPLE}).get_data(as_text=True)
-    assert "data-assistant-insert" not in html
+    assert "data-assistant-handoff" not in html
+    # Buero ohne Freigabe: kein Uebergabe-Link, auch mit API-Key.
+    app.config["ASSISTANT_ENABLED"] = True
+    html = login(app, "bob@example.com").post("/werkzeuge/anonymisieren", data={"text": EXAMPLE}).get_data(as_text=True)
+    assert "data-assistant-handoff" not in html
 
 
 # --- Werkzeuge, Navigation, Startseite ------------------------------------------------------
 
 
-def test_tools_page_per_role(app, world):
+def test_tools_page_per_role(app, world, db):
+    world.tenant_a.assistant_enabled = True
+    db.session.commit()
     employee = login(app, "dennis@example.com").get("/werkzeuge").get_data(as_text=True)
-    assert "Dokument anonymisieren" in employee and "Assistent" in employee
+    assert "Dokument anonymisieren" in employee and 'href="/assistent"' in employee
+    other_office = login(app, "bob@example.com").get("/werkzeuge").get_data(as_text=True)
+    assert "Dokument anonymisieren" in other_office and 'href="/assistent"' not in other_office
     assert "Universal-Upload" not in employee  # fuer Mitarbeiter = Memo-Upload, keine Doppelung
     admin = login(app, "admin-a@example.com").get("/werkzeuge").get_data(as_text=True)
     assert "Universal-Upload" in admin and 'href="/hochladen"' in admin

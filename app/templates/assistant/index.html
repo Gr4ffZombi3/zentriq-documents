@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Assistent – Zentriq{% endblock %}
+{% block content %}
+{# Reines Textwerkzeug: uebertragen wird nur der eingegebene Text (app/services/assistant.py);
+   Eingabe und Ergebnis werden nicht gespeichert, es wird nichts versendet oder ausgefuehrt. #}
+<div class="page-shell page-shell-narrow">
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">Assistent</h1>
+      <p class="page-subtitle">Professionelle Texte schnell formulieren.</p>
+    </div>
+  </div>
+
+  {% if not available %}
+    <p class="assistant-unavailable" data-assistant-unavailable>{{ unavailable_message }}</p>
+  {% else %}
+    <div class="assistant-page" data-assistant data-url="{{ url_for('assistant.generate') }}" data-max-chars="{{ max_chars }}">
+      <form class="assistant-form" data-assistant-form novalidate>
+        <label class="sr-only" for="assistant-input">Auftrag oder Text</label>
+        <textarea class="field-surface assistant-input" id="assistant-input" data-assistant-input rows="8" maxlength="{{ max_chars }}"
+                  placeholder="z. B. „Schreibe dem Kunden professionell, dass sein Angebot fertig ist und er sich bei Fragen melden kann.“"></textarea>
+        <p class="assistant-hint">
+          <span>Übertragen wird nur dieser Text. Nichts wird gespeichert oder versendet.</span>
+          <span class="assistant-count" data-assistant-count aria-live="off"></span>
+        </p>
+        <div class="assistant-buttons">
+          <button type="submit" class="btn btn-primary" data-assistant-submit>Text erstellen</button>
+          <span class="assistant-status" data-assistant-status aria-live="polite"></span>
+        </div>
+        <p class="form-error assistant-error" data-assistant-error role="alert" hidden></p>
+      </form>
+
+      <section class="assistant-result" data-assistant-result-box aria-labelledby="assistant-result-title" hidden>
+        <h2 class="assistant-result-title" id="assistant-result-title">Ergebnis</h2>
+        <div class="assistant-output" id="assistant-output" data-assistant-result tabindex="0" aria-live="polite"></div>
+        <div class="assistant-result-actions">
+          <button type="button" class="btn btn-primary btn-sm" data-copy="#assistant-output">Kopieren</button>
+          {% for key, label in refine_actions %}
+            <button type="button" class="btn btn-secondary btn-sm" data-assistant-refine="{{ key }}">{{ label }}</button>
+          {% endfor %}
+        </div>
+      </section>
+    </div>
+    <script defer src="{{ url_for('static', filename='js/assistant.js', v=static_rev('js/assistant.js')) }}"></script>
+  {% endif %}
+</div>
+{% endblock %}

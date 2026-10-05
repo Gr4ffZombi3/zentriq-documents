@@ -118,7 +118,8 @@ def transcribe():
 @office_member_required
 def upload_diagnosis():
     """Protokolliert, welche Antwort der Browser auf den Upload erhalten hat, wenn sie nicht
-    von diesem Server stammt (z. B. Proxy, Firewall, Virenscanner). Nur Metadaten, kein Inhalt."""
+    von diesem Server stammt (z. B. Proxy, Firewall, Virenscanner). Nur Metadaten und der Titel der
+    fremden Seite (Sperrgrund), kein Upload-Inhalt."""
     data = request.get_json(silent=True) or {}
 
     def clean(key, limit=120):
@@ -126,9 +127,9 @@ def upload_diagnosis():
         return "".join(ch for ch in str("" if value is None else value)[:limit] if ch.isprintable())
 
     current_app.logger.warning(
-        "memo.upload.foreign_response status=%s redirected=%s url=%s content_type=%s server=%s via=%s size=%s",
+        "memo.upload.foreign_response status=%s redirected=%s url=%s content_type=%s server=%s via=%s size=%s title=%r",
         clean("status", 5), clean("redirected", 5), clean("url", 200), clean("content_type"),
-        clean("server"), clean("via"), clean("size", 12),
+        clean("server"), clean("via"), clean("size", 12), clean("title", 150),
     )
     return "", 204
 

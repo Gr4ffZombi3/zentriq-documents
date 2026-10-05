@@ -289,8 +289,10 @@ def test_forbidden_json_request_gets_json_403(app, auth_client, monkeypatch):
 def test_foreign_upload_response_is_logged_without_content(app, employee_client, caplog):
     resp = employee_client.post(
         "/sprachnachrichten/diagnose",
-        json={"status": 403, "redirected": True, "url": "https://www.zentriqai.de/blocked\nx", "server": "Proxy"},
+        json={"status": 403, "redirected": True, "url": "https://www.zentriqai.de/blocked\nx", "server": "Proxy",
+              "title": "Medientyp blockiert\n" + "x" * 300},
     )
     assert resp.status_code == 204
     line = next(r.getMessage() for r in caplog.records if "foreign_response" in r.getMessage())
     assert "status=403" in line and "server=Proxy" in line and "\n" not in line
+    assert "title='Medientyp blockiert" in line and "x" * 151 not in line

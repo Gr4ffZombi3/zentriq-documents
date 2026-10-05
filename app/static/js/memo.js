@@ -268,7 +268,18 @@
   }
 
   // Meldet nur Metadaten der fremden Antwort an den Server, damit sie im Log nachvollziehbar ist.
-  function reportForeign(resp) {
+  // Titel bzw. erste Ueberschrift einer fremden HTML-Seite (z. B. Sperrseite des Proxys), damit
+  // Nutzer und IT den Sperrgrund sehen. Nur als Text, gekuerzt.
+  function pageTitle(text) {
+    if (!text) return "";
+    var match = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(text) || /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(text);
+    if (!match) return "";
+    var node = document.createElement("textarea");
+    node.innerHTML = match[1].replace(/<[^>]*>/g, " ");
+    return node.value.replace(/\s+/g, " ").trim().slice(0, 150);
+  }
+
+  function reportForeign(resp, title) {
     var target = "";
     try { var u = new URL(resp.url); target = u.origin + u.pathname; } catch (e) { target = ""; }
     fetch(root.dataset.diagnoseUrl, {
@@ -278,19 +289,22 @@
       body: JSON.stringify({
         status: resp.status, redirected: resp.redirected, url: target,
         content_type: resp.headers.get("Content-Type") || "", server: resp.headers.get("Server") || "",
-        via: resp.headers.get("Via") || "", size: resp.headers.get("Content-Length") || "",
+        via: resp.headers.get("Via") || "", size: resp.headers.get("Content-Length") || "", title: title || "",
       }),
     }).catch(function () {});
   }
 
   // Verstaendliche Meldung auch dann, wenn der Server (oder nginx) kein JSON liefert.
   // "Anmeldung abgelaufen" nur, wenn der Server das ausdruecklich meldet (code login_required).
-  function responseError(resp, body, fallback) {
+  function responseError(resp, body, fallback, text) {
     if (body && body.error) return body.error;
     if (!fromApp(resp) && resp.status !== 502 && resp.status !== 503 && resp.status !== 504 && resp.status !== 413) {
-      reportForeign(resp);
-      return "Der Upload wurde nicht vom Zentriq-Server beantwortet (HTTP " + resp.status + (resp.redirected ? ", umgeleitet" : "") +
-        "). Vermutlich hat eine Firewall, ein Proxy, ein Virenscanner oder eine Browser-Erweiterung die Übertragung der Audiodatei blockiert. Bitte die IT bzw. den Virenscanner prüfen oder es in einem anderen Netz (z. B. Handy-Hotspot) versuchen.";
+      var title = pageTitle(text);
+      var via = resp.headers.get("Via") || "";
+      reportForeign(resp, title);
+      return "Der Upload wurde nicht vom Zentriq-Server beantwortet, sondern unterwegs abgefangen (HTTP " + resp.status +
+        (resp.redirected ? ", umgeleitet" : "") + (via ? ", über " + via : "") + ")" + (title ? ": „" + title + "“" : "") +
+        ". Ihre Anmeldung bei Zentriq ist davon nicht betroffen. Vermutlich blockiert eine Firewall, ein Web-Proxy oder ein Virenscanner das Hochladen von Audiodateien – bitte die IT bitten, Uploads an www.zentriqai.de freizugeben, oder es in einem anderen Netz (z. B. Handy-Hotspot) versuchen.";
     }
     if (resp.redirected) return "Die Anmeldung ist abgelaufen. Bitte die Seite neu laden und erneut anmelden.";
     if (resp.status === 413) return "Die Datei ist zu groß (maximal 25 MB).";
@@ -300,8 +314,10 @@
   }
 
   function readJson(resp, fallback) {
-    return resp.json().catch(function () { return null; }).then(function (body) {
-      if (!body || resp.redirected || (!resp.ok && resp.status !== 202)) throw new Error(responseError(resp, body, fallback));
+    return resp.text().catch(function () { return ""; }).then(function (text) {
+      var body = null;
+      try { body = JSON.parse(text); } catch (e) { body = null; }
+      if (!body || resp.redirected || (!resp.ok && resp.status !== 202)) throw new Error(responseError(resp, body, fallback, text));
       body._status = resp.status;
       return body;
     });

@@ -22,7 +22,13 @@
   var sendBtn = $("[data-zc-send]");
   var statusEl = $("[data-zc-status]");
   var alertEl = $("[data-zc-alert]");
-  var modelSelect = $("[data-zc-model]");
+  var modelButton = $("[data-zc-model-button]");
+  var modelMenu = $("[data-zc-model-menu]");
+  var modelOptions = $("[data-zc-model-options]");
+  var modelLabel = $("[data-zc-model-label]");
+  var customerBadge = $("[data-zc-customer-badge]");
+  var modelChoice = "auto";
+  var models = [];
   var customerBox = $("[data-zc-customer]");
   var titleEl = $("[data-zc-title]");
   var projectEl = $("[data-zc-project]");
@@ -84,7 +90,7 @@
         i++;
         while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) { code.push(lines[i]); i++; }
         i++;
-        html.push('<div class="zc-code"><button type="button" class="zc-code-copy" data-zc-copy-code>Kopieren</button><pre><code>' + esc(code.join("\n")) + "</code></pre></div>");
+        html.push('<div class="zc-code"><div class="zc-code-head"><span>' + esc(fence[1] || "Code") + '</span><button type="button" data-zc-copy-code>Kopieren</button></div><pre><code>' + esc(code.join("\n")) + "</code></pre></div>");
         continue;
       }
       if (/^\s*$/.test(line)) { i++; continue; }
@@ -147,8 +153,14 @@
 
   function formatCost(v) { return v === null || v === undefined ? "" : (v === 0 ? "kostenlos" : v.toFixed(4) + " USD"); }
 
+  function setEmpty(state) {
+    root.classList.toggle("is-empty", state);
+    document.body.classList.toggle("zc-empty", state);
+    updateComposerHeight();
+  }
+
   function renderUser(m) {
-    welcome.hidden = true;
+    setEmpty(false);
     var el = document.createElement("div");
     el.className = "zc-msg zc-msg-user";
     el.dataset.id = m.id || "";
@@ -211,14 +223,15 @@
     meta.appendChild(info);
     var copy = document.createElement("button");
     copy.type = "button";
-    copy.textContent = "Kopieren";
+    copy.title = "Antwort kopieren";
+    copy.textContent = "⧉ Kopieren";
     copy.addEventListener("click", function () { copyText(m.content, copy); });
     meta.appendChild(copy);
     el.appendChild(meta);
   }
 
   function renderAssistant(m) {
-    welcome.hidden = true;
+    setEmpty(false);
     var el = document.createElement("div");
     el.className = "zc-msg zc-msg-assistant";
     fillAssistant(el, m);
@@ -228,12 +241,12 @@
 
   thread.addEventListener("click", function (e) {
     var btn = e.target.closest("[data-zc-copy-code]");
-    if (btn) copyText(btn.parentNode.querySelector("code").textContent, btn);
+    if (btn) copyText(btn.closest(".zc-code").querySelector("code").textContent, btn);
   });
 
   function clearThread() {
     Array.prototype.slice.call(thread.querySelectorAll(".zc-msg")).forEach(function (n) { n.remove(); });
-    welcome.hidden = false;
+    setEmpty(true);
   }
 
   function showAlert(message) {
@@ -243,14 +256,17 @@
 
   function setCurrent(c) {
     current = c;
-    titleEl.textContent = c ? c.title : "Neue Unterhaltung";
-    projectEl.hidden = !(c && c.project);
-    projectEl.textContent = c && c.project ? c.project : "";
+    // Titel steht in der Seitenleiste und im Fenstertitel (kein eigener Kopf wie bei Chat-Apps).
+    if (titleEl) titleEl.textContent = c ? c.title : "Neue Unterhaltung";
+    if (projectEl) {
+      projectEl.hidden = !(c && c.project);
+      projectEl.textContent = c && c.project ? c.project : "";
+    }
     menu.hidden = !c;
     customerBox.checked = !!(c && c.customer_data);
+    customerBadge.hidden = !customerBox.checked;
     if (c) {
-      modelSelect.value = c.model_choice;
-      if (modelSelect.selectedIndex < 0) modelSelect.value = "auto";
+      setModel(c.model_choice);
       var pinBtn = menu.querySelector('[data-zc-action="pin"]');
       pinBtn.textContent = c.pinned ? "Nicht mehr speichern" : "Speichern";
     }
@@ -264,20 +280,76 @@
   }
 
   // --- Laden ---------------------------------------------------------------------------
+  // --- Modellwahl ------------------------------------------------------------------------
+  function option(ref, label, sub) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "zc-option";
+    b.setAttribute("role", "option");
+    b.dataset.ref = ref;
+    var l = document.createElement("span");
+    l.className = "zc-option-label";
+    l.textContent = label;
+    var check = document.createElement("span");
+    check.className = "zc-option-check";
+    check.textContent = "✓";
+    var s2 = document.createElement("span");
+    s2.className = "zc-option-sub";
+    s2.textContent = sub;
+    b.appendChild(l); b.appendChild(check); b.appendChild(s2);
+    return b;
+  }
+
+  function renderModelOptions() {
+    modelOptions.textContent = "";
+    if (!models.length) {
+      var p = document.createElement("p");
+      p.className = "zc-option-empty";
+      p.textContent = "Derzeit ist kein KI-Modell eingerichtet oder erreichbar.";
+      modelOptions.appendChild(p);
+      setModel("auto");
+      return;
+    }
+    modelOptions.appendChild(option("auto", "Automatisch", "Wählt ein verfügbares Modell – kostenlose zuerst, Ausweichen bei Ausfällen"));
+    models.forEach(function (m) {
+      modelOptions.appendChild(option(m.ref, m.label, m.provider + (m.free ? " · kostenlos" : "") + (m.customer_data ? " · für Kundendaten freigegeben" : "") + (m.paused ? " · gerade pausiert" : "")));
+    });
+    setModel(modelChoice);
+  }
+
+  function setModel(ref) {
+    var known = ref === "auto" || models.some(function (m) { return m.ref === ref; });
+    modelChoice = known ? ref : "auto";
+    var current = models.filter(function (m) { return m.ref === modelChoice; })[0];
+    modelLabel.textContent = !models.length ? "kein Modell verfügbar" : (current ? current.label : "Automatisch");
+    Array.prototype.forEach.call(modelOptions.querySelectorAll(".zc-option"), function (o) {
+      o.setAttribute("aria-selected", String(o.dataset.ref === modelChoice));
+    });
+  }
+
+  function toggleModelMenu(open) {
+    modelMenu.hidden = open === undefined ? !modelMenu.hidden : !open;
+    modelButton.setAttribute("aria-expanded", String(!modelMenu.hidden));
+  }
+  modelButton.addEventListener("click", function () { toggleModelMenu(); });
+  document.addEventListener("click", function (e) {
+    if (!modelMenu.hidden && !e.target.closest("[data-zc-model-root]")) toggleModelMenu(false);
+    if (menu.open && !e.target.closest("[data-zc-menu]")) menu.open = false;
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") toggleModelMenu(false); });
+  modelOptions.addEventListener("click", function (e) {
+    var o = e.target.closest(".zc-option");
+    if (!o) return;
+    setModel(o.dataset.ref);
+    toggleModelMenu(false);
+    if (current) request("PATCH", "/conversations/" + current.id, { model: modelChoice }).then(function (d) { current = d.conversation; }).catch(function (err) { showAlert(err.message); });
+  });
+
   function loadModels() {
     return request("GET", "/models").then(function (data) {
-      var models = data.models || [];
-      models.forEach(function (m) {
-        var opt = document.createElement("option");
-        opt.value = m.ref;
-        opt.textContent = m.label + " · " + m.provider + (m.free ? " (kostenlos)" : "") + (m.paused ? " – pausiert" : "");
-        modelSelect.appendChild(opt);
-      });
-      if (!models.length) {
-        modelSelect.options[0].textContent = "Kein Modell verfügbar";
-        statusEl.textContent = "Derzeit ist kein KI-Modell eingerichtet oder erreichbar.";
-      }
-    }).catch(function () {});
+      models = data.models || [];
+      renderModelOptions();
+    }).catch(function () { renderModelOptions(); });
   }
 
   function open(id, fromHistory) {
@@ -316,16 +388,20 @@
   // --- Senden + Abfrage ------------------------------------------------------------------
   function ensureConversation() {
     if (current) return Promise.resolve(current);
-    return request("POST", "/conversations", { model: modelSelect.value, customer_data: customerBox.checked }).then(function (d) {
+    return request("POST", "/conversations", { model: modelChoice, customer_data: customerBox.checked }).then(function (d) {
       setCurrent(d.conversation);
       pushUrl(d.conversation.id);
       return d.conversation;
     });
   }
 
+  function updateSend() {
+    sendBtn.disabled = busy || (!input.value.trim() && !files.length);
+  }
+
   function setBusy(state) {
     busy = state;
-    sendBtn.disabled = state;
+    updateSend();
     statusEl.textContent = state ? "ZentriqAI arbeitet …" : "";
   }
 
@@ -371,10 +447,10 @@
       if (isForm) {
         body = new FormData();
         body.append("content", text);
-        body.append("model", modelSelect.value);
+        body.append("model", modelChoice);
         sending.forEach(function (f) { body.append("files", f); });
       } else {
-        body = { content: text, model: modelSelect.value };
+        body = { content: text, model: modelChoice };
       }
       return request("POST", "/conversations/" + c.id + "/messages", body, isForm).then(function (d) {
         input.value = "";
@@ -411,6 +487,7 @@
       chip.appendChild(x);
       chipsEl.appendChild(chip);
     });
+    updateSend();
     updateComposerHeight();
   }
   $("[data-zc-attach]").addEventListener("click", function () { fileInput.click(); });
@@ -429,6 +506,7 @@
 
   // --- Eingabe -------------------------------------------------------------------------
   function autosize() {
+    updateSend();
     input.style.height = "auto";
     input.style.height = Math.min(input.scrollHeight, 224) + "px";
     updateComposerHeight();
@@ -445,10 +523,8 @@
     b.addEventListener("click", function () { send(b.textContent); });
   });
 
-  modelSelect.addEventListener("change", function () {
-    if (current) request("PATCH", "/conversations/" + current.id, { model: modelSelect.value }).then(function (d) { current = d.conversation; }).catch(function (err) { showAlert(err.message); });
-  });
   customerBox.addEventListener("change", function () {
+    customerBadge.hidden = !customerBox.checked;
     if (current) request("PATCH", "/conversations/" + current.id, { customer_data: customerBox.checked }).then(function (d) { current = d.conversation; }).catch(function (err) { showAlert(err.message); });
   });
 
@@ -493,6 +569,8 @@
 
   if (window.ResizeObserver) new ResizeObserver(updateComposerHeight).observe(form);
   updateComposerHeight();
+  if (!root.dataset.initial) setEmpty(true);
+  updateSend();
   loadModels().then(function () {
     if (root.dataset.initial) open(root.dataset.initial, true);
     else input.focus();

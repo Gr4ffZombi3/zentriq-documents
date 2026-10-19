@@ -220,7 +220,7 @@ def test_navigation_has_at_most_two_levels_and_marks_active_entry(app, world):
     html = login(app, "admin-a@example.com").get("/zeiterfassung/woche").get_data(as_text=True)
     nav = _sidebar(html)
     assert nav.count('aria-current="page"') == 1
-    assert 'href="/zeiterfassung" class="app-sidebar-link is-active"' in nav
+    assert 'href="/zeiterfassung" class="zs-item is-active"' in nav
     assert "<ul" not in nav.split("<ul", 1)[1].split("</ul>", 1)[0]  # keine verschachtelte Liste
     assert 'class="app-subnav"' in html and "Woche" in html  # zweite Ebene: Reiter ueber dem Inhalt
 

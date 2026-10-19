@@ -4,53 +4,48 @@
 {% block body_class %}zs-chat-page{% endblock %}
 {% block content %}
 {# Zentraler Chat. Antworten werden als sicheres Markdown gerendert (HTML wird vorher maskiert,
-   js/zentriq-ai.js); KI-Antworten entstehen asynchron im Celery-Worker. #}
-<div class="zc" data-zc
+   js/zentriq-ai.js); KI-Antworten entstehen asynchron im Celery-Worker. Leerer Chat: Begruessung
+   und Eingabe in der Bildschirmmitte, danach Eingabe unten. #}
+<div class="zc is-empty" data-zc
      data-api="{{ url_for('zentriq.index') }}/api"
      data-base="{{ url_for('zentriq.index') }}"
      data-initial="{{ conversation_id or '' }}"
      data-max-chars="{{ max_chars }}">
   <header class="zc-head">
-    <h1 class="zc-title"><span data-zc-title>Neue Unterhaltung</span><span class="zc-project" data-zc-project hidden></span></h1>
-    <div class="zc-controls">
-      <label class="zc-check" title="Nur für Kundendaten freigegebene KI-Anbieter verwenden">
-        <input type="checkbox" data-zc-customer> Kundendaten
-      </label>
-      <label class="sr-only" for="zc-model">KI-Modell</label>
-      <select id="zc-model" class="field-surface zc-model" data-zc-model>
-        <option value="auto">Automatisch</option>
-      </select>
-      <details class="zc-menu" data-zc-menu hidden>
-        <summary aria-label="Weitere Aktionen">⋯</summary>
-        <div class="zc-menu-list">
-          <button type="button" data-zc-action="pin">Speichern</button>
-          <button type="button" data-zc-action="rename">Umbenennen</button>
-          <button type="button" data-zc-action="project">Projekt zuordnen</button>
-          <button type="button" data-zc-action="usage">Verbrauch anzeigen</button>
-          <button type="button" class="is-danger" data-zc-action="delete">Löschen</button>
-        </div>
-      </details>
+    <button type="button" class="zs-icon-btn zc-nav-toggle" x-on:click="navOpen = !navOpen" aria-label="Menü">{{ icon('menu', class='h-5 w-5') }}</button>
+    <div class="zc-model" data-zc-model-root>
+      <button type="button" class="zc-model-button" data-zc-model-button aria-haspopup="listbox" aria-expanded="false">
+        <span class="zc-model-name">ZentriqAI</span>
+        <span class="zc-model-current" data-zc-model-label>Automatisch</span>
+        {{ icon('chevron-down', class='h-4 w-4') }}
+      </button>
+      <div class="zc-popover zc-model-menu" data-zc-model-menu hidden>
+        <div class="zc-model-options" data-zc-model-options role="listbox" aria-label="KI-Modell"></div>
+        <label class="zc-toggle">
+          <input type="checkbox" data-zc-customer>
+          <span><strong>Kundendaten-Modus</strong><small>Nur für Kundendaten freigegebene Anbieter verwenden. Nötig für Kundendaten, Dokumente mit Kundendaten und Sprachnachrichten.</small></span>
+        </label>
+      </div>
     </div>
+    <span class="zc-badge" data-zc-customer-badge hidden title="Kundendaten-Modus aktiv">Kundendaten</span>
+    <span class="zc-spacer"></span>
+    <details class="zc-menu" data-zc-menu hidden>
+      <summary class="zs-icon-btn" aria-label="Weitere Aktionen">{{ icon('ellipsis', class='h-5 w-5') }}</summary>
+      <div class="zc-popover zc-menu-list">
+        <button type="button" data-zc-action="pin">Speichern</button>
+        <button type="button" data-zc-action="rename">Umbenennen</button>
+        <button type="button" data-zc-action="project">Projekt zuordnen</button>
+        <button type="button" data-zc-action="usage">Verbrauch anzeigen</button>
+        <button type="button" class="is-danger" data-zc-action="delete">Löschen</button>
+      </div>
+    </details>
+    <a href="{{ url_for('zentriq.index') }}" class="zs-icon-btn zc-new-mobile" data-zs-new aria-label="Neuer Chat">{{ icon('square-pen', class='h-5 w-5') }}</a>
   </header>
 
   <div class="zc-scroll" data-zc-scroll>
     <div class="zc-thread" data-zc-thread>
       <div class="zc-welcome" data-zc-welcome>
-        <h1>Womit kann ich helfen?</h1>
-        <p>Fragen stellen, Texte formulieren, Dokumente und Sprachnachrichten auswerten.</p>
-        {% if tool_labels %}
-          <p>Zugriff auf: {{ tool_labels | join(', ') }}.</p>
-          <div class="zc-suggestions">
-            {% if 'Aufgaben' in tool_labels %}<button type="button" class="zc-suggestion" data-zc-suggest>Zeige die offenen Aufgaben.</button>{% endif %}
-            {% if 'Leipziger Liste' in tool_labels %}<button type="button" class="zc-suggestion" data-zc-suggest>Welche Vorgänge der Leipziger Liste sind noch offen?</button>{% endif %}
-            {% if 'Arbeitszeiten' in tool_labels %}<button type="button" class="zc-suggestion" data-zc-suggest>Zeige meine Arbeitszeiten dieser Woche.</button>{% endif %}
-          </div>
-        {% else %}
-          <div class="zc-suggestions">
-            <button type="button" class="zc-suggestion" data-zc-suggest>Formuliere eine freundliche Terminerinnerung.</button>
-            <button type="button" class="zc-suggestion" data-zc-suggest>Erkläre den Unterschied zwischen Teilkasko und Vollkasko.</button>
-          </div>
-        {% endif %}
+        <h1>{{ greeting }}</h1>
       </div>
     </div>
   </div>
@@ -59,16 +54,26 @@
     <p class="form-error zc-alert" data-zc-alert role="alert" hidden></p>
     <div class="zc-composer-inner">
       <div class="zc-attachments" data-zc-attachments></div>
+      <label class="sr-only" for="zc-input">Nachricht an ZentriqAI</label>
+      <textarea id="zc-input" class="zc-input" data-zc-input rows="1" maxlength="{{ max_chars }}" placeholder="Frag ZentriqAI …"></textarea>
       <div class="zc-row">
         <input type="file" data-zc-file multiple hidden
                accept=".pdf,.txt,.md,.csv,.mp3,.m4a,.wav,.ogg,.opus,.webm,.mp4,.aac,.flac,application/pdf,text/plain,text/csv,audio/*">
-        <button type="button" class="zc-icon-btn" data-zc-attach aria-label="Datei anhängen" title="Datei anhängen (PDF, Text, Audio)">{{ icon('paperclip', class='h-5 w-5') }}</button>
-        <label class="sr-only" for="zc-input">Nachricht an ZentriqAI</label>
-        <textarea id="zc-input" class="zc-input" data-zc-input rows="1" maxlength="{{ max_chars }}" placeholder="Nachricht an ZentriqAI …"></textarea>
-        <button type="submit" class="zc-icon-btn zc-send" data-zc-send aria-label="Senden" title="Senden">{{ icon('send', class='h-4 w-4') }}</button>
+        <button type="button" class="zc-round zc-attach" data-zc-attach aria-label="Datei anhängen" title="Dateien und Sprachnachrichten anhängen">{{ icon('plus', class='h-5 w-5') }}</button>
+        <span class="zc-row-hint" data-zc-status aria-live="polite"></span>
+        <button type="submit" class="zc-round zc-send" data-zc-send aria-label="Senden" title="Senden" disabled>{{ icon('arrow-up', class='h-5 w-5', stroke_width='2.5') }}</button>
       </div>
     </div>
-    <p class="zc-hint"><span data-zc-status aria-live="polite"></span><span>Enter senden · Umschalt+Enter neue Zeile</span></p>
+    <div class="zc-suggestions" data-zc-suggestions>
+      {% if tool_labels %}
+        {% if 'Aufgaben' in tool_labels %}<button type="button" class="zc-suggestion" data-zc-suggest>Zeige die offenen Aufgaben</button>{% endif %}
+        {% if 'Leipziger Liste' in tool_labels %}<button type="button" class="zc-suggestion" data-zc-suggest>Welche Vorgänge der Leipziger Liste sind offen?</button>{% endif %}
+        {% if 'Arbeitszeiten' in tool_labels %}<button type="button" class="zc-suggestion" data-zc-suggest>Zeige meine Arbeitszeiten dieser Woche</button>{% endif %}
+      {% endif %}
+      <button type="button" class="zc-suggestion" data-zc-suggest>Formuliere eine freundliche Terminerinnerung</button>
+      <button type="button" class="zc-suggestion" data-zc-suggest>Erkläre Teilkasko und Vollkasko kurz</button>
+    </div>
+    <p class="zc-disclaimer">ZentriqAI kann Fehler machen. Wichtige Angaben bitte prüfen.</p>
   </form>
 </div>
 <script defer src="{{ url_for('static', filename='js/zentriq-ai.js', v=static_rev('js/zentriq-ai.js')) }}"></script>

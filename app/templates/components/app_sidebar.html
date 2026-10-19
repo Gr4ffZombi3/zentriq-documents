@@ -1,17 +1,23 @@
 {% from "ui/icons.html" import icon %}
-{# Seitenleiste der ZentriqAI-Plattform: Neue Unterhaltung, Chat-Suche, gespeicherte und letzte
-   Unterhaltungen (per JS geladen, js/shell.js), darunter die Bereiche aus app/navigation.py
-   (rollenabhaengig, serverseitig abgesichert in app/auth/permissions.py), unten Konto.
-   Ab 64rem fest links und einklappbar; darunter Kopfleiste mit Menue. #}
+{# Seitenleiste im Stil eines KI-Chats: oben Neuer Chat und Suche, darunter die Bereiche der
+   Bueroplattform (aus app/navigation.py, rollenabhaengig, serverseitig abgesichert in
+   app/auth/permissions.py) zum Aufklappen, dann der Chatverlauf (js/shell.js), unten das Profil
+   mit Menue. Ab 64rem fest links und einklappbar; darunter per Menue einblendbar. #}
 {% set office_member = current_user.is_office_admin or current_user.is_employee %}
-<header class="app-topbar">
+{% set AREA_ICONS = {
+  'overview': 'layout-dashboard', 'leipziger': 'list-todo', 'voice': 'phone', 'customers': 'users',
+  'time': 'clock', 'assistant': 'pen-line', 'anonymize': 'shield', 'intake': 'upload',
+  'staff': 'users', 'office_settings': 'user-cog', 'activity': 'history',
+  'platform_home': 'layout-dashboard', 'platform_offices': 'briefcase', 'platform_users': 'users',
+  'platform_system': 'settings', 'platform_security': 'shield', 'zentriq_settings': 'settings',
+} %}
+{% set name = nav_display_name or current_user.email %}
+<header class="app-topbar zs-topbar">
+  <button type="button" class="zs-icon-btn app-topbar-menu" x-on:click="navOpen = !navOpen" :aria-expanded="navOpen" aria-expanded="false" aria-controls="hauptnavigation" aria-label="Menü">
+    {{ icon('menu', class='h-5 w-5') }}
+  </button>
   <a href="{{ url_for('portal.home') }}" class="app-brand" aria-label="ZentriqAI – Startseite"><span class="wordmark">Zentriq<span class="zs-ai">AI</span></span></a>
-  <div class="app-topbar-actions">
-    <a href="{{ url_for('zentriq.index') }}" class="app-topbar-button" aria-label="Neue Unterhaltung">{{ icon('plus', class='h-4 w-4') }}</a>
-    <button type="button" class="app-topbar-button app-topbar-menu" x-on:click="navOpen = !navOpen" :aria-expanded="navOpen" aria-expanded="false" aria-controls="hauptnavigation" aria-label="Menü">
-      {{ icon('menu', class='h-5 w-5') }}
-    </button>
-  </div>
+  <a href="{{ url_for('zentriq.index') }}" class="zs-icon-btn" data-zs-new aria-label="Neuer Chat">{{ icon('square-pen', class='h-5 w-5') }}</a>
 </header>
 
 <div class="app-sidebar-backdrop" x-cloak x-show="navOpen" x-on:click="navOpen = false"></div>
@@ -19,74 +25,70 @@
      x-on:keydown.escape.window="navOpen = false" data-zs-sidebar
      data-chats-url="{{ url_for('zentriq.api_conversations') }}" data-chat-base="{{ url_for('zentriq.index') }}">
   <div class="zs-brand-row">
-    <a href="{{ url_for('portal.home') }}" class="app-brand app-sidebar-brand" aria-label="ZentriqAI – Startseite"><span class="wordmark">Zentriq<span class="zs-ai">AI</span></span></a>
-    <button type="button" class="zs-collapse" data-zs-collapse aria-label="Seitenleiste einklappen" title="Seitenleiste einklappen">«</button>
+    <a href="{{ url_for('portal.home') }}" class="app-brand zs-brand" aria-label="ZentriqAI – Startseite"><span class="wordmark">Zentriq<span class="zs-ai">AI</span></span></a>
+    <button type="button" class="zs-icon-btn zs-collapse" data-zs-collapse aria-label="Seitenleiste schließen" title="Seitenleiste schließen">{{ icon('panel-left', class='h-5 w-5') }}</button>
   </div>
 
-  <a href="{{ url_for('zentriq.index') }}" class="zs-new" data-zs-new>{{ icon('plus', class='h-4 w-4') }} Neue Unterhaltung</a>
-
-  <div class="app-sidebar-search zs-chat-search" role="search">
-    <span class="app-sidebar-search-icon">{{ icon('search', class='h-4 w-4') }}</span>
-    <input type="search" data-zs-chat-search aria-label="Chats durchsuchen" placeholder="Chats durchsuchen" maxlength="100" autocomplete="off">
+  <div class="zs-menu">
+    <a href="{{ url_for('zentriq.index') }}" class="zs-item" data-zs-new>{{ icon('square-pen', class='zs-ico') }}<span>Neuer Chat</span></a>
+    <label class="zs-item zs-search">
+      {{ icon('search', class='zs-ico') }}
+      <input type="search" data-zs-chat-search aria-label="Chats durchsuchen" placeholder="Chats durchsuchen" maxlength="100" autocomplete="off">
+    </label>
   </div>
 
-  <div class="zs-chats" data-zs-chats>
-    <div data-zs-pinned-box hidden>
-      <p class="app-sidebar-heading">Gespeichert</p>
-      <ul class="app-sidebar-list" data-zs-pinned></ul>
-    </div>
-    <p class="app-sidebar-heading" data-zs-recent-heading>Letzte Unterhaltungen</p>
-    <ul class="app-sidebar-list zs-recent" data-zs-recent></ul>
-    <p class="zs-chats-empty" data-zs-chats-empty hidden>Noch keine Unterhaltungen.</p>
-  </div>
-
-  <details class="zs-areas" open>
-    <summary class="app-sidebar-heading zs-areas-summary">{{ 'Plattform' if current_user.is_super_admin else 'Bereiche' }}</summary>
-    <div class="app-sidebar-groups">
+  <details class="zs-areas" data-zs-areas {{ 'open' if nav_active_area else '' }}>
+    <summary class="zs-section-title zs-areas-summary">{{ 'Plattform' if current_user.is_super_admin else 'Bereiche' }}</summary>
+    <div class="zs-areas-body">
       {% if office_member %}
-        <form action="{{ url_for('search.search') }}" method="get" class="app-sidebar-search" role="search">
-          <span class="app-sidebar-search-icon">{{ icon('search', class='h-4 w-4') }}</span>
-          <input type="search" name="q" aria-label="Kunden und Vorgänge suchen" placeholder="Kunden & Vorgänge" maxlength="60" autocomplete="off"
+        <form action="{{ url_for('search.search') }}" method="get" class="zs-item zs-search" role="search">
+          {{ icon('users', class='zs-ico') }}
+          <input type="search" name="q" aria-label="Kunden und Vorgänge suchen" placeholder="Kunden & Vorgänge suchen" maxlength="60" autocomplete="off"
                  value="{{ request.args.get('q', '') if request.endpoint == 'search.search' else '' }}">
         </form>
       {% endif %}
       {% for group in nav_groups %}
-        <div class="app-sidebar-group">
-          {% if group.label %}
-            {% if group.url %}
-              <a href="{{ group.url }}" class="app-sidebar-heading is-link {{ 'is-active' if group.active else '' }}"{% if group.active %} aria-current="page"{% endif %}>{{ group.label }}</a>
-            {% else %}
-              <p class="app-sidebar-heading">{{ group.label }}</p>
-            {% endif %}
+        {% if group.label and nav_groups | length > 1 %}
+          {% if group.url %}
+            <a href="{{ group.url }}" class="zs-group-title {{ 'is-active' if group.active else '' }}">{{ group.label }}</a>
+          {% else %}
+            <p class="zs-group-title">{{ group.label }}</p>
           {% endif %}
-          <ul class="app-sidebar-list">
-            {% for entry in group.entries %}
-              <li>
-                <a href="{{ entry.url }}" class="app-sidebar-link {{ 'is-active' if entry.active else '' }}"{% if entry.active %} aria-current="page"{% endif %}>{{ entry.label }}</a>
-              </li>
-            {% endfor %}
-          </ul>
-        </div>
+        {% endif %}
+        {% for entry in group.entries %}
+          <a href="{{ entry.url }}" class="zs-item {{ 'is-active' if entry.active else '' }}"{% if entry.active %} aria-current="page"{% endif %}>
+            {{ icon(AREA_ICONS.get(entry.key, 'file-text'), class='zs-ico') }}<span>{{ entry.label }}</span>
+          </a>
+        {% endfor %}
       {% endfor %}
     </div>
   </details>
 
-  <div class="app-sidebar-footer">
-    <p class="app-sidebar-identity" title="{{ current_user.email }}">
-      <span class="app-sidebar-name">{{ nav_display_name }}</span>
-      <span class="app-sidebar-role">{{ current_user.role.label }}</span>
-    </p>
-    <ul class="app-sidebar-list">
-      <li>
-        <a href="{{ url_for('settings.profile') }}" class="app-sidebar-link {{ 'is-active' if nav_settings_active else '' }}"{% if nav_settings_active %} aria-current="page"{% endif %}>{{ nav_settings_label }}</a>
-      </li>
-      <li>
-        <form method="post" action="{{ url_for('auth.logout') }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="app-sidebar-link">Abmelden</button>
-        </form>
-      </li>
-    </ul>
+  <div class="zs-chats" data-zs-chats>
+    <div data-zs-pinned-box hidden>
+      <p class="zs-section-title">Gespeichert</p>
+      <ul class="zs-chat-list" data-zs-pinned></ul>
+    </div>
+    <p class="zs-section-title" data-zs-recent-heading>Chats</p>
+    <ul class="zs-chat-list" data-zs-recent></ul>
+    <p class="zs-chats-empty" data-zs-chats-empty hidden>Noch keine Unterhaltungen.</p>
   </div>
+
+  <details class="zs-profile">
+    <summary class="zs-profile-button" title="{{ current_user.email }}">
+      <span class="zs-avatar" aria-hidden="true">{{ (name[:1] or '?') | upper }}</span>
+      <span class="zs-profile-text"><span class="zs-profile-name">{{ name }}</span><span class="zs-profile-role">{{ current_user.role.label }}</span></span>
+    </summary>
+    <div class="zs-profile-menu">
+      <a href="{{ url_for('settings.profile') }}" class="zs-item {{ 'is-active' if nav_settings_active else '' }}">{{ icon('user-cog', class='zs-ico') }}<span>{{ nav_settings_label }}</span></a>
+      {% if current_user.is_super_admin %}
+        <a href="{{ url_for('zentriq_admin.settings') }}" class="zs-item">{{ icon('settings', class='zs-ico') }}<span>KI-Einstellungen</span></a>
+      {% endif %}
+      <form method="post" action="{{ url_for('auth.logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="zs-item">{{ icon('log-out', class='zs-ico') }}<span>Abmelden</span></button>
+      </form>
+    </div>
+  </details>
 </nav>
-<button type="button" class="zs-expand" data-zs-expand aria-label="Seitenleiste einblenden" title="Seitenleiste einblenden">»</button>
+<button type="button" class="zs-icon-btn zs-expand" data-zs-expand aria-label="Seitenleiste öffnen" title="Seitenleiste öffnen">{{ icon('panel-left', class='h-5 w-5') }}</button>

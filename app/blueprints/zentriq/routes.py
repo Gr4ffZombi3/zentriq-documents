@@ -64,6 +64,14 @@ def _model_options() -> list[dict]:
 # --- Seite ---------------------------------------------------------------------------------
 
 
+def _greeting() -> str:
+    """Begruessung mit Vornamen aus dem Mitarbeiterprofil - nie aus der E-Mail-Adresse."""
+    profile = None if current_user.is_super_admin else current_user.employee_profile
+    name = (profile.display_name or "").strip() if profile is not None else ""
+    first = name.split()[0] if name and "@" not in name else ""
+    return f"Womit kann ich helfen, {first}?" if first else "Womit kann ich helfen?"
+
+
 @zentriq_bp.get("")
 @zentriq_bp.get("/c/<int:conversation_id>")
 @login_required
@@ -71,6 +79,7 @@ def index(conversation_id=None):
     return render_template(
         "zentriq/index.html",
         conversation_id=conversation_id,
+        greeting=_greeting(),
         max_chars=int(current_app.config.get("ZENTRIQ_AI_MAX_INPUT_CHARS") or 12000),
         # Nur anzeigen, was tatsaechlich nutzbar ist: Werkzeuge brauchen einen fuer Kundendaten
         # freigegebenen Anbieter.

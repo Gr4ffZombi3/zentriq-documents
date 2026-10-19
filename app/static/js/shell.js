@@ -49,13 +49,11 @@
   function chatItem(c) {
     var li = document.createElement("li");
     var a = document.createElement("a");
-    a.className = "app-sidebar-link zs-chat-link" + (String(c.id) === String(activeId) ? " is-active" : "");
+    a.className = "zs-chat-link" + (String(c.id) === String(activeId) ? " is-active" : "");
     a.href = sidebar.dataset.chatBase + "/c/" + c.id;
     a.dataset.zsChatLink = c.id;
     a.title = c.title + (c.project ? " · " + c.project : "");
-    var span = document.createElement("span");
-    span.textContent = c.title;
-    a.appendChild(span);
+    a.textContent = c.title;
     li.appendChild(a);
     return li;
   }
@@ -70,7 +68,7 @@
     (pinnedList || []).forEach(function (c) { pinnedUl.appendChild(chatItem(c)); });
     pinnedBox.hidden = !pinnedUl.children.length;
     list.forEach(function (c) { recentUl.appendChild(chatItem(c)); });
-    heading.textContent = query ? "Suchergebnisse" : "Letzte Unterhaltungen";
+    heading.textContent = query ? "Suchergebnisse" : "Chats";
     sidebar.querySelector("[data-zs-chats-empty]").hidden = list.length > 0 || pinnedUl.children.length > 0;
     sidebar.querySelector("[data-zs-chats-empty]").textContent = query ? "Keine Treffer." : "Noch keine Unterhaltungen.";
   }
@@ -96,6 +94,15 @@
     });
   }
 
+  // Bereiche auf-/zugeklappt merken (auf einer Bereichsseite ist der Abschnitt immer offen).
+  var areas = document.querySelector("[data-zs-areas]");
+  if (areas) {
+    try { if (!areas.open && localStorage.getItem("zentriq-areas-open") === "1") areas.open = true; } catch (e) {}
+    areas.addEventListener("toggle", function () {
+      try { localStorage.setItem("zentriq-areas-open", areas.open ? "1" : "0"); } catch (e) {}
+    });
+  }
+
   if (sidebar) {
     var search = sidebar.querySelector("[data-zs-chat-search]");
     if (search) search.addEventListener("input", function () {
@@ -103,7 +110,7 @@
       searchTimer = setTimeout(refreshChats, 250);
     });
     // Auf der Chat-Seite oeffnet ein Klick die Unterhaltung ohne Seitenwechsel.
-    sidebar.addEventListener("click", function (e) {
+    document.addEventListener("click", function (e) {
       var link = e.target.closest("[data-zs-chat-link]");
       var isNew = e.target.closest("[data-zs-new]");
       if (!window.ZentriqChat || e.metaKey || e.ctrlKey || e.shiftKey) return;

@@ -135,7 +135,7 @@ def test_page_never_contains_api_keys(app, world, fake):
 
 def test_layout_has_sidebar_areas_and_time_clock(app, world):
     body = login(app, "dennis@example.com").get("/zentriq").get_data(as_text=True)
-    assert "Neue Unterhaltung" in body and "Chats durchsuchen" in body
+    assert "Neuer Chat" in body and "Chats durchsuchen" in body
     assert "Leipziger Liste" in body and "Zeiterfassung" in body
     assert "data-zs-clock" in body
     # SUPER_ADMIN: keine Zeiterfassung, keine Buerobereiche, aber KI-Einstellungen.

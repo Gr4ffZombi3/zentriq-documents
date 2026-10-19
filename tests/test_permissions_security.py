@@ -431,7 +431,9 @@ def test_super_admin_is_denied_every_business_endpoint(app, world):
     client = login(app, "justin@example.com")
     checked = 0
     for rule in app.url_map.iter_rules():
-        if rule.endpoint == "static" or rule.endpoint.startswith(("platform.", "auth.")) or rule.endpoint in SUPER_ADMIN_ALLOWED:
+        # "zentriq.": ZentriqAI (Phase 5) ist bewusst nur fuer den SUPER_ADMIN freigegeben und
+        # enthaelt keine Buerodaten; die Sperre fuer alle anderen Rollen prueft test_zentriq_ai.py.
+        if rule.endpoint == "static" or rule.endpoint.startswith(("platform.", "auth.", "zentriq.")) or rule.endpoint in SUPER_ADMIN_ALLOWED:
             continue
         url = _concrete_url(rule, world)
         for method in sorted(rule.methods - {"HEAD", "OPTIONS"}):

@@ -9,7 +9,7 @@ OFFICE_ADMINs erreichbar, solange sie hier nicht ausdruecklich freigegeben werde
   globale Suche (nur eigene Vorgaenge), KI-Assistent, Werkzeuge, eigenes Konto.
 - OFFICE_ADMIN: alle Fachbereiche des eigenen Mandanten (Mandantentrennung: app/tenancy.py),
   aber nie die Plattformverwaltung.
-- SUPER_ADMIN: ausschliesslich Plattformverwaltung (Bueros, Benutzer) und eigenes Konto -
+- SUPER_ADMIN: ausschliesslich Plattformverwaltung (Bueros, Benutzer), ZentriqAI und eigenes Konto -
   KEINE fachlichen Buerodaten (Leipziger Liste, Memo, Zeiterfassung, Dokumente ...).
 """
 
@@ -61,11 +61,13 @@ EMPLOYEE_ALLOWED_ENDPOINTS = frozenset(
     }
 )
 
-SUPER_ADMIN_ALLOWED_BLUEPRINTS = frozenset({"platform"})
+# "zentriq": ZentriqAI-Assistent (Phase 5: Erprobung ausschliesslich durch den SUPER_ADMIN,
+# ohne Zugriff auf Buerodaten - siehe docs/zentriq-ai-konzept.md).
+SUPER_ADMIN_ALLOWED_BLUEPRINTS = frozenset({"platform", "zentriq"})
 SUPER_ADMIN_ALLOWED_ENDPOINTS = frozenset()
 
 # Nur fuer SUPER_ADMIN - auch ein OFFICE_ADMIN erreicht diese nie.
-SUPER_ADMIN_ONLY_BLUEPRINTS = frozenset({"platform"})
+SUPER_ADMIN_ONLY_BLUEPRINTS = frozenset({"platform", "zentriq"})
 
 # Waehrend die 2FA-Einrichtung erzwungen wird, sind nur diese Endpunkte erreichbar.
 TWO_FACTOR_SETUP_ENDPOINTS = frozenset(

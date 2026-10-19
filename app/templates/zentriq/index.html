@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}ZentriqAI – Zentriq{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/zentriq-ai.css', v=static_rev('css/zentriq-ai.css')) }}">
+{% endblock %}
+{% block content %}
+{# Antworten werden ausschliesslich per textContent eingesetzt (kein HTML aus Modellantworten). #}
+<div class="zai" data-zai data-api="{{ url_for('zentriq.index') }}/api" data-max-chars="{{ max_chars }}">
+  <aside class="zai-side" data-zai-side aria-label="Unterhaltungen">
+    <button type="button" class="btn btn-primary zai-new" data-zai-new>Neue Unterhaltung</button>
+    <label class="sr-only" for="zai-search">Unterhaltungen durchsuchen</label>
+    <input type="search" id="zai-search" class="field-surface zai-search" data-zai-search placeholder="Suchen …" autocomplete="off">
+    <ul class="zai-list" data-zai-list></ul>
+    <p class="zai-list-empty" data-zai-list-empty hidden>Noch keine Unterhaltungen.</p>
+    <div class="zai-side-foot">
+      <button type="button" class="zai-link" data-zai-usage-toggle>Verbrauch &amp; Kosten</button>
+      <a class="zai-link" href="{{ url_for('zentriq.settings') }}">KI-Einstellungen</a>
+    </div>
+  </aside>
+
+  <section class="zai-main" aria-label="ZentriqAI-Chat">
+    <header class="zai-head">
+      <button type="button" class="zai-side-toggle" data-zai-side-toggle aria-label="Unterhaltungen ein-/ausblenden">☰</button>
+      <h1 class="zai-title" data-zai-title>ZentriqAI</h1>
+      <div class="zai-head-controls">
+        <label class="zai-check" title="Nur für Kundendaten freigegebene Anbieter verwenden">
+          <input type="checkbox" data-zai-customer> Kundendaten-Modus
+        </label>
+        <label class="sr-only" for="zai-model">Modell</label>
+        <select id="zai-model" class="field-surface zai-model" data-zai-model>
+          <option value="auto">Automatisch (kostenlos zuerst)</option>
+        </select>
+        <button type="button" class="zai-icon" data-zai-rename title="Umbenennen" aria-label="Unterhaltung umbenennen" hidden>✎</button>
+        <button type="button" class="zai-icon" data-zai-delete title="Löschen" aria-label="Unterhaltung löschen" hidden>🗑</button>
+      </div>
+    </header>
+
+    <div class="zai-usage" data-zai-usage hidden></div>
+
+    <div class="zai-messages" data-zai-messages aria-live="polite">
+      <div class="zai-welcome" data-zai-welcome>
+        <h2>Wie kann ich helfen?</h2>
+        <p>ZentriqAI wählt automatisch ein verfügbares kostenloses Modell und weicht bei Limits oder Ausfällen auf andere aus.
+           Kundendaten bitte nur im Kundendaten-Modus eingeben.</p>
+      </div>
+    </div>
+
+    <form class="zai-composer" data-zai-form novalidate>
+      <p class="form-error zai-error" data-zai-error role="alert" hidden></p>
+      <div class="zai-input-row">
+        <label class="sr-only" for="zai-input">Nachricht</label>
+        <textarea id="zai-input" class="field-surface zai-input" data-zai-input rows="1" maxlength="{{ max_chars }}"
+                  placeholder="Nachricht an ZentriqAI …"></textarea>
+        <button type="submit" class="btn btn-primary" data-zai-send>Senden</button>
+      </div>
+      <p class="zai-hint"><span data-zai-status aria-live="polite"></span><span>Enter senden · Umschalt+Enter neue Zeile</span></p>
+    </form>
+  </section>
+</div>
+<script defer src="{{ url_for('static', filename='js/zentriq-ai.js', v=static_rev('js/zentriq-ai.js')) }}"></script>
+{% endblock %}

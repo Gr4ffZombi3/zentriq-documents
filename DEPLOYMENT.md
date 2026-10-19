@@ -142,6 +142,24 @@ Die frühere Mailbox-Automation (Placetel-Postfach, KI-Klassifizierung, HUK-Rüc
 entfernt; die zugehörigen `PLACETEL_*`-, `HUK_*`- und `MAILBOX_*`-Einträge (außer `MAILBOX_OPENAI_BASE_URL`) in der `.env` werden
 nicht mehr gelesen. Die Tabellen `mailbox_*` bleiben mit ihren Altdaten unverändert bestehen.
 
+## ZentriqAI (Multi-Anbieter-KI, nur SUPER_ADMIN)
+
+Plattform → KI → ZentriqAI bzw. KI-Einstellungen (`/zentriq`). Konzept und Entscheidungen:
+`docs/zentriq-ai-konzept.md`. Keine zusätzlichen Dienste: nutzt MariaDB, Redis und den
+bestehenden Celery-Worker (Zusammenfassungen).
+
+Einrichtung:
+
+1. Migration `c8d9e0f1a2b3` (rein additiv) mit dem normalen Deployment (`flask db upgrade`).
+2. Mindestens einen Key in `.env` eintragen (z. B. `GEMINI_API_KEY`, `GROQ_API_KEY`,
+   `MISTRAL_API_KEY`), danach `zentriq-api` und `zentriq-worker` neu starten. Alle Variablen
+   siehe `.env.example` (Abschnitt ZentriqAI).
+3. Unter KI-Einstellungen je Anbieter „Modelle beim Anbieter abrufen“, gewünschte Modelle
+   aktivieren und Priorität setzen. Kostenpflichtige Modelle brauchen einen Preis und ein Budget
+   > 0 (`ZENTRIQ_AI_DAILY_BUDGET_USD`, `ZENTRIQ_AI_MONTHLY_BUDGET_USD`).
+4. Anbieter nur nach geprüfter Auftragsverarbeitung „Für Kundendaten freigegeben“ markieren.
+5. Optional Aufbewahrung per Cron: `flask zentriq-ai-purge` (Standard 180 Tage).
+
 ## E-Mail-Versand (Passwort vergessen)
 
 Reset-Mails werden nur versendet, wenn in `.env` `SMTP_HOST`, `MAIL_FROM` und `PUBLIC_URL`

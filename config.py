@@ -45,6 +45,32 @@ class BaseConfig:
     ASSISTANT_MAX_INPUT_CHARS = int(os.environ.get("ASSISTANT_MAX_INPUT_CHARS", "8000"))
     ASSISTANT_MAX_OUTPUT_TOKENS = int(os.environ.get("ASSISTANT_MAX_OUTPUT_TOKENS", "4000"))
 
+    # ZentriqAI (app/services/ai/): Multi-Anbieter-Router. API-Keys nur in der Umgebung.
+    ZENTRIQ_AI_ENABLED = os.environ.get("ZENTRIQ_AI_ENABLED", "true").lower() == "true"
+    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+    GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+    CEREBRAS_API_KEY = os.environ.get("CEREBRAS_API_KEY")
+    MISTRAL_API_KEY = os.environ.get("MISTRAL_API_KEY")
+    OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+    # Kostengrenzen fuer kostenpflichtige Modelle (USD, plattformweit). 0 = keine bezahlten Modelle.
+    ZENTRIQ_AI_DAILY_BUDGET_USD = float(os.environ.get("ZENTRIQ_AI_DAILY_BUDGET_USD", "0"))
+    ZENTRIQ_AI_MONTHLY_BUDGET_USD = float(os.environ.get("ZENTRIQ_AI_MONTHLY_BUDGET_USD", "0"))
+    # Gesamtzeit fuer eine Antwort inkl. Ausweichen - muss unter dem nginx-Timeout (60 s) bleiben.
+    ZENTRIQ_AI_TIMEOUT_SECONDS = float(os.environ.get("ZENTRIQ_AI_TIMEOUT_SECONDS", "50"))
+    ZENTRIQ_AI_CALL_TIMEOUT_SECONDS = float(os.environ.get("ZENTRIQ_AI_CALL_TIMEOUT_SECONDS", "25"))
+    ZENTRIQ_AI_MAX_OUTPUT_TOKENS = int(os.environ.get("ZENTRIQ_AI_MAX_OUTPUT_TOKENS", "2000"))
+    ZENTRIQ_AI_MAX_INPUT_CHARS = int(os.environ.get("ZENTRIQ_AI_MAX_INPUT_CHARS", "12000"))
+    # Zeichenbudget fuer den mitgesendeten Verlauf (aeltere Nachrichten nur als Zusammenfassung).
+    ZENTRIQ_AI_CONTEXT_CHARS = int(os.environ.get("ZENTRIQ_AI_CONTEXT_CHARS", "12000"))
+    ZENTRIQ_AI_SUMMARY_AFTER_MESSAGES = int(os.environ.get("ZENTRIQ_AI_SUMMARY_AFTER_MESSAGES", "16"))
+    # Identische Anfrage (gleicher Benutzer, Verlauf, Modellwahl) aus dem Cache beantworten. 0 = aus.
+    ZENTRIQ_AI_CACHE_TTL_SECONDS = int(os.environ.get("ZENTRIQ_AI_CACHE_TTL_SECONDS", "3600"))
+    # Faellt ein manuell gewaehltes Modell aus, automatisch auf andere ausweichen.
+    ZENTRIQ_AI_MANUAL_FALLBACK = os.environ.get("ZENTRIQ_AI_MANUAL_FALLBACK", "true").lower() == "true"
+    # Aufbewahrung: Gespraeche nach N Tagen ohne Aktivitaet loeschen (flask zentriq-ai-purge). 0 = nie.
+    ZENTRIQ_AI_RETENTION_DAYS = int(os.environ.get("ZENTRIQ_AI_RETENTION_DAYS", "180"))
+    ZENTRIQ_AI_STATE_BACKEND = os.environ.get("ZENTRIQ_AI_STATE_BACKEND", "redis")
+
     TESSERACT_CMD = os.environ.get("TESSERACT_CMD")
     OCR_MIN_CONFIDENCE = float(os.environ.get("OCR_MIN_CONFIDENCE", "60"))
     OCR_MIN_TEXT_LENGTH = int(os.environ.get("OCR_MIN_TEXT_LENGTH", "20"))
@@ -126,6 +152,13 @@ class TestingConfig(BaseConfig):
     # Nie echte Anthropic-Aufrufe in Tests; tests/test_assistant.py setzt einen Test-Key und
     # ersetzt den Client.
     ANTHROPIC_API_KEY = None
+    # ZentriqAI: nie echte Anbieter-Aufrufe; Zustand prozesslokal statt Redis.
+    GEMINI_API_KEY = None
+    GROQ_API_KEY = None
+    CEREBRAS_API_KEY = None
+    MISTRAL_API_KEY = None
+    OPENROUTER_API_KEY = None
+    ZENTRIQ_AI_STATE_BACKEND = "memory"
 
 
 class ProductionConfig(BaseConfig):

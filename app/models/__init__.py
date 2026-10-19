@@ -1,3 +1,4 @@
+from app.models.ai import AiConversation, AiMessage, AiModel, AiProviderSetting, AiUsage
 from app.models.analysis_run import AnalysisRun
 from app.models.audit_log import AuditEventType, AuditLog
 from app.models.customer import Customer
@@ -53,6 +54,11 @@ from app.models.user import RecoveryCode, User
 from app.models.user_session import UserSession
 
 __all__ = [
+    "AiConversation",
+    "AiMessage",
+    "AiModel",
+    "AiProviderSetting",
+    "AiUsage",
     "AnalysisRun",
     "MailboxCase",
     "MailboxCallbackAttempt",

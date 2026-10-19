@@ -38,6 +38,9 @@ class AuditEventType(enum.Enum):
     CUSTOMER_CREATED = "customer_created"
     # KI-Assistent genutzt - nur Schnellaktion, nie Eingabe oder Antwort.
     ASSISTANT_USED = "assistant_used"
+    # ZentriqAI: Anbieter-/Modelleinstellungen geaendert bzw. Gespraech(e) geloescht (nur IDs).
+    AI_SETTINGS_CHANGED = "ai_settings_changed"
+    AI_CONVERSATION_DELETED = "ai_conversation_deleted"
 
 
 # Sicherheitsrelevante Ereignisse ohne fachlichen Inhalt - nur diese sind fuer den
@@ -60,6 +63,7 @@ SECURITY_EVENT_TYPES = (
     AuditEventType.TENANT_CREATED,
     AuditEventType.TENANT_UPDATED,
     AuditEventType.SESSIONS_REVOKED,
+    AuditEventType.AI_SETTINGS_CHANGED,
 )
 
 # Ereignisse, die der Buero-Admin unter "Aktivitaeten" sieht (nur eigener Mandant).

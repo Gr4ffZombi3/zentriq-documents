@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/portal.html" import state_tag %}
+{% block title %}KI-Einstellungen – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell page-shell-wide">
+  {% call page_header('KI-Einstellungen', 'Anbieter, Modelle, Kostengrenzen und Verbrauch von ZentriqAI. API-Schlüssel werden ausschließlich in der Server-Konfiguration (.env) hinterlegt und hier nie angezeigt.') %}{% endcall %}
+
+  <section class="panel">
+    <header class="panel-header">
+      <h2 class="panel-title">Kostengrenzen</h2>
+      <p class="panel-description">Gilt für kostenpflichtige Modelle, plattformweit. Festgelegt über ZENTRIQ_AI_DAILY_BUDGET_USD und ZENTRIQ_AI_MONTHLY_BUDGET_USD. Kostenlose Modelle sind nicht betroffen.</p>
+    </header>
+    <dl class="fact-list">
+      <div><dt>Heute</dt><dd class="tabular-nums">{{ '%.4f' % budget.today }} / {{ '%.2f' % budget.daily_limit }} USD</dd></div>
+      <div><dt>Dieser Monat</dt><dd class="tabular-nums">{{ '%.4f' % budget.month }} / {{ '%.2f' % budget.monthly_limit }} USD</dd></div>
+      <div><dt>Kostenpflichtige Modelle</dt><dd>{% if budget.paid_allowed %}{{ state_tag('erlaubt', 'success') }}{% else %}{{ state_tag('gesperrt (Grenze erreicht oder 0)', 'danger') }}{% endif %}</dd></div>
+    </dl>
+  </section>
+
+  {% for p in providers %}
+    <section class="panel" id="anbieter-{{ p.key }}">
+      <header class="panel-header">
+        <h2 class="panel-title">{{ p.label }}
+          {% if p.configured %}{{ state_tag('Schlüssel hinterlegt', 'success') }}{% else %}{{ state_tag('kein Schlüssel (' ~ p.key_setting ~ ')', 'neutral') }}{% endif %}
+        </h2>
+        <p class="panel-description">{{ p.note }}</p>
+      </header>
+      <div class="panel-body">
+        <form method="post" action="{{ url_for('zentriq.settings_provider', provider_key=p.key) }}" class="flex flex-wrap gap-2" style="align-items:center">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label><input type="checkbox" name="enabled" value="1" {{ 'checked' if p.setting and p.setting.enabled }}> Anbieter aktiv</label>
+          <label><input type="checkbox" name="customer_data_allowed" value="1" {{ 'checked' if p.setting and p.setting.customer_data_allowed }}> Für Kundendaten freigegeben (Auftragsverarbeitung geprüft)</label>
+          <button type="submit" class="btn btn-secondary btn-sm">Speichern</button>
+        </form>
+        {% if p.configured %}
+          <form method="post" action="{{ url_for('zentriq.settings_discover', provider_key=p.key) }}" class="mt-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-secondary btn-sm">Modelle beim Anbieter abrufen</button>
+          </form>
+        {% endif %}
+      </div>
+      {% if p.models %}
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Modell</th><th>Aktiv</th><th>Kostenlos</th><th>Priorität</th><th>USD / 1 Mio. Eingabe</th><th>USD / 1 Mio. Ausgabe</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              {% for m in p.models %}
+                {% set form_id = 'model-' ~ m.id %}
+                <tr>
+                  <td>
+                    <form id="{{ form_id }}" method="post" action="{{ url_for('zentriq.settings_model', model_id=m.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+                    <input form="{{ form_id }}" class="field-surface" name="label" value="{{ m.label }}" aria-label="Bezeichnung" style="min-width:12rem">
+                    <div class="cell-sub"><code>{{ m.model_id }}</code></div>
+                  </td>
+                  <td><input form="{{ form_id }}" type="checkbox" name="enabled" value="1" {{ 'checked' if m.enabled }} aria-label="Aktiv"></td>
+                  <td><input form="{{ form_id }}" type="checkbox" name="is_free" value="1" {{ 'checked' if m.is_free }} aria-label="Kostenlos"></td>
+                  <td><input form="{{ form_id }}" class="field-surface" name="priority" value="{{ m.priority }}" inputmode="numeric" style="width:5rem" aria-label="Priorität"></td>
+                  <td><input form="{{ form_id }}" class="field-surface" name="input_price" value="{{ m.input_price if m.input_price is not none else '' }}" style="width:6rem" aria-label="Preis Eingabe"></td>
+                  <td><input form="{{ form_id }}" class="field-surface" name="output_price" value="{{ m.output_price if m.output_price is not none else '' }}" style="width:6rem" aria-label="Preis Ausgabe"></td>
+                  <td>
+                    {% set cd = cooldowns.get(m.id) %}
+                    {% if cd %}{{ state_tag('pausiert ' ~ cd.seconds ~ ' s', 'warning') }}
+                    {% elif not m.has_price %}{{ state_tag('Preis fehlt', 'warning') }}
+                    {% elif m.enabled and p.configured %}{{ state_tag('bereit', 'success') }}
+                    {% else %}–{% endif %}
+                  </td>
+                  <td><button form="{{ form_id }}" type="submit" class="btn btn-secondary btn-sm">Speichern</button></td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+    </section>
+  {% endfor %}
+
+  <section class="panel">
+    <header class="panel-header">
+      <h2 class="panel-title">Verbrauch (30 Tage, alle Nutzer)</h2>
+      <p class="panel-description">Je Anbieter und Modell, inklusive fehlgeschlagener Versuche. Ohne Inhalte.</p>
+    </header>
+    {% if usage.rows %}
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Anbieter</th><th>Modell</th><th class="num">Anfragen</th><th class="num">Fehler</th><th class="num">Tokens ein</th><th class="num">Tokens aus</th><th class="num">Kosten USD</th></tr></thead>
+          <tbody>
+            {% for r in usage.rows %}
+              <tr><td>{{ r.provider_label }}</td><td>{{ r.model }}</td><td class="num">{{ r.requests }}</td><td class="num">{{ r.errors }}</td><td class="num">{{ r.input_tokens }}</td><td class="num">{{ r.output_tokens }}</td><td class="num">{{ '%.4f' % r.cost_usd }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="panel-body is-muted">Noch kein Verbrauch.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

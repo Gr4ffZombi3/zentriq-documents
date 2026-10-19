@@ -69,6 +69,7 @@ def create_app(config_object=None):
     from app.blueprints.timetracking.routes import timetracking_bp
     from app.blueprints.tools.routes import tools_bp
     from app.blueprints.upload.routes import upload_bp
+    from app.blueprints.zentriq.routes import zentriq_bp
     from app.models import User
 
     app.register_blueprint(auth_bp)
@@ -93,6 +94,7 @@ def create_app(config_object=None):
     app.register_blueprint(timetracking_bp)
     app.register_blueprint(platform_bp)
     app.register_blueprint(office_bp)
+    app.register_blueprint(zentriq_bp)
 
     from app.cli import register_cli
 

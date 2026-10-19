@@ -85,6 +85,14 @@ PLATFORM_GROUPS = (
             NavArea("platform_security", "Sicherheit", "platform.security", ("platform.security",), admin_only=False),
         ),
     ),
+    NavGroup(
+        "zentriq_ai",
+        "KI",
+        (
+            NavArea("zentriq_chat", "ZentriqAI", "zentriq.index", ("zentriq.index",), admin_only=False),
+            NavArea("zentriq_settings", "KI-Einstellungen", "zentriq.settings", ("zentriq.settings",), admin_only=False),
+        ),
+    ),
 )
 
 OFFICE_GROUPS = (

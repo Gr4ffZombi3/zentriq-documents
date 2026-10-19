@@ -406,6 +406,20 @@ def whisper_download_command():
     click.echo(f"Whisper-Modell '{model}' bereit: {path}")
 
 
+@click.command("zentriq-ai-purge")
+@click.option("--days", type=int, default=None, help="Abweichende Aufbewahrungsfrist in Tagen.")
+def zentriq_ai_purge_command(days: int | None):
+    """Loescht ZentriqAI-Gespraeche, die seit ZENTRIQ_AI_RETENTION_DAYS Tagen unveraendert sind
+    (alle Bueros). Verbrauchsdaten ohne Inhalte bleiben fuer die Kostenrechnung erhalten."""
+    from app.services.ai.chat import purge_older_than
+
+    days = days if days is not None else int(current_app.config.get("ZENTRIQ_AI_RETENTION_DAYS") or 0)
+    if days <= 0:
+        click.echo("Aufbewahrung unbegrenzt (ZENTRIQ_AI_RETENTION_DAYS=0) - nichts geloescht.")
+        return
+    click.echo(f"{purge_older_than(days)} Gespraeche geloescht (aelter als {days} Tage).")
+
+
 def register_cli(app) -> None:
     app.cli.add_command(create_user_command)
     app.cli.add_command(set_admin_command)
@@ -414,3 +428,4 @@ def register_cli(app) -> None:
     app.cli.add_command(send_test_mail_command)
     app.cli.add_command(recompare_lists_command)
     app.cli.add_command(whisper_download_command)
+    app.cli.add_command(zentriq_ai_purge_command)

@@ -8,6 +8,7 @@ from app.celery_app import make_celery  # noqa: E402
 flask_app = create_app()
 celery = make_celery(flask_app)
 
+import app.tasks.ai_tasks  # noqa: E402,F401
 import app.tasks.auth_tasks  # noqa: E402,F401
 import app.tasks.document_tasks  # noqa: E402,F401
 import app.tasks.memo_tasks  # noqa: E402,F401

@@ -93,6 +93,10 @@ def settings_model(model_id):
         model.priority = max(0, min(10000, int(request.form.get("priority") or model.priority)))
     except ValueError:
         pass
+    try:
+        model.tier = max(1, min(3, int(request.form.get("tier") or model.tier or 1)))
+    except ValueError:
+        pass
     model.input_price = _price(request.form.get("input_price"))
     model.output_price = _price(request.form.get("output_price"))
     db.session.commit()

@@ -165,7 +165,7 @@ def test_no_models_without_keys(app, world):
 
 
 def test_free_first_and_fallback_on_rate_limit(app, world, fake):
-    # Limits gelten bei Gemini je Modell: Flash 429 -> Flash-Lite 429 -> Groq antwortet.
+    # Komplexe Anfrage ("formuliere") -> starke kostenlose Modelle zuerst: Gemini Flash 429 -> Llama 70B.
     fake.set("gemini", adapters.ProviderError(adapters.RATE_LIMIT, retry_after=120, status=429))
     client = _root(app, world)
     conversation_id = _new(client)
@@ -174,21 +174,25 @@ def test_free_first_and_fallback_on_rate_limit(app, world, fake):
     assert reply["status"] == "done"
     assert reply["provider"] == "groq"
     assert reply["cost_usd"] == 0
-    assert [c["model"] for c in fake.calls] == ["gemini-flash-latest", "gemini-flash-lite-latest", "llama-3.3-70b-versatile"]
+    assert [c["model"] for c in fake.calls] == ["gemini-flash-latest", "llama-3.3-70b-versatile"]
     usage = _usage()
-    assert [(u.provider, u.ok, u.error_type) for u in usage] == [
-        ("gemini", False, "rate_limit"),
-        ("gemini", False, "rate_limit"),
-        ("groq", True, None),
-    ]
-    assert usage[2].input_tokens == 100 and usage[2].output_tokens == 50
+    assert [(u.provider, u.ok, u.error_type) for u in usage] == [("gemini", False, "rate_limit"), ("groq", True, None)]
+    assert usage[1].input_tokens == 100 and usage[1].output_tokens == 50
 
-    # Beide Gemini-Modelle sind jetzt pausiert und werden uebersprungen.
+    # Gemini Flash ist pausiert (Retry-After 120 s) und wird uebersprungen.
     assert state.cooldown_info("gemini", "gemini-flash-latest")["seconds"] > 60
     fake.calls.clear()
     fake.set("gemini", adapters.ProviderResult("ok", 1, 1))
-    _send(client, conversation_id, "Noch eine Frage")
-    assert [c["provider"] for c in fake.calls] == ["groq"]
+    _send(client, conversation_id, "Formuliere noch eine Variante")
+    assert [c["model"] for c in fake.calls] == ["llama-3.3-70b-versatile"]
+
+
+def test_simple_requests_use_small_models_first(app, world, fake):
+    client = _root(app, world)
+    _send(client, _new(client), "Hallo!")
+    assert fake.calls[-1]["model"] == "gemini-flash-lite-latest"
+    _send(client, _new(client), "Analysiere bitte diesen Ablauf und bewerte ihn.")
+    assert fake.calls[-1]["model"] == "gemini-flash-latest"
 
 
 def test_provider_outage_pauses_whole_provider(app, world, fake):
@@ -298,12 +302,14 @@ def test_customer_data_detection():
     assert chat.detect_customer_data("Schreibe eine freundliche Erinnerung an einen Termin.") == []
 
 
-def test_customer_data_blocked_outside_protected_mode(app, world, fake):
+def test_customer_data_pseudonymized_outside_protected_mode(app, world, fake):
+    fake.set("gemini", adapters.ProviderResult("Die IBAN [IBAN 1] ist notiert.", 10, 5))
     client = _root(app, world)
-    sent = _send(client, _new(client), "Kunde hat IBAN DE89 3704 0044 0532 0130 00")
-    assert sent.status_code == 422
-    assert sent.data["code"] == "customer_data"
-    assert fake.calls == []
+    reply = _send(client, _new(client), "Kunde hat IBAN DE89 3704 0044 0532 0130 00, bitte merken").reply
+    sent = fake.calls[-1]["messages"][-1]["content"]
+    assert "DE89" not in sent and "[IBAN 1]" in sent
+    # Lokal wieder eingesetzt: der Benutzer sieht den echten Wert.
+    assert reply["content"] == "Die IBAN DE89 3704 0044 0532 0130 00 ist notiert."
 
 
 def test_protected_mode_uses_only_approved_providers(app, world, fake, db):
@@ -322,26 +328,30 @@ def test_protected_mode_uses_only_approved_providers(app, world, fake, db):
 # --- Werkzeuge ------------------------------------------------------------------------------
 
 
-def test_tools_offered_per_role_and_only_with_approved_provider(app, world, fake, db):
+def test_tools_offered_per_role_pseudonymized_without_approval(app, world, fake, db):
+    question = "Hilf mir, meinen Tag zu planen."
     client = login(app, "dennis@example.com")
-    _send(client, _new(client), "Was steht heute an?")
-    # Ohne freigegebenen Anbieter: keine Werkzeuge, Hinweis im Systemtext.
-    assert fake.calls[-1]["tools"] is None
-    assert "noch kein KI-Anbieter für Kundendaten freigegeben" in fake.calls[-1]["system"]
-
-    _approve(db, "groq")
-    _send(client, _new(client), "Was steht heute an?")
+    _send(client, _new(client), question)
+    # Ohne freigegebenen Anbieter: Werkzeuge ja, aber pseudonymisiert (Hinweis im Systemtext).
     employee_tools = {t["name"] for t in fake.calls[-1]["tools"]}
+    assert employee_tools == {"tagesueberblick", "meine_arbeitszeiten", "offene_vorgaenge", "leipziger_auswertung", "suche"}
+    assert "Platzhalter" in fake.calls[-1]["system"]
+
+    # Mit freigegebenem Anbieter: Buerodaten nur dorthin, ohne Pseudonymisierung.
+    _approve(db, "groq")
+    _send(client, _new(client), question)
     assert fake.calls[-1]["provider"] == "groq"
-    assert employee_tools == {"meine_arbeitszeiten", "offene_vorgaenge", "suche"}
+    assert "Platzhalter" not in fake.calls[-1]["system"]
 
     admin = login(app, "admin-a@example.com")
-    _send(admin, _new(admin), "Was steht heute an?")
-    assert {t["name"] for t in fake.calls[-1]["tools"]} == employee_tools | {"aufgaben", "team_anwesenheit"}
+    _send(admin, _new(admin), question)
+    assert {t["name"] for t in fake.calls[-1]["tools"]} == employee_tools | {
+        "aufgaben", "team_anwesenheit", "mitarbeiter_aktivitaet", "sprachnachrichten", "aufgabe_erledigen"
+    }
 
     # SUPER_ADMIN: keine Buerodaten, keine Werkzeuge.
     root = _root(app, world)
-    _send(root, _new(root), "Was steht heute an?")
+    _send(root, _new(root), question)
     assert fake.calls[-1]["tools"] is None
 
 
@@ -353,7 +363,7 @@ def test_tool_call_executes_existing_service(app, world, fake, db):
         adapters.ProviderResult("Sie haben diese Woche **8:00** Stunden gearbeitet.", 20, 10),
     )
     client = login(app, "dennis@example.com")
-    reply = _send(client, _new(client), "Zeige meine Arbeitszeiten dieser Woche.").reply
+    reply = _send(client, _new(client), "Wie viele Stunden fehlen mir diese Woche bis zum Soll? Erkläre kurz.").reply
     assert reply["status"] == "done"
     assert reply["tools"] == ["Arbeitszeiten"]
     assert reply["input_tokens"] == 30 and reply["output_tokens"] == 15

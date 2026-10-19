@@ -191,7 +191,7 @@
       var dot = document.createElement("span");
       dot.className = "zc-pending-dot";
       p.appendChild(dot);
-      p.appendChild(document.createTextNode(m.attachments && m.attachments.length ? "ZentriqAI verarbeitet …" : "ZentriqAI denkt nach …"));
+      p.appendChild(document.createTextNode((m.progress || "Analysiere Anfrage") + " …"));
       el.appendChild(p);
       return;
     }
@@ -212,14 +212,19 @@
       note.textContent = m.error;
       el.appendChild(note);
     }
+    (m.actions || []).forEach(function (a) { el.appendChild(renderAction(a)); });
     var meta = document.createElement("div");
     meta.className = "zc-msg-meta";
+    // Technische Angaben nur dezent (Tooltip), nicht im Antworttext.
     var parts = [m.model || ""];
     if (m.tools && m.tools.length) parts.push("Daten: " + m.tools.join(", "));
     if (m.cached) parts.push("aus Cache");
-    else if (m.input_tokens !== null && m.input_tokens !== undefined) parts.push((m.input_tokens + m.output_tokens) + " Tokens", formatCost(m.cost_usd));
+    else if (m.input_tokens) parts.push((m.input_tokens + m.output_tokens) + " Tokens", formatCost(m.cost_usd));
     var info = document.createElement("span");
-    info.textContent = parts.filter(Boolean).join(" · ");
+    info.className = "zc-info";
+    info.textContent = "ⓘ";
+    info.title = parts.filter(Boolean).join(" · ");
+    info.setAttribute("aria-label", info.title);
     meta.appendChild(info);
     var copy = document.createElement("button");
     copy.type = "button";
@@ -228,6 +233,41 @@
     copy.addEventListener("click", function () { copyText(m.content, copy); });
     meta.appendChild(copy);
     el.appendChild(meta);
+  }
+
+  function renderAction(a) {
+    var box = document.createElement("div");
+    box.className = "zc-action is-" + a.status;
+    var text = document.createElement("p");
+    text.textContent = a.summary;
+    box.appendChild(text);
+    var status = document.createElement("p");
+    status.className = "zc-action-status";
+    if (a.status === "pending") {
+      var row = document.createElement("div");
+      row.className = "zc-action-buttons";
+      [["bestaetigen", "Bestätigen", "btn btn-primary btn-sm"], ["abbrechen", "Abbrechen", "btn btn-secondary btn-sm"]].forEach(function (d) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = d[2];
+        b.textContent = d[1];
+        b.addEventListener("click", function () {
+          Array.prototype.forEach.call(row.querySelectorAll("button"), function (x) { x.disabled = true; });
+          request("POST", "/actions/" + a.id + "/" + d[0]).then(function (r) {
+            box.replaceWith(renderAction(r.action));
+          }).catch(function (err) {
+            showAlert(err.message);
+            Array.prototype.forEach.call(row.querySelectorAll("button"), function (x) { x.disabled = false; });
+          });
+        });
+        row.appendChild(b);
+      });
+      box.appendChild(row);
+    } else {
+      status.textContent = a.status === "done" ? (a.result || "Ausgeführt.") : a.status === "cancelled" ? "Abgebrochen." : (a.result || "Nicht ausgeführt.");
+      box.appendChild(status);
+    }
+    return box;
   }
 
   function renderAssistant(m) {
@@ -415,6 +455,7 @@
       request("GET", "/conversations/" + conversationId + "/messages/" + messageId).then(function (d) {
         if (token !== pollToken) return;
         if (d.message.status === "pending" && Date.now() - started < 6 * 60000) {
+          fillAssistant(el, d.message);
           delay = Math.min(delay + 400, 3000);
           setTimeout(tick, delay);
           return;
@@ -434,6 +475,11 @@
     setTimeout(tick, delay);
   }
 
+  function newRef() {
+    try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
+    return Date.now().toString(36) + Math.random().toString(36).slice(2);
+  }
+
   function send(text) {
     text = (text !== undefined ? text : input.value).trim();
     if (busy || (!text && !files.length)) return;
@@ -441,6 +487,7 @@
     showAlert("");
     setBusy(true);
     var sending = files.slice();
+    var ref = newRef();
     ensureConversation().then(function (c) {
       var body;
       var isForm = sending.length > 0;
@@ -448,9 +495,10 @@
         body = new FormData();
         body.append("content", text);
         body.append("model", modelChoice);
+        body.append("client_ref", ref);
         sending.forEach(function (f) { body.append("files", f); });
       } else {
-        body = { content: text, model: modelChoice };
+        body = { content: text, model: modelChoice, client_ref: ref };
       }
       return request("POST", "/conversations/" + c.id + "/messages", body, isForm).then(function (d) {
         input.value = "";

@@ -61,6 +61,11 @@ PROVIDERS: dict[str, Provider] = {
             note="Vermittler zu vielen Anbietern; nur Modelle mit ':free' sind kostenlos.",
         ),
         Provider(
+            "omniroute", "OmniRoute (eigenes Gateway)", "openai", "OMNIROUTE_API_KEY", None, False,
+            note="OpenAI-kompatibles Gateway (OMNIROUTE_BASE_URL). Derzeit nicht installiert (Arbeitsspeicher). "
+            "Nur API-Key-Anbieter anbinden, keine privaten Abo-Logins. Kostenlose Modelle unter Modelle als kostenlos markieren.",
+        ),
+        Provider(
             "anthropic", "Anthropic (Claude)", "anthropic", "ANTHROPIC_API_KEY", None, False,
             note="Kostenpflichtig; offizielle API mit kommerziellen Bedingungen.",
         ),
@@ -71,17 +76,18 @@ PROVIDERS: dict[str, Provider] = {
     )
 }
 
-# (provider, model_id, label, enabled, priority, is_free, input_price, output_price)
+# (provider, model_id, label, enabled, priority, is_free, input_price, output_price, tier)
 # Preise in USD je 1 Mio. Tokens. Kostenpflichtige Modelle sind standardmaessig aus.
+# Stufe: 1 = schnell/klein (einfache Anfragen), 2 = stark, 3 = sehr stark.
 DEFAULT_MODELS = (
-    ("gemini", "gemini-flash-latest", "Gemini Flash", True, 10, True, None, None),
-    ("gemini", "gemini-flash-lite-latest", "Gemini Flash-Lite", True, 20, True, None, None),
-    ("groq", "llama-3.3-70b-versatile", "Llama 3.3 70B (Groq)", True, 30, True, None, None),
-    ("mistral", "mistral-small-latest", "Mistral Small", True, 40, True, None, None),
-    ("mistral", "mistral-medium-latest", "Mistral Medium", True, 50, True, None, None),
-    ("anthropic", "claude-haiku-4-5", "Claude Haiku 4.5", False, 200, False, 1, 5),
-    ("anthropic", "claude-sonnet-5-5", "Claude Sonnet 5.5", False, 210, False, 2, 10),
-    ("anthropic", "claude-opus-5-5", "Claude Opus 5.5", False, 220, False, 4, 20),
+    ("gemini", "gemini-flash-latest", "Gemini Flash", True, 10, True, None, None, 2),
+    ("gemini", "gemini-flash-lite-latest", "Gemini Flash-Lite", True, 20, True, None, None, 1),
+    ("groq", "llama-3.3-70b-versatile", "Llama 3.3 70B (Groq)", True, 30, True, None, None, 2),
+    ("mistral", "mistral-small-latest", "Mistral Small", True, 40, True, None, None, 1),
+    ("mistral", "mistral-medium-latest", "Mistral Medium", True, 50, True, None, None, 2),
+    ("anthropic", "claude-haiku-4-5", "Claude Haiku 4.5", False, 200, False, 1, 5, 1),
+    ("anthropic", "claude-sonnet-5-5", "Claude Sonnet 5.5", False, 210, False, 2, 10, 2),
+    ("anthropic", "claude-opus-5-5", "Claude Opus 5.5", False, 220, False, 4, 20, 3),
 )
 
 
@@ -93,12 +99,17 @@ def base_url(provider: Provider) -> str | None:
     if provider.key == "openai":
         # Bestehende globale Einstellung der Anwendung (app/services/llm/client.py).
         return current_app.config.get("OPENAI_BASE_URL") or None
+    if provider.key == "omniroute":
+        return current_app.config.get("OMNIROUTE_BASE_URL") or None
     return provider.base_url
 
 
 def is_configured(provider_key: str) -> bool:
     provider = PROVIDERS.get(provider_key)
-    return bool(provider and api_key(provider))
+    if provider is None or not api_key(provider):
+        return False
+    # OmniRoute braucht zusaetzlich die Adresse des Gateways.
+    return provider.key != "omniroute" or bool(base_url(provider))
 
 
 def ensure_defaults() -> None:
@@ -110,12 +121,12 @@ def ensure_defaults() -> None:
         if key not in known_providers:
             db.session.add(AiProviderSetting(provider=key))
             changed = True
-    for provider, model_id, label, enabled, priority, is_free, price_in, price_out in DEFAULT_MODELS:
+    for provider, model_id, label, enabled, priority, is_free, price_in, price_out, tier in DEFAULT_MODELS:
         if (provider, model_id) not in existing:
             db.session.add(
                 AiModel(
                     provider=provider, model_id=model_id, label=label, enabled=enabled, priority=priority,
-                    is_free=is_free, input_price=price_in, output_price=price_out,
+                    is_free=is_free, input_price=price_in, output_price=price_out, tier=tier,
                 )
             )
             changed = True

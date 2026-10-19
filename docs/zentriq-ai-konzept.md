@@ -144,3 +144,41 @@ nachgewiesenen Ersatz unverändert.
 **Betrieb:** Der Celery-Worker bearbeitet Chat-Antworten und Memo-Transkriptionen gemeinsam
 (Standard: 2 parallele Aufgaben). Läuft eine lange Transkription, kann eine Chat-Antwort warten.
 Bei Bedarf später eine eigene Warteschlange für ZentriqAI einrichten (Änderung der Worker-Unit).
+
+## 9. Orchestrierung (KI-Backend)
+
+**Ablauf:** Anfrage → Absicht → berechtigte Daten → kurze Antwort (`app/services/ai/orchestrator.py`).
+
+1. **Direktantwort ohne KI-Aufruf** für eindeutige, kurze Standardfragen („Was ist heute offen?“,
+   „Welche Aufgaben sind offen?“, „Meine Arbeitszeiten diese Woche“, „Wer ist heute da?“). Das
+   passende Werkzeug liefert die Daten, die Antwort wird lokal formatiert – keine Tokens, keine
+   Datenübertragung, funktioniert auch ohne eingerichteten Anbieter. Bei Bearbeitungswünschen
+   („formuliere“, „warum“, „analysiere“ …) oder manueller Modellwahl entscheidet das Modell.
+2. **Modell mit Werkzeugen:** Das Modell wählt die benötigten Werkzeuge selbst; jedes prüft die
+   Rechte serverseitig (Endpunkt-Bindung, Rolle, Mandant). Statusanzeige je Werkzeug
+   („Prüfe Aufgaben“ …), keine Gedankengänge.
+3. **Modellstufen:** einfache Anfragen → kleine Modelle (Stufe 1), Werkzeuge/Dokumente/
+   Bearbeitungsaufgaben → starke Modelle (Stufe 2/3); kostenlose immer zuerst, kostenpflichtige
+   nur mit Budget > 0 und hinterlegtem Preis. Stufe je Modell unter KI-Einstellungen.
+4. **Datenschutz:** Gibt es einen für Kundendaten freigegebenen Anbieter, gehen Bürodaten nur
+   dorthin. Sonst **Pseudonymisierung** (`privacy.py`): Personenfelder in Werkzeugergebnissen
+   feldgenau, Freitext (Nachrichten, Transkripte, Verlauf, Zusammenfassungen) über den bestehenden
+   Anonymisierer; Platzhalter wie `[Kunde 1]` werden erst lokal in der Antwort zurückgesetzt,
+   Werkzeug-Argumente des Modells vor der Ausführung lokal aufgelöst.
+5. **Dokumente:** Leipziger Listen (WM312) werden mit dem bestehenden deterministischen Parser
+   lokal ausgewertet; an das Modell geht eine kompakte Auswertung (ohne Kundendaten-Modus nur
+   Zählungen).
+6. **Schreibende Aktionen** (`actions.py`): Das Modell kann sie nur vorbereiten (`ai_actions`,
+   Status `pending`). Ausführung erst nach „Bestätigen“ durch denselben Benutzer, mit erneuter
+   Rechteprüfung, über die bestehende Geschäftslogik, genau einmal (atomarer Statuswechsel),
+   Audit-Eintrag `AI_ACTION_EXECUTED`. Erstes Werkzeug: Aufgabe als erledigt markieren.
+7. **Doppelversand:** Jede Nachricht trägt eine Browser-Kennung (`client_ref`); Wiederholungen
+   liefern die vorhandene Antwort statt einer neuen Verarbeitung.
+
+**Werkzeuge** (lesend, sofern nicht anders angegeben): Tagesüberblick, Arbeitszeiten, offene
+Vorgänge, Listenauswertung, Suche, Aufgaben*, Team-Anwesenheit*, Mitarbeiteraktivität*,
+Sprachnachrichten*, Aufgabe erledigen* (schreibend, mit Bestätigung). *nur Büro-Admin.
+
+**Nicht umgesetzt:** Streaming der Antworttexte (Antworten erscheinen nach Fertigstellung; der
+Status wird laufend aktualisiert). OmniRoute ist als Anbieter vorbereitet (`OMNIROUTE_BASE_URL`,
+`OMNIROUTE_API_KEY`), aber wegen des Arbeitsspeichers nicht installiert.

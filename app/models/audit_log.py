@@ -41,6 +41,8 @@ class AuditEventType(enum.Enum):
     # ZentriqAI: Anbieter-/Modelleinstellungen geaendert bzw. Gespraech(e) geloescht (nur IDs).
     AI_SETTINGS_CHANGED = "ai_settings_changed"
     AI_CONVERSATION_DELETED = "ai_conversation_deleted"
+    # Von ZentriqAI vorbereitete Aktion nach Bestaetigung ausgefuehrt (nur IDs und Status).
+    AI_ACTION_EXECUTED = "ai_action_executed"
 
 
 # Sicherheitsrelevante Ereignisse ohne fachlichen Inhalt - nur diese sind fuer den
@@ -87,6 +89,7 @@ OFFICE_ACTIVITY_EVENT_TYPES = (
     AuditEventType.MEMO_ASSIGNED,
     AuditEventType.CUSTOMER_CREATED,
     AuditEventType.ASSISTANT_USED,
+    AuditEventType.AI_ACTION_EXECUTED,
 )
 
 

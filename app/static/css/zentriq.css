@@ -138,6 +138,12 @@ body.zs-collapsed .zc-head { padding-left: 3.25rem; }
 .zc-msg-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.75rem; margin-top: 0.5rem; font-size: 0.75rem; color: var(--color-text-soft); }
 .zc-msg-meta button { display: inline-flex; align-items: center; gap: 0.3rem; background: none; border: 0; padding: 0.2rem 0.35rem; border-radius: 0.4rem; color: var(--color-text-muted); font-size: 0.75rem; cursor: pointer; }
 .zc-msg-meta button:hover { background: var(--color-surface-muted); color: var(--color-text); }
+.zc-info { cursor: help; font-size: 0.8rem; color: var(--color-text-soft); }
+.zc-action { margin-top: 0.75rem; border: 1px solid var(--color-border); border-radius: 0.9rem; padding: 0.7rem 0.9rem; background: var(--color-surface-muted); }
+.zc-action p { margin: 0; font-size: 0.92rem; }
+.zc-action-buttons { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
+.zc-action-status { margin-top: 0.35rem !important; font-size: 0.82rem !important; color: var(--color-text-muted); }
+.zc-action.is-done { border-color: color-mix(in oklab, var(--color-success) 40%, var(--color-border)); }
 .zc-note { font-size: 0.8rem; color: var(--color-warning-text); margin: 0.4rem 0 0; }
 .zc-error { color: var(--color-error-text, var(--color-error)); background: color-mix(in oklab, var(--color-error) 6%, transparent); border: 1px solid color-mix(in oklab, var(--color-error) 25%, transparent); border-radius: 0.75rem; padding: 0.6rem 0.85rem; font-size: 0.9rem; }
 .zc-pending { display: inline-flex; align-items: center; gap: 0.55rem; color: var(--color-text-muted); font-size: 0.92rem; }

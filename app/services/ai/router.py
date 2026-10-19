@@ -124,7 +124,7 @@ def budget_status() -> dict:
 # --- Auswahl --------------------------------------------------------------------------------
 
 
-def available_models(*, customer_data: bool = False) -> list[AiModel]:
+def available_models(*, customer_data: bool = False, complex_task: bool = False) -> list[AiModel]:
     """Freigeschaltete Modelle konfigurierter, aktiver Anbieter in Auto-Reihenfolge."""
     ensure_defaults()
     settings = provider_settings()
@@ -140,15 +140,18 @@ def available_models(*, customer_data: bool = False) -> list[AiModel]:
         if not model.has_price:
             continue
         models.append(model)
-    return sorted(
-        models,
-        key=lambda m: (not m.is_free, m.priority, Decimal(m.input_price or 0) + Decimal(m.output_price or 0), m.id),
-    )
+    # Kostenlose Modelle immer zuerst. Innerhalb davon: einfache Anfragen an kleine/schnelle,
+    # komplexe (Werkzeuge, Dokumente, lange Texte) an starke Modelle; dann Prioritaet, Preis.
+    def order(m):
+        tier = m.tier or 1
+        return (not m.is_free, -tier if complex_task else tier, m.priority, Decimal(m.input_price or 0) + Decimal(m.output_price or 0), m.id)
+
+    return sorted(models, key=order)
 
 
-def resolve_choice(choice: str | None, *, customer_data: bool) -> tuple[list[AiModel], AiModel | None]:
+def resolve_choice(choice: str | None, *, customer_data: bool, complex_task: bool = False) -> tuple[list[AiModel], AiModel | None]:
     """Kandidatenliste fuer eine Anfrage und ggf. das ausdruecklich gewaehlte Modell."""
-    candidates = available_models(customer_data=customer_data)
+    candidates = available_models(customer_data=customer_data, complex_task=complex_task)
     if not choice or choice == AUTO:
         return candidates, None
     chosen = next((m for m in candidates if m.ref == choice), None)
@@ -200,12 +203,13 @@ def complete(
     max_tokens: int | None = None,
     tools: list[dict] | None = None,
     tool_executor=None,
+    complex_task: bool = False,
 ) -> Completion:
     """Beantwortet `messages`. Mit `tools` darf das Modell Werkzeuge anfordern; `tool_executor`
     (name, arguments) -> str fuehrt sie aus (Rechtepruefung dort). Faellt ein Modell mitten im
     Ablauf aus, uebernimmt das naechste mit den bereits vorliegenden Werkzeugergebnissen."""
     choice = choice or AUTO
-    candidates, chosen = resolve_choice(choice, customer_data=customer_data)
+    candidates, chosen = resolve_choice(choice, customer_data=customer_data, complex_task=complex_task)
     if not candidates:
         message = (
             "Kein für Kundendaten freigegebenes Modell verfügbar. Ein Administrator muss dafür einen "

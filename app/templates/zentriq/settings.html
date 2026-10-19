@@ -43,7 +43,7 @@
       {% if p.models %}
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Modell</th><th>Aktiv</th><th>Kostenlos</th><th>Priorität</th><th>USD / 1 Mio. Eingabe</th><th>USD / 1 Mio. Ausgabe</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>Modell</th><th>Aktiv</th><th>Kostenlos</th><th>Priorität</th><th title="1 = schnell/klein für einfache Anfragen, 2 = stark, 3 = sehr stark">Stufe</th><th>USD / 1 Mio. Eingabe</th><th>USD / 1 Mio. Ausgabe</th><th>Status</th><th></th></tr></thead>
             <tbody>
               {% for m in p.models %}
                 {% set form_id = 'model-' ~ m.id %}
@@ -56,6 +56,13 @@
                   <td><input form="{{ form_id }}" type="checkbox" name="enabled" value="1" {{ 'checked' if m.enabled }} aria-label="Aktiv"></td>
                   <td><input form="{{ form_id }}" type="checkbox" name="is_free" value="1" {{ 'checked' if m.is_free }} aria-label="Kostenlos"></td>
                   <td><input form="{{ form_id }}" class="field-surface" name="priority" value="{{ m.priority }}" inputmode="numeric" style="width:5rem" aria-label="Priorität"></td>
+                  <td>
+                    <select form="{{ form_id }}" class="field-surface" name="tier" aria-label="Stufe" style="width:auto">
+                      {% for value, label in ((1, '1 – einfach'), (2, '2 – stark'), (3, '3 – sehr stark')) %}
+                        <option value="{{ value }}" {{ 'selected' if (m.tier or 1) == value }}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                  </td>
                   <td><input form="{{ form_id }}" class="field-surface" name="input_price" value="{{ m.input_price if m.input_price is not none else '' }}" style="width:6rem" aria-label="Preis Eingabe"></td>
                   <td><input form="{{ form_id }}" class="field-surface" name="output_price" value="{{ m.output_price if m.output_price is not none else '' }}" style="width:6rem" aria-label="Preis Ausgabe"></td>
                   <td>

@@ -15,7 +15,7 @@ from flask_login import current_user, login_required
 
 from app.models.ai import AiModel
 from app.models.audit_log import AuditEventType
-from app.services.ai import catalog, chat, router, state, tools
+from app.services.ai import actions, catalog, chat, router, state, tools
 from app.services.audit import log_audit_event
 
 zentriq_bp = Blueprint("zentriq", __name__, url_prefix="/zentriq")
@@ -81,9 +81,7 @@ def index(conversation_id=None):
         conversation_id=conversation_id,
         greeting=_greeting(),
         max_chars=int(current_app.config.get("ZENTRIQ_AI_MAX_INPUT_CHARS") or 12000),
-        # Nur anzeigen, was tatsaechlich nutzbar ist: Werkzeuge brauchen einen fuer Kundendaten
-        # freigegebenen Anbieter.
-        tool_labels=[t.label for t in tools.available_for(current_user)] if router.available_models(customer_data=True) else [],
+        tool_labels=[t.label for t in tools.available_for(current_user) if not t.write],
     )
 
 
@@ -135,10 +133,12 @@ def api_conversation(conversation_id):
     except chat.ChatError as exc:
         return _error(str(exc), exc.status, exc.error_type)
     labels = _labels()
+    messages = conversation.messages
+    by_message = chat.actions_for(messages)
     return jsonify(
         {
             "conversation": chat.serialize_conversation(conversation),
-            "messages": [chat.serialize_message(m, labels) for m in conversation.messages],
+            "messages": [chat.serialize_message(m, labels, by_message.get(m.id)) for m in messages],
         }
     )
 
@@ -188,15 +188,17 @@ def api_send(conversation_id):
     if request.mimetype == "multipart/form-data":
         content = request.form.get("content") or ""
         model = request.form.get("model")
+        client_ref = request.form.get("client_ref")
         files = request.files.getlist("files")
     else:
         data = _payload()
         content = data.get("content") if isinstance(data.get("content"), str) else ""
         model = data.get("model") if isinstance(data.get("model"), str) else None
+        client_ref = data.get("client_ref") if isinstance(data.get("client_ref"), str) else None
         files = []
     try:
         conversation = chat.get_conversation(current_user, conversation_id)
-        user_message, pending = chat.submit_message(current_user, conversation, content, model, files)
+        user_message, pending = chat.submit_message(current_user, conversation, content, model, files, client_ref)
     except chat.ChatError as exc:
         return _error(str(exc), exc.status, exc.error_type)
     labels = _labels()
@@ -220,7 +222,23 @@ def api_message(conversation_id, message_id):
         message = chat.get_message(current_user, conversation, message_id)
     except chat.ChatError as exc:
         return _error(str(exc), exc.status, exc.error_type)
-    return jsonify({"message": chat.serialize_message(message, _labels()), "conversation": chat.serialize_conversation(conversation)})
+    message_actions = chat.actions_for([message]).get(message.id)
+    return jsonify(
+        {"message": chat.serialize_message(message, _labels(), message_actions), "conversation": chat.serialize_conversation(conversation)}
+    )
+
+
+@zentriq_bp.post("/api/actions/<int:action_id>/<decision>")
+@login_required
+def api_action(action_id, decision):
+    """Vorbereitete Aktion bestaetigen oder abbrechen - nur durch den Benutzer, der sie angefordert hat."""
+    if decision not in ("bestaetigen", "abbrechen"):
+        return _error("Unbekannte Entscheidung.", 400, "invalid")
+    try:
+        action = actions.confirm(current_user, action_id) if decision == "bestaetigen" else actions.cancel(current_user, action_id)
+    except actions.ActionError as exc:
+        return _error(str(exc), exc.status, "action")
+    return jsonify({"action": actions.serialize(action)})
 
 
 @zentriq_bp.get("/api/usage")

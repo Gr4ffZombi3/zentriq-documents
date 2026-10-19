@@ -38,6 +38,8 @@ class AiModel(db.Model):
     enabled = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
     # Kleiner Wert = frueher in der automatischen Auswahl.
     priority = db.Column(db.Integer, nullable=False, default=100, server_default="100")
+    # Leistungsstufe: 1 = schnell/klein (einfache Anfragen), 2 = stark, 3 = sehr stark.
+    tier = db.Column(db.Integer, nullable=False, default=1, server_default="1")
     # Kostenloses Kontingent des Anbieters (Kosten werden mit 0 verbucht, Tokens trotzdem gezaehlt).
     is_free = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
     # USD je 1 Mio. Tokens. Kostenpflichtige Modelle ohne Preis werden nie automatisch gewaehlt.
@@ -98,6 +100,10 @@ class AiMessage(TenantScopedMixin, db.Model):
     error = db.Column(db.String(500), nullable=True)
     # Ausgefuehrte Werkzeuge (nur Namen), z. B. ["meine_arbeitszeiten"].
     tools_used = db.Column(db.JSON, nullable=True)
+    # Kurzer Verarbeitungsstatus waehrend "pending" (z. B. "Prüfe offene Aufgaben") - keine Inhalte.
+    progress = db.Column(db.String(100), nullable=True)
+    # Kennung des Browsers je Nachricht: wiederholtes Senden wird nur einmal verarbeitet.
+    client_ref = db.Column(db.String(64), nullable=True, index=True)
     provider = db.Column(db.String(40), nullable=True)
     model = db.Column(db.String(150), nullable=True)
     input_tokens = db.Column(db.Integer, nullable=True)
@@ -122,6 +128,25 @@ class AiAttachment(TenantScopedMixin, db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=_now)
 
     message = db.relationship("AiMessage", backref=db.backref("attachments", cascade="all, delete-orphan", order_by="AiAttachment.id"))
+
+
+class AiAction(TenantScopedMixin, db.Model):
+    """Von ZentriqAI vorbereitete schreibende Aktion. Ausgefuehrt wird sie ausschliesslich nach
+    ausdruecklicher Bestaetigung durch denselben Benutzer, genau einmal (status), mit erneuter
+    Rechtepruefung."""
+
+    __tablename__ = "ai_actions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    message_id = db.Column(db.Integer, db.ForeignKey("ai_messages.id", ondelete="CASCADE"), nullable=True, index=True)
+    tool = db.Column(db.String(60), nullable=False)
+    arguments = db.Column(db.JSON, nullable=False)
+    summary = db.Column(db.String(300), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="pending")  # pending|done|cancelled|failed
+    result = db.Column(db.String(300), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=_now)
+    decided_at = db.Column(db.DateTime, nullable=True)
 
 
 class AiUsage(TenantScopedMixin, db.Model):

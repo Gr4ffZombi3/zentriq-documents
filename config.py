@@ -52,6 +52,9 @@ class BaseConfig:
     CEREBRAS_API_KEY = os.environ.get("CEREBRAS_API_KEY")
     MISTRAL_API_KEY = os.environ.get("MISTRAL_API_KEY")
     OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+    # OmniRoute (OpenAI-kompatibles Gateway, z. B. http://127.0.0.1:20128/v1) - optional.
+    OMNIROUTE_BASE_URL = os.environ.get("OMNIROUTE_BASE_URL")
+    OMNIROUTE_API_KEY = os.environ.get("OMNIROUTE_API_KEY")
     # Kostengrenzen fuer kostenpflichtige Modelle (USD, plattformweit). 0 = keine bezahlten Modelle.
     ZENTRIQ_AI_DAILY_BUDGET_USD = float(os.environ.get("ZENTRIQ_AI_DAILY_BUDGET_USD", "0"))
     ZENTRIQ_AI_MONTHLY_BUDGET_USD = float(os.environ.get("ZENTRIQ_AI_MONTHLY_BUDGET_USD", "0"))
@@ -160,6 +163,7 @@ class TestingConfig(BaseConfig):
     CEREBRAS_API_KEY = None
     MISTRAL_API_KEY = None
     OPENROUTER_API_KEY = None
+    OMNIROUTE_API_KEY = None
     ZENTRIQ_AI_STATE_BACKEND = "memory"
 
 

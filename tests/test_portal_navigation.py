@@ -1,10 +1,10 @@
 """Portal-Struktur: Startseite, Hauptnavigation, Bereichsreiter."""
 
 
-def test_admin_home_is_overview(auth_client):
+def test_admin_home_is_chat(auth_client):
     resp = auth_client.get("/")
     assert resp.status_code == 302
-    assert resp.headers["Location"].endswith("/uebersicht")
+    assert resp.headers["Location"].endswith("/zentriq")
 
 
 def test_login_redirects_to_portal_home(client, user):

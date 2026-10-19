@@ -1,10 +1,15 @@
 # ruff: noqa: F811  (Fixture "world" wird aus test_permissions_security importiert)
-"""ZentriqAI: Zugriff (nur SUPER_ADMIN), Routing mit Fallback, Abkuehlzeiten, Kostengrenzen,
-Kundendaten-Schutz, Gespraechsverwaltung, Kontext/Zusammenfassung, Cache, Einstellungen.
+"""ZentriqAI: Zugriff je Rolle, Routing mit Fallback, Abkuehlzeiten, Kostengrenzen,
+Kundendaten-Schutz, asynchrone Antworten, Werkzeuge mit Rechtepruefung, Anhaenge,
+Gespraechsverwaltung, Kontext/Zusammenfassung, Cache, Einstellungen, Startseite.
 
 Anbieter werden nie echt aufgerufen: adapters.call / adapters.list_models sind ersetzt.
-Zwei-Bueros-Szenario aus test_permissions_security (Buero A mit SUPER_ADMIN Justin)."""
+Celery laeuft in Tests eager - die Antwort ist nach dem POST bereits fertig.
+Zwei-Bueros-Szenario aus test_permissions_security (Buero A: Admin A, Dennis, Laura,
+SUPER_ADMIN Justin; Buero B: Admin B, Bob)."""
 
+import io
+import json
 from decimal import Decimal
 
 import pytest
@@ -13,8 +18,8 @@ from app.models import AuditLog
 from app.models.ai import AiConversation, AiMessage, AiModel, AiProviderSetting, AiUsage
 from app.models.audit_log import AuditEventType
 from app.services.ai import adapters, catalog, chat, router, state
-from app.tenancy import bypass_tenant_scope
-from tests.test_permissions_security import _user, login, world  # noqa: F401
+from app.tenancy import bypass_tenant_scope, use_tenant_id
+from tests.test_permissions_security import login, world  # noqa: F401
 
 GEMINI = "gemini:gemini-flash-latest"
 GROQ = "groq:llama-3.3-70b-versatile"
@@ -30,8 +35,8 @@ class FakeProviders:
     def set(self, provider, *items):
         self.behaviour[provider] = list(items)
 
-    def __call__(self, provider, model_id, system, messages, max_tokens, timeout):
-        self.calls.append({"provider": provider, "model": model_id, "system": system, "messages": messages})
+    def __call__(self, provider, model_id, system, messages, max_tokens, timeout, tools=None):
+        self.calls.append({"provider": provider, "model": model_id, "system": system, "messages": list(messages), "tools": tools})
         items = self.behaviour.get(provider) or [adapters.ProviderResult(f"Antwort von {provider}", 100, 50)]
         item = items.pop(0) if len(items) > 1 else items[0]
         if isinstance(item, Exception):
@@ -66,8 +71,21 @@ def _new(client, **body):
     return resp.get_json()["conversation"]["id"]
 
 
+class Sent:
+    """POST .../messages (202) plus die fertige Antwort, wie sie der Browser abfragt."""
+
+    def __init__(self, client, conversation_id, resp):
+        self.status_code = resp.status_code
+        self.data = resp.get_json()
+        self.reply = None
+        if resp.status_code == 202:
+            reply_id = self.data["reply"]["id"]
+            self.reply = client.get(f"/zentriq/api/conversations/{conversation_id}/messages/{reply_id}").get_json()["message"]
+
+
 def _send(client, conversation_id, content="Wie formuliere ich eine freundliche Erinnerung?", **extra):
-    return client.post(f"/zentriq/api/conversations/{conversation_id}/messages", json={"content": content, **extra})
+    resp = client.post(f"/zentriq/api/conversations/{conversation_id}/messages", json={"content": content, **extra})
+    return Sent(client, conversation_id, resp)
 
 
 def _usage():
@@ -75,20 +93,35 @@ def _usage():
         return AiUsage.query.order_by(AiUsage.id).all()
 
 
-# --- Zugriff --------------------------------------------------------------------------------
+def _approve(db, provider="groq"):
+    catalog.ensure_defaults()
+    AiProviderSetting.query.filter_by(provider=provider).one().customer_data_allowed = True
+    db.session.commit()
 
 
-def test_only_super_admin_reaches_zentriq(app, world):
-    assert _root(app, world).get("/zentriq").status_code == 200
-    for email in ("admin-a@example.com", "dennis@example.com", "bob@example.com"):
-        client = login(app, email)
-        assert client.get("/zentriq").status_code == 403
-        assert client.get("/zentriq/api/conversations", headers={"Accept": "application/json"}).status_code == 403
-        assert client.get("/zentriq/einstellungen").status_code == 403
+# --- Zugriff und Startseite -----------------------------------------------------------------
 
 
-def test_disabled_switch(app, world):
+@pytest.mark.parametrize("email", ["justin@example.com", "admin-a@example.com", "dennis@example.com", "bob@example.com"])
+def test_every_role_reaches_chat_but_only_super_admin_settings(app, world, email):
+    client = login(app, email)
+    assert client.get("/zentriq").status_code == 200
+    assert client.get("/zentriq/api/conversations").status_code == 200
+    is_root = email == "justin@example.com"
+    assert client.get("/zentriq/einstellungen").status_code == (200 if is_root else 403)
+    assert client.post("/zentriq/einstellungen/anbieter/groq", data={"enabled": "1"}).status_code == (302 if is_root else 403)
+
+
+@pytest.mark.parametrize("email", ["justin@example.com", "admin-a@example.com", "dennis@example.com"])
+def test_home_opens_chat(app, world, email):
+    resp = login(app, email).get("/")
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith("/zentriq")
+
+
+def test_home_falls_back_when_disabled(app, world):
     app.config["ZENTRIQ_AI_ENABLED"] = False
+    assert login(app, "dennis@example.com").get("/").headers["Location"].endswith("/uebersicht")
     client = _root(app, world)
     assert client.get("/zentriq").status_code == 503
     assert client.get("/zentriq/api/models").status_code == 503
@@ -97,8 +130,27 @@ def test_disabled_switch(app, world):
 def test_page_never_contains_api_keys(app, world, fake):
     client = _root(app, world)
     for url in ("/zentriq", "/zentriq/einstellungen", "/zentriq/api/models"):
-        body = client.get(url).get_data(as_text=True)
-        assert "GEHEIM" not in body
+        assert "GEHEIM" not in client.get(url).get_data(as_text=True)
+
+
+def test_layout_has_sidebar_areas_and_time_clock(app, world):
+    body = login(app, "dennis@example.com").get("/zentriq").get_data(as_text=True)
+    assert "Neue Unterhaltung" in body and "Chats durchsuchen" in body
+    assert "Leipziger Liste" in body and "Zeiterfassung" in body
+    assert "data-zs-clock" in body
+    # SUPER_ADMIN: keine Zeiterfassung, keine Buerobereiche, aber KI-Einstellungen.
+    body = _root(app, world).get("/zentriq").get_data(as_text=True)
+    assert "data-zs-clock" not in body
+    assert "Leipziger Liste" not in body
+    assert "KI-Einstellungen" in body
+
+
+def test_existing_pages_keep_working_with_new_layout(app, world):
+    client = login(app, "admin-a@example.com")
+    for url in ("/uebersicht", "/zeiterfassung", "/leipziger-liste", "/settings/profile"):
+        resp = client.get(url, follow_redirects=True)
+        assert resp.status_code == 200, url
+        assert "data-zs-sidebar" in resp.get_data(as_text=True)
 
 
 # --- Routing --------------------------------------------------------------------------------
@@ -106,9 +158,10 @@ def test_page_never_contains_api_keys(app, world, fake):
 
 def test_no_models_without_keys(app, world):
     client = _root(app, world)
-    resp = _send(client, _new(client))
-    assert resp.status_code == 503
-    assert resp.get_json()["code"] == "no_models"
+    sent = _send(client, _new(client))
+    assert sent.status_code == 202
+    assert sent.reply["status"] == "error"
+    assert "kein KI-Modell verfügbar" in sent.reply["error"]
 
 
 def test_free_first_and_fallback_on_rate_limit(app, world, fake):
@@ -117,11 +170,10 @@ def test_free_first_and_fallback_on_rate_limit(app, world, fake):
     client = _root(app, world)
     conversation_id = _new(client)
 
-    resp = _send(client, conversation_id)
-    assert resp.status_code == 200
-    data = resp.get_json()
-    assert data["message"]["provider"] == "groq"
-    assert data["message"]["cost_usd"] == 0
+    reply = _send(client, conversation_id).reply
+    assert reply["status"] == "done"
+    assert reply["provider"] == "groq"
+    assert reply["cost_usd"] == 0
     assert [c["model"] for c in fake.calls] == ["gemini-flash-latest", "gemini-flash-lite-latest", "llama-3.3-70b-versatile"]
     usage = _usage()
     assert [(u.provider, u.ok, u.error_type) for u in usage] == [
@@ -131,21 +183,18 @@ def test_free_first_and_fallback_on_rate_limit(app, world, fake):
     ]
     assert usage[2].input_tokens == 100 and usage[2].output_tokens == 50
 
-    # Beide Gemini-Modelle sind jetzt pausiert (Retry-After 120 s) und werden uebersprungen.
+    # Beide Gemini-Modelle sind jetzt pausiert und werden uebersprungen.
     assert state.cooldown_info("gemini", "gemini-flash-latest")["seconds"] > 60
     fake.calls.clear()
     fake.set("gemini", adapters.ProviderResult("ok", 1, 1))
-    resp = _send(client, conversation_id, "Noch eine Frage")
+    _send(client, conversation_id, "Noch eine Frage")
     assert [c["provider"] for c in fake.calls] == ["groq"]
-    assert "Gemini Flash: pausiert" in resp.get_json()["attempts"]
 
 
 def test_provider_outage_pauses_whole_provider(app, world, fake):
     fake.set("gemini", adapters.ProviderError(adapters.UNAVAILABLE, status=503))
     client = _root(app, world)
-    resp = _send(client, _new(client))
-    assert resp.get_json()["message"]["provider"] == "groq"
-    # Nur ein Gemini-Versuch: danach ist der ganze Anbieter pausiert.
+    assert _send(client, _new(client)).reply["provider"] == "groq"
     assert [c["provider"] for c in fake.calls] == ["gemini", "groq"]
 
 
@@ -154,62 +203,59 @@ def test_all_failed_reports_attempts_and_keeps_user_message(app, world, fake):
     fake.set("groq", adapters.ProviderError(adapters.AUTH))
     client = _root(app, world)
     conversation_id = _new(client)
-    resp = _send(client, conversation_id)
-    assert resp.status_code == 503
-    data = resp.get_json()
-    assert data["code"] == "all_failed"
-    assert any("Groq" in a or "Llama" in a for a in data["attempts"])
+    reply = _send(client, conversation_id).reply
+    assert reply["status"] == "error"
+    assert "Zugang ungültig" in reply["error"]
     with bypass_tenant_scope():
-        messages = AiMessage.query.filter_by(conversation_id=conversation_id).all()
-    assert [m.role for m in messages] == ["user"]
+        messages = AiMessage.query.filter_by(conversation_id=conversation_id).order_by(AiMessage.id).all()
+    assert [(m.role, m.status) for m in messages] == [("user", "done"), ("assistant", "error")]
+    # Erneut senden: die Fehlantwort geht nicht in den Kontext, die Benutzernachrichten schon.
+    fake.set("groq", adapters.ProviderResult("jetzt ok", 1, 1))
+    state.reset_memory()
+    assert _send(client, conversation_id, "Nochmal").reply["status"] == "done"
+    assert [m["role"] for m in fake.calls[-1]["messages"]] == ["user"]
 
 
 def test_refusal_does_not_fall_back(app, world, fake):
     fake.set("gemini", adapters.ProviderError(adapters.REFUSAL))
     client = _root(app, world)
-    resp = _send(client, _new(client))
-    assert resp.status_code == 422
+    assert _send(client, _new(client)).reply["status"] == "error"
     assert [c["provider"] for c in fake.calls] == ["gemini"]
 
 
-def test_manual_model_choice_and_fallback_flag(app, world, fake):
+def test_manual_model_choice_and_fallback_note(app, world, fake):
     client = _root(app, world)
     conversation_id = _new(client, model=GROQ)
-    resp = _send(client, conversation_id)
-    assert resp.get_json()["message"]["provider"] == "groq"
+    assert _send(client, conversation_id).reply["provider"] == "groq"
     assert fake.calls[0]["provider"] == "groq"
 
     fake.calls.clear()
     fake.set("groq", adapters.ProviderError(adapters.RATE_LIMIT))
-    resp = _send(client, conversation_id, "Weiter")
-    data = resp.get_json()
-    assert data["fallback_used"] is True
-    assert data["message"]["provider"] == "gemini"
+    reply = _send(client, conversation_id, "Weiter").reply
+    assert reply["provider"] == "gemini"
+    assert "nicht verfügbar" in reply["error"]
 
 
 def test_manual_fallback_can_be_disabled(app, world, fake):
     app.config["ZENTRIQ_AI_MANUAL_FALLBACK"] = False
     fake.set("groq", adapters.ProviderError(adapters.RATE_LIMIT))
     client = _root(app, world)
-    resp = _send(client, _new(client, model=GROQ))
-    assert resp.status_code == 503
+    assert _send(client, _new(client, model=GROQ)).reply["status"] == "error"
     assert [c["provider"] for c in fake.calls] == ["groq"]
 
 
 def test_unknown_model_choice_rejected(app, world, fake):
     client = _root(app, world)
-    resp = _send(client, _new(client, model="anthropic:claude-opus-5-5"))
-    assert resp.status_code == 400
-    assert resp.get_json()["code"] == "model_unavailable"
+    reply = _send(client, _new(client, model="anthropic:claude-opus-5-5")).reply
+    assert reply["status"] == "error"
+    assert "nicht verfügbar" in reply["error"]
 
 
 def _enable_paid(app, db):
     app.config["ANTHROPIC_API_KEY"] = "sk-ant-GEHEIM"
     catalog.ensure_defaults()
-    for model in AiModel.query.filter_by(provider="anthropic").all():
+    for model in AiModel.query.all():
         model.enabled = model.model_id == "claude-haiku-4-5"
-    for model in AiModel.query.filter(AiModel.provider != "anthropic").all():
-        model.enabled = False
     db.session.commit()
 
 
@@ -217,9 +263,8 @@ def test_paid_models_blocked_by_budget(app, world, fake, db):
     _enable_paid(app, db)
     app.config["ZENTRIQ_AI_DAILY_BUDGET_USD"] = 0
     client = _root(app, world)
-    resp = _send(client, _new(client))
-    assert resp.status_code == 429
-    assert resp.get_json()["code"] == "budget"
+    reply = _send(client, _new(client)).reply
+    assert reply["status"] == "error" and "Kostengrenze" in reply["error"]
     assert fake.calls == []
 
 
@@ -229,10 +274,9 @@ def test_paid_model_cost_recorded(app, world, fake, db):
     app.config["ZENTRIQ_AI_MONTHLY_BUDGET_USD"] = 10
     fake.set("anthropic", adapters.ProviderResult("Antwort", 1000, 500))
     client = _root(app, world)
-    resp = _send(client, _new(client))
-    assert resp.status_code == 200
+    reply = _send(client, _new(client)).reply
     # Haiku 4.5: 1 USD / 5 USD je 1 Mio. Tokens -> 0,001 + 0,0025
-    assert resp.get_json()["message"]["cost_usd"] == pytest.approx(0.0035)
+    assert reply["cost_usd"] == pytest.approx(0.0035)
     assert router.budget_status()["today"] == Decimal("0.0035")
 
 
@@ -256,30 +300,163 @@ def test_customer_data_detection():
 
 def test_customer_data_blocked_outside_protected_mode(app, world, fake):
     client = _root(app, world)
-    resp = _send(client, _new(client), "Kunde hat IBAN DE89 3704 0044 0532 0130 00")
-    assert resp.status_code == 422
-    assert resp.get_json()["code"] == "customer_data"
+    sent = _send(client, _new(client), "Kunde hat IBAN DE89 3704 0044 0532 0130 00")
+    assert sent.status_code == 422
+    assert sent.data["code"] == "customer_data"
     assert fake.calls == []
 
 
 def test_protected_mode_uses_only_approved_providers(app, world, fake, db):
     client = _root(app, world)
     conversation_id = _new(client, customer_data=True)
-    resp = _send(client, conversation_id, "Kunde mit Vertragsnummer: 123456789 fragt nach Kündigung")
-    assert resp.status_code == 503
+    reply = _send(client, conversation_id, "Kunde mit Vertragsnummer: 123456789 fragt nach Kündigung").reply
+    assert reply["status"] == "error"
     assert fake.calls == []
 
-    AiProviderSetting.query.filter_by(provider="groq").one().customer_data_allowed = True
-    db.session.commit()
-    resp = _send(client, conversation_id, "Kunde mit Vertragsnummer: 123456789 fragt nach Kündigung")
-    assert resp.status_code == 200
+    _approve(db, "groq")
+    reply = _send(client, conversation_id, "Kunde mit Vertragsnummer: 123456789 fragt nach Kündigung").reply
+    assert reply["status"] == "done"
     assert {c["provider"] for c in fake.calls} == {"groq"}
+
+
+# --- Werkzeuge ------------------------------------------------------------------------------
+
+
+def test_tools_offered_per_role_and_only_with_approved_provider(app, world, fake, db):
+    client = login(app, "dennis@example.com")
+    _send(client, _new(client), "Was steht heute an?")
+    # Ohne freigegebenen Anbieter: keine Werkzeuge, Hinweis im Systemtext.
+    assert fake.calls[-1]["tools"] is None
+    assert "noch kein KI-Anbieter für Kundendaten freigegeben" in fake.calls[-1]["system"]
+
+    _approve(db, "groq")
+    _send(client, _new(client), "Was steht heute an?")
+    employee_tools = {t["name"] for t in fake.calls[-1]["tools"]}
+    assert fake.calls[-1]["provider"] == "groq"
+    assert employee_tools == {"meine_arbeitszeiten", "offene_vorgaenge", "suche"}
+
+    admin = login(app, "admin-a@example.com")
+    _send(admin, _new(admin), "Was steht heute an?")
+    assert {t["name"] for t in fake.calls[-1]["tools"]} == employee_tools | {"aufgaben", "team_anwesenheit"}
+
+    # SUPER_ADMIN: keine Buerodaten, keine Werkzeuge.
+    root = _root(app, world)
+    _send(root, _new(root), "Was steht heute an?")
+    assert fake.calls[-1]["tools"] is None
+
+
+def test_tool_call_executes_existing_service(app, world, fake, db):
+    _approve(db, "groq")
+    fake.set(
+        "groq",
+        adapters.ProviderResult("", 10, 5, tool_calls=[adapters.ToolCall("c1", "meine_arbeitszeiten", {"zeitraum": "woche"})]),
+        adapters.ProviderResult("Sie haben diese Woche **8:00** Stunden gearbeitet.", 20, 10),
+    )
+    client = login(app, "dennis@example.com")
+    reply = _send(client, _new(client), "Zeige meine Arbeitszeiten dieser Woche.").reply
+    assert reply["status"] == "done"
+    assert reply["tools"] == ["Arbeitszeiten"]
+    assert reply["input_tokens"] == 30 and reply["output_tokens"] == 15
+    second = fake.calls[-1]["messages"]
+    assert second[-2]["role"] == "assistant" and second[-2]["tool_calls"][0]["name"] == "meine_arbeitszeiten"
+    result = json.loads(second[-1]["content"])
+    assert "netto_gesamt" in result and "status_jetzt" in result
+
+
+def test_tool_permissions_rechecked_on_execution(app, world, db):
+    from app.models import User
+    from app.services.ai import tools
+
+    with bypass_tenant_scope():
+        dennis = db.session.get(User, world.dennis_id)
+    with use_tenant_id(world.tenant_a.id):
+        assert "fehler" in json.loads(tools.execute(dennis, "aufgaben", {"status": "offen"}))
+        assert "fehler" in json.loads(tools.execute(dennis, "gibt_es_nicht", {}))
+
+
+def test_employee_search_tool_never_returns_customer_master_data(app, world, db):
+    from app.models import User
+    from app.services.ai import tools
+
+    with bypass_tenant_scope():
+        dennis = db.session.get(User, world.dennis_id)
+    with use_tenant_id(world.tenant_a.id):
+        result = json.loads(tools.execute(dennis, "suche", {"suchbegriff": "OFFEN"}))
+    assert result["kunden"] == []
+    assert all("LAURA" not in json.dumps(v) for v in result["vorgaenge"])
+
+
+# --- Anhaenge -------------------------------------------------------------------------------
+
+
+def _upload(client, conversation_id, filename, content, text="Bitte zusammenfassen", mimetype="text/plain"):
+    resp = client.post(
+        f"/zentriq/api/conversations/{conversation_id}/messages",
+        data={"content": text, "files": (io.BytesIO(content), filename, mimetype)},
+        content_type="multipart/form-data",
+    )
+    return Sent(client, conversation_id, resp)
+
+
+def test_text_attachment_is_sent_as_context(app, world, fake):
+    client = _root(app, world)
+    sent = _upload(client, _new(client), "notiz.txt", "Termin am Montag mit dem Team.".encode())
+    assert sent.reply["status"] == "done"
+    assert sent.data["message"]["attachments"] == [{"filename": "notiz.txt", "kind": "document"}]
+    assert "[Anhang: notiz.txt]" in fake.calls[-1]["messages"][-1]["content"]
+
+
+def test_pdf_attachment_extracted(app, world, fake):
+    import fitz
+
+    pdf = fitz.open()
+    pdf.new_page().insert_text((72, 72), "Leipziger Liste Seite eins")
+    client = _root(app, world)
+    _upload(client, _new(client), "liste.pdf", pdf.tobytes(), mimetype="application/pdf")
+    assert "Leipziger Liste Seite eins" in fake.calls[-1]["messages"][-1]["content"]
+
+
+def test_attachment_with_customer_data_requires_protected_mode(app, world, fake):
+    client = _root(app, world)
+    sent = _upload(client, _new(client), "kunde.txt", "Kundennummer: 4711000 Rückruf 0171 2345678".encode())
+    assert sent.status_code == 422
+    assert fake.calls == []
+
+
+def test_invalid_files_rejected(app, world, fake):
+    client = _root(app, world)
+    conversation_id = _new(client)
+    assert _upload(client, conversation_id, "virus.exe", b"MZ...").status_code == 400
+    assert _upload(client, conversation_id, "fake.pdf", b"not a pdf", mimetype="application/pdf").status_code == 400
+
+
+def test_audio_requires_protected_mode(app, world, fake, monkeypatch):
+    from app.services import memo
+
+    monkeypatch.setattr(memo, "validate_audio", lambda filename, content, mimetype=None: filename)
+    client = _root(app, world)
+    assert _upload(client, _new(client), "anruf.mp3", b"ID3fake", mimetype="audio/mpeg").status_code == 422
+
+
+def test_audio_transcribed_in_worker_and_temp_file_removed(app, world, fake, db, monkeypatch, tmp_path):
+    from app.services import memo
+
+    app.config["TRANSCRIPTION_TMP_DIR"] = str(tmp_path / "memo")
+    monkeypatch.setattr(memo, "validate_audio", lambda filename, content, mimetype=None: filename)
+    monkeypatch.setattr(memo, "transcribe_file", lambda path: "Hallo, hier ist Herr Muster, bitte Rückruf.")
+    _approve(db, "groq")
+    client = _root(app, world)
+    sent = _upload(client, _new(client, customer_data=True), "anruf.mp3", b"ID3fake", text="", mimetype="audio/mpeg")
+    assert sent.reply["status"] == "done"
+    content = fake.calls[-1]["messages"][-1]["content"]
+    assert "Transkript der Sprachnachricht: anruf.mp3" in content and "Herr Muster" in content
+    assert list((tmp_path / "memo").glob("*.audio")) == []
 
 
 # --- Gespraeche -----------------------------------------------------------------------------
 
 
-def test_conversation_crud_and_search(app, world, fake):
+def test_conversation_crud_search_pin_project(app, world, fake):
     client = _root(app, world)
     conversation_id = _new(client)
     _send(client, conversation_id, "Wie plane ich die Urlaubsvertretung?")
@@ -291,33 +468,36 @@ def test_conversation_crud_and_search(app, world, fake):
 
     assert client.patch(f"/zentriq/api/conversations/{conversation_id}", json={"title": "Vertretung"}).status_code == 200
     assert client.patch(f"/zentriq/api/conversations/{conversation_id}", json={"title": "  "}).status_code == 400
+    client.patch(f"/zentriq/api/conversations/{conversation_id}", json={"pinned": True, "project": "Urlaub 2027"})
+    pinned = client.get("/zentriq/api/conversations?pinned=1").get_json()["conversations"]
+    assert [c["id"] for c in pinned] == [conversation_id] and pinned[0]["project"] == "Urlaub 2027"
+    assert client.get("/zentriq/api/conversations?pinned=0").get_json()["conversations"] == []
+    assert client.get("/zentriq/api/projects").get_json()["projects"] == ["Urlaub 2027"]
 
-    found = client.get("/zentriq/api/conversations?q=Urlaub").get_json()["conversations"]
+    found = client.get("/zentriq/api/conversations?q=Urlaubsvertretung").get_json()["conversations"]
     assert [c["id"] for c in found] == [conversation_id]
     assert client.get("/zentriq/api/conversations?q=nichtvorhanden").get_json()["conversations"] == []
+    assert client.get(f"/zentriq/c/{conversation_id}").status_code == 200
 
     assert client.delete(f"/zentriq/api/conversations/{conversation_id}").status_code == 200
     assert client.get(f"/zentriq/api/conversations/{conversation_id}").status_code == 404
     with bypass_tenant_scope():
         assert AiMessage.query.count() == 0
-        # Verbrauch bleibt fuer die Kostenrechnung, ohne Bezug zum Gespraech.
         assert all(u.conversation_id is None for u in AiUsage.query.all())
         assert AuditLog.query.filter_by(event_type=AuditEventType.AI_CONVERSATION_DELETED).count() == 1
 
 
-def test_conversations_are_private_per_user(app, world, fake, db):
-    from app.models import UserRole
+def test_conversations_are_private_per_user_and_office(app, world, fake):
+    dennis = login(app, "dennis@example.com")
+    conversation_id = _new(dennis)
+    _send(dennis, conversation_id)
 
-    _user(db, world.tenant_b, "root-b@example.com", "08/0951-T", "Root B", UserRole.SUPER_ADMIN)
-    client = _root(app, world)
-    conversation_id = _new(client)
-    _send(client, conversation_id)
-
-    other = login(app, "root-b@example.com")
-    assert other.get(f"/zentriq/api/conversations/{conversation_id}").status_code == 404
-    assert _send(other, conversation_id).status_code == 404
-    assert other.delete(f"/zentriq/api/conversations/{conversation_id}").status_code == 404
-    assert other.get("/zentriq/api/conversations").get_json()["conversations"] == []
+    for email in ("laura@example.com", "admin-a@example.com", "bob@example.com", "justin@example.com"):
+        other = login(app, email)
+        assert other.get(f"/zentriq/api/conversations/{conversation_id}").status_code == 404
+        assert other.post(f"/zentriq/api/conversations/{conversation_id}/messages", json={"content": "x"}).status_code == 404
+        assert other.delete(f"/zentriq/api/conversations/{conversation_id}").status_code == 404
+        assert other.get("/zentriq/api/conversations").get_json()["conversations"] == []
 
 
 def test_delete_all(app, world, fake):
@@ -328,25 +508,45 @@ def test_delete_all(app, world, fake):
     assert client.get("/zentriq/api/conversations").get_json()["conversations"] == []
 
 
+def test_busy_while_pending_and_stale_pending_expires(app, world, fake, db):
+    from datetime import timedelta
+
+    from app.models.ai import _now
+
+    client = _root(app, world)
+    conversation_id = _new(client)
+    with bypass_tenant_scope():
+        conversation = db.session.get(AiConversation, conversation_id)
+        pending = AiMessage(tenant_id=conversation.tenant_id, conversation_id=conversation_id, role="assistant", content="", status="pending")
+        db.session.add(pending)
+        db.session.commit()
+        pending_id = pending.id
+    assert _send(client, conversation_id).status_code == 409
+    with bypass_tenant_scope():
+        db.session.get(AiMessage, pending_id).created_at = _now() - timedelta(minutes=10)
+        db.session.commit()
+    reply = client.get(f"/zentriq/api/conversations/{conversation_id}/messages/{pending_id}").get_json()["message"]
+    assert reply["status"] == "error"
+    assert _send(client, conversation_id).status_code == 202
+
+
 # --- Kontext, Zusammenfassung, Cache ------------------------------------------------------
 
 
-def test_context_is_limited_and_uses_summary(app, world, fake, db):
+def test_context_is_limited_and_uses_summary_and_project(app, world, fake, db):
     app.config["ZENTRIQ_AI_CONTEXT_CHARS"] = 50
     client = _root(app, world)
-    conversation_id = _new(client)
+    conversation_id = _new(client, project="Kfz")
     for i in range(3):
         _send(client, conversation_id, f"Frage Nummer {i} " + "x" * 20)
-    last = fake.calls[-1]
-    # Nur die juengste Nachricht passt ins Budget; aeltere werden nicht erneut uebertragen.
-    assert last["messages"] == [{"role": "user", "content": "Frage Nummer 2 " + "x" * 20}]
+    assert fake.calls[-1]["messages"] == [{"role": "user", "content": "Frage Nummer 2 " + "x" * 20}]
 
+    other_id = _new(client, project="Kfz")
     with bypass_tenant_scope():
-        conversation = db.session.get(AiConversation, conversation_id)
-        conversation.summary = "Es geht um Frage 0 und 1."
+        db.session.get(AiConversation, conversation_id).summary = "Es geht um Fahrzeugwechsel."
         db.session.commit()
-    _send(client, conversation_id, "Und jetzt?")
-    assert "Es geht um Frage 0 und 1." in fake.calls[-1]["system"]
+    _send(client, other_id, "Und jetzt?")
+    assert "Es geht um Fahrzeugwechsel." in fake.calls[-1]["system"]
 
 
 def test_summarize_older_messages(app, world, fake, db):
@@ -357,36 +557,55 @@ def test_summarize_older_messages(app, world, fake, db):
     fake.set("gemini", adapters.ProviderResult("- Zusammenfassung", 10, 5))
     with bypass_tenant_scope():
         conversation = db.session.get(AiConversation, conversation_id)
-        with app.test_request_context():
-            from app.tenancy import use_tenant_id
-
-            with use_tenant_id(conversation.tenant_id):
-                assert chat.summarize(conversation, keep_recent=2) is True
-        assert conversation.summary == "- Zusammenfassung"
-        assert conversation.summary_upto_id is not None
+    with use_tenant_id(conversation.tenant_id):
+        assert chat.summarize(conversation, keep_recent=2) is True
+    assert conversation.summary == "- Zusammenfassung"
     assert any(u.purpose == "summary" for u in _usage())
 
 
-def test_summary_task_scheduled_after_threshold(app, world, fake, db):
+def test_summary_task_scheduled_after_threshold(app, world, fake):
     app.config["ZENTRIQ_AI_SUMMARY_AFTER_MESSAGES"] = 2
     client = _root(app, world)
     conversation_id = _new(client)
-    _send(client, conversation_id, "Erste Frage")
-    _send(client, conversation_id, "Zweite Frage")
-    _send(client, conversation_id, "Dritte Frage")
-    _send(client, conversation_id, "Vierte Frage")
-    # Celery laeuft in Tests eager: Zusammenfassung ist bereits erstellt.
+    for text in ("Erste Frage", "Zweite Frage", "Dritte Frage", "Vierte Frage"):
+        _send(client, conversation_id, text)
     assert any(u.purpose == "summary" for u in _usage())
 
 
 def test_identical_request_served_from_cache(app, world, fake):
     app.config["ZENTRIQ_AI_CACHE_TTL_SECONDS"] = 600
     client = _root(app, world)
-    first = _send(client, _new(client), "Was ist eine Leipziger Liste?").get_json()
-    second = _send(client, _new(client), "Was ist eine Leipziger Liste?").get_json()
+    first = _send(client, _new(client), "Was ist eine Leipziger Liste?").reply
+    second = _send(client, _new(client), "Was ist eine Leipziger Liste?").reply
     assert len(fake.calls) == 1
-    assert first["message"]["cached"] is False
-    assert second["message"]["cached"] is True
+    assert first["cached"] is False and second["cached"] is True
+
+
+# --- Zeiterfassungsmodul --------------------------------------------------------------------
+
+
+def test_time_clock_json_uses_existing_timetracking(app, world):
+    client = login(app, "laura@example.com")
+    headers = {"Accept": "application/json"}
+    if client.get("/zeiterfassung/status").get_json()["status"] != "out":
+        client.post("/zeiterfassung/ausstempeln", headers=headers)
+    resp = client.post("/zeiterfassung/einstempeln", headers=headers)
+    assert resp.status_code == 200 and resp.get_json()["status"] == "in"
+    # Doppelt einstempeln: bestehende Regel greift, Antwort mit Fehler und aktuellem Stand.
+    resp = client.post("/zeiterfassung/einstempeln", headers=headers)
+    assert resp.status_code == 409 and resp.get_json()["status"] == "in"
+    assert client.post("/zeiterfassung/pause/start", headers=headers).get_json()["status"] == "break"
+    assert client.post("/zeiterfassung/pause/ende", headers=headers).get_json()["status"] == "in"
+    assert client.post("/zeiterfassung/ausstempeln", headers=headers).get_json()["status"] == "out"
+    with bypass_tenant_scope():
+        events = {e.event_type for e in AuditLog.query.filter(AuditLog.actor_email_snapshot == "laura@example.com").all()}
+    assert {AuditEventType.TIME_CLOCK_IN, AuditEventType.TIME_CLOCK_OUT} <= events
+    # Formular-Stempeln (ohne JSON) funktioniert wie bisher mit Weiterleitung.
+    assert client.post("/zeiterfassung/einstempeln").status_code == 302
+
+
+def test_super_admin_has_no_time_clock_endpoint(app, world):
+    assert _root(app, world).get("/zeiterfassung/status").status_code == 403
 
 
 # --- Einstellungen und Verbrauch ------------------------------------------------------------
@@ -409,7 +628,6 @@ def test_settings_change_model_and_provider(app, world, fake, db):
     with bypass_tenant_scope():
         assert AuditLog.query.filter_by(event_type=AuditEventType.AI_SETTINGS_CHANGED).count() == 2
 
-    # Ausgeschalteter Anbieter wird nicht mehr verwendet.
     client.post("/zentriq/einstellungen/anbieter/groq", data={})
     refs = [m["ref"] for m in client.get("/zentriq/api/models").get_json()["models"]]
     assert GROQ not in refs and GEMINI not in refs
@@ -424,12 +642,13 @@ def test_discover_models(app, world, fake, monkeypatch, db):
     assert new.enabled is False and new.is_free is True
 
 
-def test_usage_endpoint(app, world, fake):
-    client = _root(app, world)
+def test_usage_endpoint_budget_only_for_super_admin(app, world, fake):
+    client = login(app, "dennis@example.com")
     _send(client, _new(client))
     data = client.get("/zentriq/api/usage").get_json()
     assert data["own"]["rows"][0]["requests"] == 1
-    assert data["budget"]["paid_allowed"] is False  # Standard: Budget 0
+    assert "budget" not in data
+    assert _root(app, world).get("/zentriq/api/usage").get_json()["budget"]["paid_allowed"] is False
 
 
 def test_purge_command_removes_only_old_conversations(app, world, fake, db):

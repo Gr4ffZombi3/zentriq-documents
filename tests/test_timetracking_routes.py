@@ -31,10 +31,10 @@ def _closed_session(db, user, hours_ago=30, length_hours=8):
     return session
 
 
-def test_employee_home_is_overview(employee_client):
+def test_employee_home_is_chat(employee_client):
     resp = employee_client.get("/")
     assert resp.status_code == 302
-    assert resp.headers["Location"].endswith("/uebersicht")
+    assert resp.headers["Location"].endswith("/zentriq")
 
 
 def test_employee_stamping_flow_uses_server_time(employee_client, employee):

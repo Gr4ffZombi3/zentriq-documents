@@ -4,7 +4,7 @@ Revision ID: c8d9e0f1a2b3
 Revises: b7d1e2f3a4c5
 Create Date: 2026-10-19 20:00:00.000000
 
-Rein additiv: fuenf neue Tabellen (ai_*) und zwei neue Enum-Werte fuer audit_logs.event_type.
+Rein additiv: sechs neue Tabellen (ai_*) und zwei neue Enum-Werte fuer audit_logs.event_type.
 Bestehende Tabellen und Daten werden nicht veraendert.
 """
 
@@ -94,6 +94,8 @@ def upgrade():
         sa.Column("title", sa.String(length=200), nullable=False),
         sa.Column("model_choice", sa.String(length=200), server_default="auto", nullable=False),
         sa.Column("customer_data", sa.Boolean(), server_default=sa.false(), nullable=False),
+        sa.Column("pinned", sa.Boolean(), server_default=sa.false(), nullable=False),
+        sa.Column("project", sa.String(length=100), nullable=True),
         sa.Column("summary", sa.Text(), nullable=True),
         sa.Column("summary_upto_id", sa.Integer(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
@@ -105,6 +107,7 @@ def upgrade():
     op.create_index("ix_ai_conversations_tenant_id", "ai_conversations", ["tenant_id"], unique=False)
     op.create_index("ix_ai_conversations_user_id", "ai_conversations", ["user_id"], unique=False)
     op.create_index("ix_ai_conversations_updated_at", "ai_conversations", ["updated_at"], unique=False)
+    op.create_index("ix_ai_conversations_project", "ai_conversations", ["project"], unique=False)
 
     op.create_table(
         "ai_messages",
@@ -113,6 +116,9 @@ def upgrade():
         sa.Column("conversation_id", sa.Integer(), nullable=False),
         sa.Column("role", sa.String(length=20), nullable=False),
         sa.Column("content", sa.Text(), nullable=False),
+        sa.Column("status", sa.String(length=20), server_default="done", nullable=False),
+        sa.Column("error", sa.String(length=500), nullable=True),
+        sa.Column("tools_used", sa.JSON(), nullable=True),
         sa.Column("provider", sa.String(length=40), nullable=True),
         sa.Column("model", sa.String(length=150), nullable=True),
         sa.Column("input_tokens", sa.Integer(), nullable=True),
@@ -126,6 +132,23 @@ def upgrade():
     )
     op.create_index("ix_ai_messages_tenant_id", "ai_messages", ["tenant_id"], unique=False)
     op.create_index("ix_ai_messages_conversation_id", "ai_messages", ["conversation_id"], unique=False)
+
+    op.create_table(
+        "ai_attachments",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("tenant_id", sa.Integer(), nullable=False),
+        sa.Column("message_id", sa.Integer(), nullable=False),
+        sa.Column("filename", sa.String(length=255), nullable=False),
+        sa.Column("kind", sa.String(length=20), nullable=False),
+        sa.Column("size_bytes", sa.Integer(), nullable=False),
+        sa.Column("text", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(), nullable=False),
+        sa.ForeignKeyConstraint(["message_id"], ["ai_messages.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"]),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index("ix_ai_attachments_tenant_id", "ai_attachments", ["tenant_id"], unique=False)
+    op.create_index("ix_ai_attachments_message_id", "ai_attachments", ["message_id"], unique=False)
 
     op.create_table(
         "ai_usage",
@@ -160,6 +183,7 @@ def downgrade():
     # Schlaegt bewusst fehl, solange Audit-Eintraege mit den neuen Event-Typen existieren.
     _alter_audit_enum(NEW_AUDIT_VALUES, OLD_AUDIT_VALUES)
     op.drop_table("ai_usage")
+    op.drop_table("ai_attachments")
     op.drop_table("ai_messages")
     op.drop_table("ai_conversations")
     op.drop_table("ai_models")

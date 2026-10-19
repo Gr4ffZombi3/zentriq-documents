@@ -431,9 +431,9 @@ def test_super_admin_is_denied_every_business_endpoint(app, world):
     client = login(app, "justin@example.com")
     checked = 0
     for rule in app.url_map.iter_rules():
-        # "zentriq.": ZentriqAI (Phase 5) ist bewusst nur fuer den SUPER_ADMIN freigegeben und
-        # enthaelt keine Buerodaten; die Sperre fuer alle anderen Rollen prueft test_zentriq_ai.py.
-        if rule.endpoint == "static" or rule.endpoint.startswith(("platform.", "auth.", "zentriq.")) or rule.endpoint in SUPER_ADMIN_ALLOWED:
+        # "zentriq."/"zentriq_admin.": ZentriqAI-Chat (ohne Buerodaten fuer den SUPER_ADMIN) und
+        # KI-Einstellungen; Rechte und Trennung prueft test_zentriq_ai.py.
+        if rule.endpoint == "static" or rule.endpoint.startswith(("platform.", "auth.", "zentriq.", "zentriq_admin.")) or rule.endpoint in SUPER_ADMIN_ALLOWED:
             continue
         url = _concrete_url(rule, world)
         for method in sorted(rule.methods - {"HEAD", "OPTIONS"}):
@@ -496,9 +496,11 @@ def test_super_admin_navigation(app, world):
     assert "data-assistant-toggle" not in html
 
 
-def test_super_admin_home_is_platform(app, world):
-    resp = login(app, "justin@example.com").get("/")
-    assert resp.headers["Location"].endswith("/plattform")
+def test_super_admin_home_is_chat_and_platform_without_ai(app, world):
+    # Startseite ist der ZentriqAI-Chat; ohne ZentriqAI wie bisher die Plattformverwaltung.
+    assert login(app, "justin@example.com").get("/").headers["Location"].endswith("/zentriq")
+    app.config["ZENTRIQ_AI_ENABLED"] = False
+    assert login(app, "justin@example.com").get("/").headers["Location"].endswith("/plattform")
 
 
 def test_super_admin_creates_office_with_office_admin(app, world):

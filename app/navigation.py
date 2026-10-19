@@ -88,15 +88,12 @@ PLATFORM_GROUPS = (
     NavGroup(
         "zentriq_ai",
         "KI",
-        (
-            NavArea("zentriq_chat", "ZentriqAI", "zentriq.index", ("zentriq.index",), admin_only=False),
-            NavArea("zentriq_settings", "KI-Einstellungen", "zentriq.settings", ("zentriq.settings",), admin_only=False),
-        ),
+        (NavArea("zentriq_settings", "KI-Einstellungen", "zentriq_admin.settings", ("zentriq_admin.",), admin_only=False),),
     ),
 )
 
 OFFICE_GROUPS = (
-    NavGroup("start", None, (NavArea("overview", "Start", "portal.overview", ("portal.overview",), admin_only=False),)),
+    NavGroup("start", None, (NavArea("overview", "Übersicht", "portal.overview", ("portal.overview",), admin_only=False),)),
     NavGroup(
         "work",
         "Arbeit",
@@ -242,9 +239,11 @@ def display_name_for(user) -> str:
 
 
 def home_endpoint_for(user) -> str:
-    """Startseite nach dem Login: Super-Admins landen in der Bueroverwaltung, alle Buero-Rollen
-    auf ihrer persoenlichen Uebersicht (Fallback: Profil, falls ein Bereich nicht registriert ist)."""
+    """Startseite nach dem Login: fuer alle Rollen der ZentriqAI-Chat. Ist ZentriqAI abgeschaltet,
+    wie bisher Plattformverwaltung bzw. persoenliche Uebersicht (Fallback: Profil)."""
     candidates = ("platform.index",) if user.is_super_admin else ("portal.overview",)
+    if current_app.config.get("ZENTRIQ_AI_ENABLED", True):
+        candidates = ("zentriq.index", *candidates)
     for endpoint in (*candidates, "timetracking.index", "settings.profile"):
         if endpoint in current_app.view_functions:
             return endpoint

@@ -64,6 +64,10 @@ class AiConversation(TenantScopedMixin, db.Model):
     model_choice = db.Column(db.String(200), nullable=False, default="auto", server_default="auto")
     # Kundendaten-Modus: nur fuer Kundendaten freigegebene Anbieter.
     customer_data = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    # In der Seitenleiste unter "Gespeichert" angeheftet.
+    pinned = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    # Optionaler Projektname: Zusammenfassungen anderer Gespraeche desselben Projekts dienen als Kontext.
+    project = db.Column(db.String(100), nullable=True, index=True)
     # Laufende Zusammenfassung aelterer Nachrichten (spart Tokens bei langen Gespraechen).
     summary = db.Column(db.Text, nullable=True)
     summary_upto_id = db.Column(db.Integer, nullable=True)
@@ -88,7 +92,12 @@ class AiMessage(TenantScopedMixin, db.Model):
         db.Integer, db.ForeignKey("ai_conversations.id", ondelete="CASCADE"), nullable=False, index=True
     )
     role = db.Column(db.String(20), nullable=False)  # "user" | "assistant"
-    content = db.Column(db.Text, nullable=False)
+    content = db.Column(db.Text, nullable=False, default="")
+    # Antworten entstehen asynchron im Celery-Worker: pending -> done | error.
+    status = db.Column(db.String(20), nullable=False, default="done", server_default="done")
+    error = db.Column(db.String(500), nullable=True)
+    # Ausgefuehrte Werkzeuge (nur Namen), z. B. ["meine_arbeitszeiten"].
+    tools_used = db.Column(db.JSON, nullable=True)
     provider = db.Column(db.String(40), nullable=True)
     model = db.Column(db.String(150), nullable=True)
     input_tokens = db.Column(db.Integer, nullable=True)
@@ -96,6 +105,23 @@ class AiMessage(TenantScopedMixin, db.Model):
     cost_usd = db.Column(db.Numeric(12, 6), nullable=True)
     cached = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
     created_at = db.Column(db.DateTime, nullable=False, default=_now)
+
+
+class AiAttachment(TenantScopedMixin, db.Model):
+    """Datei zu einer Benutzernachricht. Gespeichert wird nur der extrahierte Text (bzw. das
+    Transkript), nie die Datei selbst; geloescht mit der Nachricht."""
+
+    __tablename__ = "ai_attachments"
+
+    id = db.Column(db.Integer, primary_key=True)
+    message_id = db.Column(db.Integer, db.ForeignKey("ai_messages.id", ondelete="CASCADE"), nullable=False, index=True)
+    filename = db.Column(db.String(255), nullable=False)
+    kind = db.Column(db.String(20), nullable=False)  # document | audio
+    size_bytes = db.Column(db.Integer, nullable=False, default=0)
+    text = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=_now)
+
+    message = db.relationship("AiMessage", backref=db.backref("attachments", cascade="all, delete-orphan", order_by="AiAttachment.id"))
 
 
 class AiUsage(TenantScopedMixin, db.Model):

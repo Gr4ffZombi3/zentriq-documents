@@ -5,6 +5,7 @@ freigegebenen Blueprints/Endpunkte. Jeder andere Endpunkt - auch per direkter UR
 oder JSON-Aufruf - endet mit 403. Neue Blueprints sind damit automatisch nur fuer
 OFFICE_ADMINs erreichbar, solange sie hier nicht ausdruecklich freigegeben werden.
 
+- Alle Rollen: ZentriqAI-Chat (eigene Gespraeche).
 - EMPLOYEE: Uebersicht, eigene Zeiterfassung, eigene Eintraege der Leipziger Liste, Memo,
   globale Suche (nur eigene Vorgaenge), KI-Assistent, Werkzeuge, eigenes Konto.
 - OFFICE_ADMIN: alle Fachbereiche des eigenen Mandanten (Mandantentrennung: app/tenancy.py),
@@ -39,7 +40,8 @@ COMMON_ALLOWED_ENDPOINTS = frozenset(
 # ueber /upload Buero-Admins vorbehalten).
 # "assistant": KI-Assistent - sendet nur den vom Benutzer eingegebenen Text, speichert nichts.
 # "tools": Werkzeuge (Dokument anonymisieren laeuft lokal, speichert und uebertraegt nichts).
-EMPLOYEE_ALLOWED_BLUEPRINTS = frozenset({"timetracking", "intake", "assistant", "tools"})
+# "zentriq": ZentriqAI-Chat (eigene Gespraeche; Werkzeuge pruefen die Rechte je Endpunkt erneut).
+EMPLOYEE_ALLOWED_BLUEPRINTS = frozenset({"timetracking", "intake", "assistant", "tools", "zentriq"})
 # "leipziger.index" zeigt Mitarbeitern ausschliesslich die ueber ihre eigene Vermittlernummer
 # zugeordneten Vorgaenge. Memo (dashboard.*) speichert ein Transkript nur bei Zuordnung zu einem
 # Kunden; Kundenabgleich und -anlage bleiben im eigenen Mandanten.
@@ -61,13 +63,13 @@ EMPLOYEE_ALLOWED_ENDPOINTS = frozenset(
     }
 )
 
-# "zentriq": ZentriqAI-Assistent (Phase 5: Erprobung ausschliesslich durch den SUPER_ADMIN,
-# ohne Zugriff auf Buerodaten - siehe docs/zentriq-ai-konzept.md).
-SUPER_ADMIN_ALLOWED_BLUEPRINTS = frozenset({"platform", "zentriq"})
+# "zentriq": ZentriqAI-Chat (ohne Buero-Werkzeuge - der SUPER_ADMIN hat keine Buerodaten).
+# "zentriq_admin": KI-Anbieter, Modelle, Kostengrenzen.
+SUPER_ADMIN_ALLOWED_BLUEPRINTS = frozenset({"platform", "zentriq", "zentriq_admin"})
 SUPER_ADMIN_ALLOWED_ENDPOINTS = frozenset()
 
 # Nur fuer SUPER_ADMIN - auch ein OFFICE_ADMIN erreicht diese nie.
-SUPER_ADMIN_ONLY_BLUEPRINTS = frozenset({"platform", "zentriq"})
+SUPER_ADMIN_ONLY_BLUEPRINTS = frozenset({"platform", "zentriq_admin"})
 
 # Waehrend die 2FA-Einrichtung erzwungen wird, sind nur diese Endpunkte erreichbar.
 TWO_FACTOR_SETUP_ENDPOINTS = frozenset(

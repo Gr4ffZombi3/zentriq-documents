@@ -32,6 +32,8 @@ from app.tenancy import bypass_tenant_scope
 
 AUTO = "auto"
 MIN_ATTEMPT_SECONDS = 4.0
+# Hoechstens so viele Werkzeug-Runden je Antwort (danach muss das Modell antworten).
+MAX_TOOL_ROUNDS = 4
 
 # Abkuehlzeiten in Sekunden je Fehlerart; None = keine Sperre.
 COOLDOWNS = {
@@ -78,6 +80,7 @@ class Completion:
     cached: bool = False
     fallback_used: bool = False
     attempts: list = field(default_factory=list)
+    tools_used: list = field(default_factory=list)
 
 
 def _now():
@@ -195,19 +198,27 @@ def complete(
     conversation_id: int | None = None,
     purpose: str = "chat",
     max_tokens: int | None = None,
+    tools: list[dict] | None = None,
+    tool_executor=None,
 ) -> Completion:
+    """Beantwortet `messages`. Mit `tools` darf das Modell Werkzeuge anfordern; `tool_executor`
+    (name, arguments) -> str fuehrt sie aus (Rechtepruefung dort). Faellt ein Modell mitten im
+    Ablauf aus, uebernimmt das naechste mit den bereits vorliegenden Werkzeugergebnissen."""
     choice = choice or AUTO
     candidates, chosen = resolve_choice(choice, customer_data=customer_data)
     if not candidates:
         message = (
-            "Kein für Kundendaten freigegebenes Modell verfügbar."
+            "Kein für Kundendaten freigegebenes Modell verfügbar. Ein Administrator muss dafür einen "
+            "Anbieter unter KI-Einstellungen freigeben."
             if customer_data
-            else "Derzeit ist kein KI-Modell verfügbar. Bitte Anbieter und Modelle unter Einstellungen prüfen."
+            else "Derzeit ist kein KI-Modell verfügbar. Bitte Anbieter und Modelle unter KI-Einstellungen prüfen."
         )
         raise AiError(message, 503, "no_models")
 
     cache_ttl = int(current_app.config.get("ZENTRIQ_AI_CACHE_TTL_SECONDS") or 0)
-    cache_key = _cache_key(user_id, choice, customer_data, system, messages) if purpose == "chat" and cache_ttl else None
+    # Mit Werkzeugen haengt die Antwort von aktuellen Daten ab - nie aus dem Cache.
+    use_cache = purpose == "chat" and cache_ttl and not tools
+    cache_key = _cache_key(user_id, choice, customer_data, system, messages) if use_cache else None
     if cache_key:
         hit = state.cache_get(cache_key)
         if hit:
@@ -218,6 +229,10 @@ def complete(
     per_call = float(current_app.config.get("ZENTRIQ_AI_CALL_TIMEOUT_SECONDS") or 25)
     paid_allowed = None
     attempts: list[dict] = []
+    transcript = list(messages)
+    tools_used: list[str] = []
+    rounds = 0
+    totals = {"in": 0, "out": 0, "cost": Decimal("0")}
 
     for model in candidates:
         cooling = state.cooling_reason(model.provider, model.model_id)
@@ -230,49 +245,83 @@ def complete(
             if not paid_allowed:
                 attempts.append({"model": model.label, "error": "budget"})
                 continue
-        remaining = deadline - time.monotonic()
-        if remaining < MIN_ATTEMPT_SECONDS:
-            break
 
-        started = time.monotonic()
-        try:
-            result = adapters.call(model.provider, model.model_id, system, messages, max_tokens, min(per_call, remaining))
-        except adapters.ProviderError as exc:
+        failed = False
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining < MIN_ATTEMPT_SECONDS:
+                failed = True
+                break
+            offer_tools = tools if (tools and tool_executor and rounds < MAX_TOOL_ROUNDS) else None
+            started = time.monotonic()
+            try:
+                result = adapters.call(
+                    model.provider, model.model_id, system, transcript, max_tokens, min(per_call, remaining), tools=offer_tools
+                )
+            except adapters.ProviderError as exc:
+                latency = int((time.monotonic() - started) * 1000)
+                _record(model, user_id=user_id, tenant_id=tenant_id, conversation_id=conversation_id, purpose=purpose, ok=False, error_type=exc.kind, latency_ms=latency)
+                current_app.logger.warning("zentriq_ai.provider_failed provider=%s model=%s kind=%s", model.provider, model.model_id, exc.kind)
+                attempts.append({"model": model.label, "error": exc.kind})
+                rule = COOLDOWNS.get(exc.kind)
+                if rule:
+                    scope, seconds = rule
+                    if exc.retry_after:
+                        seconds = min(max(seconds, exc.retry_after), 3600)
+                    key = f"p:{model.provider}" if scope == "p" else f"m:{model.provider}:{model.model_id}"
+                    state.cool_down(key, seconds, exc.kind)
+                if exc.kind == adapters.REFUSAL:
+                    raise AiError("Zu dieser Anfrage kann ZentriqAI keine Antwort geben.", 422, "refusal", attempts) from exc
+                failed = True
+                break
+
             latency = int((time.monotonic() - started) * 1000)
-            _record(model, user_id=user_id, tenant_id=tenant_id, conversation_id=conversation_id, purpose=purpose, ok=False, error_type=exc.kind, latency_ms=latency)
-            current_app.logger.warning("zentriq_ai.provider_failed provider=%s model=%s kind=%s", model.provider, model.model_id, exc.kind)
-            attempts.append({"model": model.label, "error": exc.kind})
-            rule = COOLDOWNS.get(exc.kind)
-            if rule:
-                scope, seconds = rule
-                if exc.retry_after:
-                    seconds = min(max(seconds, exc.retry_after), 3600)
-                key = f"p:{model.provider}" if scope == "p" else f"m:{model.provider}:{model.model_id}"
-                state.cool_down(key, seconds, exc.kind)
-            if exc.kind == adapters.REFUSAL:
-                raise AiError("Zu dieser Anfrage kann ZentriqAI keine Antwort geben.", 422, "refusal", attempts) from exc
-            continue
+            cost = model_cost(model, result.input_tokens, result.output_tokens)
+            _record(
+                model, user_id=user_id, tenant_id=tenant_id, conversation_id=conversation_id, purpose=purpose,
+                input_tokens=result.input_tokens, output_tokens=result.output_tokens, cost=cost, latency_ms=latency,
+            )
+            totals["in"] += result.input_tokens
+            totals["out"] += result.output_tokens
+            totals["cost"] += cost
 
-        latency = int((time.monotonic() - started) * 1000)
-        cost = model_cost(model, result.input_tokens, result.output_tokens)
-        _record(
-            model, user_id=user_id, tenant_id=tenant_id, conversation_id=conversation_id, purpose=purpose,
-            input_tokens=result.input_tokens, output_tokens=result.output_tokens, cost=cost, latency_ms=latency,
-        )
-        completion = Completion(
-            text=result.text,
-            provider=model.provider,
-            model=model.model_id,
-            model_label=model.label,
-            input_tokens=result.input_tokens,
-            output_tokens=result.output_tokens,
-            cost_usd=cost,
-            fallback_used=chosen is not None and model.id != chosen.id,
-            attempts=attempts,
-        )
-        if cache_key:
-            state.cache_set(cache_key, {"text": result.text, "provider": model.provider, "model": model.model_id, "label": model.label}, cache_ttl)
-        return completion
+            if result.tool_calls and offer_tools:
+                rounds += 1
+                transcript.append(
+                    {
+                        "role": "assistant",
+                        "content": result.text,
+                        "tool_calls": [{"id": c.id, "name": c.name, "arguments": c.arguments} for c in result.tool_calls],
+                    }
+                )
+                for call in result.tool_calls:
+                    transcript.append({"role": "tool", "tool_call_id": call.id, "name": call.name, "content": tool_executor(call.name, call.arguments)})
+                    tools_used.append(call.name)
+                continue
+
+            if not result.text:
+                # Werkzeugwunsch ohne erlaubte weitere Runde: Modell muss antworten.
+                failed = True
+                attempts.append({"model": model.label, "error": adapters.EMPTY})
+                break
+
+            completion = Completion(
+                text=result.text,
+                provider=model.provider,
+                model=model.model_id,
+                model_label=model.label,
+                input_tokens=totals["in"],
+                output_tokens=totals["out"],
+                cost_usd=totals["cost"],
+                fallback_used=chosen is not None and model.id != chosen.id,
+                attempts=attempts,
+                tools_used=tools_used,
+            )
+            if cache_key:
+                state.cache_set(cache_key, {"text": result.text, "provider": model.provider, "model": model.model_id, "label": model.label}, cache_ttl)
+            return completion
+        if failed:
+            continue
 
     if attempts and all(a["error"] == "budget" for a in attempts):
         raise AiError("Die Kostengrenze für kostenpflichtige Modelle ist erreicht.", 429, "budget", attempts)

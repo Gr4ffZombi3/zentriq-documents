@@ -1,20 +1,21 @@
-"""ZentriqAI - KI-Assistent (Phase 5: zunaechst nur SUPER_ADMIN).
+"""ZentriqAI - zentraler KI-Assistent und Startseite fuer alle Rollen.
 
-Zugriff serverseitig doppelt abgesichert: app/auth/permissions.py (Blueprint "zentriq" nur
-fuer SUPER_ADMIN, fuer alle anderen Rollen 403) und @super_admin_required an jeder Route.
-Gespraeche sind je Benutzer und Mandant getrennt (app/services/ai/chat.py). API-Schluessel
-bleiben in der Server-Umgebung; die Seite zeigt nur, OB ein Anbieter konfiguriert ist."""
+Zugriff: jeder angemeldete Benutzer (Rollen-Hook in app/auth/permissions.py), Gespraeche sind je
+Benutzer und Mandant getrennt (app/services/ai/chat.py). Werkzeuge mit Buerodaten pruefen die
+bestehenden Rechte je Benutzer (app/services/ai/tools.py). KI-Einstellungen liegen getrennt im
+Blueprint "zentriq_admin" (nur SUPER_ADMIN).
 
-from decimal import Decimal, InvalidOperation
+KI-Antworten entstehen asynchron im Celery-Worker: POST .../messages legt die Nachricht und einen
+Platzhalter an (202), der Browser fragt GET .../messages/<id> ab."""
 
-from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, url_for
-from flask_login import current_user
+from decimal import Decimal
 
-from app.auth.permissions import super_admin_required
-from app.extensions import db
+from flask import Blueprint, current_app, jsonify, render_template, request
+from flask_login import current_user, login_required
+
 from app.models.ai import AiModel
 from app.models.audit_log import AuditEventType
-from app.services.ai import adapters, catalog, chat, router, state
+from app.services.ai import catalog, chat, router, state, tools
 from app.services.audit import log_audit_event
 
 zentriq_bp = Blueprint("zentriq", __name__, url_prefix="/zentriq")
@@ -38,37 +39,42 @@ def _enabled():
     return None
 
 
+def _labels() -> dict:
+    return {(m.provider, m.model_id): m.label for m in AiModel.query.all()}
+
+
 def _model_options() -> list[dict]:
-    options = []
     settings = catalog.provider_settings()
+    options = []
     for model in router.available_models():
-        cooldown = state.cooldown_info(model.provider, model.model_id)
+        setting = settings.get(model.provider)
         options.append(
             {
                 "ref": model.ref,
                 "label": model.label,
                 "provider": catalog.PROVIDERS[model.provider].label,
                 "free": model.is_free,
-                "customer_data": bool(settings.get(model.provider) and settings[model.provider].customer_data_allowed),
-                "paused": bool(cooldown),
+                "customer_data": bool(setting and setting.customer_data_allowed),
+                "paused": bool(state.cooldown_info(model.provider, model.model_id)),
             }
         )
     return options
-
-
-def _labels() -> dict:
-    return {(m.provider, m.model_id): m.label for m in AiModel.query.all()}
 
 
 # --- Seite ---------------------------------------------------------------------------------
 
 
 @zentriq_bp.get("")
-@super_admin_required
-def index():
+@zentriq_bp.get("/c/<int:conversation_id>")
+@login_required
+def index(conversation_id=None):
     return render_template(
         "zentriq/index.html",
+        conversation_id=conversation_id,
         max_chars=int(current_app.config.get("ZENTRIQ_AI_MAX_INPUT_CHARS") or 12000),
+        # Nur anzeigen, was tatsaechlich nutzbar ist: Werkzeuge brauchen einen fuer Kundendaten
+        # freigegebenen Anbieter.
+        tool_labels=[t.label for t in tools.available_for(current_user)] if router.available_models(customer_data=True) else [],
     )
 
 
@@ -76,30 +82,44 @@ def index():
 
 
 @zentriq_bp.get("/api/models")
-@super_admin_required
+@login_required
 def api_models():
     return jsonify({"models": _model_options()})
 
 
 @zentriq_bp.get("/api/conversations")
-@super_admin_required
+@login_required
 def api_conversations():
-    items = chat.list_conversations(current_user, request.args.get("q"))
+    try:
+        limit = max(1, min(100, int(request.args.get("limit") or 100)))
+    except ValueError:
+        limit = 100
+    pinned = {"1": True, "0": False}.get(request.args.get("pinned") or "")
+    items = chat.list_conversations(current_user, request.args.get("q"), limit=limit, pinned=pinned)
     return jsonify({"conversations": [chat.serialize_conversation(c) for c in items]})
 
 
+@zentriq_bp.get("/api/projects")
+@login_required
+def api_projects():
+    return jsonify({"projects": chat.projects(current_user)})
+
+
 @zentriq_bp.post("/api/conversations")
-@super_admin_required
+@login_required
 def api_create_conversation():
     data = _payload()
     conversation = chat.create_conversation(
-        current_user, model_choice=str(data.get("model") or router.AUTO), customer_data=bool(data.get("customer_data"))
+        current_user,
+        model_choice=str(data.get("model") or router.AUTO),
+        customer_data=bool(data.get("customer_data")),
+        project=data.get("project"),
     )
     return jsonify({"conversation": chat.serialize_conversation(conversation)}), 201
 
 
 @zentriq_bp.get("/api/conversations/<int:conversation_id>")
-@super_admin_required
+@login_required
 def api_conversation(conversation_id):
     try:
         conversation = chat.get_conversation(current_user, conversation_id)
@@ -115,7 +135,7 @@ def api_conversation(conversation_id):
 
 
 @zentriq_bp.patch("/api/conversations/<int:conversation_id>")
-@super_admin_required
+@login_required
 def api_update_conversation(conversation_id):
     data = _payload()
     try:
@@ -125,6 +145,8 @@ def api_update_conversation(conversation_id):
             title=data.get("title") if "title" in data else None,
             model_choice=data.get("model") if "model" in data else None,
             customer_data=data.get("customer_data") if "customer_data" in data else None,
+            pinned=data.get("pinned") if "pinned" in data else None,
+            project=(data.get("project") or "") if "project" in data else None,
         )
     except chat.ChatError as exc:
         return _error(str(exc), exc.status, exc.error_type)
@@ -132,7 +154,7 @@ def api_update_conversation(conversation_id):
 
 
 @zentriq_bp.delete("/api/conversations/<int:conversation_id>")
-@super_admin_required
+@login_required
 def api_delete_conversation(conversation_id):
     try:
         conversation = chat.get_conversation(current_user, conversation_id)
@@ -144,7 +166,7 @@ def api_delete_conversation(conversation_id):
 
 
 @zentriq_bp.delete("/api/conversations")
-@super_admin_required
+@login_required
 def api_delete_all():
     count = chat.delete_all(current_user)
     log_audit_event(AuditEventType.AI_CONVERSATION_DELETED, user=current_user, details={"all": True, "count": count})
@@ -152,138 +174,51 @@ def api_delete_all():
 
 
 @zentriq_bp.post("/api/conversations/<int:conversation_id>/messages")
-@super_admin_required
+@login_required
 def api_send(conversation_id):
-    data = _payload()
-    content = data.get("content") if isinstance(data.get("content"), str) else ""
-    model = data.get("model") if isinstance(data.get("model"), str) else None
+    if request.mimetype == "multipart/form-data":
+        content = request.form.get("content") or ""
+        model = request.form.get("model")
+        files = request.files.getlist("files")
+    else:
+        data = _payload()
+        content = data.get("content") if isinstance(data.get("content"), str) else ""
+        model = data.get("model") if isinstance(data.get("model"), str) else None
+        files = []
     try:
         conversation = chat.get_conversation(current_user, conversation_id)
-        reply, completion = chat.send_message(current_user, conversation, content, model)
+        user_message, pending = chat.submit_message(current_user, conversation, content, model, files)
     except chat.ChatError as exc:
         return _error(str(exc), exc.status, exc.error_type)
-    except router.AiError as exc:
-        current_app.logger.warning("zentriq_ai.failed type=%s", exc.error_type)
-        return _error(str(exc), exc.status, exc.error_type, attempts=router.describe_attempts(exc.attempts))
-    return jsonify(
-        {
-            "message": chat.serialize_message(reply, _labels()),
-            "conversation": chat.serialize_conversation(conversation),
-            "fallback_used": completion.fallback_used,
-            "attempts": router.describe_attempts(completion.attempts),
-        }
+    labels = _labels()
+    return (
+        jsonify(
+            {
+                "message": chat.serialize_message(user_message, labels),
+                "reply": chat.serialize_message(pending, labels),
+                "conversation": chat.serialize_conversation(conversation),
+            }
+        ),
+        202,
     )
+
+
+@zentriq_bp.get("/api/conversations/<int:conversation_id>/messages/<int:message_id>")
+@login_required
+def api_message(conversation_id, message_id):
+    try:
+        conversation = chat.get_conversation(current_user, conversation_id)
+        message = chat.get_message(current_user, conversation, message_id)
+    except chat.ChatError as exc:
+        return _error(str(exc), exc.status, exc.error_type)
+    return jsonify({"message": chat.serialize_message(message, _labels()), "conversation": chat.serialize_conversation(conversation)})
 
 
 @zentriq_bp.get("/api/usage")
-@super_admin_required
+@login_required
 def api_usage():
-    budget = router.budget_status()
-    return jsonify(
-        {
-            "budget": {key: float(value) if isinstance(value, Decimal) else value for key, value in budget.items()},
-            "own": router.usage_overview(30, user_id=current_user.id),
-        }
-    )
-
-
-# --- Einstellungen (Anbieter, Modelle, Verbrauch) ------------------------------------------
-
-
-@zentriq_bp.get("/einstellungen")
-@super_admin_required
-def settings():
-    catalog.ensure_defaults()
-    provider_settings = catalog.provider_settings()
-    models = AiModel.query.order_by(AiModel.provider, AiModel.priority, AiModel.model_id).all()
-    providers = [
-        {
-            "key": p.key,
-            "label": p.label,
-            "note": p.note,
-            "key_setting": p.key_setting,
-            "configured": catalog.is_configured(p.key),
-            "setting": provider_settings.get(p.key),
-            "models": [m for m in models if m.provider == p.key],
-        }
-        for p in catalog.PROVIDERS.values()
-    ]
-    cooldowns = {m.id: state.cooldown_info(m.provider, m.model_id) for m in models}
-    return render_template(
-        "zentriq/settings.html",
-        providers=providers,
-        cooldowns=cooldowns,
-        budget=router.budget_status(),
-        usage=router.usage_overview(30),
-    )
-
-
-def _audit_settings(details: dict) -> None:
-    log_audit_event(AuditEventType.AI_SETTINGS_CHANGED, user=current_user, details=details)
-
-
-@zentriq_bp.post("/einstellungen/anbieter/<provider_key>")
-@super_admin_required
-def settings_provider(provider_key):
-    setting = catalog.provider_settings().get(provider_key)
-    if provider_key not in catalog.PROVIDERS or setting is None:
-        return redirect(url_for("zentriq.settings"))
-    setting.enabled = request.form.get("enabled") == "1"
-    setting.customer_data_allowed = request.form.get("customer_data_allowed") == "1"
-    db.session.commit()
-    _audit_settings({"provider": provider_key, "enabled": setting.enabled, "customer_data_allowed": setting.customer_data_allowed})
-    flash("Anbieter gespeichert.", "success")
-    return redirect(url_for("zentriq.settings") + f"#anbieter-{provider_key}")
-
-
-def _price(value: str | None) -> Decimal | None:
-    value = (value or "").strip().replace(",", ".")
-    if not value:
-        return None
-    try:
-        price = Decimal(value)
-    except InvalidOperation:
-        return None
-    return price if price >= 0 else None
-
-
-@zentriq_bp.post("/einstellungen/modelle/<int:model_id>")
-@super_admin_required
-def settings_model(model_id):
-    model = db.session.get(AiModel, model_id)
-    if model is None:
-        return redirect(url_for("zentriq.settings"))
-    model.enabled = request.form.get("enabled") == "1"
-    model.is_free = request.form.get("is_free") == "1"
-    label = " ".join((request.form.get("label") or "").split())[:150]
-    model.label = label or model.model_id[:150]
-    try:
-        model.priority = max(0, min(10000, int(request.form.get("priority") or model.priority)))
-    except ValueError:
-        pass
-    model.input_price = _price(request.form.get("input_price"))
-    model.output_price = _price(request.form.get("output_price"))
-    db.session.commit()
-    _audit_settings({"model": model.ref, "enabled": model.enabled, "is_free": model.is_free})
-    if model.enabled and not model.has_price:
-        flash("Gespeichert. Ohne Preis wird dieses kostenpflichtige Modell nicht verwendet.", "error")
-    else:
-        flash("Modell gespeichert.", "success")
-    return redirect(url_for("zentriq.settings") + f"#anbieter-{model.provider}")
-
-
-@zentriq_bp.post("/einstellungen/anbieter/<provider_key>/abrufen")
-@super_admin_required
-def settings_discover(provider_key):
-    if provider_key not in catalog.PROVIDERS:
-        return redirect(url_for("zentriq.settings"))
-    try:
-        ids = adapters.list_models(provider_key)
-    except adapters.ProviderError as exc:
-        message = "Kein gültiger API-Schlüssel hinterlegt." if exc.kind == adapters.AUTH else "Anbieter nicht erreichbar."
-        flash(f"Modelle konnten nicht abgerufen werden: {message}", "error")
-        return redirect(url_for("zentriq.settings") + f"#anbieter-{provider_key}")
-    added = catalog.add_discovered_models(provider_key, ids)
-    _audit_settings({"provider": provider_key, "discovered": added})
-    flash(f"{len(ids)} Modelle gefunden, {added} neu übernommen (deaktiviert).", "success")
-    return redirect(url_for("zentriq.settings") + f"#anbieter-{provider_key}")
+    data = {"own": router.usage_overview(30, user_id=current_user.id)}
+    if current_user.is_super_admin:
+        budget = router.budget_status()
+        data["budget"] = {key: float(value) if isinstance(value, Decimal) else value for key, value in budget.items()}
+    return jsonify(data)

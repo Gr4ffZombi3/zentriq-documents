@@ -27,14 +27,14 @@
         <p class="panel-description">{{ p.note }}</p>
       </header>
       <div class="panel-body">
-        <form method="post" action="{{ url_for('zentriq.settings_provider', provider_key=p.key) }}" class="flex flex-wrap gap-2" style="align-items:center">
+        <form method="post" action="{{ url_for('zentriq_admin.settings_provider', provider_key=p.key) }}" class="flex flex-wrap gap-2" style="align-items:center">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <label><input type="checkbox" name="enabled" value="1" {{ 'checked' if p.setting and p.setting.enabled }}> Anbieter aktiv</label>
           <label><input type="checkbox" name="customer_data_allowed" value="1" {{ 'checked' if p.setting and p.setting.customer_data_allowed }}> Für Kundendaten freigegeben (Auftragsverarbeitung geprüft)</label>
           <button type="submit" class="btn btn-secondary btn-sm">Speichern</button>
         </form>
         {% if p.configured %}
-          <form method="post" action="{{ url_for('zentriq.settings_discover', provider_key=p.key) }}" class="mt-4">
+          <form method="post" action="{{ url_for('zentriq_admin.settings_discover', provider_key=p.key) }}" class="mt-4">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-secondary btn-sm">Modelle beim Anbieter abrufen</button>
           </form>
@@ -49,7 +49,7 @@
                 {% set form_id = 'model-' ~ m.id %}
                 <tr>
                   <td>
-                    <form id="{{ form_id }}" method="post" action="{{ url_for('zentriq.settings_model', model_id=m.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+                    <form id="{{ form_id }}" method="post" action="{{ url_for('zentriq_admin.settings_model', model_id=m.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
                     <input form="{{ form_id }}" class="field-surface" name="label" value="{{ m.label }}" aria-label="Bezeichnung" style="min-width:12rem">
                     <div class="cell-sub"><code>{{ m.model_id }}</code></div>
                   </td>

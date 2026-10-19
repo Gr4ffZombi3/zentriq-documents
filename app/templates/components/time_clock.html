@@ -1,0 +1,27 @@
+{# Zeiterfassung unten rechts: nutzt ausschliesslich die bestehenden Endpunkte und die Logik in
+   app/services/timetracking (Status: timetracking.status, Stempeln: timetracking.clock_in/-out,
+   Pausen: timetracking.break_start/-end). Aktualisierung ohne Seitenreload (js/shell.js).
+   Ohne JavaScript bleibt der Link zur Zeiterfassung. #}
+<aside class="zs-clock" data-zs-clock aria-label="Zeiterfassung"
+       data-status-url="{{ url_for('timetracking.status') }}"
+       data-in-url="{{ url_for('timetracking.clock_in') }}"
+       data-out-url="{{ url_for('timetracking.clock_out') }}"
+       data-break-start-url="{{ url_for('timetracking.break_start') }}"
+       data-break-end-url="{{ url_for('timetracking.break_end') }}">
+  <button type="button" class="zs-clock-pill" data-zs-clock-toggle aria-expanded="false" aria-controls="zs-clock-panel">
+    <span class="zs-clock-dot" data-zs-clock-dot></span>
+    <span class="zs-clock-label" data-zs-clock-label>Zeiterfassung</span>
+    <span class="zs-clock-time" data-zs-clock-time></span>
+  </button>
+  <div class="zs-clock-panel" id="zs-clock-panel" data-zs-clock-panel hidden>
+    <p class="zs-clock-status" data-zs-clock-status aria-live="polite">Status wird geladen …</p>
+    <p class="form-error zs-clock-error" data-zs-clock-error hidden></p>
+    <div class="zs-clock-actions">
+      <button type="button" class="btn btn-primary btn-sm" data-zs-clock-action="in" hidden>Einstempeln</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-zs-clock-action="break-start" hidden>Pause</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-zs-clock-action="break-end" hidden>Pause beenden</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-zs-clock-action="out" hidden>Ausstempeln</button>
+    </div>
+    <a class="zs-clock-link" href="{{ url_for('timetracking.index') }}">Zeiterfassung öffnen</a>
+  </div>
+</aside>

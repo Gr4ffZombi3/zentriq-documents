@@ -1,7 +1,8 @@
 # ZentriqAI – Konzept und Architekturentscheidungen
 
-Stand: 19.10.2026 · Phase 1–5 (Infrastruktur und Assistent, nur SUPER_ADMIN). Dashboard-Umbau
-(Phase 7) erst nach Freigabe.
+Stand: 19.10.2026 · Phase 1–5 (Infrastruktur und Assistent) und Phase 7 (Dashboard-Umbau):
+ZentriqAI ist Startseite für alle Rollen. OmniRoute ist wegen des Arbeitsspeichers (1,8 GB) nicht
+installiert; die Modellauswahl läuft über den eingebauten Router.
 
 ## 1. Bestandsaufnahme (Phase 1)
 
@@ -120,3 +121,26 @@ freigeschaltet, nicht für den SUPER_ADMIN.
 Nach Bereinigung (apt-/pip-Cache, Journal > 30 Tage) 64 GB Platte frei. RAM unverändert:
 ~0,75 GB verfügbar, Spitzen bei Memo-Transkription (+0,65 GB). Für OmniRoute oder weitere
 Dienste ist **4 GB RAM** die kleinste sinnvolle Erweiterung.
+
+## 8. Neue Oberfläche (Phase 7)
+
+| Bereich | Umsetzung |
+|---|---|
+| Startseite | `/` → `/zentriq` für alle Rollen (ohne ZentriqAI wie bisher Übersicht bzw. Plattform). Die bisherige Übersicht bleibt unter „Übersicht“ (`/uebersicht`) erreichbar. |
+| Seitenleiste | `components/app_sidebar.html` auf allen Seiten: Logo, Neue Unterhaltung, Chats durchsuchen, Gespeichert, Letzte Unterhaltungen (per JS nachgeladen), Bereiche aus `app/navigation.py` (unverändert rollenabhängig), Konto. Auf dem Desktop einklappbar, mobil per Menü. |
+| Chat | `zentriq/index.html` + `js/zentriq-ai.js`: Markdown (sicheres Subset, HTML wird vorher maskiert), Codeblöcke mit Kopieren, Datei-Upload (PDF/TXT/MD/CSV, Audio), Lade-/Verarbeitungsanzeige, automatisches Scrollen, Modellwahl, Kundendaten-Modus, Speichern/Umbenennen/Projekt/Löschen. Adressen `/zentriq/c/<id>`. |
+| Asynchron | KI-Antworten im Celery-Worker (`app/tasks/ai_tasks.py`), der Browser fragt den Platzhalter ab. Kein KI-Aufruf im Flask-Request-Thread; Zeiterfassung und Bürobereiche funktionieren unabhängig von der KI. Hängende Antworten werden nach 5 Minuten als Fehler markiert. |
+| Werkzeuge | `app/services/ai/tools.py`, nur lesend: Arbeitszeiten, offene Vorgänge (Leipziger Liste), Suche, Aufgaben*, Team-Anwesenheit* (*Büro-Admin). Jedes Werkzeug ist an den Endpunkt gebunden, der dieselben Daten anzeigt, und nutzt `is_endpoint_allowed` – beim Anbieten und beim Ausführen. Werkzeuge nur über Anbieter mit Kundendaten-Freigabe; ohne Freigabe sagt ZentriqAI das. SUPER_ADMIN: keine Werkzeuge. |
+| Anhänge | Text wird extrahiert (PyMuPDF), die Datei nicht gespeichert. Audio: Prüfung und lokale Transkription über die bestehende Memo-Logik (`services/memo.py`) im Worker, temporäre Datei wird gelöscht. Erkennbare Kundendaten und Audio nur im Kundendaten-Modus. |
+| Zeiterfassung | `components/time_clock.html` unten rechts für Büro-Admins und Mitarbeiter: Status, Ein-/Ausstempeln, Pause, laufende Tageszeit. Nutzt ausschließlich die bestehenden Endpunkte (`timetracking.status` neu, Stempel-Endpunkte liefern bei `Accept: application/json` JSON). Auf dem Smartphone kompakt über der Chat-Eingabe. |
+| KI-Einstellungen | Blueprint `zentriq_admin` (`/zentriq/einstellungen`), nur SUPER_ADMIN. |
+
+**Bewusst noch nicht umgesetzt:** schreibende Werkzeuge (Aufgabe erledigen, Kunde anlegen …) –
+sie benötigen eine Bestätigung im Chat vor der Ausführung; strukturierte Leipziger-Liste-Analyse
+über den Chat (die bestehende Auswertung unter „Leipziger Liste“ bleibt maßgeblich; im Chat wird
+das PDF als Text gelesen). Der bisherige Textassistent und der Analyse-Chat bleiben bis zum
+nachgewiesenen Ersatz unverändert.
+
+**Betrieb:** Der Celery-Worker bearbeitet Chat-Antworten und Memo-Transkriptionen gemeinsam
+(Standard: 2 parallele Aufgaben). Läuft eine lange Transkription, kann eine Chat-Antwort warten.
+Bei Bedarf später eine eigene Warteschlange für ZentriqAI einrichten (Änderung der Worker-Unit).

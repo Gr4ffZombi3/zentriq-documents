@@ -142,9 +142,11 @@ Die frühere Mailbox-Automation (Placetel-Postfach, KI-Klassifizierung, HUK-Rüc
 entfernt; die zugehörigen `PLACETEL_*`-, `HUK_*`- und `MAILBOX_*`-Einträge (außer `MAILBOX_OPENAI_BASE_URL`) in der `.env` werden
 nicht mehr gelesen. Die Tabellen `mailbox_*` bleiben mit ihren Altdaten unverändert bestehen.
 
-## ZentriqAI (Multi-Anbieter-KI, nur SUPER_ADMIN)
+## ZentriqAI (KI-Assistent und Startseite)
 
-Plattform → KI → ZentriqAI bzw. KI-Einstellungen (`/zentriq`). Konzept und Entscheidungen:
+Startseite für alle Rollen (`/zentriq`); KI-Einstellungen nur SUPER_ADMIN (`/zentriq/einstellungen`).
+Antworten entstehen im Celery-Worker – `zentriq-worker` muss laufen und nach dem Deployment neu
+gestartet werden (neue Task-Datei `app/tasks/ai_tasks.py`). Konzept und Entscheidungen:
 `docs/zentriq-ai-konzept.md`. Keine zusätzlichen Dienste: nutzt MariaDB, Redis und den
 bestehenden Celery-Worker (Zusammenfassungen).
 
@@ -158,6 +160,8 @@ Einrichtung:
    aktivieren und Priorität setzen. Kostenpflichtige Modelle brauchen einen Preis und ein Budget
    > 0 (`ZENTRIQ_AI_DAILY_BUDGET_USD`, `ZENTRIQ_AI_MONTHLY_BUDGET_USD`).
 4. Anbieter nur nach geprüfter Auftragsverarbeitung „Für Kundendaten freigegeben“ markieren.
+   Erst dann stehen Büro-Werkzeuge (Arbeitszeiten, Leipziger Liste, Suche, Aufgaben) im Chat zur
+   Verfügung.
 5. Optional Aufbewahrung per Cron: `flask zentriq-ai-purge` (Standard 180 Tage).
 
 ## E-Mail-Versand (Passwort vergessen)

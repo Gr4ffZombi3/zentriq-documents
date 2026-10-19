@@ -5,7 +5,7 @@
   {% include "components/_head_common.html" %}
   {% block head %}{% endblock %}
 </head>
-<body x-data="{ navOpen: false }" class="app-body" :class="{ 'nav-open': navOpen }">
+<body x-data="{ navOpen: false }" class="app-body {% block body_class %}{% endblock %}" :class="{ 'nav-open': navOpen }">
   <a class="skip-link" href="#inhalt">Zum Inhalt springen</a>
   <div class="app-shell {{ 'has-sidebar' if current_user.is_authenticated else '' }}">
     {% if current_user.is_authenticated %}
@@ -25,5 +25,8 @@
       </main>
     </div>
   </div>
+  {% if current_user.is_authenticated and (current_user.is_office_admin or current_user.is_employee) %}
+    {% include "components/time_clock.html" %}
+  {% endif %}
 </body>
 </html>

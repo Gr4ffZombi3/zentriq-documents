@@ -184,7 +184,8 @@ def test_memo_match_does_not_scan_whole_customer_base(app, db, office):
 
 def test_employee_start_page(app, office):
     client = _login(app, "dennis@example.org")
-    assert client.get("/").headers["Location"].endswith("/uebersicht")
+    # Startseite ist der ZentriqAI-Chat; die Uebersicht bleibt unter /uebersicht erreichbar.
+    assert client.get("/").headers["Location"].endswith("/zentriq")
     html = client.get("/uebersicht").get_data(as_text=True)
     assert "Dennis" in html
     for href in ('href="/leipziger-liste"', 'href="/sprachnachrichten"', 'href="/zeiterfassung"'):
@@ -206,7 +207,7 @@ def test_super_admin_start_page(app, db, office):
         db.session.add(Customer(tenant_id=office.id, name="Geheimkunde Müller", phone="0171 1234567"))
         db.session.commit()
     client = _login(app, "plattform@example.org")
-    assert client.get("/").headers["Location"].endswith("/plattform")
+    assert client.get("/").headers["Location"].endswith("/zentriq")
     html = client.get("/plattform").get_data(as_text=True)
     for label in ("Büros", "Benutzer", "System", "Sicherheit"):
         assert label in html

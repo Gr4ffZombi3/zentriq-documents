@@ -11,7 +11,8 @@ selbst und muss unter dem nginx-Timeout (60 s) bleiben."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, field
 
 import anthropic
 import openai
@@ -38,10 +39,26 @@ class ProviderError(Exception):
 
 
 @dataclass
+class ToolCall:
+    id: str
+    name: str
+    arguments: dict
+
+
+@dataclass
 class ProviderResult:
     text: str
     input_tokens: int
     output_tokens: int
+    tool_calls: list[ToolCall] = field(default_factory=list)
+
+
+# Neutrales Nachrichtenformat (unabhaengig vom Anbieter, damit der Router auch mitten in einem
+# Werkzeug-Ablauf auf einen anderen Anbieter ausweichen kann):
+#   {"role": "user", "content": str}
+#   {"role": "assistant", "content": str, "tool_calls": [ToolCall-Dict ...]}
+#   {"role": "tool", "tool_call_id": str, "name": str, "content": str}
+# Werkzeuge: [{"name": str, "description": str, "parameters": JSON-Schema}]
 
 
 def _retry_after(exc) -> float | None:
@@ -66,15 +83,65 @@ def _anthropic_client(provider, timeout: float) -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=api_key(provider), timeout=timeout, max_retries=0)
 
 
-def _call_openai(provider, model_id, system, messages, max_tokens, timeout) -> ProviderResult:
+def _openai_messages(system: str, messages: list[dict]) -> list[dict]:
+    out = [{"role": "system", "content": system}]
+    for m in messages:
+        if m["role"] == "tool":
+            out.append({"role": "tool", "tool_call_id": m["tool_call_id"], "content": m["content"]})
+        elif m["role"] == "assistant" and m.get("tool_calls"):
+            out.append(
+                {
+                    "role": "assistant",
+                    "content": m.get("content") or None,
+                    "tool_calls": [
+                        {"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": json.dumps(c["arguments"], ensure_ascii=False)}}
+                        for c in m["tool_calls"]
+                    ],
+                }
+            )
+        else:
+            out.append({"role": m["role"], "content": m["content"]})
+    return out
+
+
+def _anthropic_messages(messages: list[dict]) -> list[dict]:
+    out: list[dict] = []
+    for m in messages:
+        if m["role"] == "tool":
+            block = {"type": "tool_result", "tool_use_id": m["tool_call_id"], "content": m["content"]}
+            # Mehrere Werkzeugergebnisse gehoeren in EINE Benutzernachricht.
+            if out and out[-1]["role"] == "user" and isinstance(out[-1]["content"], list):
+                out[-1]["content"].append(block)
+            else:
+                out.append({"role": "user", "content": [block]})
+        elif m["role"] == "assistant" and m.get("tool_calls"):
+            blocks = [{"type": "text", "text": m["content"]}] if m.get("content") else []
+            blocks += [{"type": "tool_use", "id": c["id"], "name": c["name"], "input": c["arguments"]} for c in m["tool_calls"]]
+            out.append({"role": "assistant", "content": blocks})
+        else:
+            out.append({"role": m["role"], "content": m["content"]})
+    return out
+
+
+def _parse_arguments(raw) -> dict:
+    if isinstance(raw, dict):
+        return raw
+    try:
+        value = json.loads(raw or "{}")
+    except ValueError:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _call_openai(provider, model_id, system, messages, max_tokens, timeout, tools) -> ProviderResult:
     client = _openai_client(provider, timeout)
     token_param = "max_completion_tokens" if provider.key == "openai" else "max_tokens"
+    kwargs = {token_param: max_tokens}
+    if tools:
+        kwargs["tools"] = [{"type": "function", "function": t} for t in tools]
+        kwargs["tool_choice"] = "auto"
     try:
-        response = client.chat.completions.create(
-            model=model_id,
-            messages=[{"role": "system", "content": system}, *messages],
-            **{token_param: max_tokens},
-        )
+        response = client.chat.completions.create(model=model_id, messages=_openai_messages(system, messages), **kwargs)
     except openai.APITimeoutError as exc:
         raise ProviderError(TIMEOUT) from exc
     except openai.RateLimitError as exc:
@@ -92,29 +159,36 @@ def _call_openai(provider, model_id, system, messages, max_tokens, timeout) -> P
         raise ProviderError(UNAVAILABLE) from exc
 
     choice = response.choices[0] if response.choices else None
-    text = ((choice.message.content if choice and choice.message else None) or "").strip()
-    if not text:
+    message = choice.message if choice else None
+    text = ((message.content if message else None) or "").strip()
+    calls = [
+        ToolCall(id=c.id or f"call_{i}", name=c.function.name, arguments=_parse_arguments(c.function.arguments))
+        for i, c in enumerate((message.tool_calls if message else None) or [])
+        if getattr(c, "function", None)
+    ]
+    if not text and not calls:
         raise ProviderError(EMPTY)
     usage = response.usage
     return ProviderResult(
         text=text,
         input_tokens=int(getattr(usage, "prompt_tokens", 0) or 0),
         output_tokens=int(getattr(usage, "completion_tokens", 0) or 0),
+        tool_calls=calls,
     )
 
 
-def _call_anthropic(provider, model_id, system, messages, max_tokens, timeout) -> ProviderResult:
+def _call_anthropic(provider, model_id, system, messages, max_tokens, timeout, tools) -> ProviderResult:
     client = _anthropic_client(provider, timeout)
+    kwargs = {"model": model_id, "max_tokens": max_tokens, "system": system, "messages": _anthropic_messages(messages)}
+    if tools:
+        kwargs["tools"] = [{"name": t["name"], "description": t["description"], "input_schema": t["parameters"]} for t in tools]
     try:
         if model_id.startswith("claude-haiku"):
             # Haiku 4.5 kennt weder effort noch den serverseitigen Fallback.
-            response = client.messages.create(model=model_id, max_tokens=max_tokens, system=system, messages=messages)
+            response = client.messages.create(**kwargs)
         else:
             response = client.beta.messages.create(
-                model=model_id,
-                max_tokens=max_tokens,
-                system=system,
-                messages=messages,
+                **kwargs,
                 output_config={"effort": "low"},
                 betas=["server-side-fallback-2026-07-01"],
                 fallbacks="default",
@@ -138,22 +212,36 @@ def _call_anthropic(provider, model_id, system, messages, max_tokens, timeout) -
     if response.stop_reason == "refusal":
         raise ProviderError(REFUSAL)
     text = "\n".join(block.text for block in response.content if block.type == "text").strip()
-    if not text:
+    calls = [
+        ToolCall(id=block.id, name=block.name, arguments=_parse_arguments(block.input))
+        for block in response.content
+        if block.type == "tool_use"
+    ]
+    if not text and not calls:
         raise ProviderError(EMPTY)
     return ProviderResult(
         text=text,
         input_tokens=int(getattr(response.usage, "input_tokens", 0) or 0),
         output_tokens=int(getattr(response.usage, "output_tokens", 0) or 0),
+        tool_calls=calls,
     )
 
 
-def call(provider_key: str, model_id: str, system: str, messages: list[dict], max_tokens: int, timeout: float) -> ProviderResult:
+def call(
+    provider_key: str,
+    model_id: str,
+    system: str,
+    messages: list[dict],
+    max_tokens: int,
+    timeout: float,
+    tools: list[dict] | None = None,
+) -> ProviderResult:
     provider = PROVIDERS[provider_key]
     if not api_key(provider):
         raise ProviderError(AUTH)
     if provider.kind == "anthropic":
-        return _call_anthropic(provider, model_id, system, messages, max_tokens, timeout)
-    return _call_openai(provider, model_id, system, messages, max_tokens, timeout)
+        return _call_anthropic(provider, model_id, system, messages, max_tokens, timeout, tools)
+    return _call_openai(provider, model_id, system, messages, max_tokens, timeout, tools)
 
 
 def list_models(provider_key: str, timeout: float = 15) -> list[str]:

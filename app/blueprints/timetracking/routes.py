@@ -7,7 +7,7 @@ zusaetzlich immer auf current_user.id."""
 
 from datetime import date, datetime, timedelta
 
-from flask import Blueprint, Response, abort, flash, redirect, render_template, request, url_for
+from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.auth.permissions import admin_required
@@ -138,15 +138,43 @@ def index():
     )
 
 
+def _wants_json() -> bool:
+    return request.accept_mimetypes.best == "application/json"
+
+
+def _status_payload() -> dict:
+    """Kompakter Stand fuer das Zeiterfassungsmodul (unten rechts) - aus der bestehenden Logik."""
+    now = utcnow_naive()
+    today = local_today(now)
+    state = service.get_stamp_state(current_user.id, now)
+    summary = service.summarize_user_period(current_user, today, today, now=now)
+    return {
+        "status": state.status,
+        "today_net_seconds": summary.net_seconds,
+        "since": to_local(state.open_session.started_at).strftime("%H:%M") if state.status != "out" else None,
+        "stale": state.stale,
+    }
+
+
+@timetracking_bp.get("/status")
+@login_required
+def status():
+    return jsonify(_status_payload())
+
+
 def _stamp(action, success_message: str, event_type: AuditEventType | None = None):
     try:
         action(current_user)
     except TimeTrackingError as exc:
+        if _wants_json():
+            return jsonify({"error": str(exc), **_status_payload()}), 409
         flash(str(exc), "error")
     else:
         if event_type is not None:
             # Aktivitaetsprotokoll des Bueros: nur das Ereignis, keine weiteren Daten.
             log_audit_event(event_type, user=current_user)
+        if _wants_json():
+            return jsonify({"message": success_message, **_status_payload()})
         flash(success_message, "success")
     return redirect(_safe_next() or url_for("timetracking.index"))
 

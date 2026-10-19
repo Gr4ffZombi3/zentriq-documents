@@ -62,6 +62,8 @@ class BaseConfig:
     ZENTRIQ_AI_MAX_INPUT_CHARS = int(os.environ.get("ZENTRIQ_AI_MAX_INPUT_CHARS", "12000"))
     # Zeichenbudget fuer den mitgesendeten Verlauf (aeltere Nachrichten nur als Zusammenfassung).
     ZENTRIQ_AI_CONTEXT_CHARS = int(os.environ.get("ZENTRIQ_AI_CONTEXT_CHARS", "12000"))
+    # Zeichen eines Anhangs (PDF-/Text-Inhalt, Transkript), die an das Modell gehen.
+    ZENTRIQ_AI_ATTACHMENT_CHARS = int(os.environ.get("ZENTRIQ_AI_ATTACHMENT_CHARS", "20000"))
     ZENTRIQ_AI_SUMMARY_AFTER_MESSAGES = int(os.environ.get("ZENTRIQ_AI_SUMMARY_AFTER_MESSAGES", "16"))
     # Identische Anfrage (gleicher Benutzer, Verlauf, Modellwahl) aus dem Cache beantworten. 0 = aus.
     ZENTRIQ_AI_CACHE_TTL_SECONDS = int(os.environ.get("ZENTRIQ_AI_CACHE_TTL_SECONDS", "3600"))

@@ -7,6 +7,8 @@
    greift nur, solange nach einem git pull noch der alte Python-Prozess laeuft. #}
 {% set _rev = static_rev if static_rev is defined else none %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=_rev('css/app.css') if _rev else '20261001-layout-1') }}">
+{# ZentriqAI-Oberflaeche (Seitenleiste, Chat, Zeiterfassungsmodul) - eigene Datei, kein Tailwind-Build noetig. #}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/zentriq.css', v=_rev('css/zentriq.css') if _rev else '1') }}">
 {# Favicon: SVG fuer aktuelle Browser, ICO/PNG als Rueckfall; ?v= aus dem Dateiinhalt. #}
 <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg', v=_rev('img/favicon.svg') if _rev else '1') }}" type="image/svg+xml">
 <link rel="icon" href="{{ url_for('static', filename='img/favicon-32.png', v=_rev('img/favicon-32.png') if _rev else '1') }}" type="image/png" sizes="32x32">
@@ -24,3 +26,6 @@
 <script defer src="{{ url_for('static', filename='vendor/alpine-3.14.9.min.js') }}"></script>
 <script defer src="{{ url_for('static', filename='js/htmx-csrf.js', v=_rev('js/htmx-csrf.js') if _rev else '20261001-layout-1') }}"></script>
 <script defer src="{{ url_for('static', filename='js/app.js', v=_rev('js/app.js') if _rev else '20261001-layout-1') }}"></script>
+{% if current_user is defined and current_user.is_authenticated %}
+<script defer src="{{ url_for('static', filename='js/shell.js', v=_rev('js/shell.js') if _rev else '1') }}"></script>
+{% endif %}

@@ -1,61 +1,75 @@
 {% extends "base.html" %}
-{% block title %}ZentriqAI – Zentriq{% endblock %}
-{% block head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/zentriq-ai.css', v=static_rev('css/zentriq-ai.css')) }}">
-{% endblock %}
+{% from "ui/icons.html" import icon %}
+{% block title %}ZentriqAI{% endblock %}
+{% block body_class %}zs-chat-page{% endblock %}
 {% block content %}
-{# Antworten werden ausschliesslich per textContent eingesetzt (kein HTML aus Modellantworten). #}
-<div class="zai" data-zai data-api="{{ url_for('zentriq.index') }}/api" data-max-chars="{{ max_chars }}">
-  <aside class="zai-side" data-zai-side aria-label="Unterhaltungen">
-    <button type="button" class="btn btn-primary zai-new" data-zai-new>Neue Unterhaltung</button>
-    <label class="sr-only" for="zai-search">Unterhaltungen durchsuchen</label>
-    <input type="search" id="zai-search" class="field-surface zai-search" data-zai-search placeholder="Suchen …" autocomplete="off">
-    <ul class="zai-list" data-zai-list></ul>
-    <p class="zai-list-empty" data-zai-list-empty hidden>Noch keine Unterhaltungen.</p>
-    <div class="zai-side-foot">
-      <button type="button" class="zai-link" data-zai-usage-toggle>Verbrauch &amp; Kosten</button>
-      <a class="zai-link" href="{{ url_for('zentriq.settings') }}">KI-Einstellungen</a>
+{# Zentraler Chat. Antworten werden als sicheres Markdown gerendert (HTML wird vorher maskiert,
+   js/zentriq-ai.js); KI-Antworten entstehen asynchron im Celery-Worker. #}
+<div class="zc" data-zc
+     data-api="{{ url_for('zentriq.index') }}/api"
+     data-base="{{ url_for('zentriq.index') }}"
+     data-initial="{{ conversation_id or '' }}"
+     data-max-chars="{{ max_chars }}">
+  <header class="zc-head">
+    <h1 class="zc-title"><span data-zc-title>Neue Unterhaltung</span><span class="zc-project" data-zc-project hidden></span></h1>
+    <div class="zc-controls">
+      <label class="zc-check" title="Nur für Kundendaten freigegebene KI-Anbieter verwenden">
+        <input type="checkbox" data-zc-customer> Kundendaten
+      </label>
+      <label class="sr-only" for="zc-model">KI-Modell</label>
+      <select id="zc-model" class="field-surface zc-model" data-zc-model>
+        <option value="auto">Automatisch</option>
+      </select>
+      <details class="zc-menu" data-zc-menu hidden>
+        <summary aria-label="Weitere Aktionen">⋯</summary>
+        <div class="zc-menu-list">
+          <button type="button" data-zc-action="pin">Speichern</button>
+          <button type="button" data-zc-action="rename">Umbenennen</button>
+          <button type="button" data-zc-action="project">Projekt zuordnen</button>
+          <button type="button" data-zc-action="usage">Verbrauch anzeigen</button>
+          <button type="button" class="is-danger" data-zc-action="delete">Löschen</button>
+        </div>
+      </details>
     </div>
-  </aside>
+  </header>
 
-  <section class="zai-main" aria-label="ZentriqAI-Chat">
-    <header class="zai-head">
-      <button type="button" class="zai-side-toggle" data-zai-side-toggle aria-label="Unterhaltungen ein-/ausblenden">☰</button>
-      <h1 class="zai-title" data-zai-title>ZentriqAI</h1>
-      <div class="zai-head-controls">
-        <label class="zai-check" title="Nur für Kundendaten freigegebene Anbieter verwenden">
-          <input type="checkbox" data-zai-customer> Kundendaten-Modus
-        </label>
-        <label class="sr-only" for="zai-model">Modell</label>
-        <select id="zai-model" class="field-surface zai-model" data-zai-model>
-          <option value="auto">Automatisch (kostenlos zuerst)</option>
-        </select>
-        <button type="button" class="zai-icon" data-zai-rename title="Umbenennen" aria-label="Unterhaltung umbenennen" hidden>✎</button>
-        <button type="button" class="zai-icon" data-zai-delete title="Löschen" aria-label="Unterhaltung löschen" hidden>🗑</button>
-      </div>
-    </header>
-
-    <div class="zai-usage" data-zai-usage hidden></div>
-
-    <div class="zai-messages" data-zai-messages aria-live="polite">
-      <div class="zai-welcome" data-zai-welcome>
-        <h2>Wie kann ich helfen?</h2>
-        <p>ZentriqAI wählt automatisch ein verfügbares kostenloses Modell und weicht bei Limits oder Ausfällen auf andere aus.
-           Kundendaten bitte nur im Kundendaten-Modus eingeben.</p>
+  <div class="zc-scroll" data-zc-scroll>
+    <div class="zc-thread" data-zc-thread>
+      <div class="zc-welcome" data-zc-welcome>
+        <h1>Womit kann ich helfen?</h1>
+        <p>Fragen stellen, Texte formulieren, Dokumente und Sprachnachrichten auswerten.</p>
+        {% if tool_labels %}
+          <p>Zugriff auf: {{ tool_labels | join(', ') }}.</p>
+          <div class="zc-suggestions">
+            {% if 'Aufgaben' in tool_labels %}<button type="button" class="zc-suggestion" data-zc-suggest>Zeige die offenen Aufgaben.</button>{% endif %}
+            {% if 'Leipziger Liste' in tool_labels %}<button type="button" class="zc-suggestion" data-zc-suggest>Welche Vorgänge der Leipziger Liste sind noch offen?</button>{% endif %}
+            {% if 'Arbeitszeiten' in tool_labels %}<button type="button" class="zc-suggestion" data-zc-suggest>Zeige meine Arbeitszeiten dieser Woche.</button>{% endif %}
+          </div>
+        {% else %}
+          <div class="zc-suggestions">
+            <button type="button" class="zc-suggestion" data-zc-suggest>Formuliere eine freundliche Terminerinnerung.</button>
+            <button type="button" class="zc-suggestion" data-zc-suggest>Erkläre den Unterschied zwischen Teilkasko und Vollkasko.</button>
+          </div>
+        {% endif %}
       </div>
     </div>
+  </div>
 
-    <form class="zai-composer" data-zai-form novalidate>
-      <p class="form-error zai-error" data-zai-error role="alert" hidden></p>
-      <div class="zai-input-row">
-        <label class="sr-only" for="zai-input">Nachricht</label>
-        <textarea id="zai-input" class="field-surface zai-input" data-zai-input rows="1" maxlength="{{ max_chars }}"
-                  placeholder="Nachricht an ZentriqAI …"></textarea>
-        <button type="submit" class="btn btn-primary" data-zai-send>Senden</button>
+  <form class="zc-composer" data-zc-form novalidate>
+    <p class="form-error zc-alert" data-zc-alert role="alert" hidden></p>
+    <div class="zc-composer-inner">
+      <div class="zc-attachments" data-zc-attachments></div>
+      <div class="zc-row">
+        <input type="file" data-zc-file multiple hidden
+               accept=".pdf,.txt,.md,.csv,.mp3,.m4a,.wav,.ogg,.opus,.webm,.mp4,.aac,.flac,application/pdf,text/plain,text/csv,audio/*">
+        <button type="button" class="zc-icon-btn" data-zc-attach aria-label="Datei anhängen" title="Datei anhängen (PDF, Text, Audio)">{{ icon('paperclip', class='h-5 w-5') }}</button>
+        <label class="sr-only" for="zc-input">Nachricht an ZentriqAI</label>
+        <textarea id="zc-input" class="zc-input" data-zc-input rows="1" maxlength="{{ max_chars }}" placeholder="Nachricht an ZentriqAI …"></textarea>
+        <button type="submit" class="zc-icon-btn zc-send" data-zc-send aria-label="Senden" title="Senden">{{ icon('send', class='h-4 w-4') }}</button>
       </div>
-      <p class="zai-hint"><span data-zai-status aria-live="polite"></span><span>Enter senden · Umschalt+Enter neue Zeile</span></p>
-    </form>
-  </section>
+    </div>
+    <p class="zc-hint"><span data-zc-status aria-live="polite"></span><span>Enter senden · Umschalt+Enter neue Zeile</span></p>
+  </form>
 </div>
 <script defer src="{{ url_for('static', filename='js/zentriq-ai.js', v=static_rev('js/zentriq-ai.js')) }}"></script>
 {% endblock %}

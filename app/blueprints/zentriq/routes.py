@@ -13,6 +13,7 @@ from decimal import Decimal
 from flask import Blueprint, current_app, jsonify, render_template, request
 from flask_login import current_user, login_required
 
+from app.extensions import db
 from app.models import Customer, CustomerContact
 from app.models.ai import AiModel
 from app.models.audit_log import AuditEventType
@@ -294,11 +295,19 @@ def api_customer_input():
             new_vn=data.get("new_vn") if isinstance(data.get("new_vn"), str) else None,
             create_new=data.get("create_new") is True,
         )
+        if result.get("kind") == "chat" and not router.can_answer():
+            # Ohne KI-Modell nicht an den Chat weiterreichen (der koennte nur einen Fehler melden).
+            result = customer_notes.without_ai(current_user, text)
     except customer_notes.NoteError as exc:
         return _error(str(exc), exc.status, "note")
-    if result.get("kind") == "chat" and not router.can_answer():
-        # Ohne KI-Modell nicht an den Chat weiterreichen (der koennte nur einen Fehler melden).
-        result = customer_notes.without_ai(current_user, text)
+    except Exception:  # noqa: BLE001 - technischer Fehler wird als solcher gemeldet, nie als "kein Treffer".
+        current_app.logger.exception("customer_notes.input_failed user=%s", current_user.id)
+        db.session.rollback()
+        return _error(
+            "Technischer Fehler bei der Suche bzw. Speicherung. Bitte erneut versuchen – das Ergebnis ist nicht bestätigt.",
+            500,
+            "technical",
+        )
     return jsonify(result)
 
 

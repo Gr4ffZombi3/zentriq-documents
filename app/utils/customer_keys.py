@@ -47,6 +47,24 @@ def normalize_customer_number(raw: str | None) -> str:
     return re.sub(r"[^0-9A-Z]", "", (raw or "").upper())
 
 
+# Versicherungsnehmernummer im HUK-Format der Leipziger Liste: 808/123456-E (optional mit
+# Vertragsendung -12). Gueltige Schreibweisen derselben Nummer: "808/123456-E", "808123456e",
+# "808 123456 E", "808-123456-e", "808/123456e". Fuehrende Nullen und der Buchstabe bleiben
+# erhalten; verglichen wird immer exakt der Schluessel normalize_customer_number() = "808123456E"
+# - bei Erfassung, Kundenzuordnung, Dublettenpruefung, Listenabgleich und Suche.
+VN_PATTERN = re.compile(r"(?<![\w/])(\d{3})(?:\s*[/-]\s*|\s+)?(\d{6})(?:\s*-\s*|\s+)?([A-Za-z])(?:\s*-\s*(\d{2}))?(?!\w)")
+# Dieselbe Nummer ohne Buchstaben ("808/123456", "808123456"): nur zum Suchen, nie zum Anlegen.
+VN_DIGITS_PATTERN = re.compile(r"(?<![\w/+])(\d{3})(?:\s*[/-]\s*|\s+)?(\d{6})(?![\w/])")
+VN_KEY_LENGTH = 10  # "808123456E"
+_VN_KEY = re.compile(r"^(\d{9}[A-Z])(?:\d{2})?$")
+
+
+def vn_key(raw: str | None) -> str | None:
+    """VN-Schluessel einer VN- oder Vorgangsnummer ("808/123456-e-12" -> "808123456E"), sonst None."""
+    match = _VN_KEY.match(normalize_customer_number(raw))
+    return match.group(1) if match else None
+
+
 _UMLAUT_SPELLING = re.compile(r"([aou])e")
 
 

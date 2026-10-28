@@ -435,7 +435,15 @@
     setStatus("");
     var body = { text: text, client_ref: newRef() };
     if (selected) body.selected_id = selected.id;
-    return request("POST", "/kunden/eingabe", body).then(function (r) { return handle(r, text); });
+    return request("POST", "/kunden/eingabe", body).then(function (r) { return handle(r, text); }, function (err) {
+      // Technischer Fehler bzw. keine Verbindung: die bisher angezeigte Karte ist nicht das
+      // Ergebnis dieser Eingabe -> ausblenden. Ausgewaehlter Kunde und Eingabetext bleiben fuer
+      // einen erneuten Versuch erhalten.
+      resultEl.hidden = true;
+      resultEl.textContent = "";
+      setStatus(err.message, "error");
+      throw err;
+    });
   }
 
   // --- Offene Rueckrufe ---------------------------------------------------------------------

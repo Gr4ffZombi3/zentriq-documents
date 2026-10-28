@@ -16,7 +16,7 @@ from app.services.customer_overview import customer_link_counts, customer_search
 from app.services.leipziger_entries import search_key
 from app.services.llm.schemas import ExtractedCustomer
 from app.tenancy import get_current_tenant_id
-from app.utils.customer_keys import customer_keys
+from app.utils.customer_keys import customer_keys, vn_key
 from app.utils.vermittlernummer import format_vermittlernummer
 
 DEFAULT_CUSTOMER_PAGE_SIZE = 25
@@ -51,14 +51,6 @@ def normalize_postal_code(value: str | None) -> str:
     if not value:
         return ""
     return re.sub(r"\s+", "", value).lower()
-
-
-_VN_IN_CONTRACT = re.compile(r"^(\d{9}[A-Z])(?:\d{2})?$")
-
-
-def _vn_key(contract_number: str | None) -> str | None:
-    match = _VN_IN_CONTRACT.match(search_key(contract_number))
-    return match.group(1) if match else None
 
 
 class CustomerMatcher:
@@ -122,7 +114,7 @@ class CustomerMatcher:
             return candidates[0]
         # VN-Nummer aus der Vorgangsnummer ("808/123456-E-12" -> "808123456E"): ein Kunde, der mit
         # dieser Nummer als Kundennummer angelegt wurde (z. B. aus einer Kundennotiz), ist derselbe.
-        vn = _vn_key(contract_number)
+        vn = vn_key(contract_number)
         if not number and vn and len(candidates := self._by_key["customer_number_key"].get(vn, [])) == 1:
             return candidates[0]
         if keys["phone_key"]:

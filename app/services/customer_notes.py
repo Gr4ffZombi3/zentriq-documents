@@ -6,15 +6,24 @@ Ablauf einer Eingabe (handle_input):
    a) Versicherungsnehmernummer ("808/123456-E"): Kundennummer des Kunden bzw. die
       Vorgangsnummern der Leipziger Liste, die dem Kunden beim Import zugeordnet wurden
       ("808/123456-E" und "808/123456-E-12" gehoeren zur selben VN-Nummer).
-   b) Telefonnummer in jeder ueblichen Schreibweise (normalisierter phone_key).
-   c) Vollstaendiger Name eines vorhandenen Kunden (alle Namensbestandteile im Text).
+   b) Telefonnummer in jeder ueblichen Schreibweise (normalisierter phone_key), VN-Nummer ohne
+      Buchstaben ("808123456") und Kundennummer - gemeinsam: eine Ziffernfolge, die als VN- und
+      als Telefonnummer passt, liefert alle passenden Kunden zur Auswahl. Ist die Nummer bei
+      keinem Kunden hinterlegt, entscheidet ein vollstaendig genannter Name (c).
+   c) Vollstaendiger Name eines vorhandenen Kunden (alle Namensbestandteile im Text); bei Such-
+      und Fragesaetzen auch ein Teilname ("Suche Mustermann").
    d) Ohne Kennung: der in der Oberflaeche sichtbar ausgewaehlte Kunde (customer_id der Anfrage).
-   Mehrere Treffer -> Auswahl, kein Treffer -> Hinweis. Es wird nie ein Kunde angelegt oder
-   geaendert. Nennt der Text neben der Nummer einen anderen vorhandenen Kunden -> Rueckfrage.
+   Alle Vergleiche sind exakt auf den normalisierten Schluesseln (app/utils/customer_keys.py) -
+   dieselben, die Kundensuche, Dubletten- und Listenabgleich verwenden. Kein Ersteller-Filter:
+   jeder Mitarbeiter des Bueros findet jeden Kunden des Bueros.
+   Mehrere Treffer -> Auswahl, kein Treffer -> Hinweis. Ausser bei der Neuanlage (unten) wird nie
+   ein Kunde angelegt oder geaendert. Nennt der Text neben der Nummer einen anderen vorhandenen
+   Kunden -> Rueckfrage.
 2. Absicht: Fragen sowie reine Namen/Nummern -> Suche (Kundenkarte, nichts wird gespeichert).
    Bleibt nach Entfernen der Kennungen Text uebrig -> Notiz. Ohne Kundenbezug geht die Eingabe
    unveraendert an den KI-Chat ("chat"). Unklare Faelle -> kurze Rueckfrage.
-3. Notiz speichern: Text bleibt inhaltlich erhalten (nur Kennungen entfernt, Schreibweisen wie
+3. Notiz speichern: Text bleibt inhaltlich erhalten (nur Kennungen dieses Kunden entfernt - eine
+   andere Telefonnummer bleibt im Text; Schreibweisen wie
    "huk 24" -> "HUK24" vereinheitlicht). Nur ausdrueckliche Formulierungen ("nicht erreicht",
    "bitte zurueckrufen", "ruft ... zurueck") legen einen Kontaktvorgang an bzw. ergaenzen den
    offenen Vorgang zum selben Anlass. Doppelte Uebermittlung (gleiche client_ref oder gleicher
@@ -46,7 +55,17 @@ from app.services.memo_customer_match import (
     extract_phone_numbers,
 )
 from app.services.timetracking.clock import local_today, to_local, utcnow_naive
-from app.utils.customer_keys import name_key, name_parts, normalize_phone
+from app.utils.customer_keys import (
+    VN_DIGITS_PATTERN,
+    VN_KEY_LENGTH,
+    VN_PATTERN,
+    format_phone,
+    name_key,
+    name_parts,
+    normalize_customer_number,
+    normalize_phone,
+    vn_key,
+)
 from app.utils.vermittlernummer import vermittlernummer_key
 
 MAX_INPUT_CHARS = 1000
@@ -67,15 +86,7 @@ OUTCOME_LABELS = {
     DONE: "Erledigt",
 }
 
-# Versicherungsnehmernummer im HUK-Format der Leipziger Liste: 808/123456-E (optional -12).
-# Gueltige Schreibweisen derselben Nummer: "808/123456-E", "808123456e", "808 123456 E",
-# "808-123456-e", "808/123456e" - optional mit Vertragsendung "-12". Fuehrende Nullen und der
-# Buchstabe bleiben erhalten; Abgleich immer ueber denselben Schluessel "808123456E"
-# (normalize_customer_number bzw. search_key - wie Kundensuche, Dubletten- und Listenabgleich).
-_VN_PATTERN = re.compile(
-    r"(?<![\w/])(\d{3})(?:\s*[/-]\s*|\s+)?(\d{6})(?:\s*-\s*|\s+)?([A-Za-z])(?:\s*-\s*(\d{2}))?(?!\w)"
-)
-VN_KEY_LENGTH = 10  # "808123456E"
+# VN-Nummer: Muster und Schluessel zentral in app/utils/customer_keys.py (VN_PATTERN, vn_key).
 _VN_DISPLAY = re.compile(r"^(\d{3}/\d{6}-[A-Z])")
 
 # Ausdrueckliche Kontaktstaende. Reihenfolge = Vorrang ("nicht erreicht, ruft zurueck" -> ruft zurueck).
@@ -161,22 +172,32 @@ class Parsed:
     text: str
     vn_keys: list[str] = field(default_factory=list)
     vn_spans: list[tuple[int, int]] = field(default_factory=list)
+    # VN-Nummer ohne Buchstaben ("808123456"): Ziffernschluessel und Fundstellen.
+    vn_digits: list[str] = field(default_factory=list)
+    vn_digit_spans: list[tuple[int, int]] = field(default_factory=list)
     phones: list[str] = field(default_factory=list)
     numbers: list[str] = field(default_factory=list)
 
     @property
     def has_identifier(self) -> bool:
-        return bool(self.vn_keys or self.phones or self.numbers)
+        return bool(self.vn_keys or self.vn_digits or self.phones or self.numbers)
 
 
 def parse(text: str) -> Parsed:
+    """Kennungen im Text. Eine reine Ziffernfolge wird nicht nach ihrer Laenge als VN- oder
+    Telefonnummer eingeordnet: passt sie auf beide Formen, wird nach beiden gesucht."""
     parsed = Parsed(text=text)
-    for match in _VN_PATTERN.finditer(text):
-        key = "".join(part for part in match.groups() if part).upper()
+    for match in VN_PATTERN.finditer(text):
+        key = normalize_customer_number(match.group(0))
         if key not in parsed.vn_keys:
             parsed.vn_keys.append(key)
         parsed.vn_spans.append(match.span())
     rest = _remove_spans(text, parsed.vn_spans)
+    for match in VN_DIGITS_PATTERN.finditer(rest):
+        digits = match.group(1) + match.group(2)
+        if digits not in parsed.vn_digits:
+            parsed.vn_digits.append(digits)
+        parsed.vn_digit_spans.append(match.span())
     parsed.phones = extract_phone_numbers(rest)
     parsed.numbers = [n for n in extract_customer_numbers(rest) if n not in parsed.vn_keys]
     return parsed
@@ -229,20 +250,58 @@ def _load_customers(ids) -> list[Customer]:
     return Customer.query.filter(Customer.id.in_(ids)).order_by(Customer.name, Customer.id).all()
 
 
+def customers_by_vn_digits(digits: str) -> list[int]:
+    """Kunden zu einer VN-Nummer ohne Buchstaben ("808123456"): Kundennummer bzw. Vorgangsnummer
+    ist genau diese Ziffernfolge plus ein Buchstabe (und ggf. Vertragsendung). Mehrere Buchstaben
+    -> mehrere Kunden -> Auswahl."""
+    ids = {
+        customer_id
+        for customer_id, key in db.session.execute(
+            select(Customer.id, Customer.customer_number_key).where(Customer.customer_number_key.like(f"{digits}_"))
+        ).all()
+        if vn_key(key)
+    }
+    rows = db.session.execute(
+        select(LeipzigerEntry.customer_id, LeipzigerEntry.contract_key).where(
+            LeipzigerEntry.customer_id.is_not(None), LeipzigerEntry.contract_key.like(f"{digits}%")
+        )
+    ).all()
+    ids.update(customer_id for customer_id, contract_key in rows if (vn_key(contract_key) or "")[:-1] == digits)
+    return sorted(ids)
+
+
+# Grundlage eines Treffers -> Bezeichnung in Meldungen.
+BASIS_LABELS = {"vn": "Versicherungsnehmernummer", "phone": "Telefonnummer", "customer_number": "Kundennummer", "number": "Nummer"}
+
+
 def find_by_identifiers(parsed: Parsed) -> tuple[str | None, list[Customer]]:
-    """(Grundlage, Kandidaten) ueber VN-Nummer, Kundennummer oder Telefonnummer - in dieser Reihenfolge."""
+    """(Grundlage, Kandidaten) ueber exakte Vergleiche der normalisierten Kennungen.
+
+    Eine vollstaendige VN-Nummer (mit Buchstabe) ist eindeutig und hat Vorrang. Sonst werden
+    Kundennummer, VN-Nummer ohne Buchstaben und Telefonnummer gemeinsam gesucht: eine
+    Ziffernfolge, die als VN- und als Telefonnummer passt, liefert alle passenden Kunden zur
+    Auswahl. Grundlage "number", wenn die Treffer aus verschiedenen Kennungsarten stammen."""
     if parsed.vn_keys:
         ids: set[int] = set()
         for key in parsed.vn_keys:
             ids.update(customers_by_vn(key))
         return "vn", _load_customers(ids)
+    found: dict[str, set[int]] = {}
     if parsed.numbers:
-        rows = db.session.execute(select(Customer.id).where(Customer.customer_number_key.in_(parsed.numbers))).scalars()
-        return "customer_number", _load_customers(set(rows))
+        found["customer_number"] = set(
+            db.session.execute(select(Customer.id).where(Customer.customer_number_key.in_(parsed.numbers))).scalars()
+        )
+    if parsed.vn_digits:
+        found["vn"] = {customer_id for digits in parsed.vn_digits for customer_id in customers_by_vn_digits(digits)}
     if parsed.phones:
-        rows = db.session.execute(select(Customer.id).where(Customer.phone_key.in_(parsed.phones))).scalars()
-        return "phone", _load_customers(set(rows))
-    return None, []
+        found["phone"] = set(db.session.execute(select(Customer.id).where(Customer.phone_key.in_(parsed.phones))).scalars())
+    if not found:
+        return None, []
+    hits = {basis: ids for basis, ids in found.items() if ids}
+    if not hits:
+        return (next(iter(found)) if len(found) == 1 else "number"), []
+    ids = set().union(*hits.values())
+    return (next(iter(hits)) if len(hits) == 1 else "number"), _load_customers(ids)
 
 
 def search_by_name_fragment(text: str) -> list[Customer]:
@@ -256,6 +315,37 @@ def search_by_name_fragment(text: str) -> list[Customer]:
         query = query.filter(Customer.name_key.like(f"%{word}%"))
     rows = query.order_by(Customer.name, Customer.id).limit(MAX_CANDIDATES + 1).all()
     return [c for c in rows if all(word in (c.name_key or "").split() for word in words)]
+
+
+# Woerter einer Such- bzw. Frageformulierung, die nicht zum gesuchten Namen gehoeren.
+_SEARCH_WORDS = frozenset(
+    {
+        "suche", "such", "suchen", "finde", "finden", "find", "zeig", "zeige", "zeigen", "nach", "mir", "uns", "mal",
+        "was", "wer", "wie", "wo", "wann", "warum", "wieso", "weshalb", "worum", "welche", "welcher", "welches", "gibt",
+        "es", "wurde", "wurden", "ist", "sind", "hat", "haben", "steht", "stand", "notiert", "dokumentiert", "vermerkt",
+        "gesagt", "gemeint", "gewollt", "kunde", "kunden", "kundin", "akte", "kundenakte", "karte", "notizen", "zu", "zum",
+        "bei", "beim", "von", "vom", "ueber", "über", "dem", "den", "der", "die", "das", "des", "ein", "eine", "einen",
+        "offen", "offene", "offenes", "noch", "alles", "letzte", "letzten", "neues", "neu",
+    }
+)
+
+
+def search_subject(text: str) -> str | None:
+    """Gesuchter (Teil-)Name einer Such- oder Frageformulierung: "Suche Mustermann",
+    "Was wurde bei Mustermann notiert?" -> "Mustermann". Vornamen von Mitarbeitern des Bueros
+    ("Was hat Dennis notiert?") zaehlen nicht dazu. None, wenn kein Name erkennbar ist."""
+    from app.services.user_admin import office_members_query
+
+    members = {parts[0] for m in office_members_query().all() if "@" not in user_name(m) and (parts := name_parts(user_name(m)))}
+    words = []
+    for word in re.findall(r"[A-Za-zÄÖÜäöüßÉéÈèÁáÀàÓóÒòÚúÇç'’-]+", text):
+        lower = word.lower()
+        if lower in _SEARCH_WORDS or lower in _NOT_NAME or _OPEN_QUESTION.fullmatch(word) or _NOTE_NOUNS.fullmatch(word):
+            continue
+        if any(part in members for part in name_parts(word)):
+            continue
+        words.append(word)
+    return " ".join(words) if 1 <= len(words) <= 3 else None
 
 
 # --- Text ---------------------------------------------------------------------------------
@@ -850,12 +940,23 @@ def _choice(message: str, customers: list[Customer], create_option: bool = False
 
 
 def _strip_identifiers(text: str, parsed: Parsed, customer: Customer | None) -> str:
-    spans = list(parsed.vn_spans)
-    rest = _remove_spans(text, spans)
+    """Text ohne Kennungen. Mit Kunde werden nur Kennungen entfernt, die zu diesem Kunden
+    gehoeren - eine andere (z. B. neue) Telefonnummer bleibt Teil der Notiz statt verloren zu
+    gehen. Ohne Kunde: alle Kennungen (Pruefung, ob ueberhaupt Notiztext vorhanden ist)."""
+    rest = _remove_spans(text, parsed.vn_spans)
+    digit_spans = [
+        span
+        for span, digits in zip(parsed.vn_digit_spans, _digits_at(rest, parsed.vn_digit_spans))
+        if customer is None or customer.id in customers_by_vn_digits(digits)
+    ]
+    rest = _remove_spans(rest, digit_spans)
     for phone_like in _PHONE_PATTERN.finditer(rest):
-        if normalize_phone(phone_like.group(0)) in parsed.phones:
+        phone = normalize_phone(phone_like.group(0))
+        if phone in parsed.phones and (customer is None or phone == customer.phone_key):
             rest = rest.replace(phone_like.group(0), " ", 1)
     for number in parsed.numbers:
+        if customer is not None and number != customer.customer_number_key:
+            continue
         rest = re.sub(
             r"(?:kunden|versicherungsnehmer|vn)\s*-?\s*(?:nummer|nr\.?)\s*(?:ist|lautet|:)?\s*" + r"[\W_]*".join(map(re.escape, number)),
             " ",
@@ -867,6 +968,10 @@ def _strip_identifiers(text: str, parsed: Parsed, customer: Customer | None) -> 
         if span:
             rest = rest[: span[0]] + " " + rest[span[1]:]
     return rest
+
+
+def _digits_at(text: str, spans: list[tuple[int, int]]) -> list[str]:
+    return [re.sub(r"\D", "", text[start:end]) for start, end in spans]
 
 
 def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | None = None, mode: str | None = None,
@@ -900,6 +1005,12 @@ def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | Non
 
     parsed = parse(text)
     basis, candidates = find_by_identifiers(parsed)
+    if basis is not None and not candidates and not parsed.vn_keys:
+        # Nummer bei keinem Kunden hinterlegt (z. B. eine neue Telefonnummer): ein vollstaendig
+        # genannter vorhandener Kunde wird trotzdem gefunden; die Nummer bleibt Teil der Notiz.
+        by_name = _by_name(_strip_identifiers(text, parsed, None))
+        if by_name:
+            basis, candidates = "name", by_name
     if basis is None:
         candidates = _by_name(text)
         basis = "name" if candidates else None
@@ -911,14 +1022,19 @@ def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | Non
     question = is_question(text)
     chat_request = bool(_CHAT_REQUEST.search(text)) and not question
 
-    if basis == "vn" and not candidates and not question and not chat_request:
+    if parsed.vn_keys and not candidates and not question and not chat_request:
         return _new_customer_from_vn(user, text, parsed, forced_name=forced_name, client_ref=client_ref,
                                      explicit=mode == "create", create_new=create_new)
 
     if basis is None:
-        if parsed.has_identifier:
-            label = "Versicherungsnehmernummer" if parsed.vn_keys else ("Kundennummer" if parsed.numbers else "Telefonnummer")
-            return {"kind": "not_found", "message": f"Kein Kunde mit dieser {label} in Ihrem Büro gefunden. Es wurde nichts gespeichert."}
+        if question:
+            # "Suche Mustermann", "Was wurde bei Mustermann notiert?": Teilname des Kunden.
+            subject = search_subject(text)
+            found = search_by_name_fragment(subject) if subject else []
+            if len(found) == 1:
+                return _card_result(user, found[0], found[0].name, answer_question(user, found[0], text))
+            if found:
+                return _choice("Mehrere Kunden passen – bitte auswählen:", found)
         if selected is not None:
             if question and not (_OPEN_QUESTION.search(text) or _REASON_QUESTION.search(text) or _SAID_QUESTION.search(text)):
                 return {"kind": "chat"}
@@ -958,7 +1074,7 @@ def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | Non
         if question or not _strip_identifiers(text, parsed, None).strip():
             # Leseanfrage: nichts wurde gespeichert, weil nichts zu speichern war - das wird nicht
             # erwaehnt. Die bisher ausgewaehlte Karte ist nicht das Ergebnis (search=True).
-            label = {"phone": "Telefonnummer", "vn": "Versicherungsnehmernummer", "customer_number": "Kundennummer"}.get(basis)
+            label = BASIS_LABELS.get(basis)
             message = f"Zu dieser {label} ist kein Kunde hinterlegt." if label else "Dazu ist kein Kunde hinterlegt."
             return {"kind": "not_found", "search": True, "message": message}
         return {"kind": "not_found", "search": True, "message": "Kein passender Kunde gefunden. Es wurde nichts gespeichert."}
@@ -966,7 +1082,8 @@ def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | Non
     if len(candidates) > 1:
         pending = None if question else (text if _strip_identifiers(text, parsed, None).strip() else None)
         reason = {"vn": "Mehrere Kunden gehören zu dieser Nummer", "phone": "Mehrere Kunden haben diese Telefonnummer",
-                  "customer_number": "Mehrere Kunden haben diese Kundennummer", "name": "Mehrere Kunden heißen so"}[basis]
+                  "customer_number": "Mehrere Kunden haben diese Kundennummer", "number": "Mehrere Kunden passen zu dieser Nummer",
+                  "name": "Mehrere Kunden heißen so"}[basis]
         return _choice(f"{reason} – bitte auswählen:", candidates, pending_note=pending)
 
     customer = candidates[0]
@@ -1003,7 +1120,9 @@ def _act(user, customer: Customer, text: str, *, parsed: Parsed, client_ref, mod
         return _card_result(user, customer, customer.name, answer)
     remainder = _strip_identifiers(text, parsed, customer)
     note_text = normalize_note(remainder)
-    if not re.search(r"[A-Za-zÄÖÜäöüß0-9]", note_text):
+    # Nur Zahlen uebrig ("Max Mustermann 0176 1234567"): Suche, keine Notiz - ausser ausdruecklich als Notiz.
+    has_words = bool(re.search(r"[A-Za-zÄÖÜäöüß]", note_text))
+    if not has_words and (mode != "note" or not re.search(r"\d", note_text)):
         if mode == "note":
             raise NoteError("Die Notiz enthält keinen Text.")
         return _card_result(user, customer, customer.name)
@@ -1015,7 +1134,10 @@ def _act(user, customer: Customer, text: str, *, parsed: Parsed, client_ref, mod
 # Nummer existiert und nur bei einer Notiz oder einem ausdruecklichen Anlageauftrag (nie bei einer
 # reinen Suche). Gleichnamige Kunden -> Rueckfrage statt Neuanlage. Angelegt wird unter der
 # Kundensperre des Bueros (app/services/customer_lock.py, MariaDB GET_LOCK) mit erneuter Pruefung
-# nach dem Sperren; Kunde und Notiz werden in derselben Transaktion gespeichert.
+# nach dem Sperren; Kunde und Notiz werden in derselben Transaktion gespeichert. Name, VN-Nummer
+# und eine genannte Telefonnummer stehen danach in den Stammdatenfeldern, nicht nur in der Notiz.
+# Kein Unique-Index auf der Kundennummer: Listenimporte koennen gleiche Nummern liefern, die die
+# Dublettenpruefung (Kunden > Dubletten) bewusst zur Zusammenfuehrung anbietet.
 
 MAX_NAME_LENGTH = 120
 _CREATE_REQUEST = re.compile(r"\bneue[rn]?\s+kund(?:e|in)\b|\banlegen\b|\blege\b[^.?!]{0,80}\ban\b", re.I)
@@ -1036,7 +1158,7 @@ _NOT_NAME = _TOPIC_FILLER | frozenset(
 
 
 def _valid_vn(raw: str) -> str | None:
-    match = _VN_PATTERN.fullmatch(" ".join(raw.split()))
+    match = VN_PATTERN.fullmatch(" ".join(raw.split()))
     if match is None:
         return None
     number, digits, letter, suffix = match.groups()
@@ -1127,11 +1249,19 @@ def extract_new_name(text: str, parsed: Parsed) -> tuple[str, int, int] | None:
     return _name_from(tokens, cased)
 
 
-def _note_after_creation(text: str, parsed: Parsed, name_span: tuple[int, int] | None, forced_name: str | None) -> str:
+def _note_after_creation(text: str, parsed: Parsed, name_span: tuple[int, int] | None, forced_name: str | None,
+                         phone: str | None = None) -> str:
+    """Notiztext einer Neuanlage ohne VN-Nummer und Namen (und ohne die als Telefonnummer des
+    neuen Kunden gespeicherte Nummer)."""
     spans = list(parsed.vn_spans)
     if name_span:
         spans.append(name_span)
     rest = _remove_spans(text, spans)
+    if phone:
+        for phone_like in _PHONE_PATTERN.finditer(rest):
+            if normalize_phone(phone_like.group(0)) == phone:
+                rest = rest.replace(phone_like.group(0), " ", 1)
+                break
     if forced_name:
         rest = re.sub(r"\s+".join(map(re.escape, forced_name.split())), " ", rest, count=1, flags=re.I)
     rest = _CREATE_WORDS.sub(" ", rest)
@@ -1193,7 +1323,11 @@ def _new_customer_from_vn(user, text: str, parsed: Parsed, *, forced_name: str |
             "suggestion": found[0],
         }
     name = forced_name or (found[0] if found else None)
-    note_text = _note_after_creation(text, parsed, (found[1], found[2]) if found else None, forced_name)
+    name_span = (found[1], found[2]) if found else None
+    # Genau eine Telefonnummer in der Eingabe wird als Telefonnummer des neuen Kunden gespeichert
+    # (nie die VN-Nummer: deren Fundstellen sind vor der Telefonerkennung ausgeblendet).
+    phone = parsed.phones[0] if len(parsed.phones) == 1 else None
+    note_text = _note_after_creation(text, parsed, name_span, forced_name, phone)
     has_note = bool(re.search(r"[A-Za-zÄÖÜäöüß0-9]", note_text))
     explicit = explicit or bool(_CREATE_REQUEST.search(text))
 
@@ -1222,15 +1356,24 @@ def _new_customer_from_vn(user, text: str, parsed: Parsed, *, forced_name: str |
             "message": f"{name} ({vn}) ist noch nicht angelegt. Mit Notiz „{note_text}“ anlegen?",
             "create": {"name": name, "vn": vn, "text": text},
         }
-    return create_customer_with_note(user, name=name, vn=vn, note_text=note_text if has_note else None, client_ref=client_ref)
+    return create_customer_with_note(
+        user, name=name, vn=vn, phone=phone, note_text=note_text if has_note else None, client_ref=client_ref,
+        note_with_phone=_note_after_creation(text, parsed, name_span, forced_name) if phone else None,
+    )
 
 
-def create_customer_with_note(user, *, name: str, vn: str, note_text: str | None, client_ref: str | None) -> dict:
-    """Legt den Kunden an und speichert die Notiz - eine Transaktion, unter der Kundensperre."""
+def create_customer_with_note(user, *, name: str, vn: str, note_text: str | None, client_ref: str | None,
+                              phone: str | None = None, note_with_phone: str | None = None) -> dict:
+    """Legt den Kunden an und speichert die Notiz - eine Transaktion, unter der Kundensperre.
+
+    Name, VN-Nummer (Kundennummer) und ggf. Telefonnummer landen in den Stammdatenfeldern; die
+    Vergleichsschluessel setzt das Modell beim Speichern (app/models/customer.py), der Kunde ist
+    damit sofort fuer alle Mitarbeiter des Bueros auffindbar. Gemeldet wird erst nach dem Commit.
+    note_with_phone: Notiztext inkl. Telefonnummer - falls der Kunde inzwischen (parallel) angelegt
+    wurde und eine andere Telefonnummer hat, geht die Nummer so nicht verloren."""
     existing_note = _existing_by_ref(user, client_ref)
     if existing_note is not None:
         return _saved_result(user, existing_note, duplicate=True)
-    vn_key = "".join(ch for ch in vn.upper() if ch.isalnum())
     lock = customer_creation_lock(user.tenant_id, timeout_seconds=20)
     try:
         lock.acquire()
@@ -1240,21 +1383,27 @@ def create_customer_with_note(user, *, name: str, vn: str, note_text: str | None
         fresh_transaction()
         # Erneut pruefen: eine parallele Anfrage (Doppelklick, zweiter Mitarbeiter) kann den
         # Kunden inzwischen angelegt haben - dann nur die Notiz bei diesem Kunden speichern.
-        owners = _load_customers(customers_by_vn(vn_key))
+        owners = _load_customers(customers_by_vn(normalize_customer_number(vn)))
         if owners:
             customer = owners[0] if len(owners) == 1 else None
             if customer is None:
                 return _choice("Mehrere Kunden gehören zu dieser Nummer – bitte auswählen:", owners, pending_note=note_text)
+            if phone and customer.phone_key != phone and note_with_phone:
+                note_text = note_with_phone
             if note_text:
                 return save_note(user, customer, note_text, client_ref=client_ref)
             return _card_result(user, customer, f"{customer.name} ist bereits angelegt.")
+        sources = {"name": customer_sources.NOTIZ, "customer_number": customer_sources.NOTIZ}
+        if phone:
+            sources["phone"] = customer_sources.NOTIZ
         customer = Customer(
             tenant_id=user.tenant_id,
             name=name,
             customer_number=vn[:50],
+            phone=format_phone(phone) if phone else None,
             assigned_user_id=user.id,
             source=customer_sources.NOTIZ,
-            field_sources={"name": customer_sources.NOTIZ, "customer_number": customer_sources.NOTIZ},
+            field_sources=sources,
         )
         db.session.add(customer)
         try:
@@ -1263,19 +1412,30 @@ def create_customer_with_note(user, *, name: str, vn: str, note_text: str | None
                 result = save_note(user, customer, note_text, client_ref=client_ref)  # committet Kunde + Notiz
             else:
                 db.session.commit()
-                result = _card_result(user, customer, "")
+                result = {}
         except Exception:
             db.session.rollback()
             raise
     finally:
         lock.release()
+    if result.get("duplicate"):
+        # Dieselbe Anfrage wurde parallel bereits gespeichert (gleiche client_ref): die Neuanlage
+        # dieser Anfrage wurde mit zurueckgerollt, angezeigt wird das bereits gespeicherte Ergebnis.
+        return result
     from app.models.audit_log import AuditEventType
     from app.services.audit import log_audit_event
 
-    log_audit_event(AuditEventType.CUSTOMER_CREATED, user=user, details={"customer_id": customer.id, "source": customer_sources.NOTIZ})
+    try:
+        log_audit_event(AuditEventType.CUSTOMER_CREATED, user=user, details={"customer_id": customer.id, "source": customer_sources.NOTIZ})
+    except Exception:  # noqa: BLE001 - Kunde und Notiz sind bereits gespeichert; das wird nicht als Fehler gemeldet.
+        from flask import current_app
+
+        current_app.logger.exception("customer_notes.audit_failed customer=%s", customer.id)
+        db.session.rollback()
     result["created"] = True
     result["kind"] = "saved" if note_text else "card"
-    result["message"] = f"{customer.name} wurde angelegt." + (f" Notiz gespeichert: {note_text}." if note_text else "")
+    stored = f" Telefon {customer.phone} hinterlegt." if customer.phone else ""
+    result["message"] = f"{customer.name} wurde angelegt.{stored}" + (f" Notiz gespeichert: {note_text}." if note_text else "")
     result["card"] = customer_card(user, customer)
     return result
 
@@ -1296,8 +1456,20 @@ def without_ai(user, raw_text: str) -> dict:
                 "name": found[0],
                 "pending_note": text,
             }
+    subject = search_subject(text) if is_question(text) else (text if len(text.split()) <= 3 else None)
+    if subject and _looks_like_name(subject, cased=any(ch.isupper() for ch in text)):
+        # Namenssuche ohne Treffer ("Max Mustermann", "Suche Mustermann") - kein KI-Hinweis.
+        return {"kind": "not_found", "search": True, "message": f"Kein Kunde „{subject}“ in Ihrem Büro gefunden."}
     return {
         "kind": "no_ai",
         "message": "Für diese Anfrage wird ein KI-Modell benötigt, derzeit ist keins verfügbar. Kundennotizen, Suche "
         "und Rückrufe funktionieren weiterhin, z. B. „808/123456-E Max Mustermann HUK24 Wechsel“.",
     }
+
+
+def _looks_like_name(text: str, cased: bool) -> bool:
+    words = [w.strip(",.;:?!") for w in text.split()]
+    return bool(words) and all(
+        _NAME_TOKEN.match(w) and w.lower() not in _NOT_NAME and (not cased or w[:1].isupper() or w.lower() in _NAME_PARTICLES)
+        for w in words
+    )

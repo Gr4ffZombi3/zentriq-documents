@@ -420,6 +420,24 @@ def zentriq_ai_purge_command(days: int | None):
     click.echo(f"{purge_older_than(days)} Gespraeche geloescht (aelter als {days} Tage).")
 
 
+@click.command("kunden-notizen-pruefen")
+@click.option("--apply", "apply", is_flag=True, help="Eindeutige Reparaturen speichern (ohne: nur Bericht, nichts wird geaendert).")
+def customer_notes_check_command(apply: bool):
+    """Prueft Kunden und Notizen aus dem ZentriqAI-Eingabefeld (Suchschluessel, Telefon- und
+    VN-Nummer der Neuanlage, Buero-Zuordnung, moegliche Dubletten). Wiederholt ausfuehrbar;
+    ueberschreibt keine Stammdaten und fuehrt nichts zusammen (app/services/customer_note_repair.py)."""
+    from app.services.customer_note_repair import check_and_repair
+
+    report = check_and_repair(apply=apply)
+    click.echo(f"Geprueft: {report.checked_customers} Kunden, {report.checked_notes} Notizen zur Neuanlage.")
+    click.echo(("Repariert" if apply else "Reparierbar (mit --apply)") + f": {len(report.fixes)}")
+    for line in report.fixes:
+        click.echo(f"  - {line}")
+    click.echo(f"Nicht automatisch geaendert, bitte pruefen: {len(report.findings)}")
+    for line in report.findings:
+        click.echo(f"  - {line}")
+
+
 def register_cli(app) -> None:
     app.cli.add_command(create_user_command)
     app.cli.add_command(set_admin_command)
@@ -429,3 +447,4 @@ def register_cli(app) -> None:
     app.cli.add_command(recompare_lists_command)
     app.cli.add_command(whisper_download_command)
     app.cli.add_command(zentriq_ai_purge_command)
+    app.cli.add_command(customer_notes_check_command)

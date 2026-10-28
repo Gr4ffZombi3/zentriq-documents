@@ -110,6 +110,15 @@ _CHAT_REQUEST = re.compile(
 )
 _OPEN_QUESTION = re.compile(r"\boffen\w*|\bausstehend\w*|\bnoch\s+zu\s+tun\b|\br(?:ü|ue)ckruf\w*", re.I)
 _REASON_QUESTION = re.compile(r"\b(?:warum|wieso|weshalb|worum|anlass|grund)\b", re.I)
+# "Was hat ... gesagt?" - gefragt ist nach einer Aussage des Kunden, nicht nach dem Anrufanlass.
+_SAID_QUESTION = re.compile(r"\b(?:gesagt|sagte|gemeint|meinte|ge(?:ä|ae)u(?:ss|ß)ert|mitgeteilt|erz(?:ä|ae)hlt|aussage|gewollt|gew(?:ü|ue)nscht)\b", re.I)
+# Notiz gibt eine Aussage des Kunden wieder (sonst: interner Vermerk, z. B. Anrufanlass).
+_STATEMENT = re.compile(
+    r"\b(?:sagt|sagte|hat\s+gesagt|meint|meinte|m(?:ö|oe)chte|will|wollte|w(?:ü|ue)nscht|bittet|fragt|fragte|"
+    r"teilt\w*\s+mit|mitgeteilt|laut\s+kunde|kunde:|kundin:|ist\s+einverstanden|lehnt\w*\s+ab|kein\s+interesse|"
+    r"hat\s+interesse|interessiert)\b|\b(?:ruft|meldet)\b[^.;!?]{0,40}?\b(?:zur(?:ü|ue)ck|sich)\b",
+    re.I,
+)
 # Behutsame Vereinheitlichung gaengiger Schreibweisen (Inhalt bleibt unveraendert).
 _SPELLING = (
     (re.compile(r"\bhuk\s*-?\s*24\b", re.I), "HUK24"),
@@ -763,8 +772,36 @@ def _mentioned_members(text: str, customer: Customer) -> list[User]:
     return found
 
 
+def note_source(note: CustomerNote) -> str:
+    """Art der Notiz fuer Antworten: Aussage des Kunden oder interner Vermerk (Anlass/Status)."""
+    if note.event == DONE:
+        return "Status"
+    return "Kundenaussage" if _STATEMENT.search(note.text or "") else "Interne Notiz"
+
+
 def answer_question(user, customer: Customer, text: str) -> dict:
-    """Antwort ausschliesslich aus gespeicherten Notizen bzw. offenen Vorgaengen - mit Quelle."""
+    """Antwort ausschliesslich aus gespeicherten Notizen bzw. offenen Vorgaengen - mit Quelle.
+    Es wird nichts geschrieben."""
+    if _SAID_QUESTION.search(text):
+        notes = (
+            CustomerNote.query.filter(CustomerNote.customer_id == customer.id)
+            .order_by(CustomerNote.created_at.desc(), CustomerNote.id.desc())
+            .limit(20)
+            .all()
+        )
+        if not notes:
+            return {"text": f"Zu {customer.name} ist keine Gesprächsnotiz dokumentiert.", "sources": []}
+        statements = [n for n in notes if note_source(n) == "Kundenaussage"][:3]
+        if statements:
+            return {
+                "text": f"Dokumentierte Aussagen von {customer.name}:",
+                "sources": [_note_source_row(n) for n in statements],
+            }
+        # Nur interne Vermerke (z. B. "HUK24 Wechsel"): daraus wird keine Kundenaussage gemacht.
+        return {
+            "text": f"Zu {customer.name} ist keine Aussage des Kunden dokumentiert. Vorhandene interne Notizen:",
+            "sources": [_note_source_row(n) for n in notes[:3]],
+        }
     if _OPEN_QUESTION.search(text) and not _REASON_QUESTION.search(text):
         contacts = open_contacts_of(customer)
         if not contacts:
@@ -785,11 +822,17 @@ def answer_question(user, customer: Customer, text: str) -> dict:
     notes = query.order_by(CustomerNote.created_at.desc(), CustomerNote.id.desc()).limit(3).all()
     who = f" von {', '.join(user_name(m).split()[0] for m in members)}" if members else ""
     if not notes:
+        if not members:
+            return {"text": f"Zu {customer.name} ist keine Gesprächsnotiz dokumentiert.", "sources": []}
         return {"text": f"Zu {customer.name} ist kein Anlass{who} dokumentiert.", "sources": []}
     return {
         "text": f"Dokumentiert{who} zu {customer.name}:",
-        "sources": [{"text": n.text, "author": user_name(n.created_by), "when": when(n.created_at), "source": "Notiz"} for n in notes],
+        "sources": [_note_source_row(n) for n in notes],
     }
+
+
+def _note_source_row(note: CustomerNote) -> dict:
+    return {"text": note.text, "author": user_name(note.created_by), "when": when(note.created_at), "source": note_source(note)}
 
 
 # --- Eingabe --------------------------------------------------------------------------------
@@ -877,7 +920,7 @@ def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | Non
             label = "Versicherungsnehmernummer" if parsed.vn_keys else ("Kundennummer" if parsed.numbers else "Telefonnummer")
             return {"kind": "not_found", "message": f"Kein Kunde mit dieser {label} in Ihrem Büro gefunden. Es wurde nichts gespeichert."}
         if selected is not None:
-            if question and not (_OPEN_QUESTION.search(text) or _REASON_QUESTION.search(text)):
+            if question and not (_OPEN_QUESTION.search(text) or _REASON_QUESTION.search(text) or _SAID_QUESTION.search(text)):
                 return {"kind": "chat"}
             if chat_request:
                 return {"kind": "clarify", "message": f"Als Notiz für {selected.name} speichern oder an ZentriqAI senden?",
@@ -912,7 +955,13 @@ def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | Non
     if not candidates:
         if chat_request:
             return {"kind": "chat"}
-        return {"kind": "not_found", "message": "Kein passender Kunde gefunden. Es wurde nichts gespeichert."}
+        if question or not _strip_identifiers(text, parsed, None).strip():
+            # Leseanfrage: nichts wurde gespeichert, weil nichts zu speichern war - das wird nicht
+            # erwaehnt. Die bisher ausgewaehlte Karte ist nicht das Ergebnis (search=True).
+            label = {"phone": "Telefonnummer", "vn": "Versicherungsnehmernummer", "customer_number": "Kundennummer"}.get(basis)
+            message = f"Zu dieser {label} ist kein Kunde hinterlegt." if label else "Dazu ist kein Kunde hinterlegt."
+            return {"kind": "not_found", "search": True, "message": message}
+        return {"kind": "not_found", "search": True, "message": "Kein passender Kunde gefunden. Es wurde nichts gespeichert."}
 
     if len(candidates) > 1:
         pending = None if question else (text if _strip_identifiers(text, parsed, None).strip() else None)
@@ -1150,7 +1199,7 @@ def _new_customer_from_vn(user, text: str, parsed: Parsed, *, forced_name: str |
 
     if not has_note and not explicit:
         # Reine Suche nach einer unbekannten Nummer: nichts anlegen, Anlegen nur anbieten.
-        result = {"kind": "not_found", "message": f"Kein Kunde mit der Nummer {vn} in Ihrem Büro gefunden. Es wurde nichts angelegt."}
+        result = {"kind": "not_found", "search": True, "message": f"Zu dieser Versicherungsnehmernummer ({vn}) ist kein Kunde hinterlegt."}
         if name:
             result["create"] = {"name": name, "vn": vn, "text": text}
         return result

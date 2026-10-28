@@ -241,7 +241,7 @@ def test_questions_are_answered_from_stored_notes_with_source(app, office):
     _input(laura, "808/123456-e Justin Heller huk 24 Wechsel, nicht erreicht")
     data = _input(admin, "Warum hat Laura Justin Heller angerufen?")
     source = data["answer"]["sources"][0]
-    assert source["text"] == "HUK24 Wechsel, nicht erreicht" and source["author"] == "Laura" and source["source"] == "Notiz"
+    assert source["text"] == "HUK24 Wechsel, nicht erreicht" and source["author"] == "Laura" and source["source"] == "Interne Notiz"
     assert source["when"].startswith("heute, ")
 
     data = _input(admin, "Was ist bei Justin Heller noch offen?")

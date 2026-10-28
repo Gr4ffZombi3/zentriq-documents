@@ -415,6 +415,8 @@
         setStatus(r.message, "warn");
         return { handled: true, clear: false };
       case "not_found":
+        // Suche ohne Treffer: die bisher ausgewaehlte Karte ist nicht das Ergebnis -> schliessen.
+        if (r.search) closeCard();
         setStatus(r.message, "warn");
         if (r.create) {
           var wrap = el("div", "zn-choice");

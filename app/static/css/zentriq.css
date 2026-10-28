@@ -305,3 +305,4 @@ body.zs-collapsed .zc-head { padding-left: 3.25rem; }
 }
 /* Solange eine Kundenkarte/Rueckfrage offen ist, keine Chat-Vorschlaege darunter. */
 .zc-composer:has(.zn-result:not([hidden])) .zc-suggestions { display: none; }
+.zn-missing-input { flex: 1; min-width: 12rem; font-size: 0.9rem; padding: 0.35rem 0.6rem; }

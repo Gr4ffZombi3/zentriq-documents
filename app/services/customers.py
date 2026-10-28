@@ -53,11 +53,19 @@ def normalize_postal_code(value: str | None) -> str:
     return re.sub(r"\s+", "", value).lower()
 
 
+_VN_IN_CONTRACT = re.compile(r"^(\d{9}[A-Z])(?:\d{2})?$")
+
+
+def _vn_key(contract_number: str | None) -> str | None:
+    match = _VN_IN_CONTRACT.match(search_key(contract_number))
+    return match.group(1) if match else None
+
+
 class CustomerMatcher:
     """Ordnet extrahierte Kundendaten (Leipziger Liste) dem Kundenstamm des eigenen Bueros zu.
 
     Abgleich ueber die indizierten Schluessel (app/utils/customer_keys.py) in dieser Reihenfolge:
-    1. Kundennummer, 2. Telefonnummer, 3. dieselbe Vorgangsnummer aus einer frueheren Liste bei
+    1. Kundennummer (auch die VN-Nummer am Anfang der Vorgangsnummer), 2. Telefonnummer, 3. dieselbe Vorgangsnummer aus einer frueheren Liste bei
     gleichem Namen (ohne abweichende PLZ), 4. Name + Geburtsdatum, 5. Name + PLZ (nur ohne
     abweichendes Geburtsdatum). Ein gleicher Name allein fuehrt nie zu einer Zuordnung, und
     abweichende Kundennummern schliessen eine Zuordnung immer aus. Gleicher Name und gleiche PLZ
@@ -111,6 +119,11 @@ class CustomerMatcher:
             return bool(number and other and other != number)
 
         if number and (candidates := self._by_key["customer_number_key"].get(number)):
+            return candidates[0]
+        # VN-Nummer aus der Vorgangsnummer ("808/123456-E-12" -> "808123456E"): ein Kunde, der mit
+        # dieser Nummer als Kundennummer angelegt wurde (z. B. aus einer Kundennotiz), ist derselbe.
+        vn = _vn_key(contract_number)
+        if not number and vn and len(candidates := self._by_key["customer_number_key"].get(vn, [])) == 1:
             return candidates[0]
         if keys["phone_key"]:
             candidates = [c for c in self._by_key["phone_key"].get(keys["phone_key"], []) if not number_conflict(c)]

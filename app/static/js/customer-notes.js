@@ -275,7 +275,51 @@
     });
     box.appendChild(ul);
     if (r.more) box.appendChild(el("p", "zn-meta", "Weitere Treffer – bitte genauer suchen (z. B. mit VN-Nummer)."));
+    if (r.create_option) box.appendChild(createButton(r.create, note || text));
     box.appendChild(button("Abbrechen", "zn-link", closeCard));
+    return box;
+  }
+
+  // Ausdruecklich "Neuen Kunden anlegen" (nach Rueckfrage). Den Kunden legt nur der Server an,
+  // nach erneuter Pruefung auf vorhandene Kunden mit dieser Nummer.
+  function createButton(create, text) {
+    var label = create ? "Neuen Kunden „" + create.name + "“ anlegen" : "Neuen Kunden anlegen";
+    return button(label, "btn btn-secondary btn-sm", function (b) {
+      var body = { text: (create && create.text) || text, mode: "create", create_new: true, client_ref: newRef() };
+      if (create && create.name) body.new_name = create.name;
+      run(request("POST", "/kunden/eingabe", body), b).then(function (r) { handle(r, body.text); });
+    });
+  }
+
+  // Fehlende Angabe fuer eine Neuanlage abfragen (nur diese eine).
+  function renderMissing(r, field) {
+    // Kein eigenes <form>: die Karte liegt im Formular des Eingabefelds (keine verschachtelten Formulare).
+    var box = el("div", "zn-choice");
+    box.appendChild(el("p", "zn-choice-text", r.message));
+    box.appendChild(el("p", "zn-meta", "Notiz: „" + r.pending_note + "“ – wird mit der neuen Kundenakte gespeichert."));
+    var row = el("div", "zn-actions");
+    var inputEl = el("input", "field-surface zn-missing-input");
+    inputEl.type = "text";
+    inputEl.maxLength = field === "name" ? 120 : 20;
+    inputEl.placeholder = field === "name" ? "Vor- und Nachname" : "z. B. 808/123456-E";
+    inputEl.setAttribute("aria-label", field === "name" ? "Name des Kunden" : "Versicherungsnehmernummer");
+    row.appendChild(inputEl);
+    var submit = button("Anlegen und speichern", "btn btn-primary btn-sm", function () { go(); });
+    row.appendChild(submit);
+    box.appendChild(row);
+    box.appendChild(button("Abbrechen", "zn-link", closeCard));
+    function go() {
+      var value = inputEl.value.trim();
+      if (!value || pending) { inputEl.focus(); return; }
+      var body = { text: r.pending_note, mode: "create", client_ref: newRef() };
+      if (field === "name") body.new_name = value;
+      else { body.new_vn = value; body.new_name = r.name; }
+      run(request("POST", "/kunden/eingabe", body), submit).then(function (res) { handle(res, r.pending_note); });
+    }
+    inputEl.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); go(); }
+    });
+    setTimeout(function () { inputEl.focus(); }, 0);
     return box;
   }
 
@@ -328,7 +372,7 @@
         handleSaved(r);
         return { handled: true, clear: true };
       case "card":
-        setStatus("");
+        setStatus(r.created ? r.message : "", r.created ? "ok" : null);
         showCard(r.card, r.answer);
         return { handled: true, clear: true };
       case "choose":
@@ -345,8 +389,25 @@
         setStatus("");
         showResult(renderClarify(r, text));
         return { handled: true, clear: false };
+      case "need_name":
+        setStatus("");
+        select(null);
+        showResult(renderMissing(r, "name"));
+        return { handled: true, clear: true };
+      case "need_vn":
+        setStatus("");
+        select(null);
+        showResult(renderMissing(r, "vn"));
+        return { handled: true, clear: true };
       case "not_found":
         setStatus(r.message, "warn");
+        if (r.create) {
+          var wrap = el("div", "zn-choice");
+          wrap.appendChild(el("p", "zn-choice-text", r.message));
+          wrap.appendChild(createButton(r.create, text));
+          showResult(wrap);
+          setStatus("");
+        }
         return { handled: true, clear: false };
       default:
         return { handled: false };

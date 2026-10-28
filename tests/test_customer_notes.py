@@ -298,10 +298,11 @@ def test_number_and_name_of_other_customer_conflict(app, office):
     assert _notes() == []
 
 
-def test_unknown_number_or_name_gives_hint_and_creates_nothing(app, office):
+def test_unknown_number_without_name_asks_only_for_name(app, office):
     client = login(app, "laura@example.com")
-    assert _input(client, "808/999999-z HUK24 Wechsel")["kind"] == "not_found"
-    assert _input(client, "Müllermann nicht erreicht")["kind"] == "not_found"
+    data = _input(client, "808/999999-z HUK24 Wechsel")
+    assert data["kind"] == "need_name" and data["vn"] == "808/999999-Z"
+    assert _input(client, "Müllermann nicht erreicht")["kind"] == "not_found"  # nur ein Wort: kein Name
     assert _notes() == []
     with bypass_tenant_scope():
         assert Customer.query.filter_by(tenant_id=office.tenant_a.id).count() == office.customer_count

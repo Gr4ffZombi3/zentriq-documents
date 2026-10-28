@@ -280,7 +280,7 @@ def api_customer_input():
         return denied
     data = _payload()
     text = data.get("text") if isinstance(data.get("text"), str) else ""
-    mode = data.get("mode") if data.get("mode") in ("note", "search") else None
+    mode = data.get("mode") if data.get("mode") in ("note", "search", "create") else None
     try:
         result = customer_notes.handle_input(
             current_user,
@@ -290,6 +290,9 @@ def api_customer_input():
             client_ref=_client_ref(data),
             mode=mode,
             contact_choice=data.get("contact_id"),
+            new_name=data.get("new_name") if isinstance(data.get("new_name"), str) else None,
+            new_vn=data.get("new_vn") if isinstance(data.get("new_vn"), str) else None,
+            create_new=data.get("create_new") is True,
         )
     except customer_notes.NoteError as exc:
         return _error(str(exc), exc.status, "note")

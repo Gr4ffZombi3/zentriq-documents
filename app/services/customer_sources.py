@@ -11,8 +11,10 @@ MEMO = "MEMO"
 MANUELL = "MANUELL"
 # Einzeldokumente der fruehen Analyse-Pipeline (keine Leipziger Liste).
 DOKUMENT = "DOKUMENT"
+# Aus einer Kundennotiz im ZentriqAI-Feld angelegt (app/services/customer_notes.py).
+NOTIZ = "NOTIZ"
 
-LABELS = {LEIPZIGER_LISTE: "Leipziger Liste", MEMO: "Memo", MANUELL: "Manuell", DOKUMENT: "Dokument"}
+LABELS = {LEIPZIGER_LISTE: "Leipziger Liste", MEMO: "Memo", MANUELL: "Manuell", DOKUMENT: "Dokument", NOTIZ: "Notiz"}
 
 
 def _empty(value) -> bool:

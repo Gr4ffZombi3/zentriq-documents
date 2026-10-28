@@ -88,6 +88,11 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="zs-item">{{ icon('log-out', class='zs-ico') }}<span>Abmelden</span></button>
       </form>
+      <form method="post" action="{{ url_for('auth.logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="forget_browser" value="1">
+        <button type="submit" class="zs-item" title="Abmelden; bei der nächsten Anmeldung in diesem Browser ist wieder der 2FA-Code nötig.">{{ icon('log-out', class='zs-ico') }}<span>Abmelden und diesem Browser nicht mehr vertrauen</span></button>
+      </form>
     </div>
   </details>
 </nav>

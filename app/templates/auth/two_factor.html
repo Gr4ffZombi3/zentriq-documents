@@ -17,6 +17,13 @@
         {{ form.code(id='code', class_='field-surface text-center text-lg tracking-widest', inputmode='text', autocomplete='one-time-code', autofocus=true, placeholder='123456') }}
         {% for error in form.code.errors %}<span class="form-error">{{ error }}</span>{% endfor %}
       </div>
+      <label class="flex items-start gap-3 text-sm leading-6">
+        {{ form.trust_browser(class_='mt-1') }}
+        <span>
+          <span class="font-medium text-text">Diesem Browser {{ trust_days }} Tage vertrauen</span><br>
+          <span class="text-text-muted">Auf diesem Browser genügt dann bei der Anmeldung das Passwort. Nur auf eigenen, nicht öffentlich genutzten Geräten wählen.</span>
+        </span>
+      </label>
       {{ button(form.submit.label.text, variant='primary', type='submit', size='lg', extra_class='w-full') }}
     </form>
   </div>

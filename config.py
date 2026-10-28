@@ -95,6 +95,8 @@ class BaseConfig:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true"
+    # Sitzung endet nach 8 Stunden ohne Aktivitaet (gleitend, auch serverseitig geprueft in
+    # app/services/user_sessions.py) - nicht mehr beim Schliessen des Browsers.
     PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
 
     # Oeffentliche Basis-URL fuer Links in E-Mails. Bewusst NICHT aus dem Host-Header des
@@ -119,6 +121,11 @@ class BaseConfig:
     # Wie lange nach korrektem Passwort der 2FA-Code eingegeben werden kann.
     TWO_FACTOR_PENDING_MAX_AGE_SECONDS = int(os.environ.get("TWO_FACTOR_PENDING_MAX_AGE_SECONDS", "300"))
     TWO_FACTOR_RECOVERY_CODE_COUNT = 10
+    # "Diesem Browser vertrauen": so viele Tage entfaellt der 2FA-Code bei der Anmeldung in diesem
+    # Browser (Passwort bleibt Pflicht). Das Cookie ist immer HttpOnly + SameSite=Strict und in
+    # Produktion Secure (nur Tests/lokale Entwicklung ohne HTTPS schalten das ab).
+    TWO_FACTOR_TRUST_DAYS = int(os.environ.get("TWO_FACTOR_TRUST_DAYS", "30"))
+    TRUSTED_BROWSER_COOKIE_SECURE = os.environ.get("TRUSTED_BROWSER_COOKIE_SECURE", "true").lower() == "true"
 
     # Brute-Force-Schutz fuer die Anmeldung (fehlgeschlagene Versuche pro Client-IP).
     LOGIN_MAX_FAILURES_PER_IP = int(os.environ.get("LOGIN_MAX_FAILURES_PER_IP", "20"))
@@ -145,6 +152,7 @@ class TestingConfig(BaseConfig):
     CELERY_TASK_ALWAYS_EAGER = True
     WTF_CSRF_ENABLED = False
     SESSION_COOKIE_SECURE = False
+    TRUSTED_BROWSER_COOKIE_SECURE = False
     # Verhindert echte/gemockte OpenAI-Aufrufe fuer den Analysebericht-Text in der gesamten
     # bestehenden Testsuite; der Narrativ-Pfad wird gezielt in test_analysis_report.py getestet.
     ANALYSIS_NARRATIVE_ENABLED = False

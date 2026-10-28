@@ -11,7 +11,7 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from flask import has_request_context, request, session
+from flask import current_app, has_request_context, request, session
 
 from app.extensions import db
 from app.models.user_session import UserSession
@@ -64,6 +64,15 @@ def validate_session(user) -> bool:
         session.pop(SESSION_TOKEN_KEY, None)
         return False
     now = _now()
+    # Serverseitiger Leerlauf-Ablauf (zusaetzlich zum Cookie-Ablauf): laenger als
+    # PERMANENT_SESSION_LIFETIME ohne Anfrage -> abgemeldet. last_seen_at ist hoechstens
+    # LAST_SEEN_INTERVAL alt, daher diese Toleranz.
+    idle_limit = current_app.config.get("PERMANENT_SESSION_LIFETIME")
+    if isinstance(idle_limit, timedelta) and record.last_seen_at is not None and now - record.last_seen_at > idle_limit + LAST_SEEN_INTERVAL:
+        record.revoked_at = now
+        db.session.commit()
+        session.pop(SESSION_TOKEN_KEY, None)
+        return False
     if record.last_seen_at is None or now - record.last_seen_at >= LAST_SEEN_INTERVAL:
         record.last_seen_at = now
         if has_request_context():

@@ -6,7 +6,7 @@ from app.blueprints.settings.forms import ChangePasswordForm, TwoFactorCodeForm,
 from app.extensions import db
 from app.models import Tenant, User
 from app.models.audit_log import AuditEventType
-from app.services import two_factor, user_sessions
+from app.services import trusted_browsers, two_factor, user_sessions
 from app.services.audit import log_audit_event
 from app.services.password_reset import is_password_reset_available
 from app.services.user_admin import (
@@ -184,6 +184,7 @@ def profile():
         form=form,
         sessions=sessions,
         current_session_id=current_record.id if current_record else None,
+        trusted_browser_count=trusted_browsers.active_count(current_user.id),
         describe_user_agent=user_sessions.describe_user_agent,
     )
 
@@ -191,7 +192,9 @@ def profile():
 @settings_bp.post("/sitzungen/abmelden")
 @login_required
 def revoke_other_sessions():
-    """Meldet alle anderen Geraete ab; die aktuelle Sitzung bleibt angemeldet."""
+    """Meldet alle anderen Geraete ab; die aktuelle Sitzung bleibt angemeldet. Alle vertrauten
+    Browser (auch dieser) verlangen danach wieder den 2FA-Code."""
+    trusted_browsers.revoke_all(current_user.id)
     count = user_sessions.revoke_other_sessions(current_user.id)
     log_audit_event(AuditEventType.SESSIONS_REVOKED, user=current_user, details={"count": count})
     flash(

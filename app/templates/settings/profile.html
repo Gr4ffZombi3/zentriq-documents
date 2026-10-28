@@ -85,8 +85,11 @@
     <div class="panel-footer">
       <form method="post" action="{{ url_for('settings.revoke_other_sessions') }}" onsubmit="return confirm('Alle anderen Geräte abmelden?');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-secondary btn-sm"{% if sessions | length < 2 %} disabled{% endif %}>Auf allen anderen Geräten abmelden</button>
+        <button type="submit" class="btn btn-secondary btn-sm"{% if sessions | length < 2 and not trusted_browser_count %} disabled{% endif %}>Auf allen anderen Geräten abmelden</button>
       </form>
+      <p class="text-xs text-text-muted mt-2">
+        {% if trusted_browser_count %}Vertraute Browser ohne erneuten 2FA-Code: {{ trusted_browser_count }}. {% endif %}Das Abmelden aller anderen Geräte hebt auch das Vertrauen aller Browser auf.
+      </p>
     </div>
   </section>
 </div>

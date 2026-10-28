@@ -18,7 +18,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import func, text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import selectinload
 
 from app.auth.permissions import super_admin_required
@@ -27,7 +27,7 @@ from app.blueprints.settings.routes import user_form_data
 from app.extensions import db
 from app.models import Tenant, TenantStatus, User, UserRole
 from app.models.audit_log import SECURITY_EVENT_TYPES, AuditEventType, AuditLog
-from app.services import assistant, two_factor
+from app.services import assistant, trusted_browsers, two_factor
 from app.services.audit import log_audit_event
 from app.services.mailer import is_mail_configured
 from app.services.password_reset import is_password_reset_available
@@ -177,6 +177,12 @@ def office_detail(tenant_id):
         if new_status != tenant.status:
             changes["status"] = {"old": tenant.status.value, "new": new_status.value}
             tenant.status = new_status
+            if new_status == TenantStatus.SUSPENDED:
+                # Gesperrtes Buero: vertraute Browser aller Konten widerrufen (Anmeldung ist
+                # ohnehin gesperrt; nach einer Reaktivierung gilt wieder 2FA).
+                with bypass_tenant_scope():
+                    for member_id in db.session.execute(select(User.id).where(User.tenant_id == tenant.id)).scalars().all():
+                        trusted_browsers.revoke_all(member_id)
         if bool(form.assistant_enabled.data) != tenant.assistant_enabled:
             changes["assistant_enabled"] = {"old": tenant.assistant_enabled, "new": bool(form.assistant_enabled.data)}
             tenant.assistant_enabled = bool(form.assistant_enabled.data)

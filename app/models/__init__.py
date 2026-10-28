@@ -59,6 +59,7 @@ from app.models.timetracking import (
     WorkBreak,
     WorkSession,
 )
+from app.models.trusted_browser import TrustedBrowser
 from app.models.user import RecoveryCode, User
 from app.models.user_session import UserSession
 
@@ -92,6 +93,7 @@ __all__ = [
     "SystemErrorEvent",
     "Task",
     "Tenant",
+    "TrustedBrowser",
     "EmployeeProfile",
     "TimeCorrection",
     "TimeCorrectionRequest",

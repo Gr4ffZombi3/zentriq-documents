@@ -20,8 +20,8 @@ from app.auth.forms import ForgotPasswordForm, LoginForm, ResetPasswordForm, Two
 from app.extensions import db
 from app.models import User
 from app.models.audit_log import AuditEventType, AuditLog
+from app.services import trusted_browsers, user_sessions
 from app.services import two_factor as two_factor_service
-from app.services import user_sessions
 from app.services.account_state import account_login_block_reason
 from app.services.audit import log_audit_event
 from app.services.password_reset import (
@@ -69,6 +69,10 @@ def _is_login_rate_limited() -> bool:
 def _complete_login(user: User, details: dict | None = None):
     session.pop(PENDING_2FA_KEY, None)
     set_current_tenant_id(user.tenant_id)
+    # Gleitende Sitzung (PERMANENT_SESSION_LIFETIME seit der letzten Anfrage) statt eines
+    # Cookies, das beim Schliessen des Browsers/der App verfaellt - sonst verlangt jeder
+    # Neustart des Browsers am selben Arbeitstag erneut Passwort und 2FA.
+    session.permanent = True
     login_user(user)
     user_sessions.start_session(user)
     user.last_login_at = datetime.now(timezone.utc)
@@ -115,6 +119,13 @@ def login():
             return render_template("auth/login.html", form=form)
 
         if user.two_factor_enabled:
+            # Vertrauter Browser (gueltiges, nicht widerrufenes Token dieses Benutzers): kein
+            # erneuter Code. Gesperrte 2FA (zu viele Fehlversuche) wird nie uebersprungen.
+            with use_tenant_id(user.tenant_id):
+                trusted = None if two_factor_service.is_locked(user) else trusted_browsers.trusted_record(user)
+                if trusted is not None:
+                    trusted_browsers.mark_used(trusted)
+                    return _complete_login(user, details={"two_factor": "trusted_browser"})
             # Passwort korrekt, aber noch NICHT angemeldet: erst nach gueltigem zweiten Faktor.
             session[PENDING_2FA_KEY] = {"uid": user.id, "v": user.auth_version or 0, "ts": int(time.time())}
             return redirect(url_for("auth.two_factor"))
@@ -159,10 +170,14 @@ def two_factor():
                 flash("Zu viele ungültige Codes. Bitte versuche es später erneut.", "error")
                 return render_template("auth/two_factor.html", form=form), 429
             if two_factor_service.verify_second_factor(user, form.code.data, "login"):
-                return _complete_login(user, details={"two_factor": True})
+                trust = bool(form.trust_browser.data)
+                response = make_response(_complete_login(user, details={"two_factor": True, "trust_browser": trust}))
+                if trust:
+                    trusted_browsers.trust_this_browser(user, response)
+                return response
         flash("Der Code ist ungültig.", "error")
 
-    return render_template("auth/two_factor.html", form=form)
+    return render_template("auth/two_factor.html", form=form, trust_days=trusted_browsers.trust_days())
 
 
 @auth_bp.app_context_processor
@@ -278,9 +293,16 @@ def reset_password():
 @auth_bp.route("/logout", methods=["POST"])
 @login_required
 def logout():
-    log_audit_event(AuditEventType.LOGOUT, tenant_id=current_user.tenant_id, user=current_user)
-    user_sessions.end_current_session(current_user.id)
+    """Beendet die Sitzung. Ein ausdruecklich vertrauter Browser bleibt vertraut - ausser bei
+    "Abmelden und diesem Browser nicht mehr vertrauen" (forget_browser=1)."""
+    forget = request.form.get("forget_browser") == "1"
+    user = current_user._get_current_object()
+    log_audit_event(AuditEventType.LOGOUT, tenant_id=user.tenant_id, user=user, details={"forget_browser": True} if forget else None)
+    response = make_response(redirect(url_for("auth.login")))
+    if forget:
+        trusted_browsers.forget_this_browser(user, response)
+    user_sessions.end_current_session(user.id)
     logout_user()
     session.pop(PENDING_2FA_KEY, None)
-    flash("Du wurdest abgemeldet.", "success")
-    return redirect(url_for("auth.login"))
+    flash("Du wurdest abgemeldet. Dieser Browser ist nicht mehr vertraut." if forget else "Du wurdest abgemeldet.", "success")
+    return response

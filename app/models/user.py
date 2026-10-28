@@ -86,6 +86,11 @@ class User(TenantScopedMixin, UserMixin, db.Model):
                 {UserSession.revoked_at: datetime.now(timezone.utc).replace(tzinfo=None)},
                 synchronize_session=False,
             )
+            # Vertrauenswuerdige Browser ebenfalls widerrufen (ungueltig sind sie ueber
+            # auth_version ohnehin; so ist der Widerruf auch in der Datenbank sichtbar).
+            from app.services.trusted_browsers import revoke_all
+
+            revoke_all(self.id)
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password, method="scrypt")

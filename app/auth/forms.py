@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import HiddenField, PasswordField, RadioField, StringField, SubmitField
+from wtforms import BooleanField, HiddenField, PasswordField, RadioField, StringField, SubmitField
 from wtforms.validators import DataRequired, Email, EqualTo, Length
 
 
@@ -29,6 +29,7 @@ class TwoFactorForm(FlaskForm):
         "Bestätigungscode",
         validators=[DataRequired(message="Bitte den Code eingeben."), Length(max=32)],
     )
+    trust_browser = BooleanField("Diesem Browser 30 Tage vertrauen")
     submit = SubmitField("Bestätigen")
 
 

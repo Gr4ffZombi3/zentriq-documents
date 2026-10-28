@@ -4,8 +4,10 @@ Rechte (serverseitig, zusaetzlich zur Mandantentrennung ueber den globalen Tenan
 - OFFICE_ADMIN: Kunden des Zentriq-Kundenstamms (Name, Telefon, Kundennummer, Vertrags-/
   Vorgangsnummer, je mit Zahl der Leipziger-Vorgaenge und Memos) und alle Vorgaenge der
   aktuellen Liste des eigenen Bueros.
-- EMPLOYEE: ausschliesslich Vorgaenge der aktuellen Liste mit der eigenen Vermittlernummer -
-  keine Kundenstammdaten (wie bisher).
+- EMPLOYEE: dieselben Kunden des eigenen Bueros (wie im ZentriqAI-Feld - auch aus einer Notiz
+  angelegte Kunden ohne Listen-Vorgang); geoeffnet wird die Kundenkarte im ZentriqAI-Bereich,
+  nicht die Kundenakte der Verwaltung. Vorgaenge der Leipziger Liste weiterhin nur mit der
+  eigenen Vermittlernummer.
 - SUPER_ADMIN: keine Ergebnisse (der Endpunkt ist fuer ihn ohnehin gesperrt).
 
 Memo-Transkripte werden nur gezaehlt, nicht durchsucht.
@@ -109,12 +111,12 @@ def search_entries(query: str, document: Document, broker_key: str | None, *, al
 def global_search(user, raw_query: str | None) -> SearchResults:
     query = normalize_query(raw_query)
     is_office_admin = bool(user.is_office_admin)
-    results = SearchResults(query=query, show_customers=is_office_admin)
-    if len(query) < MIN_QUERY_LENGTH or not (is_office_admin or user.is_employee):
+    is_office_member = is_office_admin or bool(user.is_employee)
+    results = SearchResults(query=query, show_customers=is_office_member)
+    if len(query) < MIN_QUERY_LENGTH or not is_office_member:
         return results
 
-    if is_office_admin:
-        results.customers, results.customers_more = search_customers(query)
+    results.customers, results.customers_more = search_customers(query)
 
     results.document = current_document()
     if results.document is not None:

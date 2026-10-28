@@ -490,6 +490,24 @@
     });
   }
 
+  // Einstieg aus der globalen Suche (/zentriq?kunde=<id>): Karte dieses Kunden oeffnen. Ob der
+  // Kunde zum eigenen Buero gehoert, prueft der Server (sonst 404 -> Meldung, keine Karte).
+  function openFromUrl() {
+    var params = new URLSearchParams(location.search);
+    var id = params.get("kunde");
+    if (!id || !/^\d+$/.test(id)) return;
+    params.delete("kunde");
+    var rest = params.toString();
+    history.replaceState(history.state, "", location.pathname + (rest ? "?" + rest : "") + location.hash);
+    request("GET", "/kunden/" + id).then(function (r) {
+      setStatus("");
+      showCard(r.card);
+    }, function (err) {
+      setStatus(err.status === 404 ? "Dieser Kunde wurde in Ihrem Büro nicht gefunden." : err.message, "error");
+    });
+  }
+
   window.ZentriqNotes = { intercept: intercept, close: closeCard };
   loadCallbacks();
+  openFromUrl();
 })();

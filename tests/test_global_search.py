@@ -129,18 +129,21 @@ def test_search_by_customer_number(app, world):
     assert "Fremdbüro" not in html
 
 
-def test_employee_sees_only_own_entries_and_no_customer_master_data(app, world):
+def test_employee_sees_office_customers_but_only_own_entries(app, world):
     client = _login(app, "dennis@example.com")
     resp = client.get("/search?q=Müller")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
     # Beide Vorgaenge mit Dennis' Nummer (unterschiedliche Schreibweisen) ...
     assert "720/111111-A-14" in html and "720/222222-B-14" in html
-    # ... aber weder Lauras Vorgang noch Kundenstammdaten (Telefon, Kundennummer) noch Buero B.
+    # ... aber weder Lauras Vorgang noch Buero B.
     assert "720/333333-C-14" not in html
-    assert "K-10042" not in html and "0341" not in html
-    assert "720/999999-Z-14" not in html
-    assert 'id="treffer-kunden"' not in html
+    assert "720/999999-Z-14" not in html and "Fremdbüro" not in html
+    # Kunden des eigenen Bueros wie im ZentriqAI-Feld - geoeffnet wird die Kundenkarte dort,
+    # nicht die Kundenakte der Verwaltung; Zaehler ueber alle Vorgaenge bleiben verborgen.
+    assert 'id="treffer-kunden"' in html and "Müller Hans" in html
+    assert "/zentriq?kunde=" in html and "/customers/" not in html
+    assert 'data-label="Leipziger"' not in html
 
 
 def test_employee_cannot_find_colleagues_entries_by_number(app, world):

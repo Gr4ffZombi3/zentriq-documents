@@ -2,6 +2,7 @@
 {% block title %}Suche – Zentriq{% endblock %}
 {% block content %}
 {% set q = results.query %}
+{% set is_admin = current_user.is_office_admin %}
 <div class="page-shell">
   <div class="page-toolbar">
     <h1 class="page-toolbar-title">Suche</h1>
@@ -34,21 +35,27 @@
                   <th scope="col">Kundennummer</th>
                   <th scope="col">Telefon</th>
                   <th scope="col">Vermittler</th>
+                  {% if is_admin %}
                   <th scope="col" class="num">Leipziger</th>
                   <th scope="col" class="num">Memos</th>
+                  {% endif %}
                   <th scope="col"><span class="sr-only">Aktion</span></th>
                 </tr>
               </thead>
               <tbody>
                 {% for customer in results.customers %}
+                  {# Mitarbeiter: Kundenkarte im ZentriqAI-Bereich (Notizen, Rueckrufe) statt Kundenakte der Verwaltung. #}
+                  {% set customer_href = url_for('customers.detail', customer_id=customer.id) if is_admin else url_for('zentriq.index', kunde=customer.id) %}
                   <tr>
-                    <th scope="row" class="cell-strong stack-full"><a class="table-link" href="{{ url_for('customers.detail', customer_id=customer.id) }}">{{ customer.name }}</a></th>
+                    <th scope="row" class="cell-strong stack-full"><a class="table-link" href="{{ customer_href }}">{{ customer.name }}</a></th>
                     <td class="tabular-nums" data-label="Kundennummer">{{ customer.customer_number or '–' }}</td>
                     <td class="tabular-nums whitespace-nowrap" data-label="Telefon">{{ customer.phone or '–' }}</td>
                     <td class="tabular-nums whitespace-nowrap" data-label="Vermittler">{{ customer.broker_number or '–' }}</td>
+                    {% if is_admin %}
                     <td class="num tabular-nums" data-label="Leipziger">{{ customer.leipziger }}</td>
                     <td class="num tabular-nums" data-label="Memos">{{ customer.memos }}</td>
-                    <td class="text-right" data-label=""><a class="table-action" href="{{ url_for('customers.detail', customer_id=customer.id) }}">Öffnen</a></td>
+                    {% endif %}
+                    <td class="text-right" data-label=""><a class="table-action" href="{{ customer_href }}">Öffnen</a></td>
                   </tr>
                 {% endfor %}
               </tbody>

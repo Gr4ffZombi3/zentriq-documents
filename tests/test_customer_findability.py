@@ -102,6 +102,20 @@ def test_admin_customer_search_uses_same_stored_data(app, created):
         assert f"/customers/{created.customer.id}\"" in html, query
 
 
+def test_employee_header_search_finds_note_customer_and_opens_card(app, created):
+    """Mitarbeiter finden den aus einer Notiz angelegten Kunden auch in der Kopfzeilensuche."""
+    dennis = login(app, "dennis@example.com")
+    for query in ["808/765432-e", "808765432E", "Max Mustermann"]:
+        html = dennis.get("/search", query_string={"q": query}).get_data(as_text=True)
+        assert f"/zentriq?kunde={created.customer.id}\"" in html, query
+    assert dennis.get(f"/zentriq?kunde={created.customer.id}").status_code == 200
+    assert dennis.get(f"/customers/{created.customer.id}").status_code in (302, 403, 404)
+    assert dennis.get(f"{API}/kunden/{created.customer.id}").get_json()["card"]["notes"][0]["author"] == "Laura"
+    # Anderes Buero: kein Treffer in der Kopfzeilensuche.
+    html = login(app, "bob@example.com").get("/search", query_string={"q": "808/765432-e"}).get_data(as_text=True)
+    assert f"kunde={created.customer.id}\"" not in html and "Max Mustermann" not in html.split("</form>", 1)[1]
+
+
 def test_other_office_has_no_access(app, created):
     """6. Bob (anderes Buero): kein Treffer, kein Zugriff auf Karte oder Notiz."""
     bob = login(app, "bob@example.com")

@@ -258,3 +258,50 @@ body.zs-collapsed .zc-head { padding-left: 3.25rem; }
 
 /* --- KI-Einstellungen: Tabellenfelder ------------------------------------------------------ */
 .zs-settings-input { min-width: 0; }
+
+/* --- Kundennotizen und offene Rueckrufe (unter dem Eingabefeld) ---------------------------- */
+.zn-context { display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0.45rem; padding: 0.25rem 0.35rem 0.25rem 0.65rem; width: fit-content; max-width: 100%; border-radius: 0.7rem; background: var(--color-primary-soft); color: var(--color-primary-strong); font-size: 0.82rem; }
+.zn-context[hidden] { display: none; }
+.zn-context span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zn-context button { background: none; border: 0; cursor: pointer; color: inherit; font-size: 1rem; line-height: 1; padding: 0 0.3rem; }
+.zn { max-width: 48rem; margin: 0.6rem auto 0; display: flex; flex-direction: column; gap: 0.6rem; max-height: 46vh; overflow-y: auto; }
+.zn-status { margin: 0; font-size: 0.86rem; color: var(--color-text-muted); }
+.zn-status.is-ok { color: var(--color-success-text, var(--color-success)); }
+.zn-status.is-warn { color: var(--color-warning-text, var(--color-warning)); }
+.zn-status.is-error { color: var(--color-error-text, var(--color-error)); }
+.zn-meta { font-size: 0.78rem; color: var(--color-text-muted); }
+.zn-muted { margin: 0; font-size: 0.82rem; color: var(--color-text-soft); }
+.zn-label { color: var(--color-text-muted); }
+.zn-line { margin: 0; font-size: 0.88rem; line-height: 1.45; }
+.zn-line.is-error { color: var(--color-error-text, var(--color-error)); }
+.zn-link { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; font-size: 0.82rem; color: var(--color-primary); text-decoration: underline; width: fit-content; }
+.zn-card, .zn-choice { border: 1px solid var(--color-border); border-radius: 0.9rem; background: var(--color-surface); padding: 0.7rem 0.9rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.zn-choice.is-warn { border-color: color-mix(in oklab, var(--color-warning) 45%, var(--color-border)); }
+.zn-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+.zn-card-title { margin: 0; font-size: 0.98rem; font-weight: 600; }
+.zn-close { background: none; border: 0; cursor: pointer; color: var(--color-text-muted); font-size: 1.15rem; line-height: 1; padding: 0 0.2rem; }
+.zn-answer { background: var(--color-surface-muted); border-radius: 0.6rem; padding: 0.5rem 0.65rem; }
+.zn-answer-text, .zn-choice-text { margin: 0; font-size: 0.9rem; font-weight: 500; }
+.zn-sources, .zn-candidates, .zn-entries { list-style: none; margin: 0.25rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.zn-source { display: flex; flex-direction: column; font-size: 0.86rem; }
+.zn-contact { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.3rem 0.6rem; }
+.zn-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.zn-entries li { font-size: 0.84rem; }
+.zn-history summary { cursor: pointer; font-size: 0.82rem; color: var(--color-text-muted); }
+.zn-candidate { display: flex; flex-direction: column; align-items: flex-start; width: 100%; text-align: left; font: inherit; font-size: 0.88rem; padding: 0.45rem 0.65rem; border: 1px solid var(--color-border); border-radius: 0.65rem; background: var(--color-surface); color: var(--color-text); cursor: pointer; }
+.zn-candidate:hover, .zn-callback-open:hover { background: var(--color-surface-muted); }
+.zn-callbacks-title { margin: 0 0 0.3rem; font-size: 0.8rem; font-weight: 600; color: var(--color-text-soft); }
+.zn-callback-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.zn-callback { display: flex; align-items: center; gap: 0.5rem; }
+.zn-callback-open { flex: 1; min-width: 0; display: grid; grid-template-columns: auto 1fr; gap: 0 0.5rem; text-align: left; font: inherit; font-size: 0.86rem; padding: 0.4rem 0.6rem; border: 1px solid var(--color-border); border-radius: 0.65rem; background: var(--color-surface); color: var(--color-text); cursor: pointer; }
+.zn-callback-topic { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-muted); }
+.zn-callback-open .zn-meta { grid-column: 1 / -1; }
+/* Im laufenden Chat bleibt nur die Kundenkarte sichtbar; die Uebersicht steht auf der leeren Startseite. */
+.zc:not(.is-empty) .zn-callbacks { display: none; }
+.zc:not(.is-empty) .zn { max-height: 34vh; }
+@media (max-width: 47.99rem) {
+  .zn { max-height: 38vh; }
+  .zn-callback { flex-wrap: wrap; }
+}
+/* Solange eine Kundenkarte/Rueckfrage offen ist, keine Chat-Vorschlaege darunter. */
+.zc-composer:has(.zn-result:not([hidden])) .zc-suggestions { display: none; }

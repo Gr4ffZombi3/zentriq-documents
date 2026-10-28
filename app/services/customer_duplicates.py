@@ -20,7 +20,9 @@ from sqlalchemy import or_, update
 from app.extensions import db
 from app.models import (
     Customer,
+    CustomerContact,
     CustomerMemo,
+    CustomerNote,
     CustomerTimelineEvent,
     Document,
     DocumentCustomer,
@@ -153,6 +155,7 @@ def link_counts(customer: Customer) -> dict[str, int]:
         "Aufgaben": Task.query.filter_by(customer_id=customer.id).count(),
         "Empfehlungen": Recommendation.query.filter_by(customer_id=customer.id).count(),
         "Memos": CustomerMemo.query.filter_by(customer_id=customer.id).count(),
+        "Notizen": CustomerNote.query.filter_by(customer_id=customer.id).count(),
     }
 
 
@@ -204,7 +207,7 @@ def merge_customers(target: Customer, source: Customer, actor) -> dict:
     - Leere Felder von `target` werden aus `source` gefuellt, gefuellte nie ueberschrieben.
     - Abweichende Werte von `source` werden im Kundenverlauf von `target` festgehalten.
     - Alle Verknuepfungen (Listenzeilen, Dokumente, Verlauf, Aufgaben, Empfehlungen,
-      Listenvergleiche, Leipziger-Vorgaenge, Memos) werden auf `target` umgehaengt."""
+      Listenvergleiche, Leipziger-Vorgaenge, Memos, Notizen, Kontaktvorgaenge) werden auf `target` umgehaengt."""
     if target.id == source.id:
         raise MergeError("Ein Datensatz kann nicht mit sich selbst zusammengeführt werden.")
     if target.tenant_id != source.tenant_id or target.tenant_id != actor.tenant_id:
@@ -245,7 +248,9 @@ def merge_customers(target: Customer, source: Customer, actor) -> dict:
             memo.customer_id = target.id
     db.session.flush()
 
-    for model in (Document, CustomerTimelineEvent, Task, Recommendation, ListComparisonEntry, LeipzigerEntry):
+    for model in (
+        Document, CustomerTimelineEvent, Task, Recommendation, ListComparisonEntry, LeipzigerEntry, CustomerNote, CustomerContact,
+    ):
         db.session.execute(
             update(model)
             .where(model.customer_id == source.id, model.tenant_id == tenant_id)

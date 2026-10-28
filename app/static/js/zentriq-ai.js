@@ -480,11 +480,30 @@
     return Date.now().toString(36) + Math.random().toString(36).slice(2);
   }
 
-  function send(text) {
+  // Kundennotizen (js/customer-notes.js): Eingaben mit Kundenbezug werden direkt in Zentriq
+  // gespeichert bzw. gesucht; nur alles andere wird als Chatnachricht gesendet.
+  function send(text, skipNotes) {
     text = (text !== undefined ? text : input.value).trim();
     if (busy || (!text && !files.length)) return;
     if (text.length > maxChars) { showAlert("Die Nachricht ist zu lang (maximal " + maxChars + " Zeichen)."); return; }
     showAlert("");
+    if (!skipNotes && !files.length && window.ZentriqNotes) {
+      setBusy(true);
+      window.ZentriqNotes.intercept(text).then(function (r) {
+        setBusy(false);
+        if (!r.handled) { sendChat(text); return; }
+        if (r.clear) { input.value = ""; autosize(); }
+        input.focus();
+      }, function (err) {
+        setBusy(false);
+        showAlert(err.message);
+      });
+      return;
+    }
+    sendChat(text);
+  }
+
+  function sendChat(text) {
     setBusy(true);
     var sending = files.slice();
     var ref = newRef();
@@ -613,7 +632,15 @@
     if (id) open(id, true); else reset(true);
   });
 
-  window.ZentriqChat = { open: function (id) { open(id); }, reset: function () { reset(); } };
+  window.ZentriqChat = {
+    open: function (id) { open(id); },
+    reset: function () { reset(); },
+    // Text unveraendert als Chatnachricht senden (ohne Kundennotiz-Erkennung).
+    send: function (text) { input.value = ""; autosize(); send(text, true); },
+    focus: function () { input.focus(); },
+    setPlaceholder: function (text) { input.placeholder = text || input.dataset.placeholder; },
+  };
+  input.dataset.placeholder = input.placeholder;
 
   if (window.ResizeObserver) new ResizeObserver(updateComposerHeight).observe(form);
   updateComposerHeight();

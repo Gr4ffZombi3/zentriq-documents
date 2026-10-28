@@ -11,6 +11,7 @@ from app.models.analysis_run import AnalysisRun
 from app.models.audit_log import AuditEventType, AuditLog
 from app.models.customer import Customer
 from app.models.customer_memo import CustomerMemo
+from app.models.customer_note import CustomerContact, CustomerNote
 from app.models.customer_timeline_event import CustomerTimelineEvent
 from app.models.document import Document, DocumentCustomer
 from app.models.enums import (
@@ -78,6 +79,8 @@ __all__ = [
     "AuditEventType",
     "Customer",
     "CustomerMemo",
+    "CustomerContact",
+    "CustomerNote",
     "CustomerTimelineEvent",
     "Document",
     "DocumentCustomer",

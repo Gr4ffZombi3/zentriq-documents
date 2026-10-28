@@ -41,6 +41,8 @@ COMMON_ALLOWED_ENDPOINTS = frozenset(
 # "assistant": KI-Assistent - sendet nur den vom Benutzer eingegebenen Text, speichert nichts.
 # "tools": Werkzeuge (Dokument anonymisieren laeuft lokal, speichert und uebertraegt nichts).
 # "zentriq": ZentriqAI-Chat (eigene Gespraeche; Werkzeuge pruefen die Rechte je Endpunkt erneut).
+#   Dazu gehoeren die gemeinsamen Kundennotizen/offenen Rueckrufe des Bueros (/zentriq/api/kunden,
+#   /zentriq/api/rueckrufe) - ohne Kundenliste/-akte freizugeben; SUPER_ADMIN dort gesperrt.
 EMPLOYEE_ALLOWED_BLUEPRINTS = frozenset({"timetracking", "intake", "assistant", "tools", "zentriq"})
 # "leipziger.index" zeigt Mitarbeitern ausschliesslich die ueber ihre eigene Vermittlernummer
 # zugeordneten Vorgaenge. Memo (dashboard.*) speichert ein Transkript nur bei Zuordnung zu einem

@@ -13,10 +13,13 @@ from decimal import Decimal
 from flask import Blueprint, current_app, jsonify, render_template, request
 from flask_login import current_user, login_required
 
+from app.models import Customer, CustomerContact
 from app.models.ai import AiModel
 from app.models.audit_log import AuditEventType
+from app.services import customer_notes
 from app.services.ai import actions, catalog, chat, router, state, tools
 from app.services.audit import log_audit_event
+from app.tenancy import get_or_404_scoped
 
 zentriq_bp = Blueprint("zentriq", __name__, url_prefix="/zentriq")
 
@@ -82,6 +85,7 @@ def index(conversation_id=None):
         greeting=_greeting(),
         max_chars=int(current_app.config.get("ZENTRIQ_AI_MAX_INPUT_CHARS") or 12000),
         tool_labels=[t.label for t in tools.available_for(current_user) if not t.write],
+        customer_notes_enabled=bool(current_user.is_office_admin or current_user.is_employee),
     )
 
 
@@ -249,3 +253,86 @@ def api_usage():
         budget = router.budget_status()
         data["budget"] = {key: float(value) if isinstance(value, Decimal) else value for key, value in budget.items()}
     return jsonify(data)
+
+
+# --- Kundennotizen und offene Rueckrufe -------------------------------------------------------
+# Gemeinsame Notizen des Bueros: Buero-Admins und Mitarbeiter desselben Bueros lesen und
+# ergaenzen sie (nur diese Endpunkte, keine weiteren Kundenmodule). Der SUPER_ADMIN hat wie
+# ueberall keinen Zugriff auf Buerodaten. Kunden und Vorgaenge werden ausschliesslich im
+# Mandanten des Benutzers gesucht (globaler Tenant-Filter + get_or_404_scoped).
+
+
+def _office_user_required():
+    if not (current_user.is_office_admin or current_user.is_employee):
+        return _error("Kundennotizen stehen nur Büro-Konten zur Verfügung.", 403, "forbidden")
+    return None
+
+
+def _client_ref(data: dict) -> str | None:
+    value = data.get("client_ref")
+    return value.strip()[:64] or None if isinstance(value, str) else None
+
+
+@zentriq_bp.post("/api/kunden/eingabe")
+@login_required
+def api_customer_input():
+    if (denied := _office_user_required()) is not None:
+        return denied
+    data = _payload()
+    text = data.get("text") if isinstance(data.get("text"), str) else ""
+    mode = data.get("mode") if data.get("mode") in ("note", "search") else None
+    try:
+        result = customer_notes.handle_input(
+            current_user,
+            text,
+            selected_id=data.get("selected_id"),
+            customer_id=data.get("customer_id"),
+            client_ref=_client_ref(data),
+            mode=mode,
+            contact_choice=data.get("contact_id"),
+        )
+    except customer_notes.NoteError as exc:
+        return _error(str(exc), exc.status, "note")
+    return jsonify(result)
+
+
+@zentriq_bp.get("/api/kunden/<int:customer_id>")
+@login_required
+def api_customer_card(customer_id):
+    if (denied := _office_user_required()) is not None:
+        return denied
+    customer = get_or_404_scoped(Customer, customer_id)
+    return jsonify({"card": customer_notes.customer_card(current_user, customer)})
+
+
+@zentriq_bp.post("/api/kunden/<int:customer_id>/nicht-erreicht")
+@login_required
+def api_customer_not_reached(customer_id):
+    if (denied := _office_user_required()) is not None:
+        return denied
+    customer = get_or_404_scoped(Customer, customer_id)
+    data = _payload()
+    try:
+        result = customer_notes.mark_not_reached(
+            current_user, customer, contact_id=data.get("contact_id"), note_id=data.get("note_id"), client_ref=_client_ref(data)
+        )
+    except customer_notes.NoteError as exc:
+        return _error(str(exc), exc.status, "note")
+    return jsonify(result)
+
+
+@zentriq_bp.post("/api/rueckrufe/<int:contact_id>/erledigt")
+@login_required
+def api_callback_done(contact_id):
+    if (denied := _office_user_required()) is not None:
+        return denied
+    contact = get_or_404_scoped(CustomerContact, contact_id)
+    return jsonify(customer_notes.close_contact(current_user, contact, client_ref=_client_ref(_payload())))
+
+
+@zentriq_bp.get("/api/rueckrufe")
+@login_required
+def api_callbacks():
+    if (denied := _office_user_required()) is not None:
+        return denied
+    return jsonify({"callbacks": customer_notes.open_callbacks()})

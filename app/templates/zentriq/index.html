@@ -54,8 +54,14 @@
     <p class="form-error zc-alert" data-zc-alert role="alert" hidden></p>
     <div class="zc-composer-inner">
       <div class="zc-attachments" data-zc-attachments></div>
+      {% if customer_notes_enabled %}
+      <div class="zn-context" data-zn-context hidden>
+        <span>Notiz für <strong data-zn-context-name></strong></span>
+        <button type="button" data-zn-context-close aria-label="Kundenauswahl schließen" title="Auswahl schließen">×</button>
+      </div>
+      {% endif %}
       <label class="sr-only" for="zc-input">Nachricht an ZentriqAI</label>
-      <textarea id="zc-input" class="zc-input" data-zc-input rows="1" maxlength="{{ max_chars }}" placeholder="Frag ZentriqAI …"></textarea>
+      <textarea id="zc-input" class="zc-input" data-zc-input rows="1" maxlength="{{ max_chars }}" placeholder="{{ 'Frag ZentriqAI oder notiere etwas zu einem Kunden …' if customer_notes_enabled else 'Frag ZentriqAI …' }}"></textarea>
       <div class="zc-row">
         <input type="file" data-zc-file multiple hidden
                accept=".pdf,.txt,.md,.csv,.mp3,.m4a,.wav,.ogg,.opus,.webm,.mp4,.aac,.flac,application/pdf,text/plain,text/csv,audio/*">
@@ -64,6 +70,20 @@
         <button type="submit" class="zc-round zc-send" data-zc-send aria-label="Senden" title="Senden" disabled>{{ icon('arrow-up', class='h-5 w-5', stroke_width='2.5') }}</button>
       </div>
     </div>
+    {% if customer_notes_enabled %}
+    {# Kundennotizen: Eingaben mit Kundenbezug (VN-Nummer, Telefon, Kundenname oder ausgewaehlter
+       Kunde) speichert bzw. sucht js/customer-notes.js direkt in Zentriq, alles andere geht an den Chat. #}
+    <div class="zn" data-zn data-api="{{ url_for('zentriq.index') }}/api">
+      <p class="zn-status" data-zn-status role="status" aria-live="polite" hidden></p>
+      <div class="zn-result" data-zn-result hidden></div>
+      <section class="zn-callbacks" data-zn-callbacks aria-labelledby="zn-callbacks-title">
+        <h2 id="zn-callbacks-title" class="zn-callbacks-title">Offene Rückrufe <span data-zn-callbacks-count></span></h2>
+        <ul class="zn-callback-list" data-zn-callback-list></ul>
+        <p class="zn-muted" data-zn-callbacks-empty hidden>Keine offenen Rückrufe.</p>
+        <button type="button" class="zn-link" data-zn-callbacks-more hidden></button>
+      </section>
+    </div>
+    {% endif %}
     <div class="zc-suggestions" data-zc-suggestions>
       {% if tool_labels %}
         {% if 'Aufgaben' in tool_labels %}<button type="button" class="zc-suggestion" data-zc-suggest>Zeige die offenen Aufgaben</button>{% endif %}
@@ -76,5 +96,6 @@
     <p class="zc-disclaimer">ZentriqAI kann Fehler machen. Wichtige Angaben bitte prüfen.</p>
   </form>
 </div>
+{% if customer_notes_enabled %}<script defer src="{{ url_for('static', filename='js/customer-notes.js', v=static_rev('js/customer-notes.js')) }}"></script>{% endif %}
 <script defer src="{{ url_for('static', filename='js/zentriq-ai.js', v=static_rev('js/zentriq-ai.js')) }}"></script>
 {% endblock %}

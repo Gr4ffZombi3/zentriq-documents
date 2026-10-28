@@ -302,6 +302,7 @@
     inputEl.type = "text";
     inputEl.maxLength = field === "name" ? 120 : 20;
     inputEl.placeholder = field === "name" ? "Vor- und Nachname" : "z. B. 808/123456-E";
+    if (r.suggestion) inputEl.value = r.suggestion;
     inputEl.setAttribute("aria-label", field === "name" ? "Name des Kunden" : "Versicherungsnehmernummer");
     row.appendChild(inputEl);
     var submit = button("Anlegen und speichern", "btn btn-primary btn-sm", function () { go(); });
@@ -399,6 +400,20 @@
         select(null);
         showResult(renderMissing(r, "vn"));
         return { handled: true, clear: true };
+      case "confirm_create":
+        setStatus("");
+        select(null);
+        var confirmBox = el("div", "zn-choice");
+        confirmBox.appendChild(el("p", "zn-choice-text", r.message));
+        var confirmRow = el("div", "zn-actions");
+        confirmRow.appendChild(createButton(r.create, text));
+        confirmRow.appendChild(button("Abbrechen", "zn-link", closeCard));
+        confirmBox.appendChild(confirmRow);
+        showResult(confirmBox);
+        return { handled: true, clear: true };
+      case "no_ai":
+        setStatus(r.message, "warn");
+        return { handled: true, clear: false };
       case "not_found":
         setStatus(r.message, "warn");
         if (r.create) {

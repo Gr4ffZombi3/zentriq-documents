@@ -296,6 +296,9 @@ def api_customer_input():
         )
     except customer_notes.NoteError as exc:
         return _error(str(exc), exc.status, "note")
+    if result.get("kind") == "chat" and not router.can_answer():
+        # Ohne KI-Modell nicht an den Chat weiterreichen (der koennte nur einen Fehler melden).
+        result = customer_notes.without_ai(current_user, text)
     return jsonify(result)
 
 

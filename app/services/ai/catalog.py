@@ -88,6 +88,10 @@ DEFAULT_MODELS = (
     ("anthropic", "claude-haiku-4-5", "Claude Haiku 4.5", False, 200, False, 1, 5, 1),
     ("anthropic", "claude-sonnet-5-5", "Claude Sonnet 5.5", False, 210, False, 2, 10, 2),
     ("anthropic", "claude-opus-5-5", "Claude Opus 5.5", False, 220, False, 4, 20, 3),
+    # OpenAI: der Zugang (OPENAI_API_KEY) wird bereits fuer die Dokumentauswertung genutzt. Das
+    # kleine Modell ist freigegeben; Kosten entstehen erst, wenn eine Kostengrenze > 0 gesetzt ist.
+    ("openai", "gpt-4o-mini", "GPT-4o mini", True, 300, False, 0.15, 0.6, 1),
+    ("openai", "gpt-4o", "GPT-4o", False, 310, False, 2.5, 10, 2),
 )
 
 

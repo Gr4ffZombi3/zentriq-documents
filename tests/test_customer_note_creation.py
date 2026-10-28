@@ -9,7 +9,7 @@ from app.services import customer_sources
 from app.services.customers import CustomerMatcher
 from app.services.llm.schemas import ExtractedCustomer
 from app.tenancy import bypass_tenant_scope, use_tenant_id
-from tests.test_customer_notes import _contacts, _input, _notes, office  # noqa: F401
+from tests.test_customer_notes import _contacts, _input, _notes, ai_available, office  # noqa: F401
 from tests.test_permissions_security import login, world  # noqa: F401
 
 
@@ -127,7 +127,7 @@ def test_missing_name_or_number_is_asked_for(app, office):
     assert status == 400
 
 
-def test_pure_search_never_creates(app, office):
+def test_pure_search_never_creates(app, office, ai_available):
     client = login(app, "laura@example.com")
     for text in ("808/654321-e", "808/654321-e Max Mustermann", "Was ist bei 808/654321-e offen?", "Max Mustermann"):
         data = _input(client, text)

@@ -68,7 +68,13 @@ OUTCOME_LABELS = {
 }
 
 # Versicherungsnehmernummer im HUK-Format der Leipziger Liste: 808/123456-E (optional -12).
-_VN_PATTERN = re.compile(r"(?<![\w/])(\d{3})\s*/\s*(\d{6})\s*-\s*([A-Za-z])(?:\s*-\s*(\d{2}))?(?!\w)")
+# Gueltige Schreibweisen derselben Nummer: "808/123456-E", "808123456e", "808 123456 E",
+# "808-123456-e", "808/123456e" - optional mit Vertragsendung "-12". Fuehrende Nullen und der
+# Buchstabe bleiben erhalten; Abgleich immer ueber denselben Schluessel "808123456E"
+# (normalize_customer_number bzw. search_key - wie Kundensuche, Dubletten- und Listenabgleich).
+_VN_PATTERN = re.compile(
+    r"(?<![\w/])(\d{3})(?:\s*[/-]\s*|\s+)?(\d{6})(?:\s*-\s*|\s+)?([A-Za-z])(?:\s*-\s*(\d{2}))?(?!\w)"
+)
 VN_KEY_LENGTH = 10  # "808123456E"
 _VN_DISPLAY = re.compile(r"^(\d{3}/\d{6}-[A-Z])")
 
@@ -1084,10 +1090,59 @@ def _note_after_creation(text: str, parsed: Parsed, name_span: tuple[int, int] |
     return normalize_note(rest)
 
 
+# Woerter, die eine Kurznotiz eindeutig als Notiz ausweisen ("HUK24 Wechsel", "Termin").
+_NOTE_NOUNS = re.compile(
+    r"\b(?:wechsel|termin|angebot|vertrag|k(?:ü|ue)ndigung|schaden|unterlagen|beitrag|tarif|hausrat|haftpflicht|"
+    r"rechtsschutz|versicherung|r(?:ü|ue)ckruf|anruf|angerufen|police|antrag|r(?:ü|ue)ckfrage|beratung)\w*",
+    re.I,
+)
+
+
+def note_is_clear(note_text: str) -> bool:
+    """Eindeutig eine Notiz: Kontaktstand, Fachbegriff oder mehrere Woerter. "HUK24" allein
+    ist es nicht (koennte z. B. nur ein Stichwort zur Suche sein)."""
+    if detect_outcome(note_text)[0] or _NOTE_NOUNS.search(note_text):
+        return True
+    return len(re.findall(r"[A-Za-zÄÖÜäöüß0-9]+", note_text)) >= 2
+
+
+def name_boundary_unclear(text: str, parsed: Parsed, name_end: int) -> bool:
+    """Folgt auf den erkannten Namen ein weiteres Wort, das ebenfalls ein Namensteil sein
+    koennte ("Max Peter Mustermann ...", "Max Mustermann Police ..."), ist die Grenze zwischen
+    Name und Notiz nicht sicher - dann wird nachgefragt statt geraten."""
+    masked = text
+    for start, end in parsed.vn_spans:
+        masked = masked[:start] + " " * (end - start) + masked[end:]
+    rest = masked[name_end:]
+    if re.match(r"\s*[,;:–-]", rest):
+        return False  # "Max Mustermann, HUK24 ..." - Grenze ausdruecklich gesetzt
+    following = re.match(r"\s*(\S+)", rest)
+    if following is None:
+        return False
+    word = following.group(1).strip(",.;:")
+    cased = any(ch.isupper() for ch in masked)
+    return bool(
+        _NAME_TOKEN.match(word)
+        and word.lower() not in _NOT_NAME
+        and word.lower() not in _NAME_PARTICLES
+        and not _PARTICIPLE.match(word)
+        and not _NOTE_NOUNS.match(word)
+        and (not cased or word[:1].isupper())
+    )
+
+
 def _new_customer_from_vn(user, text: str, parsed: Parsed, *, forced_name: str | None, client_ref, explicit: bool,
                           create_new: bool) -> dict:
     vn = _display_vn(parsed, text)
     found = None if forced_name else extract_new_name(text, parsed)
+    if found and not explicit and name_boundary_unclear(text, parsed, found[2]):
+        return {
+            "kind": "need_name",
+            "message": f"Kein Kunde mit {vn} gefunden. Wo endet der Name? Bitte den vollständigen Namen angeben.",
+            "vn": vn,
+            "pending_note": text,
+            "suggestion": found[0],
+        }
     name = forced_name or (found[0] if found else None)
     note_text = _note_after_creation(text, parsed, (found[1], found[2]) if found else None, forced_name)
     has_note = bool(re.search(r"[A-Za-zÄÖÜäöüß0-9]", note_text))
@@ -1111,6 +1166,13 @@ def _new_customer_from_vn(user, text: str, parsed: Parsed, *, forced_name: str |
                 create_option=True,
                 create={"name": name, "vn": vn, "text": text},
             )
+    if has_note and not explicit and not note_is_clear(note_text):
+        # Nummer + Name + ein einzelnes Stichwort: Absicht (Notiz/Neuanlage oder Suche) unklar.
+        return {
+            "kind": "confirm_create",
+            "message": f"{name} ({vn}) ist noch nicht angelegt. Mit Notiz „{note_text}“ anlegen?",
+            "create": {"name": name, "vn": vn, "text": text},
+        }
     return create_customer_with_note(user, name=name, vn=vn, note_text=note_text if has_note else None, client_ref=client_ref)
 
 
@@ -1167,3 +1229,26 @@ def create_customer_with_note(user, *, name: str, vn: str, note_text: str | None
     result["message"] = f"{customer.name} wurde angelegt." + (f" Notiz gespeichert: {note_text}." if note_text else "")
     result["card"] = customer_card(user, customer)
     return result
+
+
+def without_ai(user, raw_text: str) -> dict:
+    """Die Eingabe braeuchte das KI-Modell, es ist aber keins verfuegbar. Sieht sie nach einer
+    Kundennotiz aus (Name + Notiz, nur die VN-Nummer fehlt), wird nur diese abgefragt; sonst ein
+    kurzer Hinweis - die Kundenfunktionen bleiben nutzbar."""
+    text = " ".join((raw_text or "").split())
+    parsed = parse(text)
+    found = extract_new_name(text, parsed) if not parsed.has_identifier and not is_question(text) else None
+    if found:
+        rest = normalize_note(_remove_spans(text, [(found[1], found[2])]))
+        if rest and note_is_clear(rest):
+            return {
+                "kind": "need_vn",
+                "message": f"{found[0]} ist nicht angelegt. Versicherungsnehmernummer für die neue Kundenakte?",
+                "name": found[0],
+                "pending_note": text,
+            }
+    return {
+        "kind": "no_ai",
+        "message": "Für diese Anfrage wird ein KI-Modell benötigt, derzeit ist keins verfügbar. Kundennotizen, Suche "
+        "und Rückrufe funktionieren weiterhin, z. B. „808/123456-E Max Mustermann HUK24 Wechsel“.",
+    }

@@ -121,6 +121,15 @@ def budget_status() -> dict:
     }
 
 
+def can_answer() -> bool:
+    """Kann ZentriqAI gerade ueberhaupt frei antworten? Ein kostenloses Modell oder ein
+    kostenpflichtiges mit Spielraum in der Kostengrenze muss verfuegbar sein."""
+    models = available_models()
+    if any(m.is_free for m in models):
+        return True
+    return bool(models) and budget_status()["paid_allowed"]
+
+
 # --- Auswahl --------------------------------------------------------------------------------
 
 
@@ -215,7 +224,8 @@ def complete(
             "Kein für Kundendaten freigegebenes Modell verfügbar. Ein Administrator muss dafür einen "
             "Anbieter unter KI-Einstellungen freigeben."
             if customer_data
-            else "Derzeit ist kein KI-Modell verfügbar. Bitte Anbieter und Modelle unter KI-Einstellungen prüfen."
+            else "Derzeit ist kein KI-Modell verfügbar (kein Anbieter mit Zugang und freigegebenem Modell). "
+            "Kundennotizen, Suche und Rückrufe funktionieren weiterhin. Administrator: KI-Einstellungen prüfen."
         )
         raise AiError(message, 503, "no_models")
 
@@ -328,6 +338,17 @@ def complete(
             continue
 
     if attempts and all(a["error"] == "budget" for a in attempts):
+        budget = budget_status()
+        if not budget["daily_limit"] or not budget["monthly_limit"]:
+            # Kostengrenze 0 USD = kostenpflichtige Modelle gesperrt (Grundeinstellung).
+            raise AiError(
+                "Es sind nur kostenpflichtige KI-Modelle eingerichtet, die Kostengrenze steht aber auf 0 USD. "
+                "Administrator: ZENTRIQ_AI_DAILY_BUDGET_USD und ZENTRIQ_AI_MONTHLY_BUDGET_USD festlegen oder einen "
+                "kostenlosen Anbieter (z. B. GEMINI_API_KEY) einrichten.",
+                429,
+                "budget",
+                attempts,
+            )
         raise AiError("Die Kostengrenze für kostenpflichtige Modelle ist erreicht.", 429, "budget", attempts)
     raise AiError(
         "Kein KI-Modell konnte die Anfrage gerade beantworten. Bitte in einer Minute erneut versuchen.",

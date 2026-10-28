@@ -82,6 +82,14 @@ def office(app, db, world):
     return world
 
 
+@pytest.fixture()
+def ai_available(monkeypatch):
+    """KI-Modell verfuegbar: Eingaben ohne Kundenbezug gehen an den Chat."""
+    from app.services.ai import router
+
+    monkeypatch.setattr(router, "can_answer", lambda: True)
+
+
 def _post(client, path, **body):
     resp = client.post(API + path, json=body)
     return resp.status_code, resp.get_json()
@@ -241,7 +249,7 @@ def test_questions_are_answered_from_stored_notes_with_source(app, office):
     assert len(_notes()) == 1
 
 
-def test_pure_search_and_general_chat_save_nothing(app, office):
+def test_pure_search_and_general_chat_save_nothing(app, office, ai_available):
     client = login(app, "laura@example.com")
     assert _input(client, "Formuliere eine freundliche Terminerinnerung")["kind"] == "chat"
     assert _input(client, "Was ist heute noch offen?")["kind"] == "chat"
@@ -255,7 +263,7 @@ def test_pure_search_and_general_chat_save_nothing(app, office):
 # --- 6. Folgenotizen ---------------------------------------------------------------------------
 
 
-def test_follow_up_note_goes_only_to_visibly_selected_customer(app, office):
+def test_follow_up_note_goes_only_to_visibly_selected_customer(app, office, ai_available):
     client = login(app, "laura@example.com")
     heller, schulz = office.ids["Justin Heller"], office.ids["Maria Schulz"]
     data = _input(client, "Termin Donnerstag 14 Uhr", selected_id=heller)

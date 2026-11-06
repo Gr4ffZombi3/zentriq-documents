@@ -202,6 +202,18 @@ def create_app(config_object=None):
         # Kennzeichnet Antworten dieses Servers. Fehlt die Kennung, stammt eine Antwort von
         # einer Stelle dazwischen (Proxy, Firewall, Virenscanner) - memo.js meldet das so.
         response.headers["X-Zentriq-App"] = "1"
+        # Grundlegende Sicherheitsheader (fehlten bisher; nginx setzt keine). setdefault: einzelne
+        # Antworten koennen bewusst abweichen.
+        headers = response.headers
+        headers.setdefault("X-Content-Type-Options", "nosniff")
+        # PDF-Vorschau bettet nur eigene Dateien ein - fremde Seiten duerfen Zentriq nicht einrahmen.
+        headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        # Mikrofon nur fuer Memo-Aufnahmen auf dieser Seite; Kamera/Standort nie.
+        headers.setdefault("Permissions-Policy", "microphone=(self), camera=(), geolocation=(), payment=()")
+        if request.is_secure:
+            # Ein Jahr nur HTTPS fuer diese Domain (ohne Subdomains/Preload - bewusst zurueckhaltend).
+            headers.setdefault("Strict-Transport-Security", "max-age=31536000")
         return response
 
     # Verstaendliche Fehlerseiten ohne technische Details (keine Stacktraces im Frontend).

@@ -1,0 +1,13 @@
+[Unit]
+Description=Zentriq Datensicherung (Datenbank, Uploads, Konfiguration)
+After=mariadb.service
+Requires=mariadb.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=__APP_DIR__
+EnvironmentFile=__APP_DIR__/.env
+ExecStart=__APP_DIR__/deploy/backup.sh
+Nice=10
+IOSchedulingClass=idle

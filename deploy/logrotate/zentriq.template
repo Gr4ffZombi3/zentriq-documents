@@ -1,0 +1,12 @@
+# Rotation der Anwendungslogs (bisher unbegrenzt wachsend). copytruncate: Gunicorn/Celery
+# schreiben ohne Neustart weiter.
+__APP_DIR__/logs/*.log {
+    weekly
+    rotate 8
+    maxsize 50M
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

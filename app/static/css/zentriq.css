@@ -194,9 +194,6 @@ body.zs-collapsed .zc-head { padding-left: 3.25rem; }
 .zc-send:hover { background: var(--color-primary-strong, var(--color-text)); }
 .zc-send:disabled { background: var(--color-border-strong, var(--color-border)); color: var(--color-surface); cursor: default; }
 .zc-alert { max-width: 48rem; margin: 0 auto 0.5rem; }
-.zc-suggestions { max-width: 48rem; margin: 0.9rem auto 0; display: none; flex-wrap: wrap; justify-content: center; gap: 0.5rem; }
-.zc-suggestion { border: 1px solid var(--color-border); background: var(--color-surface); border-radius: 999px; padding: 0.45rem 0.9rem; font-size: 0.86rem; color: var(--color-text-muted); cursor: pointer; }
-.zc-suggestion:hover { background: var(--color-surface-muted); color: var(--color-text); }
 .zc-disclaimer { max-width: 48rem; margin: 0.45rem auto 0; text-align: center; font-size: 0.72rem; color: var(--color-text-soft); }
 
 /* Leerer Chat: Begruessung und Eingabe in der Mitte */
@@ -205,7 +202,6 @@ body.zs-collapsed .zc-head { padding-left: 3.25rem; }
 .zc.is-empty .zc-head { position: absolute; top: 0; left: 0; right: 0; }
 .zc.is-empty { position: relative; padding-bottom: 8vh; }
 .zc.is-empty .zc-thread { padding-bottom: 1.5rem; }
-.zc.is-empty .zc-suggestions { display: flex; }
 .zc.is-empty .zc-disclaimer { visibility: hidden; }
 .zc:not(.is-empty) .zc-welcome { display: none; }
 
@@ -259,50 +255,69 @@ body.zs-collapsed .zc-head { padding-left: 3.25rem; }
 /* --- KI-Einstellungen: Tabellenfelder ------------------------------------------------------ */
 .zs-settings-input { min-width: 0; }
 
-/* --- Kundennotizen und offene Rueckrufe (unter dem Eingabefeld) ---------------------------- */
-.zn-context { display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0.45rem; padding: 0.25rem 0.35rem 0.25rem 0.65rem; width: fit-content; max-width: 100%; border-radius: 0.7rem; background: var(--color-primary-soft); color: var(--color-primary-strong); font-size: 0.82rem; }
+/* --- Kundensuche, Notizen und offene Rueckrufe ---------------------------------------------- */
+/* Ausgewaehlter Kunde direkt am Eingabefeld */
+.zn-context { display: flex; align-items: center; gap: 0.35rem; margin: 0 0 0.45rem; padding: 0.2rem 0.3rem 0.2rem 0.6rem; width: fit-content; max-width: 100%; border-radius: 0.6rem; background: var(--color-primary-soft); color: var(--color-primary-strong); font-size: 0.82rem; }
 .zn-context[hidden] { display: none; }
-.zn-context span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.zn-context button { background: none; border: 0; cursor: pointer; color: inherit; font-size: 1rem; line-height: 1; padding: 0 0.3rem; }
-.zn { max-width: 48rem; margin: 0.6rem auto 0; display: flex; flex-direction: column; gap: 0.6rem; max-height: 46vh; overflow-y: auto; }
-.zn-status { margin: 0; font-size: 0.86rem; color: var(--color-text-muted); }
-.zn-status.is-ok { color: var(--color-success-text, var(--color-success)); }
-.zn-status.is-warn { color: var(--color-warning-text, var(--color-warning)); }
-.zn-status.is-error { color: var(--color-error-text, var(--color-error)); }
+.zn-context-label { color: inherit; opacity: 0.8; }
+.zn-context strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zn-context button { background: none; border: 0; cursor: pointer; color: inherit; font-size: 1.05rem; line-height: 1; padding: 0.1rem 0.35rem; border-radius: 0.4rem; }
+.zn-context button:hover { background: color-mix(in oklab, var(--color-primary) 14%, transparent); }
+
+/* Antworten von Zentriq (Suche/Notiz) im Verlauf */
+.zn-reply { display: flex; flex-direction: column; gap: 0.6rem; }
+.zn-msg { margin: 0; font-size: 0.95rem; line-height: 1.5; }
+.zn-msg.is-ok { color: var(--color-success-text, var(--color-success)); font-weight: 500; }
+.zn-msg.is-ok::before { content: "✓ "; }
+.zn-msg.is-warn { color: var(--color-warning-text, var(--color-warning)); }
+.zn-msg.is-error { color: var(--color-error-text, var(--color-error)); background: color-mix(in oklab, var(--color-error) 6%, transparent); border: 1px solid color-mix(in oklab, var(--color-error) 25%, transparent); border-radius: 0.75rem; padding: 0.55rem 0.8rem; }
+.zn-msg-label { font-weight: 600; }
 .zn-meta { font-size: 0.78rem; color: var(--color-text-muted); }
-.zn-muted { margin: 0; font-size: 0.82rem; color: var(--color-text-soft); }
+.zn-muted { margin: 0; font-size: 0.84rem; color: var(--color-text-soft); }
+.zn-muted-inline { color: var(--color-text-soft); }
 .zn-label { color: var(--color-text-muted); }
-.zn-line { margin: 0; font-size: 0.88rem; line-height: 1.45; }
+.zn-line { margin: 0; font-size: 0.9rem; line-height: 1.5; }
 .zn-line.is-error { color: var(--color-error-text, var(--color-error)); }
-.zn-link { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; font-size: 0.82rem; color: var(--color-primary); text-decoration: underline; width: fit-content; }
-.zn-card, .zn-choice { border: 1px solid var(--color-border); border-radius: 0.9rem; background: var(--color-surface); padding: 0.7rem 0.9rem; display: flex; flex-direction: column; gap: 0.35rem; }
-.zn-choice.is-warn { border-color: color-mix(in oklab, var(--color-warning) 45%, var(--color-border)); }
-.zn-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
-.zn-card-title { margin: 0; font-size: 0.98rem; font-weight: 600; }
-.zn-close { background: none; border: 0; cursor: pointer; color: var(--color-text-muted); font-size: 1.15rem; line-height: 1; padding: 0 0.2rem; }
-.zn-answer { background: var(--color-surface-muted); border-radius: 0.6rem; padding: 0.5rem 0.65rem; }
-.zn-answer-text, .zn-choice-text { margin: 0; font-size: 0.9rem; font-weight: 500; }
-.zn-sources, .zn-candidates, .zn-entries { list-style: none; margin: 0.25rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
-.zn-source { display: flex; flex-direction: column; font-size: 0.86rem; }
-.zn-contact { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.3rem 0.6rem; }
-.zn-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.zn-entries li { font-size: 0.84rem; }
-.zn-history summary { cursor: pointer; font-size: 0.82rem; color: var(--color-text-muted); }
-.zn-candidate { display: flex; flex-direction: column; align-items: flex-start; width: 100%; text-align: left; font: inherit; font-size: 0.88rem; padding: 0.45rem 0.65rem; border: 1px solid var(--color-border); border-radius: 0.65rem; background: var(--color-surface); color: var(--color-text); cursor: pointer; }
+.zn-link { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; font-size: 0.84rem; color: var(--color-primary); text-decoration: underline; width: fit-content; }
+.zn-card { border: 1px solid var(--color-border); border-radius: 0.9rem; background: var(--color-surface); padding: 0.75rem 0.95rem; display: flex; flex-direction: column; gap: 0.5rem; max-width: 40rem; }
+.zn-card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.6rem; }
+.zn-card-head .zn-meta { margin: 0; }
+.zn-card-title { margin: 0; font-size: 1rem; font-weight: 600; }
+.zn-badge { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 0.05rem 0.45rem; border-radius: 999px; background: color-mix(in oklab, var(--color-warning) 16%, transparent); color: var(--color-warning-text, var(--color-warning)); vertical-align: 0.05em; }
+.zn-answer { display: flex; flex-direction: column; gap: 0.3rem; }
+.zn-answer-text { margin: 0; font-size: 0.95rem; }
+.zn-answer-text.is-empty { color: var(--color-text-muted); }
+.zn-sources, .zn-candidates, .zn-entries { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.zn-source { display: flex; flex-direction: column; font-size: 0.9rem; padding-left: 0.7rem; border-left: 2px solid var(--color-border); }
+.zn-contact { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.35rem 0.6rem; }
+.zn-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; }
+.zn-entries li { font-size: 0.86rem; }
+.zn-more { border-top: 1px solid var(--color-border); padding-top: 0.45rem; }
+.zn-more > summary { cursor: pointer; font-size: 0.84rem; color: var(--color-text-muted); width: fit-content; }
+.zn-more[open] { display: flex; flex-direction: column; gap: 0.5rem; }
+.zn-candidate { display: flex; flex-direction: column; align-items: flex-start; width: 100%; max-width: 32rem; text-align: left; font: inherit; font-size: 0.9rem; padding: 0.45rem 0.7rem; border: 1px solid var(--color-border); border-radius: 0.65rem; background: var(--color-surface); color: var(--color-text); cursor: pointer; }
 .zn-candidate:hover, .zn-callback-open:hover { background: var(--color-surface-muted); }
-.zn-callbacks-title { margin: 0 0 0.3rem; font-size: 0.8rem; font-weight: 600; color: var(--color-text-soft); }
-.zn-callback-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.zn-missing-input { flex: 1; min-width: 12rem; max-width: 20rem; font-size: 0.9rem; padding: 0.35rem 0.6rem; }
+.zc-msg-context { align-self: center; margin: 0; font-size: 0.78rem; color: var(--color-text-soft); }
+.zc-retry { margin-top: 0.4rem; background: none; border: 0; padding: 0; font: inherit; font-size: 0.84rem; color: var(--color-primary); text-decoration: underline; cursor: pointer; }
+
+/* "Offene Rueckrufe": eine einklappbare Zeile unter dem Eingabefeld */
+.zn { max-width: 48rem; margin: 0.5rem auto 0; }
+.zn-callbacks-summary { display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; list-style: none; font-size: 0.84rem; color: var(--color-text-muted); padding: 0.2rem 0.5rem; border-radius: 0.5rem; }
+.zn-callbacks-summary::-webkit-details-marker { display: none; }
+.zn-callbacks-summary::after { content: "▸"; font-size: 0.7rem; transition: transform 0.15s; }
+.zn[open] .zn-callbacks-summary::after { transform: rotate(90deg); }
+.zn-callbacks-summary:hover { background: var(--color-surface-muted); color: var(--color-text); }
+.zn-count { min-width: 1.35rem; padding: 0 0.4rem; border-radius: 999px; text-align: center; font-size: 0.75rem; font-weight: 600; background: color-mix(in oklab, var(--color-warning) 18%, transparent); color: var(--color-warning-text, var(--color-warning)); }
+.zn-count.is-zero { background: var(--color-surface-muted); color: var(--color-text-soft); }
+.zn-callbacks { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.35rem; max-height: 34vh; overflow-y: auto; }
+.zn-callback-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
 .zn-callback { display: flex; align-items: center; gap: 0.5rem; }
-.zn-callback-open { flex: 1; min-width: 0; display: grid; grid-template-columns: auto 1fr; gap: 0 0.5rem; text-align: left; font: inherit; font-size: 0.86rem; padding: 0.4rem 0.6rem; border: 1px solid var(--color-border); border-radius: 0.65rem; background: var(--color-surface); color: var(--color-text); cursor: pointer; }
+.zn-callback > .zn-msg { flex-basis: 100%; font-size: 0.84rem; }
+.zn-callback-open { flex: 1; min-width: 0; display: grid; grid-template-columns: auto 1fr; gap: 0 0.5rem; text-align: left; font: inherit; font-size: 0.88rem; padding: 0.4rem 0.65rem; border: 1px solid var(--color-border); border-radius: 0.65rem; background: var(--color-surface); color: var(--color-text); cursor: pointer; }
 .zn-callback-topic { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-muted); }
 .zn-callback-open .zn-meta { grid-column: 1 / -1; }
-/* Im laufenden Chat bleibt nur die Kundenkarte sichtbar; die Uebersicht steht auf der leeren Startseite. */
-.zc:not(.is-empty) .zn-callbacks { display: none; }
-.zc:not(.is-empty) .zn { max-height: 34vh; }
 @media (max-width: 47.99rem) {
-  .zn { max-height: 38vh; }
   .zn-callback { flex-wrap: wrap; }
+  .zn-callbacks { max-height: 30vh; }
 }
-/* Solange eine Kundenkarte/Rueckfrage offen ist, keine Chat-Vorschlaege darunter. */
-.zc-composer:has(.zn-result:not([hidden])) .zc-suggestions { display: none; }
-.zn-missing-input { flex: 1; min-width: 12rem; font-size: 0.9rem; padding: 0.35rem 0.6rem; }

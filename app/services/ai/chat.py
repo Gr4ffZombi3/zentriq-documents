@@ -525,7 +525,7 @@ def process_pending(user, message_id: int, audio_jobs=None) -> None:
             complex_task=complex_task,
         )
     except router.AiError as exc:
-        details = router.describe_attempts(exc.attempts)
+        details = [] if exc.error_type == "free_quota" else router.describe_attempts(exc.attempts)
         text = str(exc) + (" (" + "; ".join(details) + ")" if details else "")
         _fail(pending, text)
         return

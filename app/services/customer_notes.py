@@ -120,6 +120,12 @@ _CHAT_REQUEST = re.compile(
     re.I,
 )
 _OPEN_QUESTION = re.compile(r"\boffen\w*|\bausstehend\w*|\bnoch\s+zu\s+tun\b|\br(?:ü|ue)ckruf\w*", re.I)
+# Frage nach gespeicherten Vorgaengen eines Kunden (nicht nach Allgemeinwissen).
+_RECORD_QUESTION = re.compile(
+    r"\b(?:notiert|notiz\w*|dokumentiert|vermerkt|gespeichert|besprochen|gesagt|sagte|gemeint|meinte|ge(?:ä|ae)u(?:ss|ß)ert|"
+    r"mitgeteilt|erz(?:ä|ae)hlt|aussage|offen\w*|r(?:ü|ue)ckruf\w*|anlass|angerufen|anruf)\b",
+    re.I,
+)
 _REASON_QUESTION = re.compile(r"\b(?:warum|wieso|weshalb|worum|anlass|grund)\b", re.I)
 # "Was hat ... gesagt?" - gefragt ist nach einer Aussage des Kunden, nicht nach dem Anrufanlass.
 _SAID_QUESTION = re.compile(r"\b(?:gesagt|sagte|gemeint|meinte|ge(?:ä|ae)u(?:ss|ß)ert|mitgeteilt|erz(?:ä|ae)hlt|aussage|gewollt|gew(?:ü|ue)nscht)\b", re.I)
@@ -602,6 +608,10 @@ def open_callbacks(limit: int = CALLBACK_LIMIT) -> list[dict]:
     return [serialize_contact(c, with_customer=True) for c in contacts]
 
 
+def open_callback_count() -> int:
+    return CustomerContact.query.filter(CustomerContact.status == OPEN).count()
+
+
 # --- Speichern ------------------------------------------------------------------------------
 
 
@@ -762,7 +772,9 @@ def _saved_result(user, note: CustomerNote, duplicate: bool) -> dict:
     return {
         "kind": "saved",
         "duplicate": duplicate,
-        "message": f"Bei {customer.name} gespeichert: {note.text}",
+        # Doppelt gesendet (Doppelklick, Wiederholung): es gibt weiterhin genau eine Notiz.
+        "message": f"Bereits gespeichert bei {customer.name}: {note.text} – keine zweite Notiz angelegt."
+        if duplicate else f"Bei {customer.name} gespeichert: {note.text}",
         "note": serialize_note(note),
         "card": customer_card(user, customer),
     }
@@ -1035,6 +1047,10 @@ def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | Non
                 return _card_result(user, found[0], found[0].name, answer_question(user, found[0], text))
             if found:
                 return _choice("Mehrere Kunden passen – bitte auswählen:", found)
+            if subject and _RECORD_QUESTION.search(text) and _looks_like_name(subject, cased=any(ch.isupper() for ch in subject)):
+                # "Was wurde bei Erika Musterfrau notiert?" ohne Treffer: klare Meldung statt KI-Antwort;
+                # ein ausgewaehlter anderer Kunde ist nicht das Ergebnis.
+                return {"kind": "not_found", "search": True, "message": f"Kein Kunde „{subject}“ in Ihrem Büro gefunden."}
         if selected is not None:
             if question and not (_OPEN_QUESTION.search(text) or _REASON_QUESTION.search(text) or _SAID_QUESTION.search(text)):
                 return {"kind": "chat"}

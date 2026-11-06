@@ -165,7 +165,7 @@ def test_no_models_without_keys(app, world):
 
 
 def test_free_first_and_fallback_on_rate_limit(app, world, fake):
-    # Komplexe Anfrage ("formuliere") -> starke kostenlose Modelle zuerst: Gemini Flash 429 -> Llama 70B.
+    # Komplexe Anfrage ("formuliere") -> starke kostenlose Modelle zuerst: Gemini (beide starken Modelle) 429 -> Llama 70B.
     fake.set("gemini", adapters.ProviderError(adapters.RATE_LIMIT, retry_after=120, status=429))
     client = _root(app, world)
     conversation_id = _new(client)
@@ -174,13 +174,15 @@ def test_free_first_and_fallback_on_rate_limit(app, world, fake):
     assert reply["status"] == "done"
     assert reply["provider"] == "groq"
     assert reply["cost_usd"] == 0
-    assert [c["model"] for c in fake.calls] == ["gemini-flash-latest", "llama-3.3-70b-versatile"]
+    assert [c["model"] for c in fake.calls] == ["gemini-3.6-flash", "gemini-flash-latest", "llama-3.3-70b-versatile"]
     usage = _usage()
-    assert [(u.provider, u.ok, u.error_type) for u in usage] == [("gemini", False, "rate_limit"), ("groq", True, None)]
-    assert usage[1].input_tokens == 100 and usage[1].output_tokens == 50
+    assert [(u.provider, u.ok, u.error_type) for u in usage] == [
+        ("gemini", False, "rate_limit"), ("gemini", False, "rate_limit"), ("groq", True, None)
+    ]
+    assert usage[2].input_tokens == 100 and usage[2].output_tokens == 50
 
-    # Gemini Flash ist pausiert (Retry-After 120 s) und wird uebersprungen.
-    assert state.cooldown_info("gemini", "gemini-flash-latest")["seconds"] > 60
+    # Gemini ist pausiert (Retry-After 120 s) und wird uebersprungen.
+    assert state.cooldown_info("gemini", "gemini-3.6-flash")["seconds"] > 60
     fake.calls.clear()
     fake.set("gemini", adapters.ProviderResult("ok", 1, 1))
     _send(client, conversation_id, "Formuliere noch eine Variante")
@@ -190,9 +192,9 @@ def test_free_first_and_fallback_on_rate_limit(app, world, fake):
 def test_simple_requests_use_small_models_first(app, world, fake):
     client = _root(app, world)
     _send(client, _new(client), "Hallo!")
-    assert fake.calls[-1]["model"] == "gemini-flash-lite-latest"
+    assert fake.calls[-1]["model"] == "gemini-3.5-flash-lite"
     _send(client, _new(client), "Analysiere bitte diesen Ablauf und bewerte ihn.")
-    assert fake.calls[-1]["model"] == "gemini-flash-latest"
+    assert fake.calls[-1]["model"] == "gemini-3.6-flash"
 
 
 def test_provider_outage_pauses_whole_provider(app, world, fake):
@@ -474,7 +476,7 @@ def test_conversation_crud_search_pin_project(app, world, fake):
     data = client.get(f"/zentriq/api/conversations/{conversation_id}").get_json()
     assert data["conversation"]["title"] == "Wie plane ich die Urlaubsvertretung?"
     assert [m["role"] for m in data["messages"]] == ["user", "assistant"]
-    assert data["messages"][1]["model"] == "Gemini Flash"
+    assert data["messages"][1]["model"] == "Gemini 3.6 Flash"
 
     assert client.patch(f"/zentriq/api/conversations/{conversation_id}", json={"title": "Vertretung"}).status_code == 200
     assert client.patch(f"/zentriq/api/conversations/{conversation_id}", json={"title": "  "}).status_code == 400
@@ -676,3 +678,46 @@ def test_purge_command_removes_only_old_conversations(app, world, fake, db):
     assert "1 Gespraeche geloescht" in result.output
     with bypass_tenant_scope():
         assert {c.id for c in AiConversation.query.all()} == {new_id}
+
+
+# --- Kostenloses Kontingent (Gemini) bei Kostengrenze 0 -------------------------------------------
+
+
+def test_free_gemini_answers_although_paid_budget_is_zero(app, world, fake, db):
+    """Kostengrenze 0 sperrt nur kostenpflichtige Modelle; das kostenlose Gemini antwortet, das
+    eingerichtete OpenAI-Modell wird nicht angefragt."""
+    app.config["GROQ_API_KEY"] = None
+    app.config["OPENAI_API_KEY"] = "sk-GEHEIM"
+    app.config["ZENTRIQ_AI_DAILY_BUDGET_USD"] = 0
+    app.config["ZENTRIQ_AI_MONTHLY_BUDGET_USD"] = 0
+    assert router.can_answer() is True
+    client = login(app, "laura@example.com")
+    reply = _send(client, _new(client), "Hallo, wobei kannst du mir helfen?").reply
+    assert reply["status"] == "done" and reply["provider"] == "gemini" and reply["cost_usd"] == 0
+    assert {c["provider"] for c in fake.calls} == {"gemini"}
+
+
+def test_exhausted_free_quota_gives_clear_message_without_paid_fallback(app, world, fake, db):
+    app.config["GROQ_API_KEY"] = None
+    app.config["OPENAI_API_KEY"] = "sk-GEHEIM"
+    app.config["ZENTRIQ_AI_DAILY_BUDGET_USD"] = 0
+    fake.set("gemini", adapters.ProviderError(adapters.RATE_LIMIT, status=429))
+    client = login(app, "laura@example.com")
+    conversation_id = _new(client)
+    reply = _send(client, conversation_id, "Hallo!").reply
+    assert reply["status"] == "error"
+    assert "kostenlose Kontingent" in reply["error"] and "Kostengrenze" not in reply["error"]
+    assert {c["provider"] for c in fake.calls} == {"gemini"}
+    # Gleich danach: alle Gemini-Modelle pausiert -> dieselbe verstaendliche Meldung, kein Aufruf.
+    fake.calls.clear()
+    reply = _send(client, conversation_id, "Noch einmal").reply
+    assert "kostenlose Kontingent" in reply["error"] and fake.calls == []
+
+
+def test_provider_outage_is_not_reported_as_quota(app, world, fake):
+    app.config["GROQ_API_KEY"] = None
+    fake.set("gemini", adapters.ProviderError(adapters.UNAVAILABLE, status=503))
+    client = login(app, "laura@example.com")
+    reply = _send(client, _new(client), "Hallo!").reply
+    assert reply["status"] == "error"
+    assert "Kein KI-Modell konnte" in reply["error"] and "Kontingent" not in reply["error"]

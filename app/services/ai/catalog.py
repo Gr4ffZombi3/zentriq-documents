@@ -41,7 +41,8 @@ PROVIDERS: dict[str, Provider] = {
         Provider(
             "gemini", "Google Gemini (AI Studio)", "openai", "GEMINI_API_KEY",
             "https://generativelanguage.googleapis.com/v1beta/openai/", True,
-            note="Kostenloses Kontingent mit Tageslimit. EWR: es gelten die Datenregeln der kostenpflichtigen Dienste.",
+            note="Kostenloses Kontingent mit Tageslimit. Nicht für Kundendaten freigeben, solange die Nutzungsbedingungen "
+            "(EWR: nur Paid Services für eigene API-Clients) nicht geklärt sind.",
         ),
         Provider(
             "groq", "Groq", "openai", "GROQ_API_KEY", "https://api.groq.com/openai/v1", True,
@@ -80,6 +81,10 @@ PROVIDERS: dict[str, Provider] = {
 # Preise in USD je 1 Mio. Tokens. Kostenpflichtige Modelle sind standardmaessig aus.
 # Stufe: 1 = schnell/klein (einfache Anfragen), 2 = stark, 3 = sehr stark.
 DEFAULT_MODELS = (
+    # Gemini: stabile Modelle mit kostenlosem Kontingent (Stand 11/2026, aistudio.google.com/docs/models
+    # und /docs/pricing). Die "-latest"-Aliasse bleiben als Ausweichmodelle.
+    ("gemini", "gemini-3.5-flash-lite", "Gemini 3.5 Flash-Lite", True, 5, True, None, None, 1),
+    ("gemini", "gemini-3.6-flash", "Gemini 3.6 Flash", True, 6, True, None, None, 2),
     ("gemini", "gemini-flash-latest", "Gemini Flash", True, 10, True, None, None, 2),
     ("gemini", "gemini-flash-lite-latest", "Gemini Flash-Lite", True, 20, True, None, None, 1),
     ("groq", "llama-3.3-70b-versatile", "Llama 3.3 70B (Groq)", True, 30, True, None, None, 2),

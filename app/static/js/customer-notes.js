@@ -1,10 +1,13 @@
-// Kundennotizen und offene Rueckrufe auf der ZentriqAI-Startseite.
+// Kundensuche, Kundennotizen und offene Rueckrufe auf der ZentriqAI-Startseite.
 //
-// js/zentriq-ai.js ruft vor jeder Chatnachricht ZentriqNotes.intercept(text) auf. Der Server
-// entscheidet (app/services/customer_notes.py), ob die Eingabe eine Notiz, eine Kundensuche oder
-// eine normale Chatnachricht ist; Kunden- und Bueroszuordnung trifft nur das Backend.
-// Der ausgewaehlte Kunde lebt nur in dieser Seite (kein Speicher ueber Sitzungen/Ansichten) und
-// ist am Eingabefeld immer sichtbar. Alle Texte werden per textContent eingesetzt.
+// js/zentriq-ai.js zeigt jede Eingabe im Gespraechsverlauf und ruft ZentriqNotes.intercept(text,
+// reply) auf. Der Server entscheidet (app/services/customer_notes.py), ob die Eingabe eine Notiz,
+// eine Kundensuche oder eine Frage an das KI-Modell ist; Kunden- und Bueroszuordnung trifft nur
+// das Backend. Ergebnisse (Kundenkarte, Bestaetigung, Rueckfrage, "nicht gefunden", Fehler)
+// erscheinen in der Antwortblase `reply`.
+// Der ausgewaehlte Kunde lebt nur in dieser Seite (kein Speicher ueber Sitzungen/Ansichten), ist
+// am Eingabefeld immer sichtbar und wird beim Wechsel des Gespraechs aufgehoben.
+// Alle Texte werden per textContent eingesetzt.
 (function () {
   var root = document.querySelector("[data-zn]");
   if (!root) return;
@@ -12,8 +15,6 @@
   var api = root.dataset.api;
   var csrfMeta = document.querySelector('meta[name="csrf-token"]');
   var $ = function (sel, scope) { return (scope || document).querySelector(sel); };
-  var statusEl = $("[data-zn-status]", root);
-  var resultEl = $("[data-zn-result]", root);
   var context = $("[data-zn-context]");
   var contextName = $("[data-zn-context-name]");
   var listEl = $("[data-zn-callback-list]", root);
@@ -21,8 +22,10 @@
   var emptyEl = $("[data-zn-callbacks-empty]", root);
   var moreBtn = $("[data-zn-callbacks-more]", root);
 
+  var CALLBACKS_SHOWN = 3;
   var selected = null; // {id, name} - nur sichtbar ausgewaehlt
   var callbacks = [];
+  var callbacksTotal = 0;
   var showAll = false;
   var pending = false;
 
@@ -36,12 +39,16 @@
         if (!resp.ok) {
           var msg = resp.status === 401 ? "Die Anmeldung ist abgelaufen. Bitte die Seite neu laden."
             : resp.status === 404 && !data.error ? "Nicht gefunden."
-            : (data.error || "Das hat nicht geklappt. Bitte erneut versuchen.");
-          throw Object.assign(new Error(msg), { status: resp.status });
+            : (data.error || "Technischer Fehler. Bitte erneut versuchen.");
+          // 400/404/409 mit Meldung: fachliche Rueckmeldung; sonst technischer Fehler.
+          var technical = resp.status >= 500 || resp.status === 401 || !data.error;
+          throw Object.assign(new Error(msg), { status: resp.status, technical: technical });
         }
         return data;
       });
-    }, function () { throw new Error("Keine Verbindung zum Server. Bitte erneut versuchen."); });
+    }, function () {
+      throw Object.assign(new Error("Keine Verbindung zum Server. Bitte erneut versuchen."), { technical: true });
+    });
   }
 
   function newRef() {
@@ -66,153 +73,157 @@
     return b;
   }
 
-  // Schnellaktionen: waehrend einer Anfrage sind alle Knoepfe gesperrt (Doppelklick).
-  function run(promise, btn) {
+  // --- Antwortblase --------------------------------------------------------------------------
+  // Jede Antwort steht in einer Blase des Gespraechsverlaufs. Folgeaktionen (Auswahl, Erledigt,
+  // Nicht erreicht) ersetzen den Inhalt derselben Blase.
+  function message(text, tone) {
+    var p = el("p", "zn-msg" + (tone ? " is-" + tone : ""));
+    if (tone === "error") p.appendChild(el("span", "zn-msg-label", "Technischer Fehler: "));
+    p.appendChild(document.createTextNode(text));
+    if (tone === "error" || tone === "warn") p.setAttribute("role", "alert");
+    return p;
+  }
+
+  function fill(reply, nodes) {
+    reply.textContent = "";
+    reply.classList.add("zn-reply");
+    nodes.filter(Boolean).forEach(function (n) { reply.appendChild(n); });
+    if (window.ZentriqChat) window.ZentriqChat.scrollDown();
+  }
+
+  function showPending(reply, label) {
+    var p = el("div", "zc-pending");
+    p.appendChild(el("span", "zc-pending-dot"));
+    p.appendChild(document.createTextNode((label || "Wird geprüft") + " …"));
+    fill(reply, [p]);
+  }
+
+  // Folgeaktion in einer Blase: Ladezustand, Doppelklick gesperrt, Fehler in derselben Blase.
+  function act(reply, promise, label, then) {
     pending = true;
-    if (btn) btn.disabled = true;
-    return promise.then(function (r) { pending = false; return r; }, function (err) {
+    var before = Array.prototype.slice.call(reply.childNodes);
+    showPending(reply, label);
+    return promise.then(function (r) {
       pending = false;
-      if (btn) btn.disabled = false;
-      setStatus(err.message, "error");
-      return new Promise(function () {}); // Fehler ist angezeigt; Folgeschritte entfallen.
+      then(r);
+      loadCallbacks();
+    }, function (err) {
+      pending = false;
+      fill(reply, before);
+      var old = reply.querySelector(".zn-msg.is-error");
+      if (old) old.remove();
+      reply.insertBefore(message(err.message, err.technical ? "error" : "warn"), reply.firstChild);
     });
   }
 
-  function setStatus(message, tone) {
-    statusEl.textContent = message || "";
-    statusEl.hidden = !message;
-    statusEl.className = "zn-status" + (tone ? " is-" + tone : "");
-  }
-
-  // --- Auswahl ---------------------------------------------------------------------------
+  // --- Auswahl -------------------------------------------------------------------------------
   function select(customer) {
     selected = customer ? { id: customer.id, name: customer.name } : null;
     context.hidden = !selected;
     contextName.textContent = selected ? selected.name : "";
     if (window.ZentriqChat && window.ZentriqChat.setPlaceholder) {
-      window.ZentriqChat.setPlaceholder(selected ? "Notiz für " + selected.name + " …" : "");
+      window.ZentriqChat.setPlaceholder(selected ? "Notiz oder Frage zu " + selected.name + " …" : "");
     }
   }
 
-  function closeCard() {
-    select(null);
-    resultEl.hidden = true;
-    resultEl.textContent = "";
-    setStatus("");
-  }
   $("[data-zn-context-close]").addEventListener("click", function () {
-    closeCard();
+    select(null);
     if (window.ZentriqChat) window.ZentriqChat.focus();
   });
 
-  function showResult(node) {
-    resultEl.textContent = "";
-    resultEl.appendChild(node);
-    resultEl.hidden = false;
-  }
-
-  // --- Kundenkarte -----------------------------------------------------------------------
-  function line(label, value, cls) {
-    var p = el("p", "zn-line" + (cls ? " " + cls : ""));
-    if (label) p.appendChild(el("span", "zn-label", label + ": "));
-    p.appendChild(document.createTextNode(value));
-    return p;
-  }
-
+  // --- Kundenkarte (kompakt, Details aufklappbar) ----------------------------------------------
   function source(s) {
     var li = el("li", "zn-source");
     li.appendChild(el("span", "zn-source-text", s.text));
-    li.appendChild(el("span", "zn-meta", s.source + " · " + s.author + " · " + s.when));
+    li.appendChild(el("span", "zn-meta", [s.source, s.author, s.when].filter(Boolean).join(" · ")));
     return li;
   }
 
-  function renderCard(card, answer) {
+  function renderAnswer(answer) {
+    var box = el("div", "zn-answer");
+    var empty = !answer.sources || !answer.sources.length;
+    box.appendChild(el("p", "zn-answer-text" + (empty ? " is-empty" : ""), answer.text));
+    if (!empty) {
+      var ul = el("ul", "zn-sources");
+      answer.sources.forEach(function (s) { ul.appendChild(source(s)); });
+      box.appendChild(ul);
+    }
+    return box;
+  }
+
+  // quiet: "Keine Notizen vorhanden" entfaellt, wenn die Antwort darueber das schon sagt.
+  function renderCard(card, reply, quiet) {
     var box = el("article", "zn-card");
     var head = el("header", "zn-card-head");
-    var title = el("h3", "zn-card-title", card.name + (card.vn ? " · " + card.vn : ""));
-    head.appendChild(title);
-    head.appendChild(button("×", "zn-close", closeCard));
-    head.lastChild.setAttribute("aria-label", "Kundenkarte schließen");
+    head.appendChild(el("h3", "zn-card-title", card.name));
+    var facts = [card.vn, card.phone, card.place].filter(Boolean).join(" · ");
+    if (facts) head.appendChild(el("p", "zn-meta", facts));
     box.appendChild(head);
-    var facts = [card.phone, card.place].filter(Boolean).join(" · ");
-    if (facts) box.appendChild(el("p", "zn-meta", facts));
-
-    if (answer) {
-      var ans = el("div", "zn-answer");
-      ans.appendChild(el("p", "zn-answer-text", answer.text));
-      if (answer.sources && answer.sources.length) {
-        var ul = el("ul", "zn-sources");
-        answer.sources.forEach(function (s) { ul.appendChild(source(s)); });
-        ans.appendChild(ul);
-      }
-      box.appendChild(ans);
-    }
 
     var open = card.open_contacts || [];
-    if (card.latest) {
-      box.appendChild(line(null, card.latest.author + " · " + card.latest.when, "zn-meta"));
-    }
-    var reason = (open.length && open[0].topic) || (card.latest ? card.latest.text : null);
-    box.appendChild(line("Anlass", reason || "Keine Notiz dokumentiert"));
-
-    if (open.length) {
-      open.forEach(function (c) {
-        var row = el("div", "zn-contact");
-        var text = el("p", "zn-line");
-        text.appendChild(el("span", "zn-label", "Status: "));
-        text.appendChild(document.createTextNode(c.status_label + (open.length > 1 && c.topic ? " (" + c.topic + ")" : "")
-          + (c.attempts > 1 ? " · " + c.attempts + " Versuche" : "")));
-        text.appendChild(el("span", "zn-meta", " – " + c.by + ", " + c.when));
-        row.appendChild(text);
-        var actions = el("div", "zn-actions");
-        actions.appendChild(button("Nicht erreicht", null, function (b) {
-          run(request("POST", "/kunden/" + card.id + "/nicht-erreicht", { contact_id: c.id, client_ref: newRef() }), b).then(handleSaved);
-        }));
-        actions.appendChild(button("Erledigt", "btn btn-primary btn-sm", function (b) {
-          run(request("POST", "/rueckrufe/" + c.id + "/erledigt", { client_ref: newRef() }), b).then(handleSaved);
-        }));
-        row.appendChild(actions);
-        box.appendChild(row);
-      });
-    } else {
+    open.forEach(function (c) {
       var row = el("div", "zn-contact");
-      row.appendChild(line("Status", "Kein offener Vorgang"));
-      if (card.latest) {
+      var text = el("p", "zn-line");
+      text.appendChild(el("span", "zn-badge", "Rückruf offen"));
+      text.appendChild(document.createTextNode(" " + (c.topic || "Anlass nicht angegeben")));
+      text.appendChild(el("span", "zn-meta", " · " + c.status_label + (c.attempts > 1 ? ", " + c.attempts + " Versuche" : "") + " · " + c.by + ", " + c.when));
+      row.appendChild(text);
+      var actions = el("div", "zn-actions");
+      actions.appendChild(button("Nicht erreicht", null, function () {
+        act(reply, request("POST", "/kunden/" + card.id + "/nicht-erreicht", { contact_id: c.id, client_ref: newRef() }), "Wird gespeichert", function (r) { saved(reply, r); });
+      }));
+      actions.appendChild(button("Erledigt", "btn btn-primary btn-sm", function () {
+        act(reply, request("POST", "/rueckrufe/" + c.id + "/erledigt", { client_ref: newRef() }), "Wird gespeichert", function (r) { saved(reply, r); });
+      }));
+      row.appendChild(actions);
+      box.appendChild(row);
+    });
+    if (!open.length) {
+      var row = el("div", "zn-contact");
+      var latest = card.latest;
+      var line = el("p", "zn-line");
+      if (latest) {
+        line.appendChild(el("span", "zn-label", "Letzte Notiz: "));
+        line.appendChild(document.createTextNode(latest.text));
+        line.appendChild(el("span", "zn-meta", " · " + latest.author + ", " + latest.when));
+      } else if (!quiet) {
+        line.appendChild(el("span", "zn-muted-inline", "Keine Notizen vorhanden."));
+      }
+      if (line.childNodes.length) row.appendChild(line);
+      if (latest) {
         var actions = el("div", "zn-actions");
-        actions.appendChild(button("Nicht erreicht", null, function (b) {
-          run(request("POST", "/kunden/" + card.id + "/nicht-erreicht", { note_id: card.latest.id, client_ref: newRef() }), b).then(handleSaved);
+        actions.appendChild(button("Nicht erreicht", null, function () {
+          act(reply, request("POST", "/kunden/" + card.id + "/nicht-erreicht", { note_id: latest.id, client_ref: newRef() }), "Wird gespeichert", function (r) { saved(reply, r); });
         }));
         row.appendChild(actions);
       }
-      box.appendChild(row);
+      if (row.childNodes.length) box.appendChild(row);
     }
 
-    box.appendChild(renderLeipziger(card.leipziger || {}));
-
+    var details = el("details", "zn-more");
     var notes = card.notes || [];
+    details.appendChild(el("summary", null, "Details" + (notes.length ? " · " + notes.length + (card.more_notes ? "+" : "") + (notes.length === 1 ? " Notiz" : " Notizen") : "")));
+    details.appendChild(renderLeipziger(card.leipziger || {}));
     if (notes.length) {
-      var details = el("details", "zn-history");
-      details.appendChild(el("summary", null, "Notizverlauf (" + notes.length + (card.more_notes ? "+" : "") + ")"));
       var ul = el("ul", "zn-sources");
       notes.forEach(function (n) {
         ul.appendChild(source({ text: n.text, author: n.author, when: n.when, source: n.event_label || "Notiz" }));
       });
       details.appendChild(ul);
-      box.appendChild(details);
     }
     if (card.customer_url) {
       var link = el("a", "zn-link", "Kundenakte öffnen");
       link.href = card.customer_url;
-      box.appendChild(link);
+      details.appendChild(link);
     }
+    box.appendChild(details);
     return box;
   }
 
   function renderLeipziger(l) {
     var wrap = el("div", "zn-leipziger");
-    var label = el("span", "zn-label", "Leipziger Liste: ");
     var p = el("p", "zn-line");
-    p.appendChild(label);
+    p.appendChild(el("span", "zn-label", "Leipziger Liste: "));
     var entries = l.entries || [];
     var text = {
       found: entries.length ? (entries.length === 1 ? "Eintrag vorhanden" : entries.length + " Einträge vorhanden") : "Einträge nur bei anderen Vermittlern",
@@ -239,64 +250,61 @@
     return wrap;
   }
 
-  function showCard(card, answer) {
-    select(card);
-    showResult(renderCard(card, answer));
+  // Gespeichert / erledigt: Bestaetigung erst nach erfolgreicher Antwort des Servers.
+  function saved(reply, r) {
+    if (r.card) select(r.card);
+    fill(reply, [message(r.message, r.duplicate ? null : "ok"), r.card ? renderCard(r.card, reply) : null]);
   }
 
-  function handleSaved(r) {
-    setStatus(r.message, r.duplicate ? null : "ok");
-    if (r.card) showCard(r.card);
-    loadCallbacks();
-    return r;
-  }
-
-  // --- Rueckfragen -------------------------------------------------------------------------
+  // --- Rueckfragen -----------------------------------------------------------------------------
   function candidateLabel(c) {
     return [c.vn, c.place, c.birth ? "geb. " + c.birth : null, c.phone].filter(Boolean).join(" · ") || "keine weiteren Angaben";
   }
 
-  function renderChoice(r, text, tone) {
-    var box = el("div", "zn-choice" + (tone ? " is-" + tone : ""));
-    box.appendChild(el("p", "zn-choice-text", r.message));
+  function cancel(reply) {
+    return button("Abbrechen", "zn-link", function () { fill(reply, [message("Abgebrochen – es wurde nichts gespeichert.")]); });
+  }
+
+  function renderChoice(reply, r, text, tone) {
+    var nodes = [message(r.message, tone)];
     var note = r.pending_note;
-    if (note) box.appendChild(el("p", "zn-meta", "Notiz: „" + note + "“ – wird erst nach der Auswahl gespeichert."));
+    if (note) nodes.push(el("p", "zn-meta", "Notiz: „" + note + "“ – wird erst nach der Auswahl gespeichert."));
     var ul = el("ul", "zn-candidates");
     (r.candidates || []).forEach(function (c) {
       var li = el("li");
-      var b = button("", "zn-candidate", function (btn) {
+      var b = button("", "zn-candidate", function () {
         var body = note ? { text: note, customer_id: c.id, client_ref: newRef() } : { text: text, customer_id: c.id, mode: "search" };
-        run(request("POST", "/kunden/eingabe", body), btn).then(handle);
+        act(reply, request("POST", "/kunden/eingabe", body), note ? "Wird gespeichert" : "Wird geladen", function (res) { show(reply, res, text); });
       });
       b.appendChild(el("strong", null, c.name));
       b.appendChild(el("span", "zn-meta", candidateLabel(c)));
       li.appendChild(b);
       ul.appendChild(li);
     });
-    box.appendChild(ul);
-    if (r.more) box.appendChild(el("p", "zn-meta", "Weitere Treffer – bitte genauer suchen (z. B. mit VN-Nummer)."));
-    if (r.create_option) box.appendChild(createButton(r.create, note || text));
-    box.appendChild(button("Abbrechen", "zn-link", closeCard));
-    return box;
+    nodes.push(ul);
+    if (r.more) nodes.push(el("p", "zn-meta", "Weitere Treffer – bitte genauer suchen (z. B. mit VN-Nummer)."));
+    var row = el("div", "zn-actions");
+    if (r.create_option) row.appendChild(createButton(reply, r.create, note || text));
+    row.appendChild(cancel(reply));
+    nodes.push(row);
+    fill(reply, nodes);
   }
 
   // Ausdruecklich "Neuen Kunden anlegen" (nach Rueckfrage). Den Kunden legt nur der Server an,
   // nach erneuter Pruefung auf vorhandene Kunden mit dieser Nummer.
-  function createButton(create, text) {
+  function createButton(reply, create, text) {
     var label = create ? "Neuen Kunden „" + create.name + "“ anlegen" : "Neuen Kunden anlegen";
-    return button(label, "btn btn-secondary btn-sm", function (b) {
+    return button(label, "btn btn-secondary btn-sm", function () {
       var body = { text: (create && create.text) || text, mode: "create", create_new: true, client_ref: newRef() };
       if (create && create.name) body.new_name = create.name;
-      run(request("POST", "/kunden/eingabe", body), b).then(function (r) { handle(r, body.text); });
+      act(reply, request("POST", "/kunden/eingabe", body), "Wird angelegt", function (r) { show(reply, r, body.text); });
     });
   }
 
-  // Fehlende Angabe fuer eine Neuanlage abfragen (nur diese eine).
-  function renderMissing(r, field) {
-    // Kein eigenes <form>: die Karte liegt im Formular des Eingabefelds (keine verschachtelten Formulare).
-    var box = el("div", "zn-choice");
-    box.appendChild(el("p", "zn-choice-text", r.message));
-    box.appendChild(el("p", "zn-meta", "Notiz: „" + r.pending_note + "“ – wird mit der neuen Kundenakte gespeichert."));
+  // Fehlende Angabe fuer eine Neuanlage abfragen (nur diese eine). Kein eigenes <form>: die
+  // Blase liegt nicht im Formular, Enter wird direkt behandelt.
+  function renderMissing(reply, r, field) {
+    var nodes = [message(r.message), el("p", "zn-meta", "Notiz: „" + r.pending_note + "“ – wird mit der neuen Kundenakte gespeichert.")];
     var row = el("div", "zn-actions");
     var inputEl = el("input", "field-surface zn-missing-input");
     inputEl.type = "text";
@@ -305,34 +313,32 @@
     if (r.suggestion) inputEl.value = r.suggestion;
     inputEl.setAttribute("aria-label", field === "name" ? "Name des Kunden" : "Versicherungsnehmernummer");
     row.appendChild(inputEl);
-    var submit = button("Anlegen und speichern", "btn btn-primary btn-sm", function () { go(); });
-    row.appendChild(submit);
-    box.appendChild(row);
-    box.appendChild(button("Abbrechen", "zn-link", closeCard));
+    row.appendChild(button("Anlegen und speichern", "btn btn-primary btn-sm", function () { go(); }));
+    row.appendChild(cancel(reply));
+    nodes.push(row);
+    fill(reply, nodes);
     function go() {
       var value = inputEl.value.trim();
       if (!value || pending) { inputEl.focus(); return; }
       var body = { text: r.pending_note, mode: "create", client_ref: newRef() };
       if (field === "name") body.new_name = value;
       else { body.new_vn = value; body.new_name = r.name; }
-      run(request("POST", "/kunden/eingabe", body), submit).then(function (res) { handle(res, r.pending_note); });
+      act(reply, request("POST", "/kunden/eingabe", body), "Wird angelegt", function (res) { show(reply, res, r.pending_note); });
     }
     inputEl.addEventListener("keydown", function (e) {
       if (e.key === "Enter") { e.preventDefault(); go(); }
     });
     setTimeout(function () { inputEl.focus(); }, 0);
-    return box;
   }
 
-  function renderContactChoice(r) {
-    var box = el("div", "zn-choice");
-    box.appendChild(el("p", "zn-choice-text", r.message));
-    box.appendChild(el("p", "zn-meta", "Notiz: „" + r.note + "“"));
+  function renderContactChoice(reply, r) {
+    var nodes = [message(r.message), el("p", "zn-meta", "Notiz: „" + r.note + "“")];
     var ul = el("ul", "zn-candidates");
     function add(label, sub, contactId) {
       var li = el("li");
-      var b = button("", "zn-candidate", function (btn) {
-        run(request("POST", "/kunden/eingabe", { text: r.note, customer_id: r.customer.id, contact_id: contactId, mode: "note", client_ref: newRef() }), btn).then(handle);
+      var b = button("", "zn-candidate", function () {
+        act(reply, request("POST", "/kunden/eingabe", { text: r.note, customer_id: r.customer.id, contact_id: contactId, mode: "note", client_ref: newRef() }),
+          "Wird gespeichert", function (res) { show(reply, res, r.note); });
       });
       b.appendChild(el("strong", null, label));
       if (sub) b.appendChild(el("span", "zn-meta", sub));
@@ -341,150 +347,154 @@
     }
     (r.contacts || []).forEach(function (c) { add(c.topic || "Anlass nicht angegeben", c.status_label + " – " + c.by + ", " + c.when, c.id); });
     add("Neuer Vorgang", null, "new");
-    box.appendChild(ul);
-    box.appendChild(button("Abbrechen", "zn-link", closeCard));
-    return box;
+    nodes.push(ul, cancel(reply));
+    fill(reply, nodes);
   }
 
-  function renderClarify(r, text) {
-    var box = el("div", "zn-choice");
-    box.appendChild(el("p", "zn-choice-text", r.message));
-    var actions = el("div", "zn-actions");
-    actions.appendChild(button("Als Notiz speichern", "btn btn-primary btn-sm", function (b) {
-      run(request("POST", "/kunden/eingabe", { text: text, customer_id: r.customer.id, mode: "note", client_ref: newRef() }), b).then(handle);
+  function renderClarify(reply, r, text) {
+    var row = el("div", "zn-actions");
+    row.appendChild(button("Als Notiz speichern", "btn btn-primary btn-sm", function () {
+      act(reply, request("POST", "/kunden/eingabe", { text: text, customer_id: r.customer.id, mode: "note", client_ref: newRef() }),
+        "Wird gespeichert", function (res) { show(reply, res, text); });
     }));
-    actions.appendChild(button("An ZentriqAI senden", null, function () {
-      resultEl.hidden = true;
-      if (window.ZentriqChat) window.ZentriqChat.send(text);
+    row.appendChild(button("An die KI senden", null, function () {
+      if (window.ZentriqChat) window.ZentriqChat.sendInto(text, reply);
     }));
-    box.appendChild(actions);
-    return box;
+    fill(reply, [message(r.message), row]);
   }
 
-  // Ergebnis anzeigen. Rueckgabe: {handled, clear} fuer js/zentriq-ai.js.
-  function handle(r, text) {
+  // Ergebnis in der Antwortblase anzeigen. Rueckgabe false: Eingabe geht an das KI-Modell.
+  function show(reply, r, text) {
     switch (r.kind) {
       case "chat":
-        return { handled: false };
+        return false;
       case "saved":
-        handleSaved(r);
-        return { handled: true, clear: true };
       case "closed":
-        handleSaved(r);
-        return { handled: true, clear: true };
+        saved(reply, r);
+        return true;
       case "card":
-        setStatus(r.created ? r.message : "", r.created ? "ok" : null);
-        showCard(r.card, r.answer);
-        return { handled: true, clear: true };
+        select(r.card);
+        fill(reply, [
+          r.created ? message(r.message, "ok") : null,
+          r.answer ? renderAnswer(r.answer) : null,
+          renderCard(r.card, reply, !!(r.answer && !(r.answer.sources || []).length)),
+        ]);
+        return true;
       case "choose":
       case "conflict":
-        setStatus("");
         select(null);
-        showResult(renderChoice(r, text, r.kind === "conflict" ? "warn" : null));
-        return { handled: true, clear: true };
+        renderChoice(reply, r, text, r.kind === "conflict" ? "warn" : null);
+        return true;
       case "choose_contact":
-        setStatus("");
-        showResult(renderContactChoice(r));
-        return { handled: true, clear: true };
+        renderContactChoice(reply, r);
+        return true;
       case "clarify":
-        setStatus("");
-        showResult(renderClarify(r, text));
-        return { handled: true, clear: false };
+        renderClarify(reply, r, text);
+        return true;
       case "need_name":
-        setStatus("");
-        select(null);
-        showResult(renderMissing(r, "name"));
-        return { handled: true, clear: true };
       case "need_vn":
-        setStatus("");
         select(null);
-        showResult(renderMissing(r, "vn"));
-        return { handled: true, clear: true };
+        renderMissing(reply, r, r.kind === "need_name" ? "name" : "vn");
+        return true;
       case "confirm_create":
-        setStatus("");
         select(null);
-        var confirmBox = el("div", "zn-choice");
-        confirmBox.appendChild(el("p", "zn-choice-text", r.message));
-        var confirmRow = el("div", "zn-actions");
-        confirmRow.appendChild(createButton(r.create, text));
-        confirmRow.appendChild(button("Abbrechen", "zn-link", closeCard));
-        confirmBox.appendChild(confirmRow);
-        showResult(confirmBox);
-        return { handled: true, clear: true };
+        var row = el("div", "zn-actions");
+        row.appendChild(createButton(reply, r.create, text));
+        row.appendChild(cancel(reply));
+        fill(reply, [message(r.message), row]);
+        return true;
       case "no_ai":
-        setStatus(r.message, "warn");
-        return { handled: true, clear: false };
+        fill(reply, [message(r.message, "warn")]);
+        return true;
       case "not_found":
-        // Suche ohne Treffer: die bisher ausgewaehlte Karte ist nicht das Ergebnis -> schliessen.
-        if (r.search) closeCard();
-        setStatus(r.message, "warn");
+        // Suche ohne Treffer: die bisher ausgewaehlte Karte ist nicht das Ergebnis -> Auswahl aufheben.
+        if (r.search) select(null);
+        var nodes = [message(r.message, "warn")];
         if (r.create) {
-          var wrap = el("div", "zn-choice");
-          wrap.appendChild(el("p", "zn-choice-text", r.message));
-          wrap.appendChild(createButton(r.create, text));
-          showResult(wrap);
-          setStatus("");
+          var actions = el("div", "zn-actions");
+          actions.appendChild(createButton(reply, r.create, text));
+          nodes.push(actions);
         }
-        return { handled: true, clear: false };
+        fill(reply, nodes);
+        return true;
       default:
-        return { handled: false };
+        return false;
     }
   }
 
-  function intercept(text) {
-    setStatus("");
+  // Aufruf aus js/zentriq-ai.js: true = erledigt, false = an das KI-Modell weitergeben.
+  // Technischer Fehler: Meldung in der Blase, Promise wird abgelehnt (Eingabe bleibt erhalten).
+  function intercept(text, reply) {
     var body = { text: text, client_ref: newRef() };
     if (selected) body.selected_id = selected.id;
-    return request("POST", "/kunden/eingabe", body).then(function (r) { return handle(r, text); }, function (err) {
-      // Technischer Fehler bzw. keine Verbindung: die bisher angezeigte Karte ist nicht das
-      // Ergebnis dieser Eingabe -> ausblenden. Ausgewaehlter Kunde und Eingabetext bleiben fuer
-      // einen erneuten Versuch erhalten.
-      resultEl.hidden = true;
-      resultEl.textContent = "";
-      setStatus(err.message, "error");
+    showPending(reply, "Wird geprüft");
+    return request("POST", "/kunden/eingabe", body).then(function (r) {
+      var handled = show(reply, r, text);
+      if (handled) loadCallbacks();
+      return handled;
+    }, function (err) {
+      fill(reply, [message(err.message, err.technical ? "error" : "warn")]);
       throw err;
     });
   }
 
-  // --- Offene Rueckrufe ---------------------------------------------------------------------
+  // --- Offene Rueckrufe (einklappbar) -------------------------------------------------------------
+  function openCustomer(id, label) {
+    if (!window.ZentriqChat) return;
+    var reply = window.ZentriqChat.addReply(label);
+    showPending(reply, "Wird geladen");
+    request("GET", "/kunden/" + id).then(function (r) {
+      select(r.card);
+      fill(reply, [renderCard(r.card, reply)]);
+      window.ZentriqChat.focus();
+    }, function (err) {
+      fill(reply, [message(err.status === 404 ? "Dieser Kunde wurde in Ihrem Büro nicht gefunden." : err.message, err.status === 404 ? "warn" : "error")]);
+    });
+  }
+
   function renderCallbacks() {
     listEl.textContent = "";
-    var shown = showAll ? callbacks : callbacks.slice(0, 5);
+    var shown = showAll ? callbacks : callbacks.slice(0, CALLBACKS_SHOWN);
     shown.forEach(function (c) {
       var li = el("li", "zn-callback");
-      var open = button("", "zn-callback-open", function (b) {
-        run(request("GET", "/kunden/" + c.customer.id), b).then(function (r) {
-          setStatus("");
-          showCard(r.card);
-          if (window.ZentriqChat) window.ZentriqChat.focus();
-        });
-      });
-      open.appendChild(el("strong", null, c.customer.name));
-      open.appendChild(el("span", "zn-callback-topic", c.topic || "Anlass nicht angegeben"));
-      open.appendChild(el("span", "zn-meta", c.status_label + (c.attempts > 1 ? " · " + c.attempts + " Versuche" : "") + " · " + c.by + ", " + c.when));
-      li.appendChild(open);
+      var openBtn = button("", "zn-callback-open", function () { openCustomer(c.customer.id, "Rückruf: " + c.customer.name); });
+      openBtn.appendChild(el("strong", null, c.customer.name));
+      openBtn.appendChild(el("span", "zn-callback-topic", c.topic || "Anlass nicht angegeben"));
+      openBtn.appendChild(el("span", "zn-meta", c.status_label + (c.attempts > 1 ? " · " + c.attempts + " Versuche" : "") + " · " + c.by + ", " + c.when));
+      li.appendChild(openBtn);
       li.appendChild(button("Erledigt", "btn btn-secondary btn-sm", function (b) {
-        run(request("POST", "/rueckrufe/" + c.id + "/erledigt", { client_ref: newRef() }), b).then(function (r) {
-          setStatus(r.message, "ok");
-          if (selected && r.card && selected.id === r.card.id) showCard(r.card);
+        pending = true;
+        b.disabled = true;
+        request("POST", "/rueckrufe/" + c.id + "/erledigt", { client_ref: newRef() }).then(function (r) {
+          pending = false;
+          if (window.ZentriqChat) saved(window.ZentriqChat.addReply("Rückruf erledigt: " + c.customer.name), r);
           loadCallbacks();
+        }, function (err) {
+          pending = false;
+          b.disabled = false;
+          li.appendChild(message(err.message, err.technical ? "error" : "warn"));
         });
       }));
       listEl.appendChild(li);
     });
-    countEl.textContent = callbacks.length ? "(" + callbacks.length + ")" : "";
+    countEl.textContent = String(callbacksTotal);
+    countEl.classList.toggle("is-zero", !callbacksTotal);
     emptyEl.hidden = callbacks.length > 0;
-    moreBtn.hidden = callbacks.length <= 5;
-    moreBtn.textContent = showAll ? "Weniger anzeigen" : "Alle anzeigen (" + callbacks.length + ")";
+    emptyEl.textContent = "Keine offenen Rückrufe.";
+    moreBtn.hidden = callbacks.length <= CALLBACKS_SHOWN;
+    moreBtn.textContent = showAll ? "Weniger anzeigen"
+      : "Alle anzeigen (" + callbacksTotal + ")" + (callbacksTotal > callbacks.length ? " – die " + callbacks.length + " neuesten" : "");
   }
   moreBtn.addEventListener("click", function () { showAll = !showAll; renderCallbacks(); });
 
   function loadCallbacks() {
     return request("GET", "/rueckrufe").then(function (d) {
       callbacks = d.callbacks || [];
+      callbacksTotal = typeof d.total === "number" ? d.total : callbacks.length;
       renderCallbacks();
     }).catch(function () {
       listEl.textContent = "";
+      countEl.textContent = "!";
       emptyEl.hidden = false;
       emptyEl.textContent = "Offene Rückrufe konnten gerade nicht geladen werden.";
     });
@@ -499,15 +509,12 @@
     params.delete("kunde");
     var rest = params.toString();
     history.replaceState(history.state, "", location.pathname + (rest ? "?" + rest : "") + location.hash);
-    request("GET", "/kunden/" + id).then(function (r) {
-      setStatus("");
-      showCard(r.card);
-    }, function (err) {
-      setStatus(err.status === 404 ? "Dieser Kunde wurde in Ihrem Büro nicht gefunden." : err.message, "error");
-    });
+    openCustomer(id, null);
   }
 
-  window.ZentriqNotes = { intercept: intercept, close: closeCard };
+  window.ZentriqNotes = { intercept: intercept, clear: function () { select(null); } };
   loadCallbacks();
-  openFromUrl();
+  // zentriq-ai.js stellt ZentriqChat erst nach diesem Skript bereit (beide "defer").
+  if (document.readyState === "complete") openFromUrl();
+  else document.addEventListener("DOMContentLoaded", openFromUrl);
 })();

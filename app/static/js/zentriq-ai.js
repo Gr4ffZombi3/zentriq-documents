@@ -184,7 +184,7 @@
 
   function fillAssistant(el, m) {
     el.textContent = "";
-    el.dataset.id = m.id;
+    el.dataset.id = m.id || "";
     if (m.status === "pending") {
       var p = document.createElement("div");
       p.className = "zc-pending";
@@ -198,8 +198,19 @@
     if (m.status === "error") {
       var err = document.createElement("div");
       err.className = "zc-error";
+      err.setAttribute("role", "alert");
       err.textContent = m.error || "Die Antwort konnte nicht erstellt werden.";
       el.appendChild(err);
+      // Die gestellte Frage kann mit einem Klick erneut ins Eingabefeld uebernommen werden.
+      var asked = el.previousElementSibling;
+      if (asked && asked.classList.contains("zc-msg-user")) {
+        var retry = document.createElement("button");
+        retry.type = "button";
+        retry.className = "zc-retry";
+        retry.textContent = "Text erneut ins Eingabefeld übernehmen";
+        retry.addEventListener("click", function () { restoreInput(asked.firstChild ? asked.firstChild.textContent : "", true); });
+        el.appendChild(retry);
+      }
       return;
     }
     var body = document.createElement("div");
@@ -284,8 +295,10 @@
     if (btn) copyText(btn.closest(".zc-code").querySelector("code").textContent, btn);
   });
 
+  // Neuer bzw. anderer Verlauf: kein ausgewaehlter Kunde wird stillschweigend mitgenommen.
   function clearThread() {
     Array.prototype.slice.call(thread.querySelectorAll(".zc-msg")).forEach(function (n) { n.remove(); });
+    if (window.ZentriqNotes) window.ZentriqNotes.clear();
     setEmpty(true);
   }
 
@@ -480,8 +493,17 @@
     return Date.now().toString(36) + Math.random().toString(36).slice(2);
   }
 
-  // Kundennotizen (js/customer-notes.js): Eingaben mit Kundenbezug werden direkt in Zentriq
-  // gespeichert bzw. gesucht; nur alles andere wird als Chatnachricht gesendet.
+  // Eingabe nach einem Fehler wiederherstellen (nur, wenn inzwischen nichts Neues getippt wurde).
+  function restoreInput(text, force) {
+    if (!text || (input.value.trim() && !force)) return;
+    input.value = text;
+    autosize();
+    input.focus();
+  }
+
+  // Jede Eingabe erscheint sofort im Verlauf, darunter eine Antwortblase mit Ladezustand.
+  // Kundensuche und Notizen (js/customer-notes.js) beantwortet Zentriq direkt; alles andere geht
+  // als Frage an das KI-Modell. Waehrend der Bearbeitung ist Senden gesperrt (kein Doppelversand).
   function send(text, skipNotes) {
     text = (text !== undefined ? text : input.value).trim();
     if (busy || (!text && !files.length)) return;
@@ -489,24 +511,31 @@
     showAlert("");
     if (!skipNotes && !files.length && window.ZentriqNotes) {
       setBusy(true);
-      window.ZentriqNotes.intercept(text).then(function (r) {
+      input.value = "";
+      autosize();
+      var userEl = renderUser({ content: text });
+      var reply = renderAssistant({ status: "pending", progress: "Wird geprüft" });
+      stickToBottom = true;
+      scrollDown(true);
+      window.ZentriqNotes.intercept(text, reply).then(function (handled) {
+        if (!handled) { sendChat(text, { user: userEl, reply: reply }); return; }
         setBusy(false);
-        if (!r.handled) { sendChat(text); return; }
-        if (r.clear) { input.value = ""; autosize(); }
+        scrollDown();
         input.focus();
-      }, function (err) {
+      }, function () {
         setBusy(false);
-        showAlert(err.message);
+        restoreInput(text);
       });
       return;
     }
     sendChat(text);
   }
 
-  function sendChat(text) {
+  function sendChat(text, slots) {
     setBusy(true);
     var sending = files.slice();
     var ref = newRef();
+    if (slots) fillAssistant(slots.reply, { status: "pending", progress: "Frage geht an die KI" });
     ensureConversation().then(function (c) {
       var body;
       var isForm = sending.length > 0;
@@ -520,12 +549,19 @@
         body = { content: text, model: modelChoice, client_ref: ref };
       }
       return request("POST", "/conversations/" + c.id + "/messages", body, isForm).then(function (d) {
-        input.value = "";
+        if (!slots) { input.value = ""; autosize(); }
         files = [];
         renderChips();
-        autosize();
-        renderUser(d.message);
-        var el = renderAssistant(d.reply);
+        var el;
+        if (slots) {
+          slots.user.dataset.id = d.message.id || "";
+          el = slots.reply;
+          el.classList.remove("zn-reply");
+          fillAssistant(el, d.reply);
+        } else {
+          renderUser(d.message);
+          el = renderAssistant(d.reply);
+        }
         setCurrent(d.conversation);
         stickToBottom = true;
         scrollDown(true);
@@ -534,7 +570,12 @@
         else setBusy(false);
       });
     }).catch(function (err) {
-      showAlert(err.message);
+      if (slots) {
+        fillAssistant(slots.reply, { status: "error", error: err.message });
+        restoreInput(text);
+      } else {
+        showAlert(err.message);
+      }
       setBusy(false);
     });
   }
@@ -586,9 +627,6 @@
   input.addEventListener("keydown", function (e) {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
   });
-  Array.prototype.forEach.call(root.querySelectorAll("[data-zc-suggest]"), function (b) {
-    b.addEventListener("click", function () { send(b.textContent); });
-  });
 
   customerBox.addEventListener("change", function () {
     customerBadge.hidden = !customerBox.checked;
@@ -635,8 +673,29 @@
   window.ZentriqChat = {
     open: function (id) { open(id); },
     reset: function () { reset(); },
-    // Text unveraendert als Chatnachricht senden (ohne Kundennotiz-Erkennung).
+    // Text unveraendert als Frage an das KI-Modell senden (ohne Kundennotiz-Erkennung).
     send: function (text) { input.value = ""; autosize(); send(text, true); },
+    // Rueckfrage "An die KI senden": Antwort erscheint in der Blase der Rueckfrage.
+    sendInto: function (text, reply) {
+      if (busy) return;
+      var asked = reply.previousElementSibling;
+      sendChat(text, { user: asked && asked.classList.contains("zc-msg-user") ? asked : renderUser({ content: text }), reply: reply });
+    },
+    // Neue Antwortblase ohne Eingabe (z. B. Kunde aus "Offene Rueckrufe" geoeffnet).
+    addReply: function (label) {
+      if (label) {
+        var marker = document.createElement("p");
+        marker.className = "zc-msg zc-msg-context";
+        marker.textContent = label;
+        setEmpty(false);
+        thread.appendChild(marker);
+      }
+      var el = renderAssistant({ status: "pending" });
+      stickToBottom = true;
+      scrollDown(true);
+      return el;
+    },
+    scrollDown: function () { scrollDown(); },
     focus: function () { input.focus(); },
     setPlaceholder: function (text) { input.placeholder = text || input.dataset.placeholder; },
   };

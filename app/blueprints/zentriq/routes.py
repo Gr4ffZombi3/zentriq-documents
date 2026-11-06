@@ -18,7 +18,7 @@ from app.models import Customer, CustomerContact
 from app.models.ai import AiModel
 from app.models.audit_log import AuditEventType
 from app.services import customer_notes
-from app.services.ai import actions, catalog, chat, router, state, tools
+from app.services.ai import actions, catalog, chat, router, state
 from app.services.audit import log_audit_event
 from app.tenancy import get_or_404_scoped
 
@@ -85,7 +85,6 @@ def index(conversation_id=None):
         conversation_id=conversation_id,
         greeting=_greeting(),
         max_chars=int(current_app.config.get("ZENTRIQ_AI_MAX_INPUT_CHARS") or 12000),
-        tool_labels=[t.label for t in tools.available_for(current_user) if not t.write],
         customer_notes_enabled=bool(current_user.is_office_admin or current_user.is_employee),
     )
 
@@ -350,4 +349,4 @@ def api_callback_done(contact_id):
 def api_callbacks():
     if (denied := _office_user_required()) is not None:
         return denied
-    return jsonify({"callbacks": customer_notes.open_callbacks()})
+    return jsonify({"callbacks": customer_notes.open_callbacks(), "total": customer_notes.open_callback_count()})

@@ -251,7 +251,7 @@ def complete(
     for model in candidates:
         cooling = state.cooling_reason(model.provider, model.model_id)
         if cooling:
-            attempts.append({"model": model.label, "error": "cooldown"})
+            attempts.append({"model": model.label, "error": "cooldown", "reason": cooling, "free": model.is_free})
             continue
         if not model.is_free:
             if paid_allowed is None:
@@ -276,7 +276,7 @@ def complete(
                 latency = int((time.monotonic() - started) * 1000)
                 _record(model, user_id=user_id, tenant_id=tenant_id, conversation_id=conversation_id, purpose=purpose, ok=False, error_type=exc.kind, latency_ms=latency)
                 current_app.logger.warning("zentriq_ai.provider_failed provider=%s model=%s kind=%s", model.provider, model.model_id, exc.kind)
-                attempts.append({"model": model.label, "error": exc.kind})
+                attempts.append({"model": model.label, "error": exc.kind, "free": model.is_free})
                 rule = COOLDOWNS.get(exc.kind)
                 if rule:
                     scope, seconds = rule
@@ -337,6 +337,15 @@ def complete(
         if failed:
             continue
 
+    if free_quota_exhausted(attempts):
+        raise AiError(
+            "Das kostenlose Kontingent des KI-Anbieters ist gerade ausgeschöpft. Bitte später erneut versuchen – "
+            "Kundensuche, Notizen und Rückrufe funktionieren weiterhin. Kostenpflichtige Modelle werden dafür nicht "
+            "automatisch genutzt.",
+            429,
+            "free_quota",
+            attempts,
+        )
     if attempts and all(a["error"] == "budget" for a in attempts):
         budget = budget_status()
         if not budget["daily_limit"] or not budget["monthly_limit"]:
@@ -356,6 +365,14 @@ def complete(
         "all_failed",
         attempts,
     )
+
+
+def free_quota_exhausted(attempts: list[dict]) -> bool:
+    """Alle kostenlosen Modelle stehen am Limit (429 bzw. deshalb pausiert) und kostenpflichtige
+    sind wegen der Kostengrenze gesperrt - dann ist das Gratis-Kontingent die Ursache."""
+    free = [a for a in attempts if a.get("free")]
+    limited = [a for a in free if a["error"] == adapters.RATE_LIMIT or a.get("reason") == adapters.RATE_LIMIT]
+    return bool(limited) and len(limited) == len(free) and all(a.get("free") or a["error"] == "budget" for a in attempts)
 
 
 def describe_attempts(attempts: list[dict]) -> list[str]:

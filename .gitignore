@@ -43,3 +43,4 @@ storage/backups/
 # Lokales Whisper-Modell und temporaere Memo-Audiodateien
 storage/models/
 storage/tmp/
+logs/*.log.*

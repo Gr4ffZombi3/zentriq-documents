@@ -46,7 +46,7 @@
               {% set customer = item.customer %}
               <tr>
                 <th scope="row" class="cell-strong stack-full">
-                  <a class="table-link" href="{{ url_for('customers.detail', customer_id=customer.id) }}">{{ customer.name }}</a>
+                  <a class="table-link" href="{{ url_for('customers.detail', customer_id=customer.id, von=request.full_path.rstrip('?')) }}">{{ customer.name }}</a>
                   {% if item.possible_duplicates %} {{ badge('Mögliche Dublette', variant='warning') }}{% endif %}
                 </th>
                 <td class="tabular-nums" data-label="Kundennummer">{{ customer.customer_number or '–' }}</td>
@@ -55,7 +55,7 @@
                 <td class="tabular-nums whitespace-nowrap" data-label="Vermittler">{{ customer.broker_number or '–' }}</td>
                 <td class="num tabular-nums" data-label="Leipziger-Vorgänge">{{ item.leipziger_count }}</td>
                 <td class="num tabular-nums" data-label="Memos">{{ item.memo_count }}</td>
-                <td class="row-actions"><a class="table-action" href="{{ url_for('customers.detail', customer_id=customer.id) }}">Öffnen</a></td>
+                <td class="row-actions"><a class="table-action" href="{{ url_for('customers.detail', customer_id=customer.id, von=request.full_path.rstrip('?')) }}">Öffnen</a></td>
               </tr>
             {% endfor %}
           </tbody>

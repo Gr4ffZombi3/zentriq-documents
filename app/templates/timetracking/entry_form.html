@@ -17,8 +17,9 @@
         {% set is_break = mode.startswith('break') %}
         {{ time_inputs(values, 'Pausenbeginn' if is_break else 'Beginn', 'Pausenende' if is_break else 'Ende', end_optional=allow_open_end) }}
         <div class="form-field mt-4">
-          <label class="field-label" for="reason">Begründung (optional, wird protokolliert)</label>
-          <textarea class="field-surface" id="reason" name="reason" rows="3" maxlength="2000">{{ reason }}</textarea>
+          <label class="field-label" for="reason">Begründung (wird protokolliert)</label>
+          <textarea class="field-surface" id="reason" name="reason" rows="2" minlength="3" maxlength="2000" required
+                    placeholder="z. B. Ausstempeln vergessen, laut Mitarbeiterin bis 17:30 gearbeitet">{{ reason }}</textarea>
         </div>
         <div class="form-actions">
           <button type="submit" class="btn btn-primary h-10 px-4 text-sm">Speichern</button>

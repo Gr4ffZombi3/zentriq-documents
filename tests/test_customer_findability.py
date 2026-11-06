@@ -99,7 +99,7 @@ def test_admin_customer_search_uses_same_stored_data(app, created):
     client = login(app, "admin-a@example.com")
     for query in ["808/765432-e", "808765432E", "808 765432 e", "Max Mustermann"]:
         html = client.get("/search", query_string={"q": query}).get_data(as_text=True)
-        assert f"/customers/{created.customer.id}\"" in html, query
+        assert f"/customers/{created.customer.id}?von=" in html, query  # Link mit Rueckweg zur Suche
 
 
 def test_employee_header_search_finds_note_customer_and_opens_card(app, created):

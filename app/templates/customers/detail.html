@@ -6,10 +6,15 @@
 {% block content %}
 {% set summary = customer_summary %}
 {% set doc_links = customer_view["document_customers"] %}
+{# Zurueck zur Liste bzw. Suche mit Suchbegriff und Seite - nur interne, relative Pfade. #}
+{% set came_from = request.args.get('von', '') %}
+{% set back_ok = came_from[:1] == '/' and came_from[:2] != '//' and '\\' not in came_from and (came_from.startswith('/customers') or came_from.startswith('/search')) %}
+{% set back_url = came_from if back_ok else url_for('customers.list_customers') %}
+{% set back_label = 'Zur Suche' if back_ok and came_from.startswith('/search') else ('Zurück zur Liste' if back_ok else 'Alle Kunden') %}
 
 <div class="page-shell page-shell-wide">
   {% call page_header(customer.name, 'Stammdaten, zugeordnete Dokumente und alle erkannten Leipziger-Vorgänge in einer kompakten Akte.', 'Kundenakte') %}
-    {{ button('Alle Kunden', href=url_for('customers.list_customers'), variant='secondary', icon_name='arrow-left') }}
+    {{ button(back_label, href=back_url, variant='secondary', icon_name='arrow-left') }}
   {% endcall %}
 
   <div class="chip-bar">

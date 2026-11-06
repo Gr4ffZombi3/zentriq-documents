@@ -872,3 +872,80 @@
     });
   }
 })();
+
+// Darstellung Hell / Dunkel / System. Der erste Stand wird schon im <head> gesetzt
+// (components/_head_common.html); hier nur Umschalten, Speichern und - bei "System" - das
+// Nachziehen, wenn das Betriebssystem zwischen hell und dunkel wechselt.
+(function () {
+  var KEY = "zentriq-theme";
+  var root = document.documentElement;
+  var media = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+
+  function current() {
+    var pref = root.getAttribute("data-theme");
+    return pref === "dark" || pref === "system" ? pref : "light";
+  }
+
+  function apply(pref) {
+    root.classList.toggle("dark", pref === "dark" || (pref === "system" && !!media && media.matches));
+    root.setAttribute("data-theme", pref);
+  }
+
+  function set(pref) {
+    if (pref !== "dark" && pref !== "system") pref = "light";
+    try { localStorage.setItem(KEY, pref); } catch (e) {}
+    apply(pref);
+    syncControls();
+  }
+
+  function syncControls() {
+    var pref = current();
+    Array.prototype.forEach.call(document.querySelectorAll("[data-theme-choice]"), function (input) {
+      input.checked = input.value === pref;
+    });
+  }
+
+  if (media) {
+    var onChange = function () { if (current() === "system") apply("system"); };
+    if (media.addEventListener) media.addEventListener("change", onChange);
+    else if (media.addListener) media.addListener(onChange);
+  }
+  // Aenderung in einem anderen Tab uebernehmen.
+  window.addEventListener("storage", function (e) { if (e.key === KEY) { apply(e.newValue || "light"); syncControls(); } });
+
+  document.addEventListener("change", function (e) {
+    if (e.target && e.target.matches && e.target.matches("[data-theme-choice]")) set(e.target.value);
+  });
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", syncControls);
+  else syncControls();
+
+  window.ZentriqTheme = { set: set, get: current };
+})();
+
+// Doppeltes Absenden verhindern: Nach dem Absenden eines POST-Formulars werden dessen Buttons
+// kurz gesperrt (z. B. Ausstempeln, Speichern, Notiz). Abgebrochene Bestaetigungen
+// (preventDefault) und htmx-/JS-Formulare, die selbst absenden, bleiben unberuehrt.
+(function () {
+  document.addEventListener("submit", function (event) {
+    var form = event.target;
+    if (event.defaultPrevented || !form || (form.method || "").toLowerCase() !== "post") return;
+    if (form.hasAttribute("data-allow-resubmit")) return;
+    if (form.dataset.submitting === "1") { event.preventDefault(); return; }
+    form.dataset.submitting = "1";
+    form.setAttribute("aria-busy", "true");
+    setTimeout(function () {
+      Array.prototype.forEach.call(form.querySelectorAll("button[type=submit], button:not([type]), input[type=submit]"), function (b) { b.disabled = true; });
+    }, 0);
+    // Falls der Server nicht antwortet oder der Download keine neue Seite laedt: wieder freigeben.
+    setTimeout(function () { release(form); }, 8000);
+  });
+  function release(form) {
+    delete form.dataset.submitting;
+    form.removeAttribute("aria-busy");
+    Array.prototype.forEach.call(form.querySelectorAll("button[type=submit], button:not([type]), input[type=submit]"), function (b) { b.disabled = false; });
+  }
+  // Zurueck-Navigation (bfcache): Formulare wieder bedienbar machen.
+  window.addEventListener("pageshow", function () {
+    Array.prototype.forEach.call(document.querySelectorAll("form[data-submitting]"), release);
+  });
+})();

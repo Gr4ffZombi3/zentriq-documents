@@ -58,7 +58,13 @@ def _parse_local(day_value: str | None, time_value: str | None, label: str) -> d
         clock_time = datetime.strptime((time_value or "").strip(), "%H:%M").time()
     except ValueError as exc:
         raise TimeTrackingError(f"Bitte {label} vollständig angeben (Datum und Uhrzeit).") from exc
-    return local_to_utc_naive(day, clock_time)
+    value = local_to_utc_naive(day, clock_time)
+    # Bei der Umstellung auf Sommerzeit gibt es 02:00-02:59 nicht - nicht stillschweigend verschieben.
+    if to_local(value).replace(tzinfo=None) != datetime.combine(day, clock_time):
+        raise TimeTrackingError(
+            f"Die Uhrzeit für {label} gibt es an diesem Tag wegen der Zeitumstellung nicht. Bitte prüfen."
+        )
+    return value
 
 
 def _parse_optional_end(form, prefix: str = "end") -> datetime | None:
@@ -317,10 +323,13 @@ def new_request():
 def team():
     users = office_members_query().filter(User.is_active.is_(True)).order_by(User.email).all()
     rows = service.build_team_overview(users)
+    # Laufende und nicht beendete Buchungen (auch deaktivierter Benutzer) mit Direktaktion.
+    open_entries = service.open_entries(office_members_query().all())
     rows.sort(key=lambda row: (row.user.employee_profile.display_name if row.user.employee_profile and row.user.employee_profile.display_name else row.user.email).lower())
     return render_template(
         "timetracking/team.html",
         rows=rows,
+        open_entries=open_entries,
         today=local_today(),
         pending_count=_pending_request_count(),
     )
@@ -371,6 +380,7 @@ def employee(user_id):
         day_sessions=day_sessions,
         corrections=corrections,
         state=service.get_stamp_state(employee_user.id),
+        open_entries=service.open_entries([employee_user]),
         prev_url=link(view, _shift(view, start, -1)),
         next_url=link(view, _shift(view, start, 1)),
         today_url=link(view, today),
@@ -526,6 +536,36 @@ def session_edit(session_id):
         allow_open_end=work_session.is_open,
         cancel_url=url_for("timetracking.employee", user_id=employee_user.id, ansicht="tag", datum=work_session.work_date.isoformat()),
     )
+
+
+@timetracking_bp.post("/buchungen/<int:session_id>/ausstempeln")
+@login_required
+@admin_required
+def session_end(session_id):
+    """Admin stempelt einen Mitarbeiter aus: jetzt oder zum tatsaechlichen (vergangenen)
+    Arbeitsende. Nur Buero-Admins, nur Buchungen des eigenen Bueros (get_or_404_scoped)."""
+    work_session = get_or_404_scoped(WorkSession, session_id)
+    employee_user = _employee_or_404(work_session.user_id)
+    target = _safe_next() or url_for("timetracking.team")
+    reason = request.form.get("reason", "")
+    try:
+        if request.form.get("zeitpunkt") == "jetzt":
+            ended_at = utcnow_naive()
+        else:
+            ended_at = _parse_local(request.form.get("end_date"), request.form.get("end_time"), "das Arbeitsende")
+        service.admin_end_session(work_session, ended_at, current_user, reason)
+        _audit_time(
+            AuditEventType.TIME_CORRECTED,
+            {"action": "end", "work_session_id": work_session.id, "employee_user_id": employee_user.id},
+        )
+    except TimeTrackingError as exc:
+        db.session.rollback()
+        flash(str(exc), "error")
+    else:
+        profile = employee_user.employee_profile
+        name = profile.display_name if profile and profile.display_name else employee_user.email
+        flash(f"{name} wurde um {to_local(ended_at).strftime('%H:%M')} Uhr ({to_local(ended_at).strftime('%d.%m.%Y')}) ausgestempelt. Die Änderung ist protokolliert.", "success")
+    return redirect(target)
 
 
 @timetracking_bp.post("/buchungen/<int:session_id>/stornieren")

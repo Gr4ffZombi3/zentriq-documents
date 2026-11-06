@@ -2,7 +2,7 @@
 {% from "ui/display.html" import page_header %}
 {% from "ui/forms.html" import button %}
 {% from "ui/portal.html" import kpi, panel, state_tag %}
-{% from "timetracking/_macros.html" import presence, period_table, balance %}
+{% from "timetracking/_macros.html" import presence, period_table, balance, open_entries_list %}
 {% set profile = employee.employee_profile %}
 {% set employee_name = profile.display_name if profile and profile.display_name else employee.email %}
 {% block title %}{{ employee_name }} – Zeiterfassung – Zentriq{% endblock %}
@@ -20,6 +20,10 @@
   {% call page_header(employee_name, employee.email ~ ' · ' ~ employee.role.label ~ ((' · Wochensoll ' ~ ((profile.weekly_target_minutes * 60) | duration) ~ ' Std.') if profile else ' · kein Sollprofil hinterlegt')) %}
     <div class="clock-status">{{ presence(state.status) }}</div>
   {% endcall %}
+
+  {% if open_entries %}
+    {{ open_entries_list(open_entries, request.full_path, show_name=False) }}
+  {% endif %}
 
   <div class="toolbar">
     <nav class="segmented" aria-label="Ansicht">
@@ -78,9 +82,9 @@
                     {% if not session.voided_at %}
                       <a class="table-action" href="{{ url_for('timetracking.session_edit', session_id=session.id) }}">Korrigieren</a>
                       <a class="table-action" href="{{ url_for('timetracking.break_create', session_id=session.id) }}">Pause nachtragen</a>
-                      <form method="post" action="{{ url_for('timetracking.session_void', session_id=session.id) }}" class="inline" x-data x-on:submit="if (!confirm('Buchung stornieren? Sie bleibt im Protokoll sichtbar.')) $event.preventDefault()">
+                      <form method="post" action="{{ url_for('timetracking.session_void', session_id=session.id) }}" class="inline" x-data x-on:submit="const r = prompt('Buchung stornieren? Sie bleibt im Protokoll sichtbar. Bitte kurz begründen:'); if (!r || r.trim().length < 3) { $event.preventDefault(); } else { $el.querySelector('[name=reason]').value = r.trim(); }">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="reason" value="Storniert durch Administrator">
+                        <input type="hidden" name="reason" value="">
                         <button type="submit" class="table-action table-action-danger">Stornieren</button>
                       </form>
                     {% endif %}
@@ -99,9 +103,9 @@
                     <td class="text-right whitespace-nowrap">
                       {% if not work_break.voided_at and not session.voided_at %}
                         <a class="table-action" href="{{ url_for('timetracking.break_edit', break_id=work_break.id) }}">Korrigieren</a>
-                        <form method="post" action="{{ url_for('timetracking.break_void', break_id=work_break.id) }}" class="inline" x-data x-on:submit="if (!confirm('Pause stornieren?')) $event.preventDefault()">
+                        <form method="post" action="{{ url_for('timetracking.break_void', break_id=work_break.id) }}" class="inline" x-data x-on:submit="const r = prompt('Pause stornieren? Bitte kurz begründen:'); if (!r || r.trim().length < 3) { $event.preventDefault(); } else { $el.querySelector('[name=reason]').value = r.trim(); }">
                           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                          <input type="hidden" name="reason" value="Storniert durch Administrator">
+                          <input type="hidden" name="reason" value="">
                           <button type="submit" class="table-action table-action-danger">Stornieren</button>
                         </form>
                       {% endif %}

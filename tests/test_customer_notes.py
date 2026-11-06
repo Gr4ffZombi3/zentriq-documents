@@ -427,6 +427,31 @@ def test_callbacks_sorted_by_last_update(app, office, db):
     assert [c["topic"] for c in callbacks] == ["HUK24 Wechsel", "Rechtsschutz"]
 
 
+def test_done_callback_can_be_reopened_by_colleague(app, office):
+    laura = login(app, "laura@example.com")
+    heller = office.ids["Justin Heller"]
+    _input(laura, "808/123456-e HUK24 Wechsel, nicht erreicht")
+    contact = _contacts(heller)[0]
+    dennis = login(app, "dennis@example.com")
+    status, closed = _post(dennis, f"/rueckrufe/{contact.id}/erledigt", client_ref="c1")
+    assert status == 200 and closed["contact_id"] == contact.id
+    # Laura oeffnet den versehentlich erledigten Rueckruf wieder (gemeinsamer Buero-Vorgang).
+    status, reopened = _post(laura, f"/rueckrufe/{contact.id}/wieder-oeffnen", client_ref="r1")
+    assert status == 200 and reopened["duplicate"] is False and "Wieder offen" in reopened["message"]
+    status, again = _post(laura, f"/rueckrufe/{contact.id}/wieder-oeffnen", client_ref="r2")
+    assert again["duplicate"] is True
+    db_contact = _contacts(heller)[0]
+    assert db_contact.status == "open" and db_contact.closed_at is None and db_contact.closed_by_user_id is None
+    events = [n.event for n in _notes(heller)]
+    assert events.count("done") == 1 and events.count("reopened") == 1  # Verlauf bleibt vollstaendig
+    assert [c["topic"] for c in laura.get(API + "/rueckrufe").get_json()["callbacks"]] == ["HUK24 Wechsel"]
+    # Fremdes Buero kann nicht wieder oeffnen.
+    _post(dennis, f"/rueckrufe/{contact.id}/erledigt", client_ref="c2")
+    bob = login(app, "bob@example.com")
+    assert bob.post(f"{API}/rueckrufe/{contact.id}/wieder-oeffnen", json={}).status_code == 404
+    assert _contacts(heller)[0].status == "done"
+
+
 # --- 11. Buerogrenzen ---------------------------------------------------------------------------
 
 

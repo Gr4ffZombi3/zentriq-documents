@@ -100,3 +100,44 @@
   </div>
 </div>
 {%- endmacro %}
+
+{# Laufende bzw. nicht beendete Buchungen mit Direktaktion "Ausstempeln" (nur Buero-Admins,
+   serverseitig: timetracking.session_end). Kompakt: Formular erst auf Klick. #}
+{% macro open_entries_list(entries, next_url, show_name=True) -%}
+<ul class="open-entries">
+  {% for item in entries %}
+    {% set profile = item.user.employee_profile %}
+    {% set name = profile.display_name if profile and profile.display_name else item.user.email %}
+    {% set started = item.session.started_at | local_dt('%d.%m. %H:%M') %}
+    <li class="open-entry {{ 'is-warning' if item.long_running or item.released else '' }}">
+      <div class="open-entry-text">
+        {% if show_name %}<a class="open-entry-name" href="{{ url_for('timetracking.employee', user_id=item.user.id, ansicht='tag', datum=item.session.work_date.isoformat()) }}">{{ name }}</a>{% endif %}
+        <span class="open-entry-meta">seit {{ started }} Uhr · {{ item.running_seconds | duration }} Std.</span>
+        {% if item.on_break %}{{ state_tag('In Pause', 'warning') }}{% endif %}
+        {% if item.released %}{{ state_tag('Ausstempeln fehlt', 'danger') }}
+        {% elif item.long_running %}{{ state_tag('möglicherweise vergessen', 'warning') }}{% endif %}
+      </div>
+      <details class="open-entry-action">
+        <summary class="btn btn-secondary btn-sm">Ausstempeln</summary>
+        <form method="post" action="{{ url_for('timetracking.session_end', session_id=item.session.id) }}" class="open-entry-form" x-data="{ mode: '{{ 'zeit' if item.long_running or item.released else 'jetzt' }}' }">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="next" value="{{ next_url }}">
+          <fieldset class="open-entry-modes">
+            <legend class="sr-only">Arbeitsende</legend>
+            <label><input type="radio" name="zeitpunkt" value="jetzt" x-model="mode"> Jetzt</label>
+            <label><input type="radio" name="zeitpunkt" value="zeit" x-model="mode"> Tatsächliches Ende:</label>
+            <span class="open-entry-time" x-show="mode === 'zeit'">
+              <input class="field-surface" type="date" name="end_date" aria-label="Datum Arbeitsende" value="{{ item.session.work_date.isoformat() }}">
+              <input class="field-surface" type="time" name="end_time" aria-label="Uhrzeit Arbeitsende" :required="mode === 'zeit'">
+            </span>
+          </fieldset>
+          <label class="sr-only" for="grund-{{ item.session.id }}">Begründung</label>
+          <input class="field-surface" id="grund-{{ item.session.id }}" type="text" name="reason" required minlength="3" maxlength="300"
+                 placeholder="Begründung, z. B. Ausstempeln vergessen">
+          <button type="submit" class="btn btn-primary btn-sm">Ausstempeln</button>
+        </form>
+      </details>
+    </li>
+  {% endfor %}
+</ul>
+{%- endmacro %}

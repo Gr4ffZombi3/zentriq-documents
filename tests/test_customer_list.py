@@ -54,3 +54,17 @@ def test_customer_list_renders_table_with_umlauts(auth_client, db, tenant):
     assert "Vorgänge" in body
     assert "Öffnen" in body
     assert "Vorgaenge" not in body
+
+
+def test_customer_detail_returns_to_filtered_list(auth_client, db, tenant):
+    customer = Customer(tenant_id=tenant.id, name="Anna Rückweg", city="Köln")
+    db.session.add(customer)
+    db.session.commit()
+    listing = auth_client.get("/customers?q=R%C3%BCckweg").get_data(as_text=True)
+    assert f"/customers/{customer.id}?von=/customers?q%3DR%25C3%25BCckweg" in listing.replace("&amp;", "&")
+    detail = auth_client.get(f"/customers/{customer.id}?von=/customers?q%3DR%25C3%25BCckweg").get_data(as_text=True)
+    assert 'href="/customers?q=R%C3%BCckweg"' in detail and "Zurück zur Liste" in detail
+    # Fremde oder protokollrelative Ziele werden ignoriert.
+    for bad in ("https://evil.example", "//evil.example", "/settings/users"):
+        html = auth_client.get(f"/customers/{customer.id}", query_string={"von": bad}).get_data(as_text=True)
+        assert "evil.example" not in html and "Alle Kunden" in html

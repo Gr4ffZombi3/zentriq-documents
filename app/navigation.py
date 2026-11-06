@@ -1,12 +1,18 @@
-"""Navigation des Portals: eine ruhige Seitenleiste, nach Taetigkeit gruppiert (hoechstens
-zwei Ebenen: Gruppe -> Bereich; Unterseiten eines Bereichs erscheinen als Reiter darueber).
+"""Navigation des Portals: eine ruhige Seitenleiste, nach Zweck gruppiert (hoechstens zwei
+Ebenen: Gruppe -> Bereich; Unterseiten eines Bereichs erscheinen als Reiter darueber).
 
-- Buero-Rollen: Start | Arbeit (Leipziger Liste, Memo, Kunden*) | Zeit (Zeiterfassung) |
-  Werkzeuge (Assistent, Dokument anonymisieren, Universal-Upload*) | Buero* (Mitarbeiter,
-  Benutzerverwaltung, Aktivitaeten). * nur OFFICE_ADMIN.
-- SUPER_ADMIN: eigene Plattformnavigation (Uebersicht, Bueros, Benutzer, System, Sicherheit),
-  keine Fachbereiche.
-Unten in der Leiste fuer alle: Name, Rolle, Mein Konto, Abmelden.
+Seitenleiste fuer Buero-Rollen (components/app_sidebar.html):
+- oben: Assistent (ZentriqAI-Chat, zentraler KI-Einstieg) und Suche
+- Hauptbereiche ohne Ueberschrift: Kunden, Leipziger Liste (offene Vorgaenge), Memo,
+  Zeiterfassung, Uebersicht. Kunden fuehrt OFFICE_ADMIN zum Kundenstamm, Mitarbeiter zur
+  Kundensuche (sie sehen wie bisher keine Kundenstammdaten-Liste).
+- "Werkzeuge" (aufklappbar): Texte formulieren (Textassistent, nur freigegebene Bueros),
+  Dokument anonymisieren, Universal-Upload*
+- unten "Verwaltung"* (aufklappbar): Mitarbeiter, Benutzerverwaltung, Aktivitaeten
+- ganz unten: Profil mit Mein Konto (inkl. Darstellung) und Abmelden.
+* nur OFFICE_ADMIN.
+SUPER_ADMIN: eigene Plattformnavigation (Uebersicht, Bueros, Benutzer, System, Sicherheit),
+unten KI-Einstellungen; keine Fachbereiche.
 
 Die Sichtbarkeit hier ist nur Komfort - die eigentliche Absicherung erfolgt serverseitig in
 app/auth/permissions.py (Default-Deny je Rolle) und per @admin_required."""
@@ -38,6 +44,9 @@ class NavArea:
     admin_only: bool
     items: tuple[NavItem, ...] = field(default_factory=tuple)
     kind: str = "link"
+    # Nur fuer Rollen ohne Admin-Rechte (Gegenstueck zu einem admin_only-Bereich).
+    staff_only: bool = False
+    icon: str = "file-text"
 
 
 @dataclass(frozen=True)
@@ -49,6 +58,8 @@ class NavGroup:
     # Ueberschrift verlinkt auf eine Bereichsseite (Werkzeuge).
     endpoint: str | None = None
     prefixes: tuple[str, ...] = ()
+    # "main": Hauptbereiche oben; "tools": aufklappbar in der Mitte; "admin": aufklappbar unten.
+    placement: str = "main"
 
 
 LEIPZIGER_ITEMS = (
@@ -78,26 +89,29 @@ PLATFORM_GROUPS = (
         "platform",
         None,
         (
-            NavArea("platform_home", "Übersicht", "platform.index", ("platform.index",), admin_only=False),
-            NavArea("platform_offices", "Büros", "platform.offices", ("platform.office",), admin_only=False),
-            NavArea("platform_users", "Benutzer", "platform.users", ("platform.user",), admin_only=False),
-            NavArea("platform_system", "System", "platform.system", ("platform.system",), admin_only=False),
-            NavArea("platform_security", "Sicherheit", "platform.security", ("platform.security",), admin_only=False),
+            NavArea("platform_home", "Übersicht", "platform.index", ("platform.index",), admin_only=False, icon="layout-dashboard"),
+            NavArea("platform_offices", "Büros", "platform.offices", ("platform.office",), admin_only=False, icon="building-2"),
+            NavArea("platform_users", "Benutzer", "platform.users", ("platform.user",), admin_only=False, icon="users"),
+            NavArea("platform_system", "System", "platform.system", ("platform.system",), admin_only=False, icon="settings"),
+            NavArea("platform_security", "Sicherheit", "platform.security", ("platform.security",), admin_only=False, icon="shield"),
         ),
     ),
     NavGroup(
         "zentriq_ai",
-        "KI",
-        (NavArea("zentriq_settings", "KI-Einstellungen", "zentriq_admin.settings", ("zentriq_admin.",), admin_only=False),),
+        "Verwaltung",
+        (NavArea("zentriq_settings", "KI-Einstellungen", "zentriq_admin.settings", ("zentriq_admin.",), admin_only=False, icon="sparkles"),),
+        placement="admin",
     ),
 )
 
 OFFICE_GROUPS = (
-    NavGroup("start", None, (NavArea("overview", "Übersicht", "portal.overview", ("portal.overview",), admin_only=False),)),
     NavGroup(
-        "work",
-        "Arbeit",
+        "main",
+        None,
         (
+            # Zentriq-Kundenstamm (nur OFFICE_ADMIN); Mitarbeiter finden Kunden ueber die Suche.
+            NavArea("customers", "Kunden", "customers.list_customers", ("customers.",), admin_only=True, icon="users"),
+            NavArea("customer_search", "Kunden", "search.search", ("search.",), admin_only=False, staff_only=True, icon="users"),
             NavArea(
                 "leipziger",
                 "Leipziger Liste",
@@ -105,36 +119,39 @@ OFFICE_GROUPS = (
                 ("leipziger.", "documents.", "upload.", "potenziale.", "tasks.", "recommendations.", "bestand.", "cockpit."),
                 admin_only=False,
                 items=LEIPZIGER_ITEMS,
+                icon="list-todo",
             ),
-            NavArea("voice", "Memo", "dashboard.index", ("dashboard.",), admin_only=False),
-            # Zentriq-Kundenstamm (nur OFFICE_ADMIN; Mitarbeiter sehen wie bisher keine Kundenstammdaten).
-            NavArea("customers", "Kunden", "customers.list_customers", ("customers.",), admin_only=True),
+            NavArea("voice", "Memo", "dashboard.index", ("dashboard.",), admin_only=False, icon="mic"),
+            NavArea("time", "Zeiterfassung", "timetracking.index", ("timetracking.",), admin_only=False, items=TIME_ITEMS, icon="clock"),
+            NavArea("overview", "Übersicht", "portal.overview", ("portal.overview",), admin_only=False, icon="layout-dashboard"),
         ),
     ),
-    NavGroup("time", "Zeit", (NavArea("time", "Zeiterfassung", "timetracking.index", ("timetracking.",), admin_only=False, items=TIME_ITEMS),)),
     NavGroup(
         "tools",
         "Werkzeuge",
         (
-            # Nur fuer freigegebene Bueros (assistant_allowed), unabhaengig vom API-Key.
-            NavArea("assistant", "Assistent", "assistant.index", ("assistant.",), admin_only=False, kind="assistant"),
-            NavArea("anonymize", "Dokument anonymisieren", "tools.anonymize_document", ("tools.anonymize",), admin_only=False),
+            # Textassistent: nur fuer freigegebene Bueros (assistant_allowed), unabhaengig vom
+            # API-Key. Der zentrale KI-Einstieg ist der Assistent (ZentriqAI) ganz oben.
+            NavArea("assistant", "Texte formulieren", "assistant.index", ("assistant.",), admin_only=False, kind="assistant", icon="pen-line"),
+            NavArea("anonymize", "Anonymisieren", "tools.anonymize_document", ("tools.anonymize",), admin_only=False, icon="shield-check"),
             # Fuer Mitarbeiter waere der Universal-Upload nur ein zweiter Memo-Upload (sie duerfen
             # keine Listen importieren) - deshalb nur fuer Buero-Admins in der Navigation.
-            NavArea("intake", "Universal-Upload", "intake.index", ("intake.",), admin_only=True),
+            NavArea("intake", "Universal-Upload", "intake.index", ("intake.",), admin_only=True, icon="upload"),
         ),
         endpoint="tools.index",
         prefixes=("tools.index",),
+        placement="tools",
     ),
     NavGroup(
         "office",
-        "Büro",
+        "Verwaltung",
         (
-            NavArea("staff", "Mitarbeiter", "office.staff", ("office.staff",), admin_only=True),
-            NavArea("office_settings", "Benutzerverwaltung", "settings.users", ("settings.users", "settings.user_"), admin_only=True),
-            NavArea("activity", "Aktivitäten", "office.activities", ("office.activities",), admin_only=True),
+            NavArea("staff", "Mitarbeiter", "office.staff", ("office.staff",), admin_only=True, icon="briefcase"),
+            NavArea("office_settings", "Benutzerverwaltung", "settings.users", ("settings.users", "settings.user_"), admin_only=True, icon="user-cog"),
+            NavArea("activity", "Aktivitäten", "office.activities", ("office.activities",), admin_only=True, icon="history"),
         ),
         admin_only=True,
+        placement="admin",
     ),
 )
 
@@ -151,7 +168,7 @@ def _visible(entry, is_admin: bool) -> bool:
 
 def build_navigation() -> dict:
     if not current_user.is_authenticated:
-        return {"nav_groups": [], "nav_active_area": None, "nav_subitems": [], "nav_settings_label": "Mein Konto"}
+        return {"nav_groups": [], "nav_active_area": None, "nav_subitems": [], "nav_settings_label": "Mein Konto", "nav_assistant_active": False}
     is_admin = current_user.is_admin
     endpoint = request.endpoint
     # Benutzerformulare, die von der Mitarbeiterseite aus geoeffnet wurden.
@@ -167,12 +184,16 @@ def build_navigation() -> dict:
         for area in group.areas:
             if area.kind == "assistant" and not show_assistant:
                 continue
+            if area.staff_only and is_admin:
+                continue
             if not _visible(area, is_admin):
                 continue
             active = active_area is None and _matches(endpoint, area.prefixes)
             if from_staff and area.key in ("staff", "office_settings"):
                 active = area.key == "staff"
-            entries.append({"label": area.label, "url": url_for(area.endpoint), "active": active, "key": area.key, "kind": area.kind})
+            entries.append(
+                {"label": area.label, "url": url_for(area.endpoint), "active": active, "key": area.key, "kind": area.kind, "icon": area.icon}
+            )
             if active:
                 active_area = area
         if not entries:
@@ -185,6 +206,9 @@ def build_navigation() -> dict:
                 "url": heading_url,
                 "active": _matches(endpoint, group.prefixes),
                 "entries": entries,
+                "placement": group.placement,
+                # Aufgeklappt, wenn die aktuelle Seite darin liegt.
+                "open": _matches(endpoint, group.prefixes) or any(entry["active"] for entry in entries),
             }
         )
     account_active = active_area is None and _matches(endpoint, ACCOUNT_AREA.prefixes)
@@ -206,6 +230,8 @@ def build_navigation() -> dict:
         "nav_settings_active": account_active,
         "nav_settings_label": "Mein Konto",
         "nav_display_name": display_name_for(current_user),
+        # ZentriqAI-Chat (zentraler Assistent) ist keine NavArea: eigener Eintrag ganz oben.
+        "nav_assistant_active": bool(endpoint and endpoint.startswith("zentriq.")),
         "assistant_available": has_assistant,
     }
 

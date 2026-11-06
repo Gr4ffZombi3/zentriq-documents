@@ -203,16 +203,20 @@ def _sidebar(html):
 
 def test_employee_navigation_groups(app, world):
     nav = _sidebar(login(app, "dennis@example.com").get("/uebersicht").get_data(as_text=True))
-    for label in ("Start", "Arbeit", "Leipziger Liste", "Memo", "Zeit", "Zeiterfassung", "Werkzeuge", "Dokument anonymisieren", "Mein Konto", "Abmelden"):
+    for label in ("Assistent", "Kunden", "Leipziger Liste", "Memo", "Zeiterfassung", "Übersicht", "Werkzeuge", "Anonymisieren", "Mein Konto", "Abmelden"):
         assert label in nav, label
-    for hidden in ("Büro", 'href="/customers"', 'href="/mitarbeiter"', 'href="/settings/users"', 'href="/aktivitaeten"', 'href="/hochladen"', "/plattform"):
+    # Mitarbeiter: "Kunden" fuehrt zur Kundensuche, nicht zum Kundenstamm; keine Verwaltung.
+    assert 'href="/search" class="zs-item' in nav
+    for hidden in ("Verwaltung", 'href="/customers"', 'href="/mitarbeiter"', 'href="/settings/users"', 'href="/aktivitaeten"', 'href="/hochladen"', "/plattform"):
         assert hidden not in nav, hidden
 
 
 def test_office_admin_navigation_groups(app, world):
     nav = _sidebar(login(app, "admin-a@example.com").get("/uebersicht").get_data(as_text=True))
-    for label in ("Arbeit", "Kunden", "Zeit", "Werkzeuge", "Universal-Upload", "Büro", "Mitarbeiter", "Benutzerverwaltung", "Aktivitäten"):
+    for label in ("Assistent", "Kunden", "Zeiterfassung", "Werkzeuge", "Universal-Upload", "Verwaltung", "Mitarbeiter", "Benutzerverwaltung", "Aktivitäten"):
         assert label in nav, label
+    assert 'href="/customers" class="zs-item' in nav
+    assert 'href="/search" class="zs-item' not in nav  # Admin: Kunden = Kundenstamm, keine Doppelung
     assert "/plattform" not in nav
 
 

@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Assistent – Zentriq{% endblock %}
+{% block title %}Texte formulieren – Zentriq{% endblock %}
 {% block content %}
 {# Reines Textwerkzeug: uebertragen wird nur der eingegebene Text (app/services/assistant.py);
    Eingabe und Ergebnis werden nicht gespeichert, es wird nichts versendet oder ausgefuehrt. #}
 <div class="page-shell page-shell-narrow">
   <div class="page-toolbar">
     <div>
-      <h1 class="page-toolbar-title">Assistent</h1>
-      <p class="page-subtitle">Professionelle Texte schnell formulieren.</p>
+      <h1 class="page-toolbar-title">Texte formulieren</h1>
+      <p class="page-subtitle">Professionelle Texte schnell formulieren. Für Fragen zu Kunden und Vorgängen nutzen Sie den <a href="{{ url_for('zentriq.index') }}">Assistenten</a>.</p>
     </div>
   </div>
 

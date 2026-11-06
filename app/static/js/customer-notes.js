@@ -253,7 +253,14 @@
   // Gespeichert / erledigt: Bestaetigung erst nach erfolgreicher Antwort des Servers.
   function saved(reply, r) {
     if (r.card) select(r.card);
-    fill(reply, [message(r.message, r.duplicate ? null : "ok"), r.card ? renderCard(r.card, reply) : null]);
+    var undo = null;
+    // Versehentlich erledigt? Direkt in der Bestaetigung wieder oeffnen (Verlauf bleibt erhalten).
+    if (r.kind === "closed" && r.contact_id && !r.duplicate) {
+      undo = button("Rückgängig", "zn-link", function () {
+        act(reply, request("POST", "/rueckrufe/" + r.contact_id + "/wieder-oeffnen", { client_ref: newRef() }), "Wird gespeichert", function (res) { saved(reply, res); });
+      });
+    }
+    fill(reply, [message(r.message, r.duplicate ? null : "ok"), undo, r.card ? renderCard(r.card, reply) : null]);
   }
 
   // --- Rueckfragen -----------------------------------------------------------------------------

@@ -17,29 +17,34 @@
   --content-max-width: 86rem;
   --content-wide-max-width: 92rem;
 
-  /* Hell, ruhig, klar abgesetzt: neutraler Seitenhintergrund, weisse Inhaltsflaechen. */
-  --color-bg: #eef1f5;
-  --color-bg-elevated: #e6eaf0;
-  --color-surface: #ffffff;
-  --color-surface-muted: #f6f8fa;
-  --color-surface-strong: #eaeef3;
-  --color-border: #d9dfe7;
-  --color-border-strong: #c0c8d3;
-  --color-text: #17202b;
-  --color-text-muted: #4d5866;
-  --color-text-soft: #7b8593;
-  --color-primary: #1f5288;
-  --color-primary-hover: #19446f;
-  --color-primary-soft: #e6eef8;
-  --color-primary-strong: #133a63;
-  --color-success: #1f7a4d;
-  --color-warning: #a4670f;
-  --color-error: #b3373a;
-  --color-success-text: #175f3c;
-  --color-warning-text: #7c4e0b;
-  --color-error-text: #8e2a2d;
-  --color-shadow: rgba(16, 24, 40, 0.05);
-  --color-shadow-strong: rgba(16, 24, 40, 0.1);
+  /* Gedaempft hell (Standard): grau getoenter Seitenhintergrund statt Reinweiss, leicht
+     abgesetzte Inhaltsflaechen, etwas dunklere Seitenleiste, zurueckhaltende Rahmen und
+     Schatten, sparsame Akzentfarbe. Der Dunkelmodus (.dark, unten) nutzt dieselben Namen -
+     Komponenten verwenden nur diese Variablen, nie feste Farben. */
+  --color-bg: #e8ebef;
+  --color-bg-elevated: #e1e5ea;
+  --color-surface: #f6f7f9;
+  --color-surface-muted: #eef0f3;
+  --color-surface-strong: #e2e6eb;
+  --color-sidebar: #dde2e8;
+  --color-border: #d3d9e0;
+  --color-border-strong: #b9c1cb;
+  --color-text: #1d2530;
+  --color-text-muted: #4a5563;
+  --color-text-soft: #687381;
+  --color-primary: #2b5888;
+  --color-primary-hover: #234a73;
+  --color-primary-soft: #dbe4ee;
+  --color-primary-strong: #1b3f66;
+  --color-on-primary: #ffffff;
+  --color-success: #2a7350;
+  --color-warning: #9a6514;
+  --color-error: #a83c3f;
+  --color-success-text: #1e5c3e;
+  --color-warning-text: #74490c;
+  --color-error-text: #8a2f32;
+  --color-shadow: rgba(16, 24, 40, 0.035);
+  --color-shadow-strong: rgba(16, 24, 40, 0.08);
   --radius-card: 10px;
   --radius-panel: 10px;
   --radius-sm: 7px;
@@ -71,28 +76,30 @@
 }
 
 .dark {
-  --color-bg: #12161c;
-  --color-bg-elevated: #0e1216;
-  --color-surface: #192029;
-  --color-surface-muted: #1d252f;
-  --color-surface-strong: #222b36;
-  --color-border: #2a333e;
-  --color-border-strong: #394451;
-  --color-text: #e5e8ec;
-  --color-text-muted: #a2abb6;
-  --color-text-soft: #7a8490;
+  --color-bg: #15191f;
+  --color-bg-elevated: #111419;
+  --color-surface: #1b2028;
+  --color-surface-muted: #20262f;
+  --color-surface-strong: #272e38;
+  --color-sidebar: #111419;
+  --color-border: #2b323c;
+  --color-border-strong: #3a4350;
+  --color-text: #e2e6ea;
+  --color-text-muted: #a5aeb9;
+  --color-text-soft: #838d99;
   --color-primary: #86acd9;
   --color-primary-hover: #a1c0e4;
   --color-primary-soft: rgba(134, 172, 217, 0.14);
   --color-primary-strong: #c6d8ee;
+  --color-on-primary: #0f1a27;
   --color-success: #4fbf88;
   --color-warning: #dca64c;
   --color-error: #ec7d7d;
   --color-success-text: #7ed3a8;
   --color-warning-text: #eac17a;
   --color-error-text: #f3a3a3;
-  --color-shadow: rgba(0, 0, 0, 0.3);
-  --color-shadow-strong: rgba(0, 0, 0, 0.45);
+  --color-shadow: rgba(0, 0, 0, 0.25);
+  --color-shadow-strong: rgba(0, 0, 0, 0.4);
 }
 
 @layer base {
@@ -209,7 +216,7 @@
     justify-content: center;
     border-radius: 0.95rem;
     background: linear-gradient(145deg, var(--color-primary) 0%, color-mix(in oklab, var(--color-primary) 70%, black) 100%);
-    color: white;
+    color: var(--color-on-primary);
     box-shadow: 0 14px 24px -18px color-mix(in oklab, var(--color-primary) 42%, transparent);
   }
 
@@ -1276,7 +1283,7 @@
 
   .btn-primary {
     background: linear-gradient(145deg, var(--color-primary) 0%, color-mix(in oklab, var(--color-primary) 78%, black) 100%);
-    color: white;
+    color: var(--color-on-primary);
     box-shadow: 0 16px 30px -24px color-mix(in oklab, var(--color-primary) 42%, transparent);
   }
 
@@ -1308,7 +1315,7 @@
 
   .btn-danger {
     background: linear-gradient(145deg, var(--color-error) 0%, color-mix(in oklab, var(--color-error) 74%, black) 100%);
-    color: white;
+    color: var(--color-on-primary);
   }
 
   .status-pill {
@@ -4088,7 +4095,7 @@
     justify-content: center;
     border-radius: var(--radius-sm);
     background: var(--color-primary);
-    color: #fff;
+    color: var(--color-on-primary);
     font-size: 0.9rem;
     font-weight: 700;
   }
@@ -4634,7 +4641,7 @@
   .btn-primary {
     border-color: var(--color-primary);
     background: var(--color-primary);
-    color: #fff;
+    color: var(--color-on-primary);
     box-shadow: none;
   }
 
@@ -4659,7 +4666,7 @@
   .btn-danger {
     border-color: var(--color-error);
     background: var(--color-error);
-    color: #fff;
+    color: var(--color-on-primary);
   }
 
   .btn-danger:hover {
@@ -4941,7 +4948,7 @@
 
   .segmented-item.is-active {
     background: var(--color-primary);
-    color: #fff;
+    color: var(--color-on-primary);
   }
 
   .dark .segmented-item.is-active {
@@ -5352,7 +5359,7 @@
   .btn-plain-primary {
     border-color: var(--color-primary);
     background: var(--color-primary);
-    color: #fff;
+    color: var(--color-on-primary);
   }
 
   .btn-plain-primary:hover {
@@ -5806,7 +5813,7 @@
     border-radius: var(--radius-sm);
     background: var(--color-primary);
     padding: 0.5rem 0.85rem;
-    color: #fff;
+    color: var(--color-on-primary);
     font-weight: 600;
   }
   .skip-link:focus { top: 0.5rem; }
@@ -6112,8 +6119,8 @@
   .btn-sm { min-height: 1.95rem; padding: 0 0.7rem; font-size: 0.8rem; }
   .btn-lg { min-height: 2.6rem; padding: 0 1.25rem; font-size: 0.9rem; }
 
-  .btn-primary { border-color: var(--color-primary); background: var(--color-primary); color: #fff; box-shadow: none; }
-  .btn-primary:hover { border-color: var(--color-primary-hover); background: var(--color-primary-hover); color: #fff; }
+  .btn-primary { border-color: var(--color-primary); background: var(--color-primary); color: var(--color-on-primary); box-shadow: none; }
+  .btn-primary:hover { border-color: var(--color-primary-hover); background: var(--color-primary-hover); color: var(--color-on-primary); }
 
   .btn-secondary {
     border-color: var(--color-border-strong);
@@ -6549,7 +6556,7 @@
     font-weight: 650;
     color: var(--color-text-muted);
   }
-  .staff-row.is-admin .staff-avatar { background: var(--color-primary); color: #fff; }
+  .staff-row.is-admin .staff-avatar { background: var(--color-primary); color: var(--color-on-primary); }
   .staff-row.is-inactive .staff-avatar { opacity: 0.55; }
   .staff-ident { display: flex; min-width: 0; align-items: baseline; gap: 0.45rem; flex-wrap: wrap; }
   .staff-name { font-weight: 650; color: var(--color-text); text-decoration: none; }
@@ -7378,5 +7385,131 @@
   .worklist .copy-inline.is-copied { opacity: 1; }
   @media (hover: none) {
     .worklist .copy-inline { opacity: 1; }
+  }
+}
+
+/* ==========================================================================
+   Oberflaeche 11/2026: gedaempft hell als Standard, Dunkelmodus, ruhigere Flaechen.
+   Farben ausschliesslich ueber die Tokens oben (@theme / .dark); hier nur gemeinsame
+   Regeln, die fuer alle Seiten gelten - keine Sonderloesungen je Seite.
+   ========================================================================== */
+@layer components {
+  html { color-scheme: light; }
+  html.dark { color-scheme: dark; }
+
+  /* Weniger harte Kontraste: Inhaltsflaechen nur leicht abgesetzt, kaum Schatten. */
+  .surface-card,
+  .panel,
+  .kpi-row,
+  .split-list-nav,
+  .filter-bar,
+  .upload-compact-shell,
+  .flash { box-shadow: none; }
+
+  /* Leere Ansichten: ruhig, ohne zweite Karte im Inhalt. */
+  .empty-state { padding: 2rem 1.5rem; }
+  .empty-state-icon { background: var(--color-surface-strong); color: var(--color-text-muted); }
+
+  /* Fehlermeldungen in Formularen und Werkzeugen: gleiche Darstellung wie Hinweise. */
+  .form-error[role="alert"]:not([hidden]),
+  .assistant-error:not([hidden]) {
+    border: 1px solid color-mix(in oklab, var(--color-error) 28%, transparent);
+    border-left: 3px solid var(--color-error);
+    border-radius: var(--radius-sm);
+    background: color-mix(in oklab, var(--color-error) 7%, transparent);
+    padding: 0.5rem 0.75rem;
+  }
+
+  /* Ladezustand: einheitlicher dezenter Hinweis fuer Elemente mit aria-busy. */
+  [aria-busy="true"] { cursor: progress; opacity: 0.7; }
+
+  /* Sichtbarer Tastaturfokus fuer alle Links, Buttons und Felder. */
+  :where(a, button, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  /* Dialoge, Menues und aufklappende Listen im Dunkelmodus nicht heller als der Inhalt. */
+  .dark :where(.app-subnav-menu, .zc-popover, .zs-profile-menu) { background: var(--color-surface-muted); }
+
+  .page-subtitle a,
+  .panel-note a { color: var(--color-primary); text-decoration: underline; text-underline-offset: 2px; }
+
+  /* --- Darstellung (Mein Konto) ------------------------------------------------- */
+  .theme-choice {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 0.6rem;
+    margin: 0;
+    border: 0;
+    padding: 0;
+  }
+  .theme-option { position: relative; display: block; cursor: pointer; }
+  .theme-option input { position: absolute; opacity: 0; pointer-events: none; }
+  .theme-option-box {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    height: 100%;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-muted);
+    padding: 0.7rem 0.85rem;
+    color: var(--color-text-muted);
+  }
+  .theme-option:hover .theme-option-box { border-color: var(--color-border-strong); color: var(--color-text); }
+  .theme-option input:checked + .theme-option-box {
+    border-color: var(--color-primary);
+    background: var(--color-primary-soft);
+    color: var(--color-primary-strong);
+  }
+  .theme-option input:focus-visible + .theme-option-box { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+  .theme-option-text { display: flex; min-width: 0; flex-direction: column; }
+  .theme-option-text strong { font-size: 0.9rem; font-weight: 600; color: var(--color-text); }
+  .theme-option-text small { font-size: 0.78rem; color: var(--color-text-muted); }
+}
+
+/* --- Zeiterfassung: laufende Buchungen mit Direktaktion (Team / Mitarbeiter) ------------- */
+@layer components {
+  .open-entries { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+  .open-entry {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    border-top: 1px solid var(--color-border);
+    padding: 0.6rem 0;
+  }
+  .open-entry:first-child { border-top: 0; padding-top: 0; }
+  .open-entry.is-warning .open-entry-meta { color: var(--color-warning-text); }
+  .open-entry-text { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.6rem; }
+  .open-entry-name { font-weight: 600; color: var(--color-text); text-decoration: none; overflow-wrap: anywhere; }
+  .open-entry-name:hover { color: var(--color-primary); text-decoration: underline; }
+  .open-entry-meta { font-size: 0.85rem; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+  .open-entry-action > summary { list-style: none; }
+  .open-entry-action > summary::-webkit-details-marker { display: none; }
+  .open-entry-action[open] { flex-basis: 100%; }
+  .open-entry-action[open] > summary { display: none; }
+  .open-entry-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-muted);
+    padding: 0.6rem 0.75rem;
+  }
+  .open-entry-modes { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.9rem; margin: 0; border: 0; padding: 0; font-size: 0.875rem; }
+  .open-entry-modes label { display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+  .open-entry-time { display: inline-flex; gap: 0.4rem; }
+  .open-entry-time input { min-height: 2rem; padding: 0 0.5rem; }
+  .open-entry-form > input[name="reason"] { flex: 1 1 14rem; min-height: 2rem; padding: 0 0.6rem; }
+  .page-shell > .open-entries {
+    border: 1px solid color-mix(in oklab, var(--color-warning) 35%, var(--color-border));
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    padding: 0.75rem 1rem;
   }
 }

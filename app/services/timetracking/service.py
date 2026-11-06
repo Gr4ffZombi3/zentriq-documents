@@ -37,6 +37,9 @@ from app.services.timetracking.clock import format_utc_iso, local_date_of, local
 # Offene Buchungen, die laenger laufen, gelten als "Ausstempeln vergessen". Sie werden beim
 # naechsten Einstempeln ohne erfundene Endzeit geloest und muessen korrigiert werden.
 STALE_SESSION_HOURS = 16
+# Ab dieser Laufzeit weist die Team-Ansicht auf ein moeglicherweise vergessenes Ausstempeln hin.
+# Es wird nichts automatisch beendet oder gekuerzt.
+LONG_RUNNING_HOURS = 10
 
 
 class TimeTrackingError(Exception):
@@ -207,9 +210,24 @@ def _require_active_session(user: User, now: datetime) -> WorkSession:
     return session
 
 
+def _lock(session: WorkSession) -> WorkSession:
+    """Sperrt die Buchung bis zum Commit (SELECT ... FOR UPDATE) und laedt ihren aktuellen Stand.
+    Verhindert, dass Mitarbeiter und Admin dieselbe Buchung gleichzeitig beenden und sich
+    gegenseitig ueberschreiben (MariaDB; SQLite ignoriert die Sperre)."""
+    return (
+        WorkSession.query.filter(WorkSession.id == session.id)
+        .with_for_update()
+        .populate_existing()
+        .one()
+    )
+
+
 def clock_out(user: User) -> WorkSession:
     now = utcnow_naive()
-    session = _require_active_session(user, now)
+    session = _lock(_require_active_session(user, now))
+    if not session.is_open:
+        db.session.rollback()
+        raise TimeTrackingError("Sie wurden bereits ausgestempelt.")
     open_break = get_open_break(user.id)
     if open_break is not None:
         open_break.ended_at = now
@@ -324,6 +342,93 @@ def _check_breaks_inside(session: WorkSession, started_at: datetime, ended_at: d
             )
 
 
+def _require_reason(reason: str | None, correction_request: TimeCorrectionRequest | None = None) -> None:
+    """Admin-Korrekturen brauchen eine kurze Begruendung (bei Antraegen steht sie im Antrag)."""
+    if correction_request is None and len((reason or "").strip()) < 3:
+        raise TimeTrackingError("Bitte eine kurze Begründung angeben (mindestens 3 Zeichen).")
+
+
+@dataclass
+class OpenEntry:
+    """Eine nicht beendete Buchung fuer die Team-Ansicht."""
+
+    session: WorkSession
+    user: User
+    on_break: bool
+    running_seconds: int
+    long_running: bool  # laeuft auffaellig lange - moeglicherweise vergessen
+    released: bool  # bereits aus dem offenen Zustand geloest (Ausstempeln fehlte)
+
+
+def open_entries(users: list[User], now: datetime | None = None) -> list[OpenEntry]:
+    """Alle laufenden bzw. nicht beendeten Buchungen der uebergebenen (Buero-)Benutzer."""
+    now = now or utcnow_naive()
+    by_id = {item.id: item for item in users}
+    if not by_id:
+        return []
+    sessions = (
+        WorkSession.query.options(selectinload(WorkSession.breaks))
+        .filter(
+            WorkSession.user_id.in_(list(by_id)),
+            WorkSession.ended_at.is_(None),
+            WorkSession.voided_at.is_(None),
+        )
+        .order_by(WorkSession.started_at)
+        .all()
+    )
+    entries = []
+    for item in sessions:
+        running = max(0, int((now - item.started_at).total_seconds()))
+        entries.append(
+            OpenEntry(
+                session=item,
+                user=by_id[item.user_id],
+                on_break=any(br.open_marker == 1 and br.voided_at is None for br in item.breaks),
+                running_seconds=running,
+                long_running=running >= LONG_RUNNING_HOURS * 3600,
+                released=item.is_incomplete,
+            )
+        )
+    return entries
+
+
+def _close_open_breaks(session: WorkSession, ended_at: datetime, actor: User, reason: str | None) -> None:
+    """Eine noch laufende Pause endet spaetestens mit der Buchung (protokolliert)."""
+    for work_break in session.active_breaks:
+        if work_break.ended_at is not None:
+            continue
+        if work_break.started_at >= ended_at:
+            raise TimeTrackingError(
+                "Eine Pause beginnt erst nach dem gewählten Ende. Bitte ein späteres Ende wählen oder die Pause korrigieren."
+            )
+        _record(actor, work_break, "break", "update", "ended_at", None, ended_at, reason)
+        work_break.ended_at = ended_at
+        work_break.open_marker = None
+        work_break.is_corrected = True
+
+
+def admin_end_session(session: WorkSession, ended_at: datetime, actor: User, reason: str | None) -> WorkSession:
+    """Admin beendet eine laufende (oder als 'Ausstempeln fehlte' geloeste) Buchung zum
+    angegebenen Zeitpunkt. Eine laufende Pause endet spaetestens dann mit. Alles wird mit
+    altem/neuem Wert, Akteur und Begruendung protokolliert; committet wird vom Aufrufer."""
+    _require_reason(reason)
+    session = _lock(session)
+    if session.voided_at is not None:
+        raise TimeTrackingError("Die Buchung ist storniert.")
+    if session.ended_at is not None:
+        raise TimeTrackingError("Die Buchung wurde inzwischen bereits beendet. Bitte Seite neu laden.")
+    now = utcnow_naive()
+    _validate_range(session.started_at, ended_at, now)
+    _check_session_overlap(session.user_id, session.started_at, ended_at, now, exclude_id=session.id)
+    _close_open_breaks(session, ended_at, actor, reason)
+    _check_breaks_inside(session, session.started_at, ended_at)
+    _record(actor, session, "session", "update", "ended_at", None, ended_at, reason)
+    session.ended_at = ended_at
+    session.open_marker = None
+    session.is_corrected = True
+    return session
+
+
 def update_session_times(
     session: WorkSession,
     started_at: datetime,
@@ -333,6 +438,7 @@ def update_session_times(
     correction_request: TimeCorrectionRequest | None = None,
 ) -> bool:
     """Gibt False zurueck, wenn sich nichts geaendert hat."""
+    _require_reason(reason, correction_request)
     now = utcnow_naive()
     if session.voided_at is not None:
         raise TimeTrackingError("Stornierte Buchungen können nicht geändert werden.")
@@ -340,6 +446,8 @@ def update_session_times(
         raise TimeTrackingError("Bitte ein Ende angeben.")
     _validate_range(started_at, ended_at, now)
     _check_session_overlap(session.user_id, started_at, ended_at, now, exclude_id=session.id)
+    if ended_at is not None and session.ended_at is None:
+        _close_open_breaks(session, ended_at, actor, reason)
     _check_breaks_inside(session, started_at, ended_at)
 
     changed = False
@@ -370,6 +478,7 @@ def create_manual_session(
     reason: str | None = None,
     correction_request: TimeCorrectionRequest | None = None,
 ) -> WorkSession:
+    _require_reason(reason, correction_request)
     now = utcnow_naive()
     _validate_range(started_at, ended_at, now)
     _check_session_overlap(employee.id, started_at, ended_at, now)
@@ -391,6 +500,7 @@ def create_manual_session(
 
 
 def void_session(session: WorkSession, actor: User, reason: str | None = None) -> None:
+    _require_reason(reason)
     if session.voided_at is not None:
         raise TimeTrackingError("Die Buchung ist bereits storniert.")
     session.voided_at = utcnow_naive()
@@ -422,6 +532,7 @@ def _validate_break(session: WorkSession, started_at: datetime, ended_at: dateti
 def update_break_times(
     work_break: WorkBreak, started_at: datetime, ended_at: datetime | None, actor: User, reason: str | None = None
 ) -> bool:
+    _require_reason(reason)
     if work_break.voided_at is not None:
         raise TimeTrackingError("Stornierte Pausen können nicht geändert werden.")
     _validate_break(work_break.work_session, started_at, ended_at, exclude_id=work_break.id)
@@ -441,6 +552,7 @@ def update_break_times(
 
 
 def add_break(session: WorkSession, started_at: datetime, ended_at: datetime, actor: User, reason: str | None = None) -> WorkBreak:
+    _require_reason(reason)
     _validate_break(session, started_at, ended_at)
     work_break = WorkBreak(
         tenant_id=session.tenant_id,
@@ -458,6 +570,7 @@ def add_break(session: WorkSession, started_at: datetime, ended_at: datetime, ac
 
 
 def void_break(work_break: WorkBreak, actor: User, reason: str | None = None) -> None:
+    _require_reason(reason)
     if work_break.voided_at is not None:
         raise TimeTrackingError("Die Pause ist bereits storniert.")
     work_break.voided_at = utcnow_naive()

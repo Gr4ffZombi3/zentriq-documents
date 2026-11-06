@@ -1,7 +1,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-{# Bewusst helles Erscheinungsbild; ein frueher gespeichertes dunkles Theme wird verworfen. #}
-<script>try { localStorage.removeItem("zentriq-theme"); } catch (e) {}</script>
+{# Darstellung (Hell / Dunkel / System, Standard: Hell) und eingeklappte Seitenleiste schon vor
+   dem ersten Zeichnen setzen - sonst blitzt beim Seitenaufbau kurz die helle bzw. breite Ansicht
+   auf. Gespeichert im Browser (localStorage); geaendert unter Mein Konto -> Darstellung
+   (js/app.js, window.ZentriqTheme). #}
+<script>
+(function () {
+  var root = document.documentElement, pref = "light";
+  try { pref = localStorage.getItem("zentriq-theme") || "light"; } catch (e) {}
+  if (pref !== "dark" && pref !== "system") pref = "light";
+  var dark = pref === "dark" || (pref === "system" && !!window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  root.classList.toggle("dark", dark);
+  root.setAttribute("data-theme", pref);
+  try { if (localStorage.getItem("zentriq-sidebar-collapsed") === "1") root.classList.add("zs-collapsed"); } catch (e) {}
+})();
+</script>
 <meta name="csrf-token" content="{{ csrf_token() }}">
 {# Version aus dem Dateiinhalt (static_rev): neues CSS bekommt immer eine neue URL. Der feste Wert
    greift nur, solange nach einem git pull noch der alte Python-Prozess laeuft. #}
@@ -15,7 +28,8 @@
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png', v=_rev('img/apple-touch-icon.png') if _rev else '1') }}">
 {# Installierbare Web-App (Manifest, Service Worker: app/blueprints/pwa/routes.py). #}
 <link rel="manifest" href="{{ url_for('pwa.manifest') }}">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#e9ecf0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14181e" media="(prefers-color-scheme: dark)">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">

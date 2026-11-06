@@ -2,7 +2,7 @@
 {% from "ui/display.html" import page_header %}
 {% from "ui/forms.html" import button %}
 {% from "ui/portal.html" import kpi, panel %}
-{% from "timetracking/_macros.html" import presence, balance %}
+{% from "timetracking/_macros.html" import presence, balance, open_entries_list %}
 {% block title %}Team – Zeiterfassung – Zentriq{% endblock %}
 {% block content %}
 {% set present = rows | selectattr('state', 'equalto', 'in') | list | length %}
@@ -23,6 +23,12 @@
     {{ kpi('Abwesend', rows | length - present - on_break) }}
     {{ kpi('Offene Anträge', pending_count, tone='warning' if pending_count else None, href=url_for('timetracking.requests')) }}
   </div>
+
+  {% if open_entries %}
+    {% call panel('Aktuell eingestempelt', 'Laufende und nicht beendete Buchungen. Nichts wird automatisch beendet oder gekürzt.') %}
+      {{ open_entries_list(open_entries, url_for('timetracking.team')) }}
+    {% endcall %}
+  {% endif %}
 
   {% call panel('Übersicht ' ~ today.strftime('%d.%m.%Y'), flush=True) %}
     <div class="table-wrap">

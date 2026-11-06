@@ -79,11 +79,13 @@ RECENT_TOPIC_DAYS = 7
 
 OPEN, DONE = "open", "done"
 NOT_REACHED, CALLBACK_REQUESTED, CUSTOMER_CALLS_BACK = "not_reached", "callback_requested", "customer_calls_back"
+REOPENED = "reopened"
 OUTCOME_LABELS = {
     NOT_REACHED: "Nicht erreicht",
     CALLBACK_REQUESTED: "Rückruf erbeten",
     CUSTOMER_CALLS_BACK: "Kunde ruft zurück",
     DONE: "Erledigt",
+    REOPENED: "Wieder geöffnet",
 }
 
 # VN-Nummer: Muster und Schluessel zentral in app/utils/customer_keys.py (VN_PATTERN, vn_key).
@@ -847,6 +849,36 @@ def close_contact(user, contact: CustomerContact, *, client_ref: str | None = No
         "kind": "closed",
         "duplicate": not created,
         "message": f"Erledigt: {contact.topic or 'Vorgang'} bei {customer.name}.",
+        "card": customer_card(user, customer),
+        # Fuer "Rueckgaengig" direkt in der Bestaetigung (reopen_contact).
+        "contact_id": contact.id,
+    }
+
+
+def reopen_contact(user, contact: CustomerContact, *, client_ref: str | None = None) -> dict:
+    """Versehentlich erledigten Rueckruf wieder oeffnen. Der Verlauf bleibt vollstaendig: die
+    Erledigt-Notiz bleibt stehen, das Wiederoeffnen wird als eigene Notiz (Verfasser, Zeitpunkt)
+    festgehalten. Ein bereits offener Vorgang bleibt unveraendert."""
+    customer = contact.customer
+    existing = _existing_by_ref(user, client_ref)
+    if existing is not None or contact.status != DONE:
+        return {"kind": "saved", "duplicate": True, "message": "Der Rückruf ist bereits offen.", "card": customer_card(user, customer)}
+    now = utcnow_naive()
+    contact.status = OPEN
+    contact.closed_by_user_id = None
+    contact.closed_at = None
+    contact.updated_by_user_id = user.id
+    contact.updated_at = now
+    note = CustomerNote(
+        tenant_id=contact.tenant_id, customer_id=contact.customer_id, contact_id=contact.id,
+        text="Wieder geöffnet" + (f" ({contact.topic})" if contact.topic else ""), event=REOPENED,
+        created_by_user_id=user.id, created_at=now, client_ref=client_ref or None,
+    )
+    _note, created = _commit_note(note, user)
+    return {
+        "kind": "saved",
+        "duplicate": not created,
+        "message": f"Wieder offen: {contact.topic or 'Rückruf'} bei {customer.name}.",
         "card": customer_card(user, customer),
     }
 

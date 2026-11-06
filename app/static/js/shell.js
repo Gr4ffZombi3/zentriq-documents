@@ -2,7 +2,7 @@
 // - Seitenleiste: einklappen (Desktop), gespeicherte/letzte Unterhaltungen, Chat-Suche
 // - Zeiterfassung unten rechts: Status, Ein-/Ausstempeln, Pause - ueber die bestehenden
 //   Endpunkte der Zeiterfassung, ohne Seitenreload.
-// Inhalte werden nur per textContent eingesetzt. localStorage nur fuer den Einklapp-Zustand.
+// Inhalte werden nur per textContent eingesetzt. localStorage nur fuer Einklapp-Zustaende.
 (function () {
   var csrfMeta = document.querySelector('meta[name="csrf-token"]');
   function csrf() { return csrfMeta ? csrfMeta.getAttribute("content") : ""; }
@@ -29,17 +29,41 @@
     }, function () { throw new Error("Keine Verbindung zum Server."); });
   }
 
-  // --- Seitenleiste: einklappen ---------------------------------------------------------
+  // --- Seitenleiste: einklappen (Desktop: Symbolleiste) ---------------------------------
+  // Der gespeicherte Zustand wird schon im <head> auf <html> gesetzt (kein Springen).
   var KEY = "zentriq-sidebar-collapsed";
-  try { if (localStorage.getItem(KEY) === "1") document.body.classList.add("zs-collapsed"); } catch (e) {}
-  function setCollapsed(state) {
-    document.body.classList.toggle("zs-collapsed", state);
-    try { localStorage.setItem(KEY, state ? "1" : "0"); } catch (e) {}
-  }
+  var root = document.documentElement;
   var collapseBtn = document.querySelector("[data-zs-collapse]");
-  var expandBtn = document.querySelector("[data-zs-expand]");
-  if (collapseBtn) collapseBtn.addEventListener("click", function () { setCollapsed(true); });
-  if (expandBtn) expandBtn.addEventListener("click", function () { setCollapsed(false); });
+  function syncCollapseButton() {
+    if (!collapseBtn) return;
+    var collapsed = root.classList.contains("zs-collapsed");
+    var text = collapsed ? "Seitenleiste ausklappen" : "Seitenleiste einklappen";
+    collapseBtn.setAttribute("aria-label", text);
+    collapseBtn.setAttribute("title", text);
+    collapseBtn.setAttribute("aria-expanded", String(!collapsed));
+  }
+  function setCollapsed(state) {
+    root.classList.toggle("zs-collapsed", state);
+    try { localStorage.setItem(KEY, state ? "1" : "0"); } catch (e) {}
+    syncCollapseButton();
+  }
+  function isRail() {
+    return root.classList.contains("zs-collapsed") && window.matchMedia("(min-width: 64rem)").matches;
+  }
+  if (collapseBtn) collapseBtn.addEventListener("click", function () { setCollapsed(!root.classList.contains("zs-collapsed")); });
+  syncCollapseButton();
+
+  // In der Symbolleiste klappt ein Klick auf Suche oder Gruppe die Leiste wieder aus.
+  document.addEventListener("click", function (e) {
+    if (!isRail()) return;
+    var search = e.target.closest("[data-zs-search]");
+    var summary = e.target.closest(".zs-group-summary");
+    if (!search && !summary) return;
+    e.preventDefault();
+    setCollapsed(false);
+    if (search) { var input = search.querySelector("input"); if (input) input.focus(); }
+    if (summary) summary.parentElement.open = true;
+  });
 
   // --- Seitenleiste: Unterhaltungen -----------------------------------------------------
   var sidebar = document.querySelector("[data-zs-sidebar]");
@@ -68,7 +92,8 @@
     (pinnedList || []).forEach(function (c) { pinnedUl.appendChild(chatItem(c)); });
     pinnedBox.hidden = !pinnedUl.children.length;
     list.forEach(function (c) { recentUl.appendChild(chatItem(c)); });
-    heading.textContent = query ? "Suchergebnisse" : "Chats";
+    heading.textContent = "Suchergebnisse";
+    heading.hidden = !query;
     sidebar.querySelector("[data-zs-chats-empty]").hidden = list.length > 0 || pinnedUl.children.length > 0;
     sidebar.querySelector("[data-zs-chats-empty]").textContent = query ? "Keine Treffer." : "Noch keine Unterhaltungen.";
   }
@@ -94,14 +119,24 @@
     });
   }
 
-  // Bereiche auf-/zugeklappt merken (auf einer Bereichsseite ist der Abschnitt immer offen).
-  var areas = document.querySelector("[data-zs-areas]");
-  if (areas) {
-    try { if (!areas.open && localStorage.getItem("zentriq-areas-open") === "1") areas.open = true; } catch (e) {}
-    areas.addEventListener("toggle", function () {
-      try { localStorage.setItem("zentriq-areas-open", areas.open ? "1" : "0"); } catch (e) {}
+  // Gruppen (Werkzeuge, Letzte Chats, Verwaltung) auf-/zugeklappt merken; liegt die aktuelle
+  // Seite in einer Gruppe, ist sie serverseitig ohnehin geoeffnet.
+  Array.prototype.forEach.call(document.querySelectorAll("[data-zs-group]"), function (group) {
+    var key = "zentriq-group-" + group.dataset.zsGroup;
+    try {
+      var saved = localStorage.getItem(key);
+      if (saved === "1") group.open = true;
+      else if (saved === "0" && !group.querySelector("[aria-current]")) group.open = false;
+    } catch (e) {}
+    // Nur bewusstes Auf-/Zuklappen merken - "toggle" feuert auch beim Laden einer serverseitig
+    // geoeffneten Gruppe.
+    var summary = group.querySelector("summary");
+    if (summary) summary.addEventListener("click", function () {
+      setTimeout(function () {
+        try { localStorage.setItem(key, group.open ? "1" : "0"); } catch (e) {}
+      }, 0);
     });
-  }
+  });
 
   if (sidebar) {
     var search = sidebar.querySelector("[data-zs-chat-search]");

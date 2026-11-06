@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "ui/portal.html" import state_tag %}
 {% from "settings/_form_macros.html" import text_input %}
+{% from "ui/icons.html" import icon %}
 {% set profile = None if current_user.is_super_admin else current_user.employee_profile %}
 {% block title %}Mein Konto – Zentriq{% endblock %}
 {% block content %}
@@ -21,6 +22,31 @@
       <div><dt>Rolle</dt><dd>{{ current_user.role.label }}</dd></div>
     </dl>
     <p class="panel-note">Name, E-Mail und Vermittlernummer pflegt Ihr Büro-Admin.</p>
+  </section>
+
+  {# Darstellung: gespeichert im Browser, gesetzt schon vor dem ersten Zeichnen
+     (components/_head_common.html), umgeschaltet in js/app.js (window.ZentriqTheme). #}
+  <section class="panel" id="darstellung" aria-labelledby="darstellung-titel">
+    <header class="panel-header"><h2 class="panel-title" id="darstellung-titel">Darstellung</h2></header>
+    <div class="panel-body">
+      <fieldset class="theme-choice">
+        <legend class="sr-only">Farbschema</legend>
+        {% for value, label, icon_name, hint in [
+          ('light', 'Hell', 'sun', 'Gedämpft hell (Standard)'),
+          ('dark', 'Dunkel', 'moon', 'Dunkle Flächen, helle Schrift'),
+          ('system', 'System', 'monitor', 'Wie im Betriebssystem eingestellt'),
+        ] %}
+          <label class="theme-option">
+            <input type="radio" name="theme" value="{{ value }}" data-theme-choice{{ ' checked' if value == 'light' else '' }}>
+            <span class="theme-option-box">
+              {{ icon(icon_name, class='h-5 w-5') }}
+              <span class="theme-option-text"><strong>{{ label }}</strong><small>{{ hint }}</small></span>
+            </span>
+          </label>
+        {% endfor %}
+      </fieldset>
+      <p class="panel-note">Die Auswahl gilt für diesen Browser und wird sofort übernommen.</p>
+    </div>
   </section>
 
   <section class="panel">

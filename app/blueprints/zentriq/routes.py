@@ -344,6 +344,15 @@ def api_callback_done(contact_id):
     return jsonify(customer_notes.close_contact(current_user, contact, client_ref=_client_ref(_payload())))
 
 
+@zentriq_bp.post("/api/rueckrufe/<int:contact_id>/wieder-oeffnen")
+@login_required
+def api_callback_reopen(contact_id):
+    if (denied := _office_user_required()) is not None:
+        return denied
+    contact = get_or_404_scoped(CustomerContact, contact_id)
+    return jsonify(customer_notes.reopen_contact(current_user, contact, client_ref=_client_ref(_payload())))
+
+
 @zentriq_bp.get("/api/rueckrufe")
 @login_required
 def api_callbacks():

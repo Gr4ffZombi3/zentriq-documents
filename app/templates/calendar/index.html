@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% from "ui/icons.html" import icon %}
+{% block title %}Kalender – Zentriq{% endblock %}
+{% block body_class %}cal-page{% endblock %}
+{% block content %}
+{# Gemeinsamer Buerokalender (js/calendar.js, API: app/blueprints/calendar/routes.py). Aufbau
+   angelehnt an gaengige Desktop-Kalender: links Monatsuebersicht und Kalenderfilter, oben
+   Navigation und Ansicht, darunter Zeitraster bzw. Monat/Liste. Auf dem Handy standardmaessig
+   Tagesliste; Monat und Filter als ausklappbare Auswahl. Alle Zeiten Europe/Berlin. #}
+<script type="application/json" id="cal-data">{{ {
+  "members": members, "today": today, "me": me, "kinds": location_kinds,
+  "isAdmin": current_user.is_office_admin, "prefill": prefill,
+  "api": url_for('calendar.index') ~ '/api',
+  "customerUrl": url_for('customers.detail', customer_id=0) if current_user.is_office_admin else url_for('zentriq.index') ~ '?kunde=0'
+} | tojson }}</script>
+
+<div class="cal" data-cal>
+  <aside class="cal-side" id="cal-side" data-cal-side>
+    <div class="cal-mini" data-cal-mini aria-label="Monatsübersicht"></div>
+    <fieldset class="cal-filter">
+      <legend>Kalender</legend>
+      <div data-cal-filter></div>
+    </fieldset>
+  </aside>
+
+  <section class="cal-main" aria-label="Kalender">
+    <header class="cal-toolbar">
+      <button type="button" class="btn btn-primary btn-sm cal-new" data-cal-new>{{ icon('plus', class='h-4 w-4') }}<span>Neuer Termin</span></button>
+      <div class="cal-nav">
+        <button type="button" class="btn btn-secondary btn-sm" data-cal-today>Heute</button>
+        <button type="button" class="zs-icon-btn" data-cal-prev aria-label="Zurück">{{ icon('chevron-right', class='h-5 w-5 cal-flip') }}</button>
+        <button type="button" class="zs-icon-btn" data-cal-next aria-label="Weiter">{{ icon('chevron-right', class='h-5 w-5') }}</button>
+      </div>
+      <h1 class="cal-period" data-cal-period aria-live="polite"></h1>
+      <button type="button" class="btn btn-secondary btn-sm cal-side-toggle" data-cal-side-toggle aria-controls="cal-side" aria-expanded="false">{{ icon('calendar', class='h-4 w-4') }}<span>Monat &amp; Filter</span></button>
+      <div class="cal-views" role="group" aria-label="Ansicht">
+        <button type="button" data-cal-view="day">Tag</button>
+        <button type="button" data-cal-view="workweek" class="cal-hide-sm">Arbeitswoche</button>
+        <button type="button" data-cal-view="week">Woche</button>
+        <button type="button" data-cal-view="month">Monat</button>
+        <button type="button" data-cal-view="list">Liste</button>
+      </div>
+    </header>
+    <p class="cal-status" data-cal-status role="status" hidden></p>
+    <div class="cal-body" data-cal-body aria-busy="true"></div>
+    <p class="cal-hint">Termine lassen sich mit der Maus verschieben und an der Unterkante in der Dauer ändern. Tastatur: Termin auswählen, <kbd>Alt</kbd>+Pfeiltasten verschieben, <kbd>Alt</kbd>+<kbd>Umschalt</kbd>+Pfeil ↑/↓ ändert die Dauer.</p>
+  </section>
+</div>
+
+<div class="cal-pop" data-cal-pop role="dialog" aria-modal="false" aria-labelledby="cal-pop-title" hidden></div>
+
+<dialog class="cal-dialog" data-cal-dialog aria-labelledby="cal-form-title">
+  <form method="dialog" class="cal-form" data-cal-form novalidate>
+    <header class="cal-form-head">
+      <h2 id="cal-form-title" data-cal-form-title>Neuer Termin</h2>
+      <button type="button" class="zs-icon-btn" data-cal-close aria-label="Schließen">{{ icon('x', class='h-5 w-5') }}</button>
+    </header>
+    <div class="cal-form-body">
+      <label class="cal-field cal-field-wide">
+        <span>Titel</span>
+        <input class="field-surface" name="title" maxlength="200" required autocomplete="off" placeholder="z. B. Beratung Kfz-Wechsel">
+      </label>
+      <label class="cal-field"><span>Beginn</span><input class="field-surface" type="datetime-local" name="start" step="900" required></label>
+      <label class="cal-field"><span>Ende</span><input class="field-surface" type="datetime-local" name="end" step="900" required></label>
+      <div class="cal-quick cal-field-wide" role="group" aria-label="Dauer">
+        <span>Dauer:</span>
+        <button type="button" data-cal-dur="15">15 Min.</button>
+        <button type="button" data-cal-dur="30">30 Min.</button>
+        <button type="button" data-cal-dur="60">1 Std.</button>
+        <button type="button" data-cal-dur="90">1,5 Std.</button>
+      </div>
+      <label class="cal-field">
+        <span>Zuständig</span>
+        <select class="field-surface" name="assignee_id" required data-cal-assignee></select>
+      </label>
+      <div class="cal-field cal-customer">
+        <label for="cal-customer-input">Kunde (optional)</label>
+        <input class="field-surface" id="cal-customer-input" data-cal-customer-input autocomplete="off" placeholder="Name oder Kundennummer"
+               role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="cal-customer-list">
+        <input type="hidden" name="customer_id">
+        <ul class="cal-suggest" id="cal-customer-list" role="listbox" data-cal-customer-list hidden></ul>
+      </div>
+      <label class="cal-field">
+        <span>Art</span>
+        <select class="field-surface" name="location_kind">
+          <option value="">–</option>
+          {% for key, label in location_kinds.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="cal-field"><span>Ort / Telefon / Link</span><input class="field-surface" name="location" maxlength="255" autocomplete="off"></label>
+      <label class="cal-field cal-field-wide"><span>Notiz</span><textarea class="field-surface" name="note" rows="2" maxlength="2000"></textarea></label>
+      <p class="cal-warn cal-field-wide" data-cal-conflicts role="status" hidden></p>
+      <p class="form-error cal-field-wide" data-cal-form-error role="alert" hidden></p>
+    </div>
+    <footer class="cal-form-foot">
+      <button type="submit" class="btn btn-primary" data-cal-save>Speichern</button>
+      <button type="button" class="btn btn-secondary" data-cal-close>Abbrechen</button>
+    </footer>
+  </form>
+</dialog>
+<script defer src="{{ url_for('static', filename='js/calendar.js', v=static_rev('js/calendar.js')) }}"></script>
+{% endblock %}

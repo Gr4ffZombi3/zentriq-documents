@@ -9,6 +9,7 @@ from app.models.ai import (
 )
 from app.models.analysis_run import AnalysisRun
 from app.models.audit_log import AuditEventType, AuditLog
+from app.models.calendar import CalendarEvent, CalendarEventChange
 from app.models.customer import Customer
 from app.models.customer_memo import CustomerMemo
 from app.models.customer_note import CustomerContact, CustomerNote
@@ -40,6 +41,7 @@ from app.models.enums import (
     WiedervorlageReason,
 )
 from app.models.feedback import RecommendationFeedback
+from app.models.huk_quote import HukQuoteJob
 from app.models.leipziger_entry import LeipzigerEntry
 from app.models.list_comparison import ListComparison, ListComparisonEntry
 from app.models.mailbox_case import (
@@ -64,6 +66,9 @@ from app.models.user import RecoveryCode, User
 from app.models.user_session import UserSession
 
 __all__ = [
+    "CalendarEvent",
+    "CalendarEventChange",
+    "HukQuoteJob",
     "AiAction",
     "AiAttachment",
     "AiConversation",

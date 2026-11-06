@@ -1,0 +1,201 @@
+"""Gemeinsamer Buerokalender (Seite + JSON-API).
+
+Zugriff: Buero-Admins und Mitarbeiter des eigenen Bueros (SUPER_ADMIN nie). Mandantentrennung
+ueber den globalen Tenant-Filter; Termine werden per get_or_404_scoped geladen - Termine anderer
+Bueros sind fuer jede Aktion 404. Loeschen: Ersteller oder Buero-Admin; absagen/aendern: alle."""
+
+from datetime import date, timedelta
+
+from flask import Blueprint, abort, jsonify, render_template, request
+from flask_login import current_user, login_required
+
+from app.models import CalendarEvent
+from app.services import calendar as cal
+from app.services.global_search import MIN_QUERY_LENGTH, normalize_query, search_customers
+from app.services.timetracking.clock import local_today
+from app.tenancy import get_or_404_scoped
+
+calendar_bp = Blueprint("calendar", __name__, url_prefix="/kalender")
+
+MAX_RANGE_DAYS = 62
+
+
+def _office_member():
+    if not (current_user.is_office_admin or current_user.is_employee):
+        abort(403)
+
+
+def _error(exc: cal.CalendarError):
+    return jsonify({"error": str(exc), "code": exc.code}), exc.status
+
+
+def _payload() -> dict:
+    data = request.get_json(silent=True)
+    return data if isinstance(data, dict) else {}
+
+
+def _parse_day(value: str | None, default: date) -> date:
+    try:
+        return date.fromisoformat(value) if value else default
+    except ValueError:
+        return default
+
+
+@calendar_bp.get("")
+@login_required
+def index():
+    _office_member()
+    members = cal.member_payload(cal.office_members())
+    return render_template(
+        "calendar/index.html",
+        members=members,
+        today=local_today().isoformat(),
+        me=current_user.id,
+        location_kinds=cal.LOCATION_KINDS,
+        prefill={key: request.args.get(key, "") for key in ("titel", "start", "ende", "mitarbeiter", "kunde", "kunde_name", "notiz")},
+    )
+
+
+@calendar_bp.get("/api/termine")
+@login_required
+def api_events():
+    _office_member()
+    today = local_today()
+    start = _parse_day(request.args.get("von"), today)
+    end = _parse_day(request.args.get("bis"), start + timedelta(days=6))
+    if end < start or (end - start).days > MAX_RANGE_DAYS:
+        return jsonify({"error": "Ungültiger Zeitraum."}), 400
+    start_utc, end_utc = cal.local_day_bounds(start, end)
+    events = cal.events_between(start_utc, end_utc)
+    return jsonify(
+        {
+            "events": [cal.serialize(item, current_user) for item in events],
+            "members": cal.member_payload(cal.office_members()),
+            "stamp": cal.change_stamp(),
+        }
+    )
+
+
+@calendar_bp.get("/api/stand")
+@login_required
+def api_stamp():
+    _office_member()
+    return jsonify({"stamp": cal.change_stamp()})
+
+
+@calendar_bp.get("/api/naechste")
+@login_required
+def api_upcoming():
+    _office_member()
+    mine = request.args.get("nur_meine") == "1"
+    items = cal.upcoming(limit=5, assignee_id=current_user.id if mine else None)
+    return jsonify({"events": [cal.serialize(item, current_user) for item in items]})
+
+
+@calendar_bp.get("/api/termine/<int:event_id>")
+@login_required
+def api_event(event_id):
+    _office_member()
+    event = get_or_404_scoped(CalendarEvent, event_id)
+    return jsonify({"event": cal.serialize(event, current_user), "history": cal.history(event.id)})
+
+
+@calendar_bp.post("/api/termine")
+@login_required
+def api_create():
+    _office_member()
+    data = _payload()
+    try:
+        event, created, conflicts = cal.create_event(current_user, data, client_ref=data.get("client_ref"))
+    except cal.CalendarError as exc:
+        return _error(exc)
+    return jsonify(
+        {"event": cal.serialize(event, current_user), "created": created, "conflicts": cal.conflict_payload(conflicts)}
+    ), (201 if created else 200)
+
+
+@calendar_bp.patch("/api/termine/<int:event_id>")
+@login_required
+def api_update(event_id):
+    _office_member()
+    event = get_or_404_scoped(CalendarEvent, event_id)
+    try:
+        event, changed, conflicts = cal.update_event(current_user, event, _payload())
+    except cal.CalendarError as exc:
+        if exc.code == "conflict":
+            fresh = get_or_404_scoped(CalendarEvent, event_id)
+            return jsonify({"error": str(exc), "code": exc.code, "event": cal.serialize(fresh, current_user)}), 409
+        return _error(exc)
+    return jsonify({"event": cal.serialize(event, current_user), "changed": changed, "conflicts": cal.conflict_payload(conflicts)})
+
+
+@calendar_bp.post("/api/termine/<int:event_id>/absagen")
+@login_required
+def api_cancel(event_id):
+    _office_member()
+    event = get_or_404_scoped(CalendarEvent, event_id)
+    try:
+        event = cal.set_cancelled(current_user, event, True, _payload().get("version"))
+    except cal.CalendarError as exc:
+        return _error(exc)
+    return jsonify({"event": cal.serialize(event, current_user)})
+
+
+@calendar_bp.post("/api/termine/<int:event_id>/reaktivieren")
+@login_required
+def api_reactivate(event_id):
+    _office_member()
+    event = get_or_404_scoped(CalendarEvent, event_id)
+    try:
+        event = cal.set_cancelled(current_user, event, False, _payload().get("version"))
+    except cal.CalendarError as exc:
+        return _error(exc)
+    return jsonify({"event": cal.serialize(event, current_user)})
+
+
+@calendar_bp.delete("/api/termine/<int:event_id>")
+@login_required
+def api_delete(event_id):
+    _office_member()
+    event = get_or_404_scoped(CalendarEvent, event_id)
+    try:
+        cal.delete_event(current_user, event, _payload().get("version"))
+    except cal.CalendarError as exc:
+        return _error(exc)
+    return jsonify({"deleted": True})
+
+
+@calendar_bp.get("/api/konflikte")
+@login_required
+def api_conflicts():
+    _office_member()
+    try:
+        starts_at = cal.parse_local(request.args.get("start"), "den Beginn")
+        ends_at = cal.parse_local(request.args.get("ende"), "das Ende")
+        assignee_id = int(request.args.get("mitarbeiter", "0"))
+    except (cal.CalendarError, ValueError):
+        return jsonify({"conflicts": []})
+    exclude = request.args.get("ohne", type=int)
+    if ends_at <= starts_at:
+        return jsonify({"conflicts": []})
+    return jsonify({"conflicts": cal.conflict_payload(cal.conflicts_for(assignee_id, starts_at, ends_at, exclude_id=exclude))})
+
+
+@calendar_bp.get("/api/kunden")
+@login_required
+def api_customers():
+    """Kundenauswahl fuer die Terminverknuepfung - dieselbe Suche wie die Kopfzeilensuche
+    (Mitarbeiter finden Kunden des eigenen Bueros, Tenant-Filter)."""
+    _office_member()
+    query = normalize_query(request.args.get("q"))
+    if len(query) < MIN_QUERY_LENGTH:
+        return jsonify({"customers": []})
+    rows, _more = search_customers(query)
+    return jsonify(
+        {
+            "customers": [
+                {"id": row["id"], "name": row["name"], "detail": " · ".join(str(v) for v in (row.get("customer_number"), row.get("city")) if v)}
+                for row in rows[:8]
+            ]
+        }
+    )

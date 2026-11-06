@@ -43,7 +43,8 @@ COMMON_ALLOWED_ENDPOINTS = frozenset(
 # "zentriq": ZentriqAI-Chat (eigene Gespraeche; Werkzeuge pruefen die Rechte je Endpunkt erneut).
 #   Dazu gehoeren die gemeinsamen Kundennotizen/offenen Rueckrufe des Bueros (/zentriq/api/kunden,
 #   /zentriq/api/rueckrufe) - ohne Kundenliste/-akte freizugeben; SUPER_ADMIN dort gesperrt.
-EMPLOYEE_ALLOWED_BLUEPRINTS = frozenset({"timetracking", "intake", "assistant", "tools", "zentriq"})
+# calendar/huk: die Views pruefen zusaetzlich selbst auf Buero-Mitgliedschaft.
+EMPLOYEE_ALLOWED_BLUEPRINTS = frozenset({"timetracking", "intake", "assistant", "tools", "zentriq", "calendar", "huk"})
 # "leipziger.index" zeigt Mitarbeitern ausschliesslich die ueber ihre eigene Vermittlernummer
 # zugeordneten Vorgaenge. Memo (dashboard.*) speichert ein Transkript nur bei Zuordnung zu einem
 # Kunden; Kundenabgleich und -anlage bleiben im eigenen Mandanten.

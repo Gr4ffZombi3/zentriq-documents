@@ -87,6 +87,18 @@
         <button type="button" class="zn-link" data-zn-callbacks-more hidden></button>
       </div>
     </details>
+    {# Kompakte Vorschau des Buerokalenders (js/customer-notes.js, API calendar.api_upcoming). #}
+    <details class="zn zn-agenda" data-zn-agenda data-url="{{ url_for('calendar.api_upcoming') }}">
+      <summary class="zn-callbacks-summary">
+        <span>Nächste Termine</span>
+        <span class="zn-count is-zero" data-zn-agenda-count>…</span>
+      </summary>
+      <div class="zn-callbacks">
+        <ul class="zn-callback-list" data-zn-agenda-list></ul>
+        <p class="zn-muted" data-zn-agenda-empty hidden>Keine anstehenden Termine.</p>
+        <a class="zn-link" href="{{ url_for('calendar.index') }}">Zum Kalender</a>
+      </div>
+    </details>
     {% endif %}
     <p class="zc-disclaimer">KI-Antworten können Fehler enthalten. Wichtige Angaben bitte prüfen.</p>
   </form>

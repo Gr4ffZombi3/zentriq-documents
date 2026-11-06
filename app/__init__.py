@@ -50,11 +50,13 @@ def create_app(config_object=None):
     from app.auth.routes import auth_bp
     from app.blueprints.assistant.routes import assistant_bp
     from app.blueprints.bestand.routes import bestand_bp
+    from app.blueprints.calendar.routes import calendar_bp
     from app.blueprints.chat.routes import chat_bp
     from app.blueprints.cockpit.routes import cockpit_bp
     from app.blueprints.customers.routes import customers_bp
     from app.blueprints.dashboard.routes import dashboard_bp
     from app.blueprints.documents.routes import documents_bp
+    from app.blueprints.huk.routes import huk_bp
     from app.blueprints.intake.routes import intake_bp
     from app.blueprints.leipziger.routes import leipziger_bp
     from app.blueprints.office.routes import office_bp
@@ -96,6 +98,8 @@ def create_app(config_object=None):
     app.register_blueprint(platform_bp)
     app.register_blueprint(office_bp)
     app.register_blueprint(zentriq_bp)
+    app.register_blueprint(calendar_bp)
+    app.register_blueprint(huk_bp)
     app.register_blueprint(zentriq_admin_bp)
 
     from app.cli import register_cli

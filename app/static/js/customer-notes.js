@@ -371,10 +371,52 @@
   }
 
   // Ergebnis in der Antwortblase anzeigen. Rueckgabe false: Eingabe geht an das KI-Modell.
+  // --- Termine (Kalender) ------------------------------------------------------------------
+  function calendarLink(url, label) {
+    var a = el("a", "zn-link", label || "Im Kalender öffnen"); a.href = url; return a;
+  }
+  function calendarChoice(reply, text, choice) {
+    act(reply, request("POST", "/kunden/eingabe", { text: text, calendar: choice, client_ref: newRef() }), "Wird gespeichert", function (res) { show(reply, res, text); });
+  }
+  function calendarUndo(reply, ev) {
+    var csrf = csrfMeta ? csrfMeta.getAttribute("content") : "";
+    pending = true;
+    fetch("/kalender/api/termine/" + ev.id, {
+      method: "DELETE", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", Accept: "application/json", "X-CSRFToken": csrf },
+      body: JSON.stringify({ version: ev.version }),
+    }).then(function (resp) {
+      return resp.json().catch(function () { return {}; }).then(function (d) {
+        pending = false;
+        fill(reply, [message(resp.ok ? "Termin wieder entfernt." : (d.error || "Der Termin konnte nicht entfernt werden."), resp.ok ? "ok" : "warn")]);
+      });
+    }, function () { pending = false; fill(reply, [message("Keine Verbindung zum Server. Bitte erneut versuchen.", "error")]); });
+  }
+
   function show(reply, r, text) {
     switch (r.kind) {
       case "chat":
         return false;
+      case "calendar_saved": {
+        var actions = el("div", "zn-actions");
+        actions.appendChild(calendarLink(r.calendar_url));
+        if (!r.duplicate && r.event && r.event.can_delete) actions.appendChild(button("Rückgängig", "zn-link", function () { calendarUndo(reply, r.event); }));
+        fill(reply, [message(r.message, r.duplicate ? null : (r.tone || "ok")), actions]);
+        return true;
+      }
+      case "calendar_question": {
+        var opts = el("div", "zn-actions");
+        (r.options || []).forEach(function (o) { opts.appendChild(button(o.label, "btn btn-secondary btn-sm", function () { calendarChoice(reply, text, o.choice); })); });
+        opts.appendChild(calendarLink(r.form_url, "Im Kalender vervollständigen"));
+        fill(reply, [message(r.message, "warn"), opts]);
+        return true;
+      }
+      case "calendar_list": {
+        var ul = el("ul", "zn-entries");
+        (r.lines || []).forEach(function (line) { ul.appendChild(el("li", null, line)); });
+        fill(reply, [message(r.message), r.lines && r.lines.length ? ul : null, calendarLink(r.calendar_url)]);
+        return true;
+      }
       case "saved":
       case "closed":
         saved(reply, r);
@@ -524,4 +566,35 @@
   // zentriq-ai.js stellt ZentriqChat erst nach diesem Skript bereit (beide "defer").
   if (document.readyState === "complete") openFromUrl();
   else document.addEventListener("DOMContentLoaded", openFromUrl);
+
+  // --- Naechste Termine (kompakt unter dem Eingabefeld) ------------------------------------
+  var agenda = document.querySelector("[data-zn-agenda]");
+  function loadAgenda() {
+    if (!agenda || document.hidden) return;
+    fetch(agenda.dataset.url, { credentials: "same-origin", headers: { Accept: "application/json" } })
+      .then(function (r) { return r.ok ? r.json() : { events: [] }; })
+      .then(function (d) {
+        var list = agenda.querySelector("[data-zn-agenda-list]"), count = agenda.querySelector("[data-zn-agenda-count]");
+        var days = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+        list.textContent = "";
+        (d.events || []).forEach(function (e) {
+          var li = el("li", "zn-callback");
+          var a = el("a", "zn-callback-open zn-agenda-item");
+          a.href = "/kalender";
+          var dt = new Date(e.start.slice(0, 10) + "T12:00:00Z");
+          a.appendChild(el("strong", null, days[dt.getUTCDay()] + " " + e.start.slice(8, 10) + "." + e.start.slice(5, 7) + ". " + e.start.slice(11, 16)));
+          a.appendChild(el("span", "zn-callback-topic", e.title));
+          a.appendChild(el("span", "zn-meta", e.assignee + (e.customer ? " · " + e.customer.name : "")));
+          li.appendChild(a);
+          list.appendChild(li);
+        });
+        var n = (d.events || []).length;
+        count.textContent = n >= 5 ? "5+" : String(n);
+        count.classList.toggle("is-zero", n === 0);
+        agenda.querySelector("[data-zn-agenda-empty]").hidden = n > 0;
+      }, function () {});
+  }
+  loadAgenda();
+  setInterval(loadAgenda, 60000);
+  document.addEventListener("visibilitychange", loadAgenda);
 })();

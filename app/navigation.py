@@ -3,10 +3,10 @@ Ebenen: Gruppe -> Bereich; Unterseiten eines Bereichs erscheinen als Reiter daru
 
 Seitenleiste fuer Buero-Rollen (components/app_sidebar.html):
 - oben: Assistent (ZentriqAI-Chat, zentraler KI-Einstieg) und Suche
-- Hauptbereiche ohne Ueberschrift: Kunden, Leipziger Liste (offene Vorgaenge), Memo,
+- Hauptbereiche ohne Ueberschrift: Kunden, Kalender, Leipziger Liste (offene Vorgaenge), Memo,
   Zeiterfassung, Uebersicht. Kunden fuehrt OFFICE_ADMIN zum Kundenstamm, Mitarbeiter zur
   Kundensuche (sie sehen wie bisher keine Kundenstammdaten-Liste).
-- "Werkzeuge" (aufklappbar): Texte formulieren (Textassistent, nur freigegebene Bueros),
+- "Werkzeuge" (aufklappbar): Kfz-Angebot (HUK-Webrechner), Texte formulieren (Textassistent, nur freigegebene Bueros),
   Dokument anonymisieren, Universal-Upload*
 - unten "Verwaltung"* (aufklappbar): Mitarbeiter, Benutzerverwaltung, Aktivitaeten
 - ganz unten: Profil mit Mein Konto (inkl. Darstellung) und Abmelden.
@@ -112,6 +112,7 @@ OFFICE_GROUPS = (
             # Zentriq-Kundenstamm (nur OFFICE_ADMIN); Mitarbeiter finden Kunden ueber die Suche.
             NavArea("customers", "Kunden", "customers.list_customers", ("customers.",), admin_only=True, icon="users"),
             NavArea("customer_search", "Kunden", "search.search", ("search.",), admin_only=False, staff_only=True, icon="users"),
+            NavArea("calendar", "Kalender", "calendar.index", ("calendar.",), admin_only=False, icon="calendar"),
             NavArea(
                 "leipziger",
                 "Leipziger Liste",
@@ -133,6 +134,7 @@ OFFICE_GROUPS = (
             # Textassistent: nur fuer freigegebene Bueros (assistant_allowed), unabhaengig vom
             # API-Key. Der zentrale KI-Einstieg ist der Assistent (ZentriqAI) ganz oben.
             NavArea("assistant", "Texte formulieren", "assistant.index", ("assistant.",), admin_only=False, kind="assistant", icon="pen-line"),
+            NavArea("huk", "Kfz-Angebot (HUK)", "huk.index", ("huk.",), admin_only=False, icon="trending-up"),
             NavArea("anonymize", "Anonymisieren", "tools.anonymize_document", ("tools.anonymize",), admin_only=False, icon="shield-check"),
             # Fuer Mitarbeiter waere der Universal-Upload nur ein zweiter Memo-Upload (sie duerfen
             # keine Listen importieren) - deshalb nur fuer Buero-Admins in der Navigation.

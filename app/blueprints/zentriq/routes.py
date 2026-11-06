@@ -17,7 +17,7 @@ from app.extensions import db
 from app.models import Customer, CustomerContact
 from app.models.ai import AiModel
 from app.models.audit_log import AuditEventType
-from app.services import customer_notes
+from app.services import calendar_intent, customer_notes
 from app.services.ai import actions, catalog, chat, router, state
 from app.services.audit import log_audit_event
 from app.tenancy import get_or_404_scoped
@@ -281,6 +281,19 @@ def api_customer_input():
     data = _payload()
     text = data.get("text") if isinstance(data.get("text"), str) else ""
     mode = data.get("mode") if data.get("mode") in ("note", "search", "create") else None
+    # Termine ("Termin mit ... Donnerstag um 14 Uhr bei Laura") gehen an den Kalender.
+    if isinstance(data.get("calendar"), dict) or (mode is None and calendar_intent.is_calendar_request(text)):
+        try:
+            return jsonify(
+                calendar_intent.handle(
+                    current_user, text, choice=data.get("calendar"), client_ref=_client_ref(data),
+                    selected_customer_id=data.get("selected_id"),
+                )
+            )
+        except Exception:  # noqa: BLE001
+            current_app.logger.exception("calendar_intent.failed user=%s", current_user.id)
+            db.session.rollback()
+            return _error("Technischer Fehler beim Termin. Er wurde nicht gespeichert – bitte erneut versuchen.", 500, "technical")
     try:
         result = customer_notes.handle_input(
             current_user,

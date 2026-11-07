@@ -794,3 +794,65 @@ def test_retry_delay_from_gemini_body():
         response = Resp()
 
     assert adapters._retry_after(Exc()) == 37.0
+
+
+def _per_model(monkeypatch, behaviour):
+    """adapters.call je Modell: Exception werfen oder ProviderResult liefern."""
+    calls = []
+
+    def call(provider, model_id, system, messages, max_tokens, timeout, tools=None):
+        calls.append(model_id)
+        item = behaviour.get(model_id, adapters.ProviderResult(f"Antwort von {model_id}", 10, 5))
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+    monkeypatch.setattr(adapters, "call", call)
+    return calls
+
+
+def test_daily_quota_and_timeout_do_not_block_other_models(app, world, fake, monkeypatch):
+    """Produktionsfall 07.11.2026: gemini-3.6-flash 429 (Tageskontingent 20, retryDelay ~8,7 h),
+    gemini-flash-latest Zeitueberschreitung, Flash-Lite funktioniert."""
+    app.config["GROQ_API_KEY"] = None
+    calls = _per_model(monkeypatch, {
+        "gemini-3.6-flash": adapters.ProviderError(adapters.RATE_LIMIT, retry_after=31467, status=429),
+        "gemini-flash-latest": adapters.ProviderError(adapters.TIMEOUT),
+    })
+    client = _root(app, world)
+    conversation_id = _new(client)
+    reply = _send(client, conversation_id).reply
+    assert reply["status"] == "done" and reply["model"] == "Gemini 3.5 Flash-Lite"
+    assert calls == ["gemini-3.6-flash", "gemini-flash-latest", "gemini-3.5-flash-lite"]
+    # Die Wartezeit des Anbieters gilt voll (nicht nach 1 h erneut gegen das leere Kontingent).
+    assert state.cooldown_info("gemini", "gemini-3.6-flash")["seconds"] > 8 * 3600
+    assert state.cooldown_info("gemini", "gemini-flash-latest")["seconds"] > 60
+    assert state.cooldown_info("gemini", "gemini-3.5-flash-lite") is None
+
+    calls.clear()
+    for _ in range(3):  # weitere Eingaben: genau ein Aufruf, keine Wiederholung am leeren Kontingent
+        assert _send(client, conversation_id, "Formuliere noch eine Variante").reply["status"] == "done"
+    assert calls == ["gemini-3.5-flash-lite"] * 3
+
+
+def test_exhausted_quota_message_names_provider_wait(app, world, fake, monkeypatch):
+    app.config["GROQ_API_KEY"] = None
+    exhausted = adapters.ProviderError(adapters.RATE_LIMIT, retry_after=31467, status=429)
+    calls = _per_model(monkeypatch, {m: exhausted for m in (
+        "gemini-3.6-flash", "gemini-flash-latest", "gemini-3.5-flash-lite", "gemini-flash-lite-latest")})
+    client = _root(app, world)
+    conversation_id = _new(client)
+    first = _send(client, conversation_id).reply
+    assert first["status"] == "error"
+    assert "8 Std." in first["error"] and "in einer Minute" not in first["error"]
+    assert len(calls) == 4
+    calls.clear()
+    second = _send(client, conversation_id, "Nochmal").reply
+    assert calls == []  # alles pausiert: kein Aufruf an das ausgeschoepfte Kontingent
+    assert "8 Std." in second["error"]
+
+
+def test_failure_message_durations():
+    assert router._duration(45) == "1 Min."
+    assert router._duration(31467) == "8 Std. 44 Min."
+    assert router._duration(7200) == "2 Std."

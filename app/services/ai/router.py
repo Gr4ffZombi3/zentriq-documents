@@ -36,6 +36,10 @@ MIN_ATTEMPT_SECONDS = 4.0
 MAX_TOOL_ROUNDS = 4
 # Obergrenze fuer Modellaufrufe je Benutzereingabe (Werkzeugrunden + Ausweichmodelle zusammen).
 MAX_CALLS_PER_REQUEST = 6
+# Vom Anbieter genannte Wartezeiten werden bis zu dieser Grenze uebernommen. Ein erschoepftes
+# Tageskontingent (Gemini Free Tier: "retryDelay" bis zum Tageswechsel) wird also nicht vorher
+# erneut angefragt.
+MAX_COOLDOWN_SECONDS = 26 * 3600
 
 # Abkuehlzeiten in Sekunden je Fehlerart; None = keine Sperre.
 COOLDOWNS = {
@@ -43,7 +47,10 @@ COOLDOWNS = {
     adapters.AUTH: ("p", 3600),
     adapters.NOT_FOUND: ("m", 3600),
     adapters.UNAVAILABLE: ("p", 30),
-    adapters.TIMEOUT: ("p", 30),
+    # Zeitueberschreitung betrifft meist ein einzelnes (ueberlastetes) Modell - andere Modelle
+    # desselben Anbieters bleiben nutzbar. Laenger pausieren, sonst kostet jede Anfrage erneut
+    # die volle Wartezeit.
+    adapters.TIMEOUT: ("m", 300),
     adapters.EMPTY: ("m", 30),
     adapters.BAD_REQUEST: None,
     adapters.REFUSAL: None,
@@ -267,7 +274,9 @@ def complete(
             continue
         cooling = state.cooling_reason(model.provider, model.model_id)
         if cooling:
-            attempts.append({"model": model.label, "error": "cooldown", "reason": cooling, "free": model.is_free})
+            info = state.cooldown_info(model.provider, model.model_id) or {}
+            attempts.append({"model": model.label, "error": "cooldown", "reason": cooling, "free": model.is_free,
+                             "retry_after": info.get("seconds") if cooling == adapters.RATE_LIMIT else None})
             continue
         if not model.is_free:
             if paid_allowed is None:
@@ -307,7 +316,7 @@ def complete(
                 if rule:
                     scope, seconds = rule
                     if exc.retry_after:
-                        seconds = min(max(seconds, exc.retry_after), 3600)
+                        seconds = min(max(seconds, exc.retry_after), MAX_COOLDOWN_SECONDS)
                     key = f"p:{model.provider}" if scope == "p" else f"m:{model.provider}:{model.model_id}"
                     state.cool_down(key, seconds, exc.kind)
                 if exc.kind == adapters.REFUSAL:
@@ -368,7 +377,8 @@ def complete(
 
     if free_quota_exhausted(attempts):
         raise AiError(
-            "Das kostenlose Kontingent des KI-Anbieters ist gerade ausgeschöpft. Bitte später erneut versuchen – "
+            "Das kostenlose Kontingent des KI-Anbieters ist gerade ausgeschöpft" + _wait_hint(attempts) + ". "
+            "Bitte dann erneut versuchen – "
             "Kundensuche, Notizen und Rückrufe funktionieren weiterhin. Kostenpflichtige Modelle werden dafür nicht "
             "automatisch genutzt.",
             429,
@@ -392,18 +402,33 @@ def complete(
     raise AiError(_failure_message(attempts), 503, "all_failed", attempts)
 
 
+def _duration(seconds: float) -> str:
+    minutes = max(1, round(seconds / 60))
+    if minutes < 60:
+        return f"{minutes} Min."
+    hours, rest = divmod(minutes, 60)
+    return f"{hours} Std." + (f" {rest} Min." if rest else "")
+
+
+def _wait_hint(attempts: list[dict]) -> str:
+    """Kuerzeste vom Anbieter genannte Wartezeit (429 bzw. daraus entstandene Pause), sonst leer."""
+    waits = [a["retry_after"] for a in attempts if a.get("retry_after")]
+    return f" (laut Anbieter frühestens in ca. {_duration(min(waits))} wieder verfügbar)" if waits else ""
+
+
 def _failure_message(attempts: list[dict]) -> str:
     """Ehrliche Meldung: Wartezeit nur, wenn ein Anbieter sie genannt hat - keine pauschale Zusage."""
     fallback = " Suche, Zählungen, Rückrufe, Notizen und Kalender funktionieren ohne KI weiter."
     waits = [a["retry_after"] for a in attempts if a.get("retry_after")]
     kinds = {a["error"] for a in attempts if a["error"] not in ("skipped", "limit")}
     if kinds and kinds <= {adapters.RATE_LIMIT, "cooldown"} and waits:
-        minutes = max(1, round(min(waits) / 60))
-        return f"Die KI-Modelle sind laut Anbieter gerade ausgelastet (frühestens in ca. {minutes} Min. wieder verfügbar)." + fallback
+        return "Die KI-Modelle sind gerade am Limit" + _wait_hint(attempts) + "." + fallback
     if adapters.BAD_REQUEST in kinds:
         return "Der KI-Anbieter hat die Anfrage abgelehnt (technischer Fehler, wird protokolliert)." + fallback
     if kinds and kinds <= {adapters.UNAVAILABLE, adapters.TIMEOUT, "cooldown"}:
         return "Der KI-Anbieter ist gerade nicht erreichbar." + fallback
+    if waits:
+        return "Kein KI-Modell konnte die Anfrage beantworten. Das Kontingent ist teilweise ausgeschöpft" + _wait_hint(attempts) + "." + fallback
     return "Kein KI-Modell konnte die Anfrage beantworten." + fallback
 
 

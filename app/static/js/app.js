@@ -949,3 +949,27 @@
     Array.prototype.forEach.call(document.querySelectorAll("form[data-submitting]"), release);
   });
 })();
+
+// Seitlich scrollbare Reiterleisten (Unterseiten, Panel-Reiter): Verlauf am Rand nur, wenn dort
+// tatsaechlich weitere Reiter liegen - so ist erkennbar, dass gewischt werden kann.
+(function () {
+  "use strict";
+  var bars = document.querySelectorAll(".app-subnav-tabs, .panel-tabs");
+  if (!bars.length) return;
+  function update(bar) {
+    var max = bar.scrollWidth - bar.clientWidth;
+    bar.classList.toggle("has-more-right", max > 2 && bar.scrollLeft < max - 2);
+    bar.classList.toggle("has-more-left", max > 2 && bar.scrollLeft > 2);
+  }
+  Array.prototype.forEach.call(bars, function (bar) {
+    update(bar);
+    // Aktiven Reiter sichtbar machen.
+    var active = bar.querySelector('[aria-current="page"], .is-active, [aria-selected="true"]');
+    if (active && active.scrollIntoView && bar.scrollWidth > bar.clientWidth) {
+      bar.scrollLeft = Math.max(0, active.offsetLeft - bar.clientWidth / 2 + active.offsetWidth / 2);
+      update(bar);
+    }
+    bar.addEventListener("scroll", function () { update(bar); }, { passive: true });
+  });
+  window.addEventListener("resize", function () { Array.prototype.forEach.call(bars, update); });
+})();

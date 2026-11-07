@@ -375,3 +375,49 @@
 /* E-Mail-Entwurf (```E-Mail-Entwurf): Fliesstext, umbrechen statt seitlich scrollen. */
 .zc-md .zc-code-prose pre, .zc-md .zc-code-prose pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
 .zc-md .zc-code-prose pre code { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.95rem; line-height: 1.5; }
+
+/* ==========================================================================================
+   Handy & Touch (gilt fuer die gesamte Anwendung, zuletzt geladen):
+   - Touchflaechen mind. 44 x 44 CSS-Pixel (WCAG 2.5.5), auch bei Icon-Knoepfen.
+   - Eingabefelder 16 px Schrift: verhindert das automatische Hineinzoomen auf iOS.
+   - Sichere Bildschirmraender (viewport-fit=cover): Kopfzeile, Eingabefeld, Zeiterfassung.
+   - Bildschirmtastatur: interactive-widget=resizes-content (Viewport-Meta) + 100dvh-Layout
+     halten Eingabefeld und Senden sichtbar.
+   ========================================================================================== */
+@media (max-width: 48rem), (pointer: coarse) {
+  .zs-icon-btn, .zc-round { min-width: 2.75rem; min-height: 2.75rem; }
+  .btn, .btn-sm, a.btn, button.btn { min-height: 2.75rem; }
+  .app-brand { min-height: 2.75rem; display: inline-flex; align-items: center; }
+  .zc-model-button { min-height: 2.75rem; }
+  .zs-clock-pill { height: 2.75rem; }
+  .copy-inline, .table-action { min-height: 2.75rem; min-width: 2.75rem; display: inline-flex; align-items: center; justify-content: center; padding-inline: 0.6rem; }
+  summary, .zn-callbacks-summary { min-height: 2.75rem; display: flex; align-items: center; }
+  .field-surface, select, textarea, input[type="text"], input[type="search"], input[type="email"], input[type="tel"],
+  input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="datetime-local"], input[type="file"] {
+    min-height: 2.75rem; font-size: 16px;
+  }
+  .zc-input { font-size: 16px; }
+  .sr-only { min-height: 0 !important; min-width: 0 !important; }
+  input[type="checkbox"], input[type="radio"] { min-width: 1.25rem; min-height: 1.25rem; }
+  /* Lange Namen, Nummern, E-Mail-Adressen und Meldungen umbrechen statt das Layout zu sprengen. */
+  main :where(p, li, dd, dt, td, th, h1, h2, h3, span, a, label, .flash) { overflow-wrap: anywhere; }
+}
+@supports (padding: env(safe-area-inset-bottom)) {
+  .app-topbar { padding-left: max(0.5rem, env(safe-area-inset-left)); padding-right: max(0.5rem, env(safe-area-inset-right)); }
+  .zs-sidebar { padding-bottom: env(safe-area-inset-bottom); }
+  .zc-composer { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
+  .zs-clock { right: max(0.6rem, env(safe-area-inset-right)); bottom: max(0.6rem, env(safe-area-inset-bottom)); }
+}
+.app-subnav-tabs.has-more-right, .panel-tabs.has-more-right { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent); }
+.app-subnav-tabs.has-more-left, .panel-tabs.has-more-left { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 2.5rem), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 2.5rem), transparent); }
+.app-subnav-tabs.has-more-left.has-more-right, .panel-tabs.has-more-left.has-more-right { -webkit-mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent); mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent); }
+
+@media (max-width: 48rem) {
+  /* Zeiterfassung kompakt (Statuspunkt + Zeit), Text bleibt fuer Screenreader; Inhalt endet
+     oberhalb der Anzeige, damit sie nichts dauerhaft verdeckt. */
+  .zs-clock-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .app-content { padding-bottom: calc(4.5rem + env(safe-area-inset-bottom)); }
+  .zs-chat-page .app-content { padding-bottom: 0; }
+  /* Kennzahlen zweispaltig statt einzeln untereinander. */
+  .summary-strip-4, .summary-strip-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

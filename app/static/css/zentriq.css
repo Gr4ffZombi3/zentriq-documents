@@ -335,6 +335,19 @@
 .zn-candidate { display: flex; flex-direction: column; align-items: flex-start; width: 100%; max-width: 32rem; text-align: left; font: inherit; font-size: 0.9rem; padding: 0.45rem 0.7rem; border: 1px solid var(--color-border); border-radius: 0.65rem; background: var(--color-surface); color: var(--color-text); cursor: pointer; }
 .zn-candidate:hover, .zn-callback-open:hover { background: var(--color-surface-muted); }
 .zn-missing-input { flex: 1; min-width: 12rem; max-width: 20rem; font-size: 0.9rem; padding: 0.35rem 0.6rem; }
+.zn-msg.is-info { color: var(--color-text-muted); }
+.zn-card-edit { margin-left: auto; min-height: 2.75rem; padding: 0 0.25rem; }
+/* Stammdaten bearbeiten (customer-notes.js renderEdit): zweispaltig, auf dem Handy einspaltig. */
+.zn-edit { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem 0.75rem; padding: 0.85rem; border: 1px solid var(--color-border); border-radius: 0.9rem; background: var(--color-surface); }
+.zn-edit-field { display: grid; gap: 0.2rem; min-width: 0; }
+.zn-edit-field.is-wide, .zn-edit .zn-actions { grid-column: 1 / -1; }
+.zn-edit-label { font-size: 0.8rem; color: var(--color-text-muted); }
+.zn-edit .field-surface { min-height: 2.75rem; font-size: 1rem; }
+.zn-name-row .zn-missing-input { min-width: 9rem; }
+@media (max-width: 40rem) {
+  .zn-edit { grid-template-columns: 1fr; }
+  .zn-name-row .zn-missing-input { max-width: none; flex-basis: 100%; }
+}
 .zc-msg-context { align-self: center; margin: 0; font-size: 0.78rem; color: var(--color-text-soft); }
 .zc-retry { margin-top: 0.4rem; background: none; border: 0; padding: 0; font: inherit; font-size: 0.84rem; color: var(--color-primary); text-decoration: underline; cursor: pointer; }
 
@@ -358,3 +371,7 @@
   .zn-callback { flex-wrap: wrap; }
   .zn-callbacks { max-height: 30vh; }
 }
+
+/* E-Mail-Entwurf (```E-Mail-Entwurf): Fliesstext, umbrechen statt seitlich scrollen. */
+.zc-md .zc-code-prose pre, .zc-md .zc-code-prose pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.zc-md .zc-code-prose pre code { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.95rem; line-height: 1.5; }

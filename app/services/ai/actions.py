@@ -61,7 +61,19 @@ def _task_done(user, arguments: dict) -> str:
     return f"Aufgabe „{task.title}“ ist als erledigt markiert."
 
 
-EXECUTORS = {"aufgabe_erledigen": _task_done}
+def _customer_create(user, arguments: dict) -> str:
+    from app.services.ai import office_tools
+
+    return office_tools.execute_customer(user, arguments)
+
+
+def _booking(user, arguments: dict) -> str:
+    from app.services.ai import office_tools
+
+    return office_tools.execute_booking(user, arguments)
+
+
+EXECUTORS = {"aufgabe_erledigen": _task_done, "kunde_anlegen": _customer_create, "termin_buchen": _booking}
 
 
 def confirm(user, action_id: int) -> AiAction:

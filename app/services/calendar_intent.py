@@ -23,6 +23,9 @@ WEEKDAYS = {
 }
 _CREATE = re.compile(r"^\s*(?:bitte\s+)?(?:(?:einen?|neuen?)\s+)?termin\b(?!e)", re.I)
 _CREATE_VERB = re.compile(r"\btermin\b(?!e).*\b(eintragen|anlegen|vereinbaren|machen|ausmachen|planen)\b", re.I)
+# Ausdrueckliche Buchung: "Buche Dienstag um 14 Uhr fuer Max Mustermann bei Laura" - Verfuegbarkeit
+# wird unmittelbar vor dem Speichern geprueft (keine Doppelbuchung, Buerozeiten).
+_BOOK = re.compile(r"^\s*(?:bitte\s+)?(?:buche|buchen|reserviere)\b|\btermin\b(?!e).*\bbuchen\b", re.I)
 _LIST = re.compile(r"^\s*(?:welche|was\s+f[üu]r|habe?\s+ich|hat\s+\w+|gibt\s+es)\b.*\btermine?\b|^\s*(?:meine\s+)?termine\s+(?:heute|morgen|diese\s+woche)\s*\??$", re.I)
 
 _DATE_NUM = re.compile(r"\b(?:am\s+)?(\d{1,2})\.(\d{1,2})\.(\d{2,4})?")
@@ -39,6 +42,8 @@ _DURATION_WORDS = (
     (re.compile(r"\bzwei\s+stunden\b", re.I), 120),
 )
 _ASSIGNEE = re.compile(r"\b(?:bei|für|fuer|zuständig(?:\s+ist)?|zustaendig(?:\s+ist)?)\s+([A-ZÄÖÜa-zäöüß][\wäöüß-]+(?:\s+[A-ZÄÖÜ][\wäöüß-]+)?)", re.I)
+_ASSIGNEE_BEI = re.compile(r"\b(?:bei|zuständig(?:\s+ist)?|zustaendig(?:\s+ist)?)\s+([A-ZÄÖÜa-zäöüß][\wäöüß-]+(?:\s+[A-ZÄÖÜ][\wäöüß-]+)?)", re.I)
+_FOR = re.compile(r"\b(?:für|fuer)\s+(?:(?:herrn?|frau|kunde|kundin)\s+)?([A-ZÄÖÜa-zäöüß][\wäöüß-]+(?:\s+[A-ZÄÖÜ][\wäöüß-]+){0,2})")
 _CUSTOMER = re.compile(r"\bmit\s+(?:(?:herrn?|frau|kunde|kundin)\s+)?([A-ZÄÖÜ][\wäöüß-]+(?:\s+[A-ZÄÖÜ][\wäöüß-]+){0,2})")
 _TOPIC = re.compile(r"\b(?:wegen|zum\s+thema|thema|betreff|zu[mr]?)\s*:?\s+(.+?)(?=[,.;]|$|\s+(?:am|um|bei|für|mit|heute|morgen)\b)", re.I)
 _KINDS = (
@@ -54,7 +59,7 @@ def is_calendar_request(text: str, customer_selected: bool = False) -> bool:
     """Bei sichtbar ausgewaehltem Kunden bleibt eine kurze Notiz wie "Termin Donnerstag 14 Uhr"
     eine Kundennotiz (bisheriges Verhalten). Ein Termin wird es dort nur mit ausdruecklichem
     Auftrag: Verb ("eintragen", "anlegen" ...), Person ("mit ...") oder Zustaendigem ("bei ...")."""
-    if _LIST.search(text) or _CREATE_VERB.search(text):
+    if _LIST.search(text) or _CREATE_VERB.search(text) or _BOOK.search(text):
         return True
     if not _CREATE.search(text):
         return False
@@ -72,6 +77,8 @@ class Parsed:
     kind: str | None = None
     topic: str | None = None
     notes: list[str] = field(default_factory=list)
+    for_name: str | None = None  # "fuer X": Kunde (oder Mitarbeiter, falls X einer ist)
+    booking: bool = False
 
 
 def _next_weekday(today: date, weekday: int, next_week: bool) -> date:
@@ -131,9 +138,15 @@ def parse(text: str, today: date) -> Parsed:
             if pattern.search(rest):
                 p.minutes = minutes
                 break
-    assignee = _ASSIGNEE.search(text)
-    if assignee and assignee.group(1).lower() not in _PRONOUNS:
-        p.assignee_name = assignee.group(1).strip()
+    p.booking = bool(_BOOK.search(text))
+    # "bei Laura" / "zustaendig ist Laura" nennt die Zustaendige; "fuer X" kann Kunde oder
+    # Mitarbeiter sein (wird in handle() gegen die Mitarbeiterliste geprueft).
+    by = _ASSIGNEE_BEI.search(text)
+    if by and by.group(1).lower() not in _PRONOUNS:
+        p.assignee_name = by.group(1).strip()
+    for_match = _FOR.search(text)
+    if for_match and for_match.group(1).lower() not in _PRONOUNS:
+        p.for_name = " ".join(w for w in for_match.group(1).split() if w.lower() not in WEEKDAYS) or None
     customer = _CUSTOMER.search(text)
     if customer:
         p.customer_name = customer.group(1).strip()
@@ -224,6 +237,12 @@ def handle(user, raw_text: str, choice: dict | None = None, client_ref: str | No
     p = parse(text, today)
     members = cal.office_members()
 
+    if p.for_name:
+        if _members_matching(p.for_name, members) and not p.assignee_name:
+            p.assignee_name = p.for_name
+        elif not p.customer_name:
+            p.customer_name = p.for_name
+
     # Zustaendiger Mitarbeiter
     assignee = None
     defaults = []
@@ -300,6 +319,8 @@ def handle(user, raw_text: str, choice: dict | None = None, client_ref: str | No
                          [{"label": "Trotzdem eintragen", "choice": {**choice, "past_ok": True, "assignee_id": assignee.id, **({"customer_id": customer.id} if customer else {"no_customer": True})}}],
                          assignee_id=assignee.id, customer=customer, title=title)
     end_iso = cal.local_iso(cal.parse_local(start_iso, "den Beginn") + timedelta(minutes=minutes))
+    if p.booking:
+        return _book(user, p, assignee, customer, title, start_iso, end_iso, start_utc, minutes, client_ref, defaults)
     try:
         event, created, conflicts = cal.create_event(
             user,
@@ -337,3 +358,32 @@ def _question(p: Parsed, message: str, options: list, assignee_id=None, customer
         "options": options,
         "form_url": _form_url(p, assignee_id=assignee_id, customer=customer, title=title),
     }
+
+
+
+def _book(user, p: Parsed, assignee, customer, title, start_iso, end_iso, start_utc, minutes, client_ref, defaults) -> dict:
+    """Ausdrueckliche Buchung (app/services/booking.py): erneute Pruefung unmittelbar vor dem
+    Speichern; belegt -> nicht buchen, freie Alternativen nennen."""
+    from app.services import booking
+
+    try:
+        result = booking.book(user, assignee=assignee, start_utc=start_utc, minutes=minutes, customer=customer, title=title,
+                              location_kind=p.kind or "", client_ref=client_ref)
+    except cal.CalendarError as exc:
+        return _question(p, str(exc), [], assignee_id=assignee.id, customer=customer, title=title)
+    if result.reason:
+        message = f"Nicht gebucht: {result.reason}"
+        if result.alternatives:
+            message += " Freie Alternativen: " + "; ".join(a.label() for a in result.alternatives) + "."
+        return {"kind": "calendar_question", "message": message, "options": [],
+                "form_url": _form_url(p, assignee_id=assignee.id, customer=customer, title=title)}
+    event = result.event
+    if not result.created:
+        return {"kind": "calendar_saved", "duplicate": True, "message": f"Dieser Termin ist bereits gebucht: {_when(event)}, {cal.member_name(event.assignee)}.",
+                "event": cal.serialize(event, user), "calendar_url": url_for("calendar.index"), "tone": "ok"}
+    parts = [f"Termin gebucht (bestätigt): {_when(event)}", cal.member_name(event.assignee)]
+    if event.customer:
+        parts.append(f"Kunde {event.customer.name}")
+    message = ", ".join(parts) + "." + (f" Angenommen: {', '.join(defaults)}." if defaults else "")
+    return {"kind": "calendar_saved", "duplicate": False, "message": message, "event": cal.serialize(event, user),
+            "calendar_url": url_for("calendar.index"), "tone": "ok"}

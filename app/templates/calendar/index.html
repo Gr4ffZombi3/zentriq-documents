@@ -21,6 +21,9 @@
       <legend>Kalender</legend>
       <div data-cal-filter></div>
     </fieldset>
+    {% if current_user.is_office_admin %}
+      <a class="cal-settings-link" href="{{ url_for('calendar.settings') }}">Bürozeiten &amp; Büro-Profil</a>
+    {% endif %}
   </aside>
 
   <section class="cal-main" aria-label="Kalender">

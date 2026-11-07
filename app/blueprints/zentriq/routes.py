@@ -17,7 +17,7 @@ from app.extensions import db
 from app.models import Customer, CustomerContact
 from app.models.ai import AiModel
 from app.models.audit_log import AuditEventType
-from app.services import calendar_intent, customer_notes
+from app.services import calendar_intent, customer_create, customer_notes, email_context, email_reply
 from app.services.ai import actions, catalog, chat, router, state
 from app.services.audit import log_audit_event
 from app.tenancy import get_or_404_scoped
@@ -281,6 +281,15 @@ def api_customer_input():
     data = _payload()
     text = data.get("text") if isinstance(data.get("text"), str) else ""
     mode = data.get("mode") if data.get("mode") in ("note", "search", "create") else None
+    # "Schreibe eine Antwort, um einen Termin zu machen": Auftrag zu einer E-Mail im Gespraech ->
+    # Chat (dort app/services/email_reply.py, funktioniert auch ohne KI-Modell). Kein Termin,
+    # keine Notiz.
+    if mode is None and not data.get("customer_id") and email_reply.is_reply_instruction(text) and not customer_create.is_command(text):
+        return jsonify({"kind": "chat"})
+    # Eingefuegte E-Mail: gehoert ins Gespraech (Kontext fuer "Antwort schreiben"), ist keine
+    # Kurznotiz - auch wenn sie Nummern oder Namen enthaelt.
+    if mode is None and not data.get("customer_id") and email_context.looks_like_email(text):
+        return jsonify({"kind": "chat"})
     # Termine ("Termin mit ... Donnerstag um 14 Uhr bei Laura") gehen an den Kalender.
     if isinstance(data.get("calendar"), dict) or (mode is None and calendar_intent.is_calendar_request(text, customer_selected=data.get("selected_id") not in (None, ""))):
         try:
@@ -306,6 +315,8 @@ def api_customer_input():
             new_name=data.get("new_name") if isinstance(data.get("new_name"), str) else None,
             new_vn=data.get("new_vn") if isinstance(data.get("new_vn"), str) else None,
             create_new=data.get("create_new") is True,
+            first_name=data.get("first_name") if isinstance(data.get("first_name"), str) else None,
+            last_name=data.get("last_name") if isinstance(data.get("last_name"), str) else None,
         )
         if result.get("kind") == "chat" and not router.can_answer():
             # Ohne KI-Modell nicht an den Chat weiterreichen (der koennte nur einen Fehler melden).
@@ -321,6 +332,21 @@ def api_customer_input():
             "technical",
         )
     return jsonify(result)
+
+
+@zentriq_bp.patch("/api/kunden/<int:customer_id>")
+@login_required
+def api_customer_update(customer_id):
+    """Stammdaten ueber die Kundenkarte bearbeiten (eigenes Buero; Rechte: customer_create.can_edit)."""
+    if (denied := _office_user_required()) is not None:
+        return denied
+    customer = get_or_404_scoped(Customer, customer_id)
+    try:
+        customer_create.update_fields(current_user, customer, _payload())
+    except customer_create.CreateError as exc:
+        db.session.rollback()
+        return _error(str(exc), exc.status, "customer")
+    return jsonify({"card": customer_notes.customer_card(current_user, customer), "message": "Gespeichert."})
 
 
 @zentriq_bp.get("/api/kunden/<int:customer_id>")

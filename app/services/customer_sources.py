@@ -13,8 +13,12 @@ MANUELL = "MANUELL"
 DOKUMENT = "DOKUMENT"
 # Aus einer Kundennotiz im ZentriqAI-Feld angelegt (app/services/customer_notes.py).
 NOTIZ = "NOTIZ"
+# Ausdruecklicher Anlagebefehl im ZentriqAI-Feld (app/services/customer_create.py).
+EINGABE = "EINGABE"
+# Aus einer eingefuegten/hochgeladenen Kunden-E-Mail (app/services/email_context.py).
+E_MAIL = "E_MAIL"
 
-LABELS = {LEIPZIGER_LISTE: "Leipziger Liste", MEMO: "Memo", MANUELL: "Manuell", DOKUMENT: "Dokument", NOTIZ: "Notiz"}
+LABELS = {LEIPZIGER_LISTE: "Leipziger Liste", MEMO: "Memo", MANUELL: "Manuell", DOKUMENT: "Dokument", NOTIZ: "Notiz", EINGABE: "Eingabe im Assistenten", E_MAIL: "E-Mail"}
 
 
 def _empty(value) -> bool:

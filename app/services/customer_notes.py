@@ -46,7 +46,7 @@ from sqlalchemy.exc import IntegrityError
 from app.extensions import db
 from app.models import Customer, CustomerContact, CustomerNote, Document, LeipzigerEntry, User
 from app.models.enums import DocStatus, DocType
-from app.services import customer_sources
+from app.services import customer_create, customer_sources
 from app.services.customer_lock import CustomerLockTimeout, customer_creation_lock, fresh_transaction
 from app.services.memo_customer_match import (
     _PHONE_PATTERN,
@@ -596,7 +596,12 @@ def customer_card(user, customer: Customer) -> dict:
         "more_notes": len(notes) > HISTORY_LIMIT,
         "leipziger": leipziger_summary(user, customer),
         "customer_url": url_for("customers.detail", customer_id=customer.id) if user.is_office_admin else None,
+        "can_edit": customer_create.can_edit(user, customer),
     }
+    if card["can_edit"]:
+        card["edit"] = customer_create.edit_payload(customer)
+    if customer.address:
+        card["address"] = customer.address
     return card
 
 
@@ -1019,7 +1024,8 @@ def _digits_at(text: str, spans: list[tuple[int, int]]) -> list[str]:
 
 
 def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | None = None, mode: str | None = None,
-                 customer_id=None, contact_choice=None, new_name=None, new_vn=None, create_new: bool = False) -> dict:
+                 customer_id=None, contact_choice=None, new_name=None, new_vn=None, create_new: bool = False,
+                 first_name=None, last_name=None) -> dict:
     """Verarbeitet eine Eingabe des ZentriqAI-Feldes. Ergebnis "kind":
     chat | saved | card | choose | choose_contact | conflict | not_found | clarify | need_name | need_vn.
 
@@ -1039,6 +1045,14 @@ def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | Non
     if len(text) > MAX_INPUT_CHARS:
         # Lange Texte sind keine Kurznotizen - unveraendert an den Chat.
         return {"kind": "chat"}
+
+    # Ausdruecklicher Anlagebefehl ("Lege Kunden ... an", "Neuer Kunde ...") vor jeder Suche:
+    # lokale Zerlegung, keine VN-Nummer noetig, keine Notiz (app/services/customer_create.py).
+    if customer_id in (None, "") and customer_create.is_command(text):
+        try:
+            return customer_create.handle(user, text, first_name=first_name, last_name=last_name, create_new=create_new)
+        except customer_create.CreateError as exc:
+            raise NoteError(str(exc), exc.status) from None
 
     # Ausdruecklich gewaehlter Kunde (Auswahlliste / Rueckfrage): kein erneutes Erkennen.
     if customer_id not in (None, ""):

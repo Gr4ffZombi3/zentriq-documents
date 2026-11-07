@@ -499,6 +499,15 @@ TOOLS: dict[str, Tool] = {
 }
 
 
+def _register_office_tools() -> None:
+    from app.services.ai import office_tools
+
+    TOOLS.update({tool.name: tool for tool in office_tools.TOOLS})
+
+
+_register_office_tools()
+
+
 def is_allowed(user, tool: Tool) -> bool:
     if tool.endpoint not in current_app.view_functions:
         return False

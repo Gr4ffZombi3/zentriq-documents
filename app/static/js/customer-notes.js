@@ -156,8 +156,11 @@
     var box = el("article", "zn-card");
     var head = el("header", "zn-card-head");
     head.appendChild(el("h3", "zn-card-title", card.name));
-    var facts = [card.vn, card.phone, card.place].filter(Boolean).join(" · ");
+    var facts = [card.vn, card.phone, card.address, card.place].filter(Boolean).join(" · ");
     if (facts) head.appendChild(el("p", "zn-meta", facts));
+    if (card.can_edit && card.edit) {
+      head.appendChild(button("Bearbeiten", "zn-link zn-card-edit", function () { renderEdit(box, card, reply); }));
+    }
     box.appendChild(head);
 
     var open = card.open_contacts || [];
@@ -218,6 +221,84 @@
     }
     box.appendChild(details);
     return box;
+  }
+
+  // Stammdaten bearbeiten: kompaktes Formular in der Karte; gespeichert wird nur nach Klick,
+  // der Server prueft Rechte, Format und gleichzeitige Aenderungen (version).
+  function renderEdit(box, card, reply) {
+    var e = card.edit, v = e.values;
+    var form = el("div", "zn-edit");
+    var inputs = {};
+    function field(key, label, opts) {
+      var wrap = el("label", "zn-edit-field" + (opts && opts.wide ? " is-wide" : ""));
+      wrap.appendChild(el("span", "zn-edit-label", label));
+      var input = el("input", "field-surface");
+      input.type = (opts && opts.type) || "text";
+      input.value = v[key] || "";
+      if (opts && opts.mode) input.inputMode = opts.mode;
+      if (opts && opts.auto) input.autocomplete = opts.auto;
+      wrap.appendChild(input);
+      inputs[key] = input;
+      form.appendChild(wrap);
+    }
+    if (e.structured_name) { field("first_name", "Vorname", { auto: "off" }); field("last_name", "Nachname", { auto: "off" }); }
+    else field("name", "Name", { wide: true });
+    field("phone", "Telefon", { type: "tel", mode: "tel" });
+    field("email", "E-Mail", { type: "email", mode: "email" });
+    if (e.structured_address) { field("street", "Straße"); field("house_number", "Hausnr."); }
+    else field("address", "Adresse", { wide: true });
+    field("postal_code", "PLZ", { mode: "numeric" });
+    field("city", "Ort");
+    field("customer_number", "VN-Nummer");
+    var actions = el("div", "zn-actions");
+    actions.appendChild(button("Speichern", "btn btn-primary btn-sm", function () {
+      var body = { version: e.version };
+      Object.keys(inputs).forEach(function (k) { body[k] = inputs[k].value; });
+      act(reply, request("PATCH", "/kunden/" + card.id, body), "Wird gespeichert", function (r) {
+        select(r.card);
+        fill(reply, [message(r.message, "ok"), renderCard(r.card, reply, true)]);
+      });
+    }));
+    actions.appendChild(button("Abbrechen", "btn btn-secondary btn-sm", function () {
+      form.replaceWith(renderCard(card, reply, true));
+    }));
+    form.appendChild(actions);
+    box.replaceWith(form);
+    var first = form.querySelector("input");
+    if (first) first.focus();
+  }
+
+  // Kundenanlage: Vor-/Nachname unklar oder fehlend. Die erkannten Angaben bleiben erhalten -
+  // gesendet wird derselbe Text plus die Namensteile.
+  function renderCreateName(reply, r) {
+    var nodes = [message(r.message)];
+    if (r.create.facts && r.create.facts.length) nodes.push(el("p", "zn-meta", "Erkannt: " + r.create.facts.join(" · ")));
+    function send(first, last) {
+      var body = { text: r.create.text, mode: "create", first_name: first, last_name: last, client_ref: newRef() };
+      act(reply, request("POST", "/kunden/eingabe", body), "Wird angelegt", function (res) { show(reply, res, r.create.text); });
+    }
+    if (r.options && r.options.length) {
+      var opts = el("div", "zn-actions");
+      r.options.forEach(function (o) { opts.appendChild(button(o.label, "btn btn-secondary btn-sm", function () { send(o.first_name, o.last_name); })); });
+      nodes.push(opts);
+    }
+    var row = el("div", "zn-actions zn-name-row");
+    var first = el("input", "field-surface zn-missing-input");
+    first.placeholder = "Vorname"; first.setAttribute("aria-label", "Vorname"); first.value = (r.suggestion || {}).first_name || "";
+    var last = el("input", "field-surface zn-missing-input");
+    last.placeholder = "Nachname"; last.setAttribute("aria-label", "Nachname"); last.value = (r.suggestion || {}).last_name || "";
+    row.appendChild(first); row.appendChild(last);
+    row.appendChild(button("Anlegen", "btn btn-primary btn-sm", function () { go(); }));
+    row.appendChild(cancel(reply));
+    nodes.push(row);
+    fill(reply, nodes);
+    function go() {
+      if (!first.value.trim()) { first.focus(); return; }
+      if (!last.value.trim()) { last.focus(); return; }
+      send(first.value.trim(), last.value.trim());
+    }
+    [first, last].forEach(function (i) { i.addEventListener("keydown", function (ev) { if (ev.key === "Enter") { ev.preventDefault(); go(); } }); });
+    setTimeout(function () { (first.value ? last : first).focus(); }, 0);
   }
 
   function renderLeipziger(l) {
@@ -304,6 +385,7 @@
     return button(label, "btn btn-secondary btn-sm", function () {
       var body = { text: (create && create.text) || text, mode: "create", create_new: true, client_ref: newRef() };
       if (create && create.name) body.new_name = create.name;
+      if (create && create.first_name && create.last_name) { body.first_name = create.first_name; body.last_name = create.last_name; }
       act(reply, request("POST", "/kunden/eingabe", body), "Wird angelegt", function (r) { show(reply, r, body.text); });
     });
   }
@@ -425,6 +507,7 @@
         select(r.card);
         fill(reply, [
           r.created ? message(r.message, "ok") : null,
+          r.notice ? message(r.notice, r.created ? null : "info") : null,
           r.answer ? renderAnswer(r.answer) : null,
           renderCard(r.card, reply, !!(r.answer && !(r.answer.sources || []).length)),
         ]);
@@ -444,6 +527,10 @@
       case "need_vn":
         select(null);
         renderMissing(reply, r, r.kind === "need_name" ? "name" : "vn");
+        return true;
+      case "create_name":
+        select(null);
+        renderCreateName(reply, r);
         return true;
       case "confirm_create":
         select(null);

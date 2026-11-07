@@ -23,6 +23,7 @@ PERSONAL_FIELDS = {
     "zustaendig": "Person",
     "von": "Person",
     "telefon": "Telefon",
+    "email": "E-Mail",
     "kundennummer": "Kundennummer",
     "vertrag": "Vertrag",
     "ort": "Ort",

@@ -18,6 +18,13 @@ class Customer(TenantScopedMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False, index=True)
     address = db.Column(db.String(255))
+    # Strukturierte Erfassung (optional, z. B. Kundenanlage im ZentriqAI-Feld). `name` bzw.
+    # `address` bleiben die Anzeigefelder und werden dabei mitgepflegt ("Vorname Nachname",
+    # "Strasse Hausnummer"); aeltere Datensaetze haben hier keine Werte.
+    first_name = db.Column(db.String(120), nullable=True)
+    last_name = db.Column(db.String(120), nullable=True)
+    street = db.Column(db.String(200), nullable=True)
+    house_number = db.Column(db.String(20), nullable=True)
     city = db.Column(db.String(120), index=True)
     postal_code = db.Column(db.String(20), index=True)
     date_of_birth = db.Column(db.Date, nullable=True)

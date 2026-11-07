@@ -90,7 +90,7 @@
         i++;
         while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) { code.push(lines[i]); i++; }
         i++;
-        html.push('<div class="zc-code"><div class="zc-code-head"><span>' + esc(fence[1] || "Code") + '</span><button type="button" data-zc-copy-code>Kopieren</button></div><pre><code>' + esc(code.join("\n")) + "</code></pre></div>");
+        html.push('<div class="zc-code' + (/entwurf/i.test(fence[1] || "") ? " zc-code-prose" : "") + '"><div class="zc-code-head"><span>' + esc(fence[1] || "Code") + '</span><button type="button" data-zc-copy-code>Kopieren</button></div><pre><code>' + esc(code.join("\n")) + "</code></pre></div>");
         continue;
       }
       if (/^\s*$/.test(line)) { i++; continue; }

@@ -336,7 +336,9 @@ def test_tools_offered_per_role_pseudonymized_without_approval(app, world, fake,
     _send(client, _new(client), question)
     # Ohne freigegebenen Anbieter: Werkzeuge ja, aber pseudonymisiert (Hinweis im Systemtext).
     employee_tools = {t["name"] for t in fake.calls[-1]["tools"]}
-    assert employee_tools == {"tagesueberblick", "meine_arbeitszeiten", "offene_vorgaenge", "leipziger_auswertung", "suche"}
+    assert employee_tools == {"tagesueberblick", "meine_arbeitszeiten", "offene_vorgaenge", "leipziger_auswertung", "suche",
+                              # Buero-Werkzeuge (app/services/ai/office_tools.py): wie in der Oberflaeche
+                              "kunden_suchen", "bueroprofil", "freie_termine", "kunde_anlegen", "termin_buchen"}
     assert "Platzhalter" in fake.calls[-1]["system"]
 
     # Mit freigegebenem Anbieter: Buerodaten nur dorthin, ohne Pseudonymisierung.

@@ -50,6 +50,7 @@ from app.models.mailbox_case import (
     MailboxCaseEvent,
     MailboxSyncCursor,
 )
+from app.models.office_settings import OfficeSettings
 from app.models.recommendation import Recommendation
 from app.models.system_error import SystemErrorEvent
 from app.models.task import Task
@@ -69,6 +70,7 @@ __all__ = [
     "CalendarEvent",
     "CalendarEventChange",
     "HukQuoteJob",
+    "OfficeSettings",
     "AiAction",
     "AiAttachment",
     "AiConversation",

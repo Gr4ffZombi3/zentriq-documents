@@ -7795,7 +7795,15 @@
   .huk-tag { display: inline-block; padding: 0.05rem 0.45rem; border-radius: 9999px; font-size: 0.72rem; font-weight: 600; background: var(--color-surface-strong); color: var(--color-text-muted); }
   .huk-tag-strong { background: var(--color-primary); color: var(--color-on-primary); }
 
+  .settings-hours { display: grid; gap: 0.45rem; }
+  .cal-settings-link { display: inline-flex; align-items: center; min-height: 2.75rem; margin-top: 0.5rem; font-size: 0.88rem; color: var(--color-primary); }
+  .settings-hours-row { display: grid; grid-template-columns: 7rem minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 0.5rem; }
+  .settings-hours-day { font-weight: 550; }
+
   @media (max-width: 40rem) {
+    .settings-hours-row { grid-template-columns: 1fr 1fr; }
+    .settings-hours-row > [aria-hidden] { display: none; }
+    .settings-hours-day { grid-column: 1 / -1; }
     .huk-options, .huk-options-long { grid-template-columns: 1fr; }
     .huk-list-item { align-items: flex-start; flex-direction: column; gap: 0.4rem; }
     .huk-form-actions .btn { width: 100%; justify-content: center; }

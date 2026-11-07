@@ -31,6 +31,7 @@ from sqlalchemy import or_
 
 from app.extensions import db
 from app.models.ai import AiAction, AiAttachment, AiConversation, AiMessage, AiUsage, _now
+from app.services import email_reply
 from app.services.ai import actions, orchestrator, router, tools
 from app.services.ai.privacy import Pseudonymizer
 
@@ -471,6 +472,15 @@ def process_pending(user, message_id: int, audio_jobs=None) -> None:
         .first()
     )
     has_attachments = bool(question and question.attachments)
+
+    # 0. Antwort auf eine Kunden-E-Mail: Kunde, Kalender und Entwurf deterministisch im Backend,
+    #    das Modell nur fuer den Mitteltext (app/services/email_reply.py).
+    if question is not None and email_reply.is_request(question.content):
+        _set_progress(pending, "Erstelle Antwortentwurf")
+        reply = email_reply.handle(user, conversation, question)
+        if reply is not None:
+            _finish(pending, conversation, reply, provider=orchestrator.DIRECT_PROVIDER, model="email_reply", tools_used=["E-Mail-Antwort"])
+            return
 
     # 1. Direktantwort ohne KI-Aufruf (nur bei automatischer Modellwahl und ohne Anhang).
     if question is not None and not has_attachments and (conversation.model_choice or router.AUTO) == router.AUTO:

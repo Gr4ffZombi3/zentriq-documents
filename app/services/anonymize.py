@@ -51,7 +51,8 @@ _LOWER = "a-zäöüß"
 # Ein Namensbestandteil: "Müller", "Schmidt-Leutheusser", "O'Neill", auch in Grossbuchstaben.
 _NAME_WORD = rf"[{_UPPER}][{_LOWER}{_UPPER}'’-]+"
 _PARTICLE = r"(?:von|van|de|der|den|zu|di|da|du|el|al|ter|vom|zur)"
-_FULL_NAME = rf"{_NAME_WORD}(?:\s+(?:{_PARTICLE}\s+)*{_NAME_WORD}){{0,3}}"
+# Namensteile nur innerhalb einer Zeile ([ \t]): "Horna\nGeburtsdatum: ..." ist kein Name.
+_FULL_NAME = rf"{_NAME_WORD}(?:[ \t]+(?:{_PARTICLE}[ \t]+)*{_NAME_WORD}){{0,3}}"
 
 # Woerter, die auf einen Vornamen folgen koennen, ohne Nachname zu sein.
 _NOT_SURNAME = {
@@ -60,6 +61,11 @@ _NOT_SURNAME = {
     "war", "wird", "kann", "soll", "hier", "dort", "heute", "morgen", "gestern", "bitte", "danke",
     "kundennummer", "kunde", "kundin", "telefon", "tel", "mobil", "e-mail", "email", "vertrag",
     "geb", "geboren", "herr", "frau", "gmbh", "ag", "kg",
+    # Feldbezeichnungen aus Formularen/E-Mails ("Herr Horna Geburtsdatum: ...")
+    "geburtsdatum", "geburtstag", "vertragsnummer", "versicherungsnummer", "versicherungsscheinnummer",
+    "vermittlernummer", "anschrift", "adresse", "straße", "strasse", "plz", "postleitzahl", "wohnort",
+    "telefonnummer", "handynummer", "mobilnummer", "betreff", "datum", "anrede", "vorname", "nachname", "name",
+    "kennzeichen", "schadennummer", "iban", "unterschrift",
 }
 
 _EMAIL = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}")
@@ -118,7 +124,7 @@ _SALUTATION = re.compile(rf"\b(?:Herrn?|Frau|Hr\.|Fr\.)\s+(?:(?:Dr|Prof)\.\s+)*(
 _NAME_LABELED = re.compile(
     rf"\b(?:Name|Kunde|Kundin|Versicherungsnehmer(?:in)?|VN|Vor-?\s?und\s?Nachname|Ansprechpartner(?:in)?"
     rf"|Inhaber(?:in)?|Halter(?:in)?|Fahrer(?:in)?|Geschädigte[r]?|Anspruchsteller(?:in)?|Empfänger(?:in)?)"
-    rf"\s*:\s*({_NAME_WORD}(?:,?\s+(?:{_PARTICLE}\s+)*{_NAME_WORD}){{0,3}})"
+    rf"[ \t]*:[ \t]*({_NAME_WORD}(?:,?[ \t]+(?:{_PARTICLE}[ \t]+)*{_NAME_WORD}){{0,3}})"
 )
 _WORD = re.compile(rf"{_NAME_WORD}")
 

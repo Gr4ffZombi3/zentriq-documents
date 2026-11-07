@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Kalender-Einstellungen – Zentriq{% endblock %}
+{% block body_class %}huk-page{% endblock %}
+{% block content %}
+{# Buero-Profil (Absender/Signatur in E-Mail-Entwuerfen des Assistenten) und Regeln fuer
+   Terminvorschlaege (app/services/availability.py). Nur Buero-Admins. #}
+{% set f = form or {} %}
+{% macro val(key) -%}{{ f.get(key) if form else ((record[key] if record and record[key] is not none else '') ) }}{%- endmacro %}
+<div class="page-shell page-shell-narrow">
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">Kalender-Einstellungen</h1>
+      <p class="page-subtitle">Büro-Profil für E-Mail-Entwürfe und Regeln für Terminvorschläge des Assistenten.</p>
+    </div>
+    <a class="btn btn-secondary btn-sm" href="{{ url_for('calendar.index') }}">Zum Kalender</a>
+  </div>
+
+  {% for e in errors %}<p class="flash flash-error" role="alert">{{ e }}</p>{% endfor %}
+
+  <form method="post" class="huk-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <section class="panel" aria-labelledby="s-profil">
+      <header class="panel-header"><h2 class="panel-title" id="s-profil">Büro-Profil</h2></header>
+      <div class="panel-body huk-fields">
+        <p class="form-hint">Nur diese Angaben erscheinen als Absender und Kontakt in E-Mail-Entwürfen – nie Daten des Kunden.</p>
+        {% for key, label, type in (('office_name', 'Name des Büros', 'text'), ('email', 'E-Mail des Büros', 'email'), ('phone', 'Telefon', 'tel'), ('address', 'Anschrift', 'text'), ('website', 'Website', 'text')) %}
+          <div class="huk-field">
+            <label class="field-label" for="s-{{ key }}">{{ label }}</label>
+            <input class="field-surface" id="s-{{ key }}" name="{{ key }}" type="{{ type }}" value="{{ val(key) }}">
+          </div>
+        {% endfor %}
+        <div class="huk-field">
+          <label class="field-label" for="s-signature">Signatur</label>
+          <textarea class="field-surface" id="s-signature" name="signature" rows="4" placeholder="Mit freundlichen Grüßen&#10;…">{{ val('signature') }}</textarea>
+          <p class="form-hint">Leer: Name des Mitarbeiters und Büro-Angaben werden verwendet.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="s-planung">
+      <header class="panel-header"><h2 class="panel-title" id="s-planung">Terminplanung</h2></header>
+      <div class="panel-body huk-fields">
+        <p class="form-hint">Bürozeiten (Europe/Berlin). Tage ohne Angabe sind geschlossen. Abwesenheiten bitte als Termin im Kalender eintragen – sie blockieren dann Vorschläge.</p>
+        <div class="settings-hours">
+          {% for iso, label, window in days %}
+            <div class="settings-hours-row">
+              <span class="settings-hours-day">{{ label }}</span>
+              <label class="sr-only" for="von-{{ iso }}">{{ label }} von</label>
+              <input class="field-surface" id="von-{{ iso }}" name="von_{{ iso }}" type="time" value="{{ f.get('von_' ~ iso) if form else (window[0].strftime('%H:%M') if window else '') }}">
+              <span aria-hidden="true">–</span>
+              <label class="sr-only" for="bis-{{ iso }}">{{ label }} bis</label>
+              <input class="field-surface" id="bis-{{ iso }}" name="bis_{{ iso }}" type="time" value="{{ f.get('bis_' ~ iso) if form else (window[1].strftime('%H:%M') if window else '') }}">
+            </div>
+          {% endfor %}
+        </div>
+        {% for key, label, default, hint in (('default_minutes', 'Standard-Termindauer (Minuten)', 30, ''), ('buffer_minutes', 'Puffer vor/nach Terminen (Minuten)', 0, ''), ('lead_minutes', 'Mindestvorlauf (Minuten)', 120, 'z. B. 1440 = frühestens morgen zur gleichen Zeit'), ('horizon_days', 'Vorschläge für die nächsten … Tage', 14, '')) %}
+          <div class="huk-field">
+            <label class="field-label" for="s-{{ key }}">{{ label }}</label>
+            <input class="field-surface" id="s-{{ key }}" name="{{ key }}" type="number" inputmode="numeric" value="{{ val(key) or default }}">
+            {% if hint %}<p class="form-hint">{{ hint }}</p>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+    <div class="huk-form-actions"><button type="submit" class="btn btn-primary">Speichern</button></div>
+  </form>
+</div>
+{% endblock %}

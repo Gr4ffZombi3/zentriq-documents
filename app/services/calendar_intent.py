@@ -54,6 +54,85 @@ _KINDS = (
 DEFAULT_MINUTES = 30
 _PRONOUNS = {"mir", "mich", "uns", "ihm", "ihr", "ihnen", "dem", "der", "den"}
 
+# Kurzer Buchungsauftrag ("09.11.26 Schmidthofer Termin um 16.30"): Datum + Uhrzeit + "Termin",
+# keine Frage, kein Schreibauftrag. Fragen ("Ist am 09.11. um 16:30 noch frei?") und Mail-
+# Auftraege ("Schreib eine Mail mit Terminvorschlaegen") buchen nie.
+_TERMIN_WORD = re.compile(r"\btermin\b(?!e)", re.I)
+_WRITING = re.compile(r"\b(?:schreib\w*|formulier\w*|entw[uü]rf\w*|e-?mail\w*|mail|nachricht|antwort\w*|brief|vorschl[äa]g\w*|vorschlagen|anbieten)\b", re.I)
+_QUESTION = re.compile(r"\?\s*$|^\s*(?:ist|sind|gibt|hat|habe|haben|hast|wann|welche[rsmn]?|wer|was|wie|kann|k[öo]nnte?n?|geht|passt|w[äa]re|bin|bist)\b", re.I)
+_AVAILABILITY = re.compile(r"\b(?:frei|verf[üu]gbar|belegt|besetzt|zeit|passt|geht|m[öo]glich)\b", re.I)
+_NAME_STOP = {
+    "termin", "um", "uhr", "am", "bitte", "heute", "morgen", "übermorgen", "uebermorgen", "mit", "bei", "für", "fuer", "und",
+    "telefonisch", "telefon", "anruf", "video", "vor", "ort", "hausbesuch", "im", "büro", "buero", "beim", "kunden", "herr",
+    "herrn", "frau", "kunde", "kundin", "minuten", "minute", "min", "stunde", "stunden", "std", "h", "nächste", "naechste",
+    "nächsten", "naechsten", "kommende", "kommenden", "woche", "buche", "buchen", "eintragen", "anlegen", "vereinbaren",
+}
+
+
+def _has_when(text: str) -> bool:
+    p = parse(text, local_today())
+    return p.day is not None and p.start is not None
+
+
+def is_booking_command(text: str) -> bool:
+    """Kurzer Buchungsauftrag mit Datum und Uhrzeit ("09.11.26 Schmidthofer Termin um 16.30") -
+    lokal erkannt, ohne KI. Wird wie "Buche ..." gebucht (Verfuegbarkeit beim Speichern)."""
+    if _CREATE.search(text) or _CREATE_VERB.search(text) or _BOOK.search(text):
+        return False  # bisherige Formen ("Termin mit ...", "... eintragen", "Buche ...") wie gehabt
+    return bool(_TERMIN_WORD.search(text) and not _QUESTION.search(text) and not _WRITING.search(text) and _has_when(text))
+
+
+def is_availability_question(text: str) -> bool:
+    """"Ist am 09.11. um 16:30 noch frei?" - wird beantwortet, bucht aber nie."""
+    return bool(_QUESTION.search(text) and _AVAILABILITY.search(text) and not _WRITING.search(text) and _has_when(text))
+
+
+def bare_name(text: str) -> str | None:
+    """Name ohne "mit"/"fuer" ("09.11.26 Schmidthofer Termin um 16.30"): uebrige grossgeschriebene
+    Woerter nach Entfernen von Datum, Uhrzeit, Dauer und Fuellwoertern."""
+    rest = _DATE_NUM.sub(" ", text)
+    rest = _TIME_RANGE.sub(" ", rest)
+    rest = _TIME.sub(" ", rest)
+    rest = _DURATION.sub(" ", rest)
+    rest = _ASSIGNEE_BEI.sub(" ", rest)
+    rest = _TOPIC.sub(" ", rest)
+    words = []
+    for word in re.findall(r"[A-Za-zÄÖÜäöüß][\wäöüß-]*", rest):
+        low = word.lower()
+        if low in _NAME_STOP or low in WEEKDAYS or not word[0].isupper():
+            continue
+        words.append(word)
+    return " ".join(words[:3]) or None
+
+
+def _office_default_minutes() -> int | None:
+    """Standarddauer aus den Buero-Einstellungen (/kalender/einstellungen); None = nicht hinterlegt."""
+    from app.services import availability
+
+    s = availability.settings()
+    return int(s.default_minutes) if s is not None and s.default_minutes else None
+
+
+def _broker_key(value) -> str:
+    return re.sub(r"[^0-9a-z]", "", (value or "").lower())
+
+
+def _responsible_for(customer, members):
+    """Zustaendig laut Kundendaten: Betreuer (assigned_user_id), sonst Mitarbeiter mit der
+    Vermittlernummer des Kunden. None, wenn nichts (eindeutig) hinterlegt ist."""
+    if customer is None:
+        return None
+    if customer.assigned_user_id:
+        found = next((m for m in members if m.id == customer.assigned_user_id), None)
+        if found is not None:
+            return found
+    key = _broker_key(customer.broker_number)
+    if key:
+        found = [m for m in members if _broker_key(getattr(m, "vermittlernummer", None)) == key]
+        if len(found) == 1:
+            return found[0]
+    return None
+
 
 def is_calendar_request(text: str, customer_selected: bool = False) -> bool:
     """Bei sichtbar ausgewaehltem Kunden bleibt eine kurze Notiz wie "Termin Donnerstag 14 Uhr"
@@ -61,6 +140,11 @@ def is_calendar_request(text: str, customer_selected: bool = False) -> bool:
     Auftrag: Verb ("eintragen", "anlegen" ...), Person ("mit ...") oder Zustaendigem ("bei ...")."""
     if _LIST.search(text) or _CREATE_VERB.search(text) or _BOOK.search(text):
         return True
+    if is_availability_question(text):
+        return True
+    if is_booking_command(text):
+        # Bei ausgewaehltem Kunden ohne Namen im Text bleibt "Termin 09.11. 14 Uhr" eine Notiz.
+        return not customer_selected or bool(bare_name(text) or _CUSTOMER.search(text) or _ASSIGNEE.search(text))
     if not _CREATE.search(text):
         return False
     return not customer_selected or bool(_CUSTOMER.search(text) or _ASSIGNEE.search(text))
@@ -143,7 +227,9 @@ def parse(text: str, today: date) -> Parsed:
     # Mitarbeiter sein (wird in handle() gegen die Mitarbeiterliste geprueft).
     by = _ASSIGNEE_BEI.search(text)
     if by and by.group(1).lower() not in _PRONOUNS:
-        p.assignee_name = by.group(1).strip()
+        # Das Muster ignoriert Gross-/Kleinschreibung: "bei Laura noch frei" -> nur "Laura".
+        words = by.group(1).split()
+        p.assignee_name = " ".join([words[0], *[w for w in words[1:] if w[:1].isupper()]])
     for_match = _FOR.search(text)
     if for_match and for_match.group(1).lower() not in _PRONOUNS:
         p.for_name = " ".join(w for w in for_match.group(1).split() if w.lower() not in WEEKDAYS) or None
@@ -236,6 +322,17 @@ def handle(user, raw_text: str, choice: dict | None = None, client_ref: str | No
     today = local_today()
     p = parse(text, today)
     members = cal.office_members()
+    short = is_booking_command(text)
+    if is_availability_question(text) and not choice:
+        return _availability_answer(user, p, members, text)
+    p.booking = p.booking or short
+    # Auswahl aus einer Rueckfrage (freie Alternative, Dauer) ueberschreibt die erkannten Werte.
+    if isinstance(choice.get("start"), str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", choice["start"]):
+        p.day, p.start, p.end = date.fromisoformat(choice["start"][:10]), time(int(choice["start"][11:13]), int(choice["start"][14:16])), None
+    if str(choice.get("minutes") or "").isdigit():
+        p.minutes, p.end = int(choice["minutes"]), None
+    if p.booking and not p.customer_name and not p.for_name and not choice.get("customer_id"):
+        p.customer_name = bare_name(text)
 
     if p.for_name:
         if _members_matching(p.for_name, members) and not p.assignee_name:
@@ -258,16 +355,12 @@ def handle(user, raw_text: str, choice: dict | None = None, client_ref: str | No
         else:
             return _question(p, f"„{p.assignee_name}“ ist kein Mitarbeiter Ihres Büros. Wer ist zuständig?",
                              [{"label": cal.member_name(m), "choice": {**choice, "assignee_id": m.id}} for m in members])
-    if assignee is None:
+    if assignee is None and p.customer_name and not choice.get("customer_id"):
         # "Termin mit Laura": ein Mitarbeitername nach "mit" ist kein Kunde, sondern die Zustaendige.
-        if p.customer_name and len(_members_matching(p.customer_name, members)) == 1 and not choice.get("customer_id"):
+        if len(_members_matching(p.customer_name, members)) == 1 and not _customers_matching(p.customer_name):
             assignee = _members_matching(p.customer_name, members)[0]
             p.customer_name = None
-        else:
-            assignee = next((m for m in members if m.id == user.id), None)
-            defaults.append("zuständig: Sie selbst")
-    if assignee is None:
-        return _question(p, "Wer ist für den Termin zuständig?", [{"label": cal.member_name(m), "choice": {**choice, "assignee_id": m.id}} for m in members])
+    assignee_id = assignee.id if assignee else None
 
     # Kunde
     customer = None
@@ -282,14 +375,35 @@ def handle(user, raw_text: str, choice: dict | None = None, client_ref: str | No
         elif found:
             options = [{"label": c.name + (f" · {c.city}" if c.city else ""), "choice": {**choice, "customer_id": c.id}} for c in found[:6]]
             options.append({"label": "Ohne Kundenverknüpfung", "choice": {**choice, "no_customer": True}})
-            return _question(p, f"Welcher Kunde ist gemeint mit „{p.customer_name}“?", options, assignee_id=assignee.id)
+            return _question(p, f"Mehrere Kunden passen zu „{p.customer_name}“{_when_text(p)}. Welcher ist gemeint?", options, assignee_id=assignee_id)
         else:
             return _question(
                 p, f"Ich finde keinen Kunden „{p.customer_name}“. Termin ohne Kundenverknüpfung speichern?",
-                [{"label": "Ohne Verknüpfung speichern", "choice": {**choice, "no_customer": True}}], assignee_id=assignee.id,
+                [{"label": "Ohne Verknüpfung speichern", "choice": {**choice, "no_customer": True}}], assignee_id=assignee_id,
             )
     elif selected_customer_id not in (None, ""):
         customer = Customer.query.filter(Customer.id == int(selected_customer_id)).first()
+    elif short and not choice.get("no_customer"):
+        return _question(p, f"Für welchen Kunden ist der Termin{_when_text(p)}? Bitte den Namen ergänzen, z. B. „09.11.26 Mustermann Termin um 16.30“.",
+                         [{"label": "Ohne Kunde buchen", "choice": {**choice, "no_customer": True}}])
+
+    # Zustaendig: ausdruecklich genannt, sonst laut Kundendaten (Betreuer/Vermittlernummer). Beim
+    # kurzen Buchungsauftrag wird ohne hinterlegte Zustaendigkeit gezielt nachgefragt; sonst wie
+    # bisher die eingebende Person.
+    if assignee is None:
+        assignee = _responsible_for(customer, members)
+        if assignee is not None:
+            defaults.append("Zuständigkeit laut Kundendaten")
+    if assignee is None and short:
+        keep = {**choice, **({"customer_id": customer.id} if customer else {"no_customer": True})}
+        who = f" für {customer.name}" if customer else ""
+        return _question(p, f"Für den Termin{who}{_when_text(p)} ist kein zuständiger Mitarbeiter hinterlegt. Wer übernimmt ihn?",
+                         [{"label": cal.member_name(m), "choice": {**keep, "assignee_id": m.id}} for m in members], customer=customer)
+    if assignee is None:
+        assignee = next((m for m in members if m.id == user.id), None)
+        defaults.append("zuständig: Sie selbst")
+    if assignee is None:
+        return _question(p, "Wer ist für den Termin zuständig?", [{"label": cal.member_name(m), "choice": {**choice, "assignee_id": m.id}} for m in members])
 
     # Datum und Uhrzeit (Pflicht)
     title = f"Termin {customer.name}" if customer else (f"Termin mit {p.customer_name}" if p.customer_name else "Termin")
@@ -305,8 +419,14 @@ def handle(user, raw_text: str, choice: dict | None = None, client_ref: str | No
         if minutes <= 0:
             return _question(p, "Das Ende liegt vor dem Beginn. Bitte die Uhrzeit prüfen.", [], assignee_id=assignee.id, customer=customer, title=title)
     if minutes is None:
-        minutes = DEFAULT_MINUTES
-        defaults.append(f"Dauer {DEFAULT_MINUTES} Minuten")
+        office_minutes = _office_default_minutes()
+        if office_minutes is None and short:
+            keep = {**choice, "assignee_id": assignee.id, **({"customer_id": customer.id} if customer else {"no_customer": True})}
+            return _question(p, f"Wie lange soll der Termin{_when_text(p)} dauern? (Im Büro ist keine Standarddauer hinterlegt.)",
+                             [{"label": f"{m} Min.", "choice": {**keep, "minutes": m}} for m in (15, 30, 45, 60, 90)],
+                             assignee_id=assignee.id, customer=customer, title=title)
+        minutes = office_minutes or DEFAULT_MINUTES
+        defaults.append(f"Dauer {minutes} Minuten" + (" (Büro-Vorgabe)" if office_minutes else ""))
     if not 5 <= minutes <= 12 * 60:
         return _question(p, "Die Dauer ist unplausibel. Bitte prüfen.", [], assignee_id=assignee.id, customer=customer, title=title)
     start_iso = f"{p.day.isoformat()}T{p.start.strftime('%H:%M')}"
@@ -320,7 +440,7 @@ def handle(user, raw_text: str, choice: dict | None = None, client_ref: str | No
                          assignee_id=assignee.id, customer=customer, title=title)
     end_iso = cal.local_iso(cal.parse_local(start_iso, "den Beginn") + timedelta(minutes=minutes))
     if p.booking:
-        return _book(user, p, assignee, customer, title, start_iso, end_iso, start_utc, minutes, client_ref, defaults)
+        return _book(user, p, assignee, customer, title, start_iso, end_iso, start_utc, minutes, client_ref, defaults, choice)
     try:
         event, created, conflicts = cal.create_event(
             user,
@@ -361,7 +481,7 @@ def _question(p: Parsed, message: str, options: list, assignee_id=None, customer
 
 
 
-def _book(user, p: Parsed, assignee, customer, title, start_iso, end_iso, start_utc, minutes, client_ref, defaults) -> dict:
+def _book(user, p: Parsed, assignee, customer, title, start_iso, end_iso, start_utc, minutes, client_ref, defaults, choice=None) -> dict:
     """Ausdrueckliche Buchung (app/services/booking.py): erneute Pruefung unmittelbar vor dem
     Speichern; belegt -> nicht buchen, freie Alternativen nennen."""
     from app.services import booking
@@ -374,16 +494,64 @@ def _book(user, p: Parsed, assignee, customer, title, start_iso, end_iso, start_
     if result.reason:
         message = f"Nicht gebucht: {result.reason}"
         if result.alternatives:
-            message += " Freie Alternativen: " + "; ".join(a.label() for a in result.alternatives) + "."
-        return {"kind": "calendar_question", "message": message, "options": [],
+            message += " Freie Alternativen bei " + cal.member_name(assignee) + ": " + "; ".join(a.label() for a in result.alternatives) + "."
+        else:
+            message += " Keine freie Alternative im Kalender gefunden."
+        keep = {**(choice or {}), "assignee_id": assignee.id, "minutes": minutes,
+                **({"customer_id": customer.id} if customer else {"no_customer": True})}
+        options = [{"label": "Buchen: " + a.label(), "choice": {**keep, "start": a.iso()}} for a in result.alternatives]
+        return {"kind": "calendar_question", "message": message, "options": options,
                 "form_url": _form_url(p, assignee_id=assignee.id, customer=customer, title=title)}
     event = result.event
     if not result.created:
         return {"kind": "calendar_saved", "duplicate": True, "message": f"Dieser Termin ist bereits gebucht: {_when(event)}, {cal.member_name(event.assignee)}.",
                 "event": cal.serialize(event, user), "calendar_url": url_for("calendar.index"), "tone": "ok"}
-    parts = [f"Termin gebucht (bestätigt): {_when(event)}", cal.member_name(event.assignee)]
-    if event.customer:
-        parts.append(f"Kunde {event.customer.name}")
-    message = ", ".join(parts) + "." + (f" Angenommen: {', '.join(defaults)}." if defaults else "")
+    local = to_local(event.starts_at)
+    who = event.customer.name if event.customer else (p.customer_name or "ohne Kunde")
+    message = (f"Termin gebucht (bestätigt): {who} am {local.strftime('%d.%m.%Y')} um {local.strftime('%H:%M')} Uhr "
+               f"({minutes} Min.), zuständig: {cal.member_name(event.assignee)}.")
+    if defaults:
+        message += " Angenommen: " + ", ".join(defaults) + "."
     return {"kind": "calendar_saved", "duplicate": False, "message": message, "event": cal.serialize(event, user),
             "calendar_url": url_for("calendar.index"), "tone": "ok"}
+
+
+def _when_text(p: Parsed) -> str:
+    if p.day and p.start:
+        return f" am {p.day.strftime('%d.%m.%Y')} um {p.start.strftime('%H:%M')} Uhr"
+    return ""
+
+
+def _availability_answer(user, p: Parsed, members, text: str) -> dict:
+    """Reine Verfuegbarkeitsfrage: pruefen und antworten, nichts speichern."""
+    from app.services import availability
+
+    assignee = None
+    if p.assignee_name:
+        found = _members_matching(p.assignee_name, members)
+        assignee = found[0] if len(found) == 1 else None
+    if assignee is None:
+        assignee = next((m for m in members if m.id == user.id), None)
+    minutes = p.minutes or _office_default_minutes() or DEFAULT_MINUTES
+    start_utc = cal.parse_local(f"{p.day.isoformat()}T{p.start.strftime('%H:%M')}", "den Beginn")
+    when = f"{p.day.strftime('%d.%m.%Y')} um {p.start.strftime('%H:%M')} Uhr"
+    s = availability.settings()
+    lines = []
+    if availability.planning_ready(s):
+        reason = availability.check(assignee, start_utc, minutes, s)
+        if reason:
+            from app.services.booking import alternatives_near
+
+            lines = [a.label() for a in alternatives_near(assignee, start_utc, minutes, s)]
+    else:
+        busy = cal.conflicts_for(assignee.id, start_utc, start_utc + timedelta(minutes=minutes))
+        reason = f"{cal.member_name(assignee)} hat dann bereits „{busy[0].title}“." if busy else None
+    name = cal.member_name(assignee)
+    if reason:
+        message = f"Am {when} ist bei {name} nicht frei: {reason}"
+    else:
+        message = f"Am {when} ist bei {name} frei ({minutes} Min.)."
+    if not availability.planning_ready(s):
+        message += " (Bürozeiten sind nicht hinterlegt – geprüft wurden nur vorhandene Termine.)"
+    message += " Es wurde nichts gebucht." + (" Freie Alternativen:" if lines else "")
+    return {"kind": "calendar_list", "message": message, "lines": lines, "calendar_url": url_for("calendar.index")}

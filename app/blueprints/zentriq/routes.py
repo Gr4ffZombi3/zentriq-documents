@@ -297,20 +297,28 @@ def api_customer_input():
     # Kurznotiz - auch wenn sie Nummern oder Namen enthaelt.
     if mode is None and not data.get("customer_id") and email_context.looks_like_email(text):
         return jsonify({"kind": "chat"})
+    # Kurzer Buchungsauftrag ("09.11.26 Schmidthofer Termin um 16.30") und reine Verfuegbarkeits-
+    # fragen ("Ist am 09.11. um 16:30 noch frei?") gehen direkt an den Kalender - lokal erkannt,
+    # ohne KI-Modell und vor allen anderen Weichen.
+    selected = data.get("selected_id") not in (None, "")
+    direct_calendar = mode is None and not data.get("customer_id") and (
+        calendar_intent.is_availability_question(text)
+        or (calendar_intent.is_booking_command(text) and calendar_intent.is_calendar_request(text, customer_selected=selected))
+    )
     # Bestandsfragen ("Wie viele Kunden sind laut Leipziger Liste noch zurueckzurufen?"): direkt
     # aus der Datenbank, unabhaengig von einem KI-Modell (app/services/stock_questions.py).
-    if mode is None and not data.get("customer_id"):
+    if mode is None and not data.get("customer_id") and not direct_calendar:
         facts = stock_questions.answer(current_user, text, selected_id=data.get("selected_id"))
         if facts is not None:
             return jsonify(facts)
     # Fachfrage mit Internetbedarf -> Chat (Webrecherche, funktioniert auch ohne KI-Modell).
-    if mode is None and not data.get("customer_id") and not data.get("selected_id"):
+    if mode is None and not data.get("customer_id") and not data.get("selected_id") and not direct_calendar:
         from app.services import web_research
 
         if web_research.is_question(text) and not customer_notes._by_name(text):
             return jsonify({"kind": "chat"})
     # Termine ("Termin mit ... Donnerstag um 14 Uhr bei Laura") gehen an den Kalender.
-    if isinstance(data.get("calendar"), dict) or (mode is None and calendar_intent.is_calendar_request(text, customer_selected=data.get("selected_id") not in (None, ""))):
+    if isinstance(data.get("calendar"), dict) or direct_calendar or (mode is None and calendar_intent.is_calendar_request(text, customer_selected=selected)):
         try:
             return jsonify(
                 calendar_intent.handle(

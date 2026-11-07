@@ -528,6 +528,28 @@
         select(null);
         renderMissing(reply, r, r.kind === "need_name" ? "name" : "vn");
         return true;
+      case "facts": {
+        // Bestandsfrage, direkt aus der Datenbank beantwortet (kein KI-Modell).
+        var nodes = [message(r.message)];
+        if (r.rule) nodes.push(el("p", "zn-meta", r.rule));
+        if (r.lines && r.lines.length) {
+          var ul = el("ul", "zn-entries");
+          r.lines.forEach(function (line) { ul.appendChild(el("li", null, line)); });
+          if (r.more) ul.appendChild(el("li", "zn-meta", "… und " + r.more + " weitere"));
+          nodes.push(ul);
+        }
+        if (r.link) {
+          var a = el("a", "zn-link", r.link.label);
+          a.href = r.link.url;
+          nodes.push(a);
+        }
+        if (r.callbacks) {
+          var open = el("p", "zn-meta", "Die offenen Rückrufe stehen auch unter „Offene Rückrufe“ unter dem Eingabefeld.");
+          nodes.push(open);
+        }
+        fill(reply, nodes);
+        return true;
+      }
       case "create_name":
         select(null);
         renderCreateName(reply, r);

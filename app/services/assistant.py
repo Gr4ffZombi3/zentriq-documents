@@ -154,7 +154,7 @@ def generate(action_key: str | None, text: str | None) -> str:
     except anthropic.APITimeoutError as exc:
         raise AssistantError("Der Assistent hat nicht rechtzeitig geantwortet. Bitte erneut versuchen.", 504, "timeout") from exc
     except anthropic.RateLimitError as exc:
-        raise AssistantError("Der Assistent ist gerade ausgelastet. Bitte in einer Minute erneut versuchen.", 429, "rate_limit") from exc
+        raise AssistantError("Der Assistent ist laut Anbieter gerade ausgelastet. Bitte später erneut versuchen.", 429, "rate_limit") from exc
     except anthropic.BadRequestError as exc:
         raise AssistantError("Die Anfrage konnte nicht verarbeitet werden.", 502, "bad_request") from exc
     except (anthropic.AuthenticationError, anthropic.PermissionDeniedError, anthropic.NotFoundError) as exc:

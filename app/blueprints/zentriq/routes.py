@@ -17,7 +17,14 @@ from app.extensions import db
 from app.models import Customer, CustomerContact
 from app.models.ai import AiModel
 from app.models.audit_log import AuditEventType
-from app.services import calendar_intent, customer_create, customer_notes, email_context, email_reply
+from app.services import (
+    calendar_intent,
+    customer_create,
+    customer_notes,
+    email_context,
+    email_reply,
+    stock_questions,
+)
 from app.services.ai import actions, catalog, chat, router, state
 from app.services.audit import log_audit_event
 from app.tenancy import get_or_404_scoped
@@ -290,6 +297,12 @@ def api_customer_input():
     # Kurznotiz - auch wenn sie Nummern oder Namen enthaelt.
     if mode is None and not data.get("customer_id") and email_context.looks_like_email(text):
         return jsonify({"kind": "chat"})
+    # Bestandsfragen ("Wie viele Kunden sind laut Leipziger Liste noch zurueckzurufen?"): direkt
+    # aus der Datenbank, unabhaengig von einem KI-Modell (app/services/stock_questions.py).
+    if mode is None and not data.get("customer_id"):
+        facts = stock_questions.answer(current_user, text, selected_id=data.get("selected_id"))
+        if facts is not None:
+            return jsonify(facts)
     # Termine ("Termin mit ... Donnerstag um 14 Uhr bei Laura") gehen an den Kalender.
     if isinstance(data.get("calendar"), dict) or (mode is None and calendar_intent.is_calendar_request(text, customer_selected=data.get("selected_id") not in (None, ""))):
         try:
@@ -319,8 +332,13 @@ def api_customer_input():
             last_name=data.get("last_name") if isinstance(data.get("last_name"), str) else None,
         )
         if result.get("kind") == "chat" and not router.can_answer():
-            # Ohne KI-Modell nicht an den Chat weiterreichen (der koennte nur einen Fehler melden).
-            result = customer_notes.without_ai(current_user, text)
+            # Ohne KI-Modell nicht an den Chat weiterreichen (der koennte nur einen Fehler melden) -
+            # ausser die Frage ist eine Standardabfrage, die der Chat direkt aus Zentriq beantwortet
+            # (orchestrator.direct_answer, ohne Modell).
+            from app.services.ai import orchestrator
+
+            if orchestrator.detect_intent(current_user, text) is None:
+                result = customer_notes.without_ai(current_user, text)
     except customer_notes.NoteError as exc:
         return _error(str(exc), exc.status, "note")
     except Exception:  # noqa: BLE001 - technischer Fehler wird als solcher gemeldet, nie als "kein Treffer".

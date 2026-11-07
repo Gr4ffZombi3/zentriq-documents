@@ -482,6 +482,22 @@ def process_pending(user, message_id: int, audio_jobs=None) -> None:
             _finish(pending, conversation, reply, provider=orchestrator.DIRECT_PROVIDER, model="email_reply", tools_used=["E-Mail-Antwort"])
             return
 
+    # 0b. Bestandsfragen (Zaehlungen) immer direkt aus der Datenbank - kein Modell noetig.
+    if question is not None and not has_attachments:
+        from app.services import stock_questions
+
+        facts = stock_questions.answer(user, question.content)
+        if facts is not None:
+            text = facts["message"] + (f"\n\n{facts['rule']}" if facts.get("rule") else "")
+            if facts.get("lines"):
+                text += "\n\n" + "\n".join(f"- {line}" for line in facts["lines"])
+                if facts.get("more"):
+                    text += f"\n- … und {facts['more']} weitere"
+            if facts.get("link"):
+                text += f"\n\n[{facts['link']['label']}]({facts['link']['url']})"
+            _finish(pending, conversation, text, provider=orchestrator.DIRECT_PROVIDER, model=orchestrator.DIRECT_MODEL, tools_used=["Bestandsabfrage"])
+            return
+
     # 1. Direktantwort ohne KI-Aufruf (nur bei automatischer Modellwahl und ohne Anhang).
     if question is not None and not has_attachments and (conversation.model_choice or router.AUTO) == router.AUTO:
         direct = orchestrator.direct_answer(user, question.content)

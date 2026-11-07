@@ -282,7 +282,7 @@ def api_customer_input():
     text = data.get("text") if isinstance(data.get("text"), str) else ""
     mode = data.get("mode") if data.get("mode") in ("note", "search", "create") else None
     # Termine ("Termin mit ... Donnerstag um 14 Uhr bei Laura") gehen an den Kalender.
-    if isinstance(data.get("calendar"), dict) or (mode is None and calendar_intent.is_calendar_request(text)):
+    if isinstance(data.get("calendar"), dict) or (mode is None and calendar_intent.is_calendar_request(text, customer_selected=data.get("selected_id") not in (None, ""))):
         try:
             return jsonify(
                 calendar_intent.handle(

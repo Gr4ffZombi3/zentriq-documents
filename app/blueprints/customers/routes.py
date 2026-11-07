@@ -21,6 +21,7 @@ from app.services.customers import (
     build_customer_detail_context,
     build_customer_directory,
 )
+from app.services.huk import jobs as huk_jobs
 from app.tenancy import get_or_404_scoped
 
 MEMO_BASIS_LABELS = {
@@ -83,6 +84,9 @@ def detail(customer_id):
         memo_basis=MEMO_BASIS_LABELS,
         source_labels=customer_sources.LABELS,
         display_name=display_name_for,
+        huk_jobs=huk_jobs.jobs_for_customer(current_user, customer.id),
+        huk_labels=huk_jobs.STATUS_LABELS,
+        huk_tones=huk_jobs.STATUS_TONES,
     )
 
 

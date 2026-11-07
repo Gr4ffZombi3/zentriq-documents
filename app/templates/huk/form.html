@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% from "ui/icons.html" import icon %}
+{% block title %}Kfz-Angaben – Zentriq{% endblock %}
+{% block content %}
+{# Folgefragen erscheinen nur, wenn der HUK-Rechner sie stellt (app/services/huk/schema.py,
+   Field.condition). Die Anzeige steuert huk-form.js; geprueft wird serverseitig. #}
+{% set SHOW_IF = {
+  'halterzulassung': 'zulassung=wechsel',
+  'alle_ueber_25': 'fahrer!=vn',
+  'sf_vollkasko': 'vollkasko_bisher=ja',
+  'selbstbeteiligung': 'deckung=vollkasko',
+  'selbstbeteiligung_tk': 'deckung=teilkasko',
+} %}
+{% set action = url_for('huk.edit', job_id=job.id) if job else url_for('huk.new') %}
+<div class="page-shell page-shell-narrow">
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">Angaben für die Kfz-Berechnung</h1>
+      <p class="page-subtitle">Alle Angaben sind Pflicht und gehen erst nach Ihrer Bestätigung an huk.de. Es werden keine Werte ergänzt oder geschätzt.</p>
+    </div>
+    <a class="btn btn-secondary btn-sm" href="{{ url_for('huk.index') }}">Zur Übersicht</a>
+  </div>
+
+  {% if missing or errors %}
+    <p class="flash flash-error" role="alert">Bitte die markierten Angaben ergänzen bzw. korrigieren ({{ (missing | length) + (errors | length) }}).</p>
+  {% endif %}
+
+  <form method="post" action="{{ action }}" class="huk-form" data-huk-form novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <section class="panel" aria-labelledby="huk-kunde">
+      <header class="panel-header"><h2 class="panel-title" id="huk-kunde">Kunde</h2></header>
+      <div class="panel-body huk-customer" data-huk-customer data-api="{{ url_for('calendar.api_customers') }}">
+        <input type="hidden" name="kunde" value="{{ customer.id if customer else '' }}" data-huk-customer-id>
+        <p class="huk-customer-current" data-huk-customer-current {% if not customer %}hidden{% endif %}>
+          Ergebnis wird gespeichert bei: <strong data-huk-customer-name>{{ customer.name if customer else '' }}</strong>
+          <button type="button" class="btn btn-secondary btn-sm" data-huk-customer-clear>Ändern</button>
+        </p>
+        <div data-huk-customer-search {% if customer %}hidden{% endif %}>
+          <label class="field-label" for="huk-kunde-suche">Kunde suchen (optional)</label>
+          <input class="field-surface" id="huk-kunde-suche" type="search" autocomplete="off" placeholder="Name oder VN-Nummer" data-huk-customer-input>
+          <ul class="huk-customer-results" data-huk-customer-results role="listbox" aria-label="Gefundene Kunden"></ul>
+          <p class="form-hint">Ohne Kunde wird die Berechnung nur in der Übersicht gespeichert.</p>
+        </div>
+      </div>
+    </section>
+
+    <details class="panel huk-ai" {% if ai_error or suggested and ai_text %}open{% endif %}>
+      <summary class="panel-header"><span class="panel-title">Angaben aus Text übernehmen (KI)</span></summary>
+      <div class="panel-body">
+        {% if ai_reason %}
+          <p class="form-hint">{{ ai_reason }}</p>
+        {% else %}
+          <p class="form-hint">Text einfügen (z. B. Kundenmail). Claude trägt nur ausdrücklich genannte Angaben als <strong>Vorschlag</strong> in leere Felder ein – bitte jeden Vorschlag prüfen.</p>
+          <label class="sr-only" for="huk-ki-text">Text</label>
+          <textarea class="field-surface" id="huk-ki-text" name="ki_text" rows="4" maxlength="{{ ai_max_chars }}">{{ ai_text }}</textarea>
+          {% if ai_error %}<p class="form-error" role="alert">{{ ai_error }}</p>{% endif %}
+          <div class="form-actions"><button type="submit" class="btn btn-secondary" name="aktion" value="ki" formnovalidate>Vorschläge übernehmen</button></div>
+        {% endif %}
+      </div>
+    </details>
+
+    {% if suggested %}
+      <p class="flash flash-info">Markierte Felder sind <strong>Vorschläge</strong> (aus Kundendaten bzw. Text). Bitte prüfen, bevor Sie speichern.</p>
+    {% endif %}
+
+    {% for section in sections %}
+      <section class="panel" aria-labelledby="huk-s-{{ loop.index }}">
+        <header class="panel-header"><h2 class="panel-title" id="huk-s-{{ loop.index }}">{{ section }}</h2></header>
+        <div class="panel-body huk-fields">
+          {% for f in fields if f.section == section %}
+            {% set value = values.get(f.key) %}
+            {% set bad = f.key in missing or f.key in errors %}
+            <div class="huk-field {{ 'huk-field-bad' if bad }} {{ 'huk-field-suggested' if f.key in suggested }}"
+                 {% if SHOW_IF.get(f.key) %}data-show-if="{{ SHOW_IF[f.key] }}"{% endif %}
+                 {% if f.condition and f.key not in active_keys %}hidden{% endif %}>
+              {% set fid = 'huk-' ~ f.key %}
+              {% if f.kind in ('choice', 'multi') %}
+                <fieldset {% if bad %}aria-invalid="true" aria-describedby="{{ fid }}-err"{% endif %}>
+                  <legend class="field-label">{{ f.question }}</legend>
+                  <div class="huk-options {{ 'huk-options-long' if f.options | length > 4 }}">
+                    {% for o in f.options %}
+                      {% set checked = (o.value in (value or [])) if f.kind == 'multi' else (o.value == value) %}
+                      <label class="huk-option">
+                        <input type="{{ 'checkbox' if f.kind == 'multi' else 'radio' }}" name="{{ f.key }}" value="{{ o.value }}" {% if checked %}checked{% endif %}>
+                        <span>{{ o.short or o.label }}</span>
+                      </label>
+                    {% endfor %}
+                  </div>
+                </fieldset>
+              {% elif f.kind == 'sf' %}
+                <label class="field-label" for="{{ fid }}">{{ f.question }}</label>
+                <select class="field-surface" id="{{ fid }}" name="{{ f.key }}" {% if bad %}aria-invalid="true" aria-describedby="{{ fid }}-err"{% endif %}>
+                  <option value="">Bitte auswählen</option>
+                  {% for o in f.options %}<option value="{{ o.value }}" {% if o.value == value %}selected{% endif %}>{{ o.label }}</option>{% endfor %}
+                </select>
+              {% else %}
+                <label class="field-label" for="{{ fid }}">{{ f.question }}</label>
+                <input class="field-surface" id="{{ fid }}" name="{{ f.key }}" value="{{ value or '' }}" placeholder="{{ f.placeholder }}"
+                       autocomplete="off" {% if f.key in ('plz', 'fahrleistung', 'hsn') %}inputmode="numeric"{% elif f.key not in ('tsn',) %}inputmode="decimal"{% endif %}
+                       {% if f.key == 'tsn' %}autocapitalize="characters"{% endif %}
+                       {% if bad %}aria-invalid="true" aria-describedby="{{ fid }}-err"{% endif %}>
+                {% if proposals.get(f.key) and not value %}
+                  <button type="button" class="huk-proposal" data-huk-proposal="{{ fid }}" data-value="{{ proposals[f.key] }}">Vorschlag: {{ proposals[f.key] }} übernehmen</button>
+                {% endif %}
+              {% endif %}
+              {% if f.hint %}<p class="form-hint">{{ f.hint }}</p>{% endif %}
+              {% if f.key in suggested %}<p class="huk-suggested-tag">Vorschlag – bitte prüfen</p>{% endif %}
+              {% if f.key in errors %}<p class="form-error" id="{{ fid }}-err">{{ errors[f.key] }}</p>
+              {% elif f.key in missing %}<p class="form-error" id="{{ fid }}-err">Bitte angeben.</p>{% endif %}
+            </div>
+          {% endfor %}
+          {% if section == 'Schutz' %}
+            <p class="form-hint">Zusatzbausteine (Schutzbrief, Rabattschutz u. a.) werden nicht ausgewählt.</p>
+          {% endif %}
+        </div>
+      </section>
+    {% endfor %}
+
+    <div class="huk-form-actions">
+      <button type="submit" class="btn btn-primary" name="aktion" value="speichern">Weiter zur Zusammenfassung</button>
+    </div>
+  </form>
+</div>
+<script defer src="{{ url_for('static', filename='js/huk-form.js', v=static_rev('js/huk-form.js')) }}"></script>
+{% endblock %}

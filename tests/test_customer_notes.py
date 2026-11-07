@@ -268,8 +268,12 @@ def test_follow_up_note_goes_only_to_visibly_selected_customer(app, office, ai_a
     heller, schulz = office.ids["Justin Heller"], office.ids["Maria Schulz"]
     data = _input(client, "Termin Donnerstag 14 Uhr", selected_id=heller)
     assert data["kind"] == "saved" and data["message"] == "Bei Justin Heller gespeichert: Termin Donnerstag 14 Uhr"
-    # Ohne Auswahl: kein unsichtbarer Kontext -> nichts gespeichert, Eingabe geht an den Chat.
-    assert _input(client, "Termin Freitag 9 Uhr")["kind"] == "chat"
+    # Ohne Auswahl: kein unsichtbarer Kontext -> keine Kundennotiz. (Die Eingabe ist ein
+    # Terminwunsch und geht an den Buerokalender - ohne Kundenverknuepfung.)
+    notes_before = len(_notes())
+    data = _input(client, "Termin Freitag 9 Uhr")
+    assert data["kind"] != "saved" and len(_notes()) == notes_before
+    assert (data.get("event") or {}).get("customer") is None
     # Neue Kennung ersetzt die Auswahl.
     data = _input(client, "808/111111-b Angebot zugeschickt", selected_id=heller)
     assert data["card"]["id"] == schulz

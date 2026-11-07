@@ -9,8 +9,9 @@ Grundsaetze:
   schlaegt die Berechnung fehl - es wird nichts geschaetzt.
 - Captcha, Zugriffssperre oder unbekannte Pflichtfragen werden nicht umgangen, sondern als
   "blocked" bzw. "needs_input" gemeldet (manuelle Uebergabe).
-- Jeder Auftrag startet einen eigenen Browser ohne gespeichertes Profil (keine geteilten Cookies
-  zwischen Auftraegen oder Bueros); er wird am Ende immer geschlossen."""
+- Jeder Auftrag startet einen eigenen Browser mit leerem, eigenem Profilverzeichnis (keine
+  geteilten Cookies zwischen Auftraegen oder Bueros); er wird am Ende immer geschlossen und das
+  Profil geloescht."""
 
 import re
 import time
@@ -324,18 +325,28 @@ def _offer(ctx: Context, v: dict) -> dict:
     }
 
 
-def run(values: dict, *, timeout_s: int = 150, should_cancel=lambda: False, evidence_path: str | None = None, headless: bool = True) -> dict:
+def run(values: dict, *, timeout_s: int = 150, should_cancel=lambda: False, evidence_path: str | None = None,
+        headless: bool = True, profile_dir: str | None = None) -> dict:
+    """Fuehrt die Berechnung aus. profile_dir: leeres, nur fuer diesen Auftrag angelegtes
+    Browserprofil (wird vom Aufrufer danach geloescht); ohne Angabe ein temporaeres Profil."""
+    import shutil
+    import tempfile
+
     from playwright.sync_api import Error as PlaywrightError
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
     from playwright.sync_api import sync_playwright
 
     deadline = time.monotonic() + timeout_s
+    own_profile = profile_dir is None
+    profile_dir = profile_dir or tempfile.mkdtemp(prefix="huk-")
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless, args=["--disable-dev-shm-usage", "--disable-gpu"])
+        context = p.chromium.launch_persistent_context(
+            profile_dir, headless=headless, args=["--disable-dev-shm-usage", "--disable-gpu", "--disable-extensions"],
+            locale="de-DE", timezone_id="Europe/Berlin", viewport={"width": 1366, "height": 1000},
+            accept_downloads=False, service_workers="block",
+        )
         try:
-            context = browser.new_context(locale="de-DE", timezone_id="Europe/Berlin", viewport={"width": 1366, "height": 1000},
-                                          accept_downloads=False, service_workers="block")
-            page = context.new_page()
+            page = context.pages[0] if context.pages else context.new_page()
             page.set_default_timeout(15000)
             ctx = Context(page=page, deadline=deadline, should_cancel=should_cancel)
             response = page.goto(START_URL, wait_until="domcontentloaded", timeout=45000)
@@ -370,4 +381,8 @@ def run(values: dict, *, timeout_s: int = 150, should_cancel=lambda: False, evid
         except PlaywrightError as exc:
             raise HukRunError("network", "Verbindung zum Rechner fehlgeschlagen.", retryable=True) from exc
         finally:
-            browser.close()
+            try:
+                context.close()
+            finally:
+                if own_profile:
+                    shutil.rmtree(profile_dir, ignore_errors=True)

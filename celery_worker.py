@@ -11,4 +11,5 @@ celery = make_celery(flask_app)
 import app.tasks.ai_tasks  # noqa: E402,F401
 import app.tasks.auth_tasks  # noqa: E402,F401
 import app.tasks.document_tasks  # noqa: E402,F401
+import app.tasks.huk_tasks  # noqa: E402,F401
 import app.tasks.memo_tasks  # noqa: E402,F401

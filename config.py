@@ -45,6 +45,28 @@ class BaseConfig:
     ASSISTANT_MAX_INPUT_CHARS = int(os.environ.get("ASSISTANT_MAX_INPUT_CHARS", "8000"))
     ASSISTANT_MAX_OUTPUT_TOKENS = int(os.environ.get("ASSISTANT_MAX_OUTPUT_TOKENS", "4000"))
 
+    # Kfz-Beitragsberechnung ueber den oeffentlichen HUK-Webrechner (app/services/huk/):
+    # Playwright (headless Chromium) im Celery-Worker, hoechstens ein Browser gleichzeitig.
+    HUK_ENABLED = os.environ.get("HUK_ENABLED", "true").lower() == "true"
+    HUK_RUN_TIMEOUT_SECONDS = int(os.environ.get("HUK_RUN_TIMEOUT_SECONDS", "150"))
+    HUK_MAX_ATTEMPTS = int(os.environ.get("HUK_MAX_ATTEMPTS", "2"))
+    # Unter diesem freien Arbeitsspeicher (MB) wartet ein Auftrag, statt Chromium zu starten.
+    HUK_MIN_FREE_MB = int(os.environ.get("HUK_MIN_FREE_MB", "350"))
+    HUK_STORAGE_DIR = os.environ.get("HUK_STORAGE_DIR", str(BASE_DIR / "storage" / "huk"))
+    HUK_BROWSER_TMP_DIR = os.environ.get("HUK_BROWSER_TMP_DIR", str(BASE_DIR / "storage" / "tmp" / "huk"))
+    # Belege (Screenshot der Rechnerseite) werden nach dieser Frist geloescht; das Ergebnis bleibt.
+    HUK_EVIDENCE_RETENTION_DAYS = int(os.environ.get("HUK_EVIDENCE_RETENTION_DAYS", "90"))
+    # Claude (eigene Anbindung, nicht der ZentriqAI-Router): nur zum Uebernehmen von Angaben aus
+    # einem Freitext. 0 = aus. Kostenobergrenze je Auftrag in USD; Modell/Preise einstellbar.
+    HUK_AI_MAX_COST_USD = float(os.environ.get("HUK_AI_MAX_COST_USD", "0"))
+    HUK_AI_MAX_CALLS = int(os.environ.get("HUK_AI_MAX_CALLS", "3"))
+    HUK_AI_MODEL = os.environ.get("HUK_AI_MODEL", "claude-opus-5-5")
+    HUK_AI_PRICE_INPUT_PER_MTOK = float(os.environ.get("HUK_AI_PRICE_INPUT_PER_MTOK", "4.0"))
+    HUK_AI_PRICE_OUTPUT_PER_MTOK = float(os.environ.get("HUK_AI_PRICE_OUTPUT_PER_MTOK", "20.0"))
+    HUK_AI_MAX_OUTPUT_TOKENS = int(os.environ.get("HUK_AI_MAX_OUTPUT_TOKENS", "2000"))
+    HUK_AI_MAX_INPUT_CHARS = int(os.environ.get("HUK_AI_MAX_INPUT_CHARS", "3000"))
+    HUK_AI_TIMEOUT_SECONDS = float(os.environ.get("HUK_AI_TIMEOUT_SECONDS", "40"))
+
     # ZentriqAI (app/services/ai/): Multi-Anbieter-Router. API-Keys nur in der Umgebung.
     ZENTRIQ_AI_ENABLED = os.environ.get("ZENTRIQ_AI_ENABLED", "true").lower() == "true"
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")

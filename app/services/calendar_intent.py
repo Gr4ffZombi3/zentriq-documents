@@ -50,8 +50,15 @@ DEFAULT_MINUTES = 30
 _PRONOUNS = {"mir", "mich", "uns", "ihm", "ihr", "ihnen", "dem", "der", "den"}
 
 
-def is_calendar_request(text: str) -> bool:
-    return bool(_CREATE.search(text) or _CREATE_VERB.search(text) or _LIST.search(text))
+def is_calendar_request(text: str, customer_selected: bool = False) -> bool:
+    """Bei sichtbar ausgewaehltem Kunden bleibt eine kurze Notiz wie "Termin Donnerstag 14 Uhr"
+    eine Kundennotiz (bisheriges Verhalten). Ein Termin wird es dort nur mit ausdruecklichem
+    Auftrag: Verb ("eintragen", "anlegen" ...), Person ("mit ...") oder Zustaendigem ("bei ...")."""
+    if _LIST.search(text) or _CREATE_VERB.search(text):
+        return True
+    if not _CREATE.search(text):
+        return False
+    return not customer_selected or bool(_CUSTOMER.search(text) or _ASSIGNEE.search(text))
 
 
 @dataclass

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import badge %}
+{% from "ui/icons.html" import icon %}
+{% block title %}Kfz-Angebot (HUK) – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell page-shell-narrow">
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">Kfz-Angebot (HUK)</h1>
+      <p class="page-subtitle">Unverbindliche Beitragsberechnung über den öffentlichen Rechner auf huk.de, im Hintergrund. Es wird nichts beantragt.</p>
+    </div>
+    {% if enabled %}
+      <a class="btn btn-primary" href="{{ url_for('huk.new') }}">{{ icon('plus', class='h-4 w-4') }}<span>Neue Berechnung</span></a>
+    {% endif %}
+  </div>
+
+  {% if not enabled %}
+    <p class="flash flash-info">Die Kfz-Berechnung ist derzeit abgeschaltet.</p>
+  {% endif %}
+
+  <section class="panel" aria-labelledby="huk-liste">
+    <header class="panel-header">
+      <h2 class="panel-title" id="huk-liste">{{ 'Berechnungen des Büros' if current_user.is_office_admin else 'Meine Berechnungen' }}</h2>
+    </header>
+    {% if jobs %}
+      <ul class="huk-list">
+        {% for job in jobs %}
+          {% set res = job.result or {} %}
+          {% set sel = (res.tariffs or []) | selectattr('selected') | first %}
+          <li>
+            <a class="huk-list-item" href="{{ url_for('huk.show', job_id=job.id) }}">
+              <span class="huk-list-main">
+                <span class="huk-list-title">{{ job.customer.name if job.customer else 'Ohne Kundenzuordnung' }}</span>
+                <span class="huk-list-meta">
+                  {{ job.created_at | local_dt }}
+                  {% if job.input_data %} · HSN/TSN {{ job.input_data.get('hsn', '–') }}/{{ job.input_data.get('tsn', '–') }}{% endif %}
+                  {% if current_user.is_office_admin and job.created_by %} · {{ member_name(job.created_by) }}{% endif %}
+                </span>
+              </span>
+              <span class="huk-list-side">
+                {% if job.status == 'done' and sel %}<span class="huk-list-price">{{ sel.price }}</span>{% endif %}
+                {{ badge(labels.get(job.status, job.status), tones.get(job.status, 'muted')) }}
+              </span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="panel-body"><p class="form-hint">Noch keine Berechnungen.</p></div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

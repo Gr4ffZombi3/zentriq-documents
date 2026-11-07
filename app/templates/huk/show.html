@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import badge %}
+{% block title %}Kfz-Berechnung – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell page-shell-narrow" data-huk-job data-status-url="{{ url_for('huk.status', job_id=job.id) }}" data-status="{{ job.status }}">
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">Kfz-Berechnung</h1>
+      <p class="page-subtitle">
+        {{ job.customer.name if job.customer else 'Ohne Kundenzuordnung' }} · angelegt {{ job.created_at | local_dt }}
+      </p>
+    </div>
+    <div class="huk-toolbar-status" aria-live="polite" data-huk-status-badge>{{ badge(status.label, status.tone) }}</div>
+  </div>
+
+  {% if job.status == 'draft' %}
+    <section class="panel" aria-labelledby="huk-zusammenfassung">
+      <header class="panel-header">
+        <h2 class="panel-title" id="huk-zusammenfassung">Zusammenfassung der Angaben</h2>
+        <div class="panel-actions"><a class="btn btn-secondary btn-sm" href="{{ url_for('huk.edit', job_id=job.id) }}">Angaben ändern</a></div>
+      </header>
+      {% include "huk/_summary.html" %}
+    </section>
+
+    {% if incomplete %}
+      <p class="flash flash-error" role="alert">Es fehlen noch Angaben. <a href="{{ url_for('huk.edit', job_id=job.id, pruefen=1) }}">Formular vervollständigen</a></p>
+    {% elif enabled %}
+      <form method="post" action="{{ url_for('huk.start', job_id=job.id) }}" class="panel huk-start" data-huk-start>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="client_ref" value="{{ start_token }}">
+        <div class="panel-body">
+          <p>Diese Angaben (ohne Namen und Anschrift) werden an den öffentlichen Rechner auf <strong>huk.de</strong> übermittelt. Berechnet wird ein <strong>unverbindlicher Beitrag</strong>; es wird kein Antrag gestellt und keine Kontaktanfrage gesendet.</p>
+          <label class="huk-confirm">
+            <input type="checkbox" name="bestaetigt" value="ja" required>
+            <span>Ich habe die Angaben geprüft und möchte sie an huk.de übermitteln.</span>
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" data-huk-start-button>Angebot auf huk.de berechnen</button>
+          </div>
+        </div>
+      </form>
+    {% endif %}
+
+  {% elif job.is_active %}
+    <section class="panel huk-progress" aria-labelledby="huk-status">
+      <div class="panel-body">
+        <h2 class="panel-title" id="huk-status"><span class="huk-spinner" aria-hidden="true"></span> In Bearbeitung</h2>
+        <p data-huk-message>{{ job.message or 'Die Berechnung läuft im Hintergrund (meist unter einer Minute). Sie können die Seite verlassen – der Auftrag bleibt unter „Kfz-Angebot“ auffindbar.' }}</p>
+        <form method="post" action="{{ url_for('huk.cancel', job_id=job.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-secondary btn-sm" {% if job.cancel_requested %}disabled{% endif %}>Abbrechen</button>
+        </form>
+      </div>
+    </section>
+
+  {% elif result %}
+    <section class="panel huk-result" aria-labelledby="huk-ergebnis">
+      <header class="panel-header">
+        <h2 class="panel-title" id="huk-ergebnis">Ergebnis</h2>
+        <div class="panel-actions">
+          <form method="post" action="{{ url_for('huk.copy', job_id=job.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-secondary btn-sm">Mit geänderten Angaben neu berechnen</button>
+          </form>
+        </div>
+      </header>
+      <div class="panel-body">
+        <p class="huk-kind"><strong>Unverbindliche Beitragsberechnung</strong> – kein verbindliches Angebot, kein Antrag. Maßgeblich ist erst ein Angebot bzw. Antrag der HUK-COBURG.</p>
+        {% if not result.complete %}
+          <p class="flash flash-error" role="alert">Unvollständiges Ergebnis: Der gewählte Tarif bzw. die Zahlungsangaben ließen sich nicht eindeutig ablesen. Bitte die Berechnung auf huk.de prüfen.</p>
+        {% endif %}
+        <ul class="huk-tariffs">
+          {% for t in result.tariffs %}
+            <li class="huk-tariff {{ 'huk-tariff-selected' if t.selected }}">
+              <span class="huk-tariff-name">{{ t.name }}{% if t.recommended %} <span class="huk-tag">Empfohlen</span>{% endif %}{% if t.selected %} <span class="huk-tag huk-tag-strong">gewählt</span>{% endif %}</span>
+              <span class="huk-tariff-price">{{ t.price }}</span>
+              <span class="huk-tariff-period">{{ t.period }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+      <dl class="fact-list">
+        <div><dt>Versicherungsschutz</dt><dd>{{ result.coverage }}</dd></div>
+        <div><dt>Selbstbeteiligung</dt><dd>{{ result.deductible or 'keine (nur Kfz-Haftpflicht)' }}</dd></div>
+        <div><dt>Zahlungsweise</dt><dd>{{ result.payment_interval }}</dd></div>
+        <div><dt>Zahlungsart</dt><dd>{{ result.payment_method }}</dd></div>
+        <div><dt>Fahrzeug laut Rechner</dt><dd>{{ result.vehicle }}</dd></div>
+        <div><dt>Berechnet</dt><dd>{{ result.calculated_at | iso_local_dt }} Uhr auf <a href="{{ result.source_url }}" target="_blank" rel="noopener noreferrer">huk.de (Pkw-Tarifrechner)</a></dd></div>
+        <div><dt>Angebotsreferenz</dt><dd>Der Rechner vergibt vor dem Antrag keine Referenz.{% if job.evidence_path %} <a href="{{ url_for('huk.evidence', job_id=job.id) }}" target="_blank" rel="noopener">Beleg der Rechnerseite (Bild)</a>{% endif %}</dd></div>
+      </dl>
+    </section>
+    <details class="panel">
+      <summary class="panel-header"><span class="panel-title">Berechnungsgrundlagen</span></summary>
+      {% include "huk/_summary.html" %}
+    </details>
+
+  {% else %}
+    <section class="panel" aria-labelledby="huk-meldung">
+      <div class="panel-body">
+        <h2 class="panel-title" id="huk-meldung">{{ status.label }}</h2>
+        <p>{{ job.message or 'Es liegt kein Ergebnis vor.' }}</p>
+        <p class="form-hint">Es wurde kein Beitrag gespeichert.</p>
+        <div class="form-actions">
+          <a class="btn btn-primary" href="{{ url_for('huk.edit', job_id=job.id, pruefen=1) }}">Angaben prüfen und erneut berechnen</a>
+          {% if job.error_code == 'blocked' %}
+            <a class="btn btn-secondary" href="https://www.huk.de/tarifrechner/pkw" target="_blank" rel="noopener noreferrer">Rechner auf huk.de selbst öffnen</a>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+    <details class="panel">
+      <summary class="panel-header"><span class="panel-title">Angaben</span></summary>
+      {% include "huk/_summary.html" %}
+    </details>
+  {% endif %}
+</div>
+<script defer src="{{ url_for('static', filename='js/huk-form.js', v=static_rev('js/huk-form.js')) }}"></script>
+{% endblock %}

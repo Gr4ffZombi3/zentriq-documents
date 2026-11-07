@@ -268,6 +268,34 @@
     {% endif %}
   </section>
 
+  <section class="panel" aria-labelledby="kunde-kfz">
+    <header class="panel-header">
+      <h2 class="panel-title" id="kunde-kfz">Kfz-Berechnungen (HUK) <span class="count-tag">{{ huk_jobs | length }}</span></h2>
+      <div class="panel-actions"><a class="btn btn-secondary btn-sm" href="{{ url_for('huk.new', kunde=customer.id) }}">Neue Kfz-Berechnung</a></div>
+    </header>
+    {% if huk_jobs %}
+      <ul class="huk-list">
+        {% for job in huk_jobs %}
+          {% set sel = ((job.result or {}).tariffs or []) | selectattr('selected') | first %}
+          <li>
+            <a class="huk-list-item" href="{{ url_for('huk.show', job_id=job.id) }}">
+              <span class="huk-list-main">
+                <span class="huk-list-title">{{ (job.result or {}).coverage or 'Kfz-Berechnung' }}</span>
+                <span class="huk-list-meta">{{ job.created_at | local_dt }}{% if job.created_by %} · {{ display_name(job.created_by) }}{% endif %}</span>
+              </span>
+              <span class="huk-list-side">
+                {% if job.status == 'done' and sel %}<span class="huk-list-price">{{ sel.price }} {{ sel.period }}</span>{% endif %}
+                {{ badge(huk_labels.get(job.status, job.status), huk_tones.get(job.status, 'muted')) }}
+              </span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty-note">Noch keine Kfz-Berechnung für diesen Kunden.</p>
+    {% endif %}
+  </section>
+
   <div class="grid gap-5 xl:grid-cols-2">
     {% call card(padding='p-5 sm:p-6') %}
       <div class="section-heading">

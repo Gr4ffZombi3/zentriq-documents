@@ -1,0 +1,8 @@
+{% for section, items in summary %}
+  <h3 class="huk-summary-title">{{ section }}</h3>
+  <dl class="fact-list">
+    {% for question, answer in items %}
+      <div><dt>{{ question }}</dt><dd>{{ answer }}</dd></div>
+    {% endfor %}
+  </dl>
+{% endfor %}

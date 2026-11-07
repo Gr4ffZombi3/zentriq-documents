@@ -48,8 +48,10 @@ def test_memo_page_shows_only_upload(auth_client):
     assert "Datei hier ablegen" in html
     assert "Sprachnachricht auswählen" in html
     assert 'type="file"' in html
+    # Nur der Seiteninhalt: die Navigation enthaelt z. B. "Kfz-Angebot (HUK)".
+    main = html[html.index("<main"):]
     for removed in ("Postfach", "HUK", "Rückruf", "Schadenart", "Placetel"):
-        assert removed not in html
+        assert removed not in main
 
 
 def test_upload_returns_transcript_as_json(auth_client, fake_transcription):

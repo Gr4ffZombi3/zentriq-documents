@@ -67,6 +67,14 @@ class BaseConfig:
     HUK_AI_MAX_INPUT_CHARS = int(os.environ.get("HUK_AI_MAX_INPUT_CHARS", "3000"))
     HUK_AI_TIMEOUT_SECONDS = float(os.environ.get("HUK_AI_TIMEOUT_SECONDS", "40"))
 
+    # Webrecherche (app/services/web_research.py): HUK-Fragen ueber www.huk.de (ohne Schluessel);
+    # allgemeine Themen nur mit Google Programmable Search (offizielle API, 100 Anfragen/Tag frei,
+    # darueber kostenpflichtig) - ohne beide Werte ist die allgemeine Suche aus.
+    GOOGLE_SEARCH_API_KEY = os.environ.get("GOOGLE_SEARCH_API_KEY")
+    GOOGLE_SEARCH_CX = os.environ.get("GOOGLE_SEARCH_CX")
+    # Abrechnungen (Originaldateien, nur Buero-Admin)
+    SETTLEMENT_STORAGE_DIR = os.environ.get("SETTLEMENT_STORAGE_DIR", str(BASE_DIR / "storage" / "settlements"))
+
     # ZentriqAI (app/services/ai/): Multi-Anbieter-Router. API-Keys nur in der Umgebung.
     ZENTRIQ_AI_ENABLED = os.environ.get("ZENTRIQ_AI_ENABLED", "true").lower() == "true"
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")

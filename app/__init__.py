@@ -67,6 +67,7 @@ def create_app(config_object=None):
     from app.blueprints.recommendations.routes import recommendations_bp
     from app.blueprints.search.routes import search_bp
     from app.blueprints.settings.routes import settings_bp
+    from app.blueprints.settlements.routes import settlements_bp
     from app.blueprints.tasks.routes import tasks_bp
     from app.blueprints.timetracking.routes import timetracking_bp
     from app.blueprints.tools.routes import tools_bp
@@ -100,6 +101,7 @@ def create_app(config_object=None):
     app.register_blueprint(zentriq_bp)
     app.register_blueprint(calendar_bp)
     app.register_blueprint(huk_bp)
+    app.register_blueprint(settlements_bp)
     app.register_blueprint(zentriq_admin_bp)
 
     from app.cli import register_cli

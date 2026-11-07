@@ -7817,3 +7817,32 @@
 
 /* Ausserhalb des Layers: muss die ungelayerte Position aus zentriq.css (.zs-clock) uebersteuern. */
 .huk-page:has(.huk-form-actions) .zs-clock { bottom: calc(4.75rem + env(safe-area-inset-bottom)); }
+
+/* Abrechnungen (templates/settlements/) */
+@layer components {
+  .abr-filter-body { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; }
+  .abr-filter-body .field-label { flex-basis: 100%; margin: 0; }
+  .abr-filter-body select { min-width: 12rem; }
+  .abr-filter-body .huk-option { min-height: 2.5rem; }
+  .abr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1rem; }
+  .abr-total { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .abr-card dd { font-variant-numeric: tabular-nums; }
+  .abr-drill { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in oklab, var(--color-primary) 45%, transparent); text-underline-offset: 3px; }
+  .abr-plain { margin: 0; padding: 0; list-style: none; }
+  .abr-details { padding: 0.25rem 1.15rem 0.85rem; }
+  .abr-details > summary { cursor: pointer; color: var(--color-primary); min-height: 2.75rem; display: flex; align-items: center; }
+  .abr-lines { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.35rem; }
+  .abr-lines li { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; justify-content: space-between; font-size: 0.9rem; overflow-wrap: anywhere; }
+  .abr-src { font-size: 0.85rem; }
+  .abr-warn { margin: 0.5rem 1.15rem 1rem; }
+  .abr-rows { margin: 0; padding: 0; list-style: none; }
+  .abr-row { padding: 0.75rem 1.15rem; border-top: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent); }
+  .abr-row.is-open { background: color-mix(in oklab, var(--color-warning) 8%, var(--color-surface)); }
+  .abr-row.is-ignored { opacity: 0.6; }
+  .abr-row-main { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; }
+  .abr-row-ref { overflow-wrap: anywhere; }
+  .abr-row-main strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .abr-raw { margin: 0.25rem 0 0; color: var(--color-text-muted); font-size: 0.85rem; overflow-wrap: anywhere; }
+  .abr-review { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.4rem; margin-top: 0.5rem; }
+  .abr-inline { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+}

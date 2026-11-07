@@ -303,6 +303,12 @@ def api_customer_input():
         facts = stock_questions.answer(current_user, text, selected_id=data.get("selected_id"))
         if facts is not None:
             return jsonify(facts)
+    # Fachfrage mit Internetbedarf -> Chat (Webrecherche, funktioniert auch ohne KI-Modell).
+    if mode is None and not data.get("customer_id") and not data.get("selected_id"):
+        from app.services import web_research
+
+        if web_research.is_question(text) and not customer_notes._by_name(text):
+            return jsonify({"kind": "chat"})
     # Termine ("Termin mit ... Donnerstag um 14 Uhr bei Laura") gehen an den Kalender.
     if isinstance(data.get("calendar"), dict) or (mode is None and calendar_intent.is_calendar_request(text, customer_selected=data.get("selected_id") not in (None, ""))):
         try:

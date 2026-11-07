@@ -205,9 +205,11 @@ def test_employee_navigation_groups(app, world):
     nav = _sidebar(login(app, "dennis@example.com").get("/uebersicht").get_data(as_text=True))
     for label in ("Assistent", "Kunden", "Leipziger Liste", "Memo", "Zeiterfassung", "Übersicht", "Werkzeuge", "Anonymisieren", "Mein Konto", "Abmelden"):
         assert label in nav, label
-    # Mitarbeiter: "Kunden" fuehrt zur Kundensuche, nicht zum Kundenstamm; keine Verwaltung.
+    # Mitarbeiter: "Kunden" fuehrt zur Kundensuche, nicht zum Kundenstamm. In der Verwaltung nur
+    # "Abrechnungen" (einreichen); alle anderen Verwaltungsseiten bleiben verborgen.
     assert 'href="/search" class="zs-item' in nav
-    for hidden in ("Verwaltung", 'href="/customers"', 'href="/mitarbeiter"', 'href="/settings/users"', 'href="/aktivitaeten"', 'href="/hochladen"', "/plattform"):
+    assert 'href="/abrechnungen"' in nav
+    for hidden in ('href="/customers"', 'href="/mitarbeiter"', 'href="/settings/users"', 'href="/aktivitaeten"', 'href="/hochladen"', "/plattform"):
         assert hidden not in nav, hidden
 
 

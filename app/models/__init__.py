@@ -52,6 +52,7 @@ from app.models.mailbox_case import (
 )
 from app.models.office_settings import OfficeSettings
 from app.models.recommendation import Recommendation
+from app.models.settlement import Settlement, SettlementLine
 from app.models.system_error import SystemErrorEvent
 from app.models.task import Task
 from app.models.tenant import Tenant
@@ -71,6 +72,8 @@ __all__ = [
     "CalendarEventChange",
     "HukQuoteJob",
     "OfficeSettings",
+    "Settlement",
+    "SettlementLine",
     "AiAction",
     "AiAttachment",
     "AiConversation",

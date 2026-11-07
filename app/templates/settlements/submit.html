@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Abrechnungen – Zentriq{% endblock %}
+{% block body_class %}huk-page{% endblock %}
+{% block content %}
+<div class="page-shell page-shell-narrow">
+  <div class="page-toolbar"><div><h1 class="page-toolbar-title">Abrechnungen</h1>
+    <p class="page-subtitle">Abrechnungen einreichen. Auswertungen stehen nur dem Büro-Admin zur Verfügung.</p></div></div>
+  {% include "settlements/_upload.html" %}
+  <section class="panel" aria-labelledby="abr-eingang">
+    <header class="panel-header"><h2 class="panel-title" id="abr-eingang">Meine Eingänge</h2></header>
+    {% if own %}
+      <ul class="huk-list">
+        {% for s in own %}
+          <li><div class="huk-list-item"><span class="huk-list-main"><span class="huk-list-title">{{ s.original_filename }}</span>
+            <span class="huk-list-meta">eingereicht {{ s.created_at | local_dt }}</span></span>
+            <span class="status-pill status-pill-success">Eingang bestätigt</span></div></li>
+        {% endfor %}
+      </ul>
+    {% else %}<div class="panel-body"><p class="form-hint">Noch nichts eingereicht.</p></div>{% endif %}
+  </section>
+</div>
+{% endblock %}

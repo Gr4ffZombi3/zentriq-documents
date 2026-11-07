@@ -151,8 +151,10 @@ OFFICE_GROUPS = (
             NavArea("staff", "Mitarbeiter", "office.staff", ("office.staff",), admin_only=True, icon="briefcase"),
             NavArea("office_settings", "Benutzerverwaltung", "settings.users", ("settings.users", "settings.user_"), admin_only=True, icon="user-cog"),
             NavArea("activity", "Aktivitäten", "office.activities", ("office.activities",), admin_only=True, icon="history"),
+            # Einreichen fuer alle Buero-Mitglieder; Inhalte sieht nur der Buero-Admin (Blueprint prueft).
+            NavArea("settlements", "Abrechnungen", "settlements.index", ("settlements.",), admin_only=False, icon="file-text"),
         ),
-        admin_only=True,
+        admin_only=False,
         placement="admin",
     ),
 )

@@ -498,6 +498,17 @@ def process_pending(user, message_id: int, audio_jobs=None) -> None:
             _finish(pending, conversation, text, provider=orchestrator.DIRECT_PROVIDER, model=orchestrator.DIRECT_MODEL, tools_used=["Bestandsabfrage"])
             return
 
+    # 0c. Fachfrage mit externem Informationsbedarf: echte Websuche (www.huk.de zuerst), geoeffnete
+    #     Quellen werden verlinkt; an die Suche geht nur eine allgemeine Anfrage (app/services/web_research.py).
+    if question is not None and not has_attachments:
+        from app.services import web_research
+
+        if web_research.is_question(question.content):
+            _set_progress(pending, "Recherchiere im Internet")
+            reply = web_research.handle(user, conversation, question.content)
+            _finish(pending, conversation, reply, provider=orchestrator.DIRECT_PROVIDER, model="web_research", tools_used=["Webrecherche"])
+            return
+
     # 1. Direktantwort ohne KI-Aufruf (nur bei automatischer Modellwahl und ohne Anhang).
     if question is not None and not has_attachments and (conversation.model_choice or router.AUTO) == router.AUTO:
         direct = orchestrator.direct_answer(user, question.content)

@@ -24,11 +24,16 @@ _LIST_WHAT = re.compile(r"^\s*(?:was|welche)\b.*\b(?:leipziger|liste)\b.*\b(?:of
 MAX_LINES = 8
 
 
+_EARNED = re.compile(r"\b(?:verdien\w*|verdienst|provision\w*|abrechnung\w*|courtage|einnahmen|10[- ]?(?:€|euro)[- ]?positionen)\b", re.I)
+
+
 def detect(text: str) -> str | None:
-    """'leipziger' | 'callbacks' | None. Nur eindeutige, kurze Zaehl-/Bestandsfragen."""
+    """'settlement' | 'leipziger' | 'callbacks' | None. Nur eindeutige, kurze Zaehl-/Bestandsfragen."""
     t = " ".join((text or "").split())
     if not t or len(t) > 200:
         return None
+    if _EARNED.search(t) and re.search(r"\b(?:wie\s*viel\w*|was\s+hat|wieviel|summe|zeige?|übersicht|uebersicht)\b", t, re.I):
+        return "settlement"
     asks = bool(_COUNT.search(t)) or bool(_LIST_WHAT.search(t))
     if not asks or not _OPEN_WORDS.search(t):
         return None
@@ -81,10 +86,75 @@ def _callbacks(user) -> dict:
     }
 
 
+def _month_from(text: str):
+    from app.services import settlements
+
+    available = settlements.periods()
+    m = re.search(r"\b(" + "|".join(settlements.MONTHS) + r")\b(?:\s+(\d{4}))?", text, re.I)
+    if m:
+        month = settlements.MONTHS[m.group(1).lower()]
+        if m.group(2):
+            return int(m.group(2)), month
+        years = [y for y, mo in available if mo == month]
+        return (years[0], month) if years else None
+    if re.search(r"\b(?:letzten|vorigen|vergangenen)\s+monat", text, re.I):
+        from datetime import date
+
+        today = date.today()
+        return (today.year, today.month - 1) if today.month > 1 else (today.year - 1, 12)
+    return available[0] if available else None
+
+
+def _settlement(user, text: str) -> dict:
+    """Abrechnungsdaten: ausschliesslich fuer den Buero-Admin, direkt aus der Datenbank."""
+    if not user.is_office_admin:
+        return {"kind": "facts", "message": "Abrechnungsdaten sieht ausschließlich der Büro-Admin.", "lines": []}
+    from app.services import calendar as cal
+    from app.services import settlements
+    from app.services.calendar_intent import _members_matching
+
+    period = _month_from(text)
+    if period is None:
+        return {"kind": "facts", "message": "Für diesen Zeitraum liegen keine ausgewerteten Abrechnungen vor.", "lines": []}
+    year, month = period
+    members = cal.office_members()
+    named = []
+    for word in re.findall(r"\b[A-ZÄÖÜ][a-zäöüß]+(?:-[A-ZÄÖÜ][a-zäöüß]+)?\b", text):
+        found = _members_matching(word, members)
+        if len(found) == 1 and found[0] not in named:
+            named.append(found[0])
+    exclude_ten = bool(re.search(r"\bohne\s+10", text, re.I))
+    rows = settlements.summary(year, month, exclude_ten=exclude_ten)
+    if named:
+        rows = [r for r in rows if r.user_id in {u.id for u in named}]
+    label = settlements.month_label(year, month)
+    if not rows:
+        who = ", ".join(cal.member_name(u) for u in named) or "das Büro"
+        return {"kind": "facts", "message": f"Für {who} liegen für {label} keine ausgewerteten Abrechnungen vor.", "lines": []}
+
+    def money(v):
+        return f"{v:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    lines = []
+    for r in rows:
+        orders = "Aufträge aus der Abrechnung nicht ermittelbar" if r.orders is None else f"{r.orders} Aufträge"
+        lines.append(f"{r.name}: {money(r.total)} gesamt (regulär {money(r.regular)}, 10-€-Positionen {money(r.ten_sum)}; "
+                     f"Stornos {money(r.storno_sum)}) · {orders}" + (f" · {r.unclear} unklare Zeile(n) offen" if r.unclear else ""))
+    total = sum((r.total for r in rows), start=0)
+    message = f"Verdient laut Abrechnung, {label}" + (" (ohne 10-€-Positionen)" if exclude_ten else "") + f": {money(total)}."
+    return {
+        "kind": "facts", "message": message, "rule": "Summe der gezählten Buchungen (unklare Zeilen erst nach Prüfung).",
+        "lines": lines, "link": {"url": url_for("settlements.index", monat=f"{year:04d}-{month:02d}"), "label": "Abrechnungen öffnen"},
+        "count": len(rows),
+    }
+
+
 def answer(user, text: str, *, selected_id=None) -> dict | None:
     kind = detect(text)
     if kind is None or not (user.is_office_admin or user.is_employee):
         return None
+    if kind == "settlement":
+        return _settlement(user, text)
     if selected_id not in (None, ""):
         return None  # Frage bezieht sich auf den ausgewaehlten Kunden (customer_notes)
     from app.services.customer_notes import _by_name

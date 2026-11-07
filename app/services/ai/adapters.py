@@ -12,6 +12,7 @@ selbst und muss unter dem nginx-Timeout (60 s) bleiben."""
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 
 import anthropic
@@ -31,11 +32,13 @@ EMPTY = "empty"
 
 
 class ProviderError(Exception):
-    def __init__(self, kind: str, retry_after: float | None = None, status: int | None = None):
+    def __init__(self, kind: str, retry_after: float | None = None, status: int | None = None, detail: str | None = None):
         super().__init__(kind)
         self.kind = kind
         self.retry_after = retry_after
         self.status = status
+        # Gekuerzte Fehlermeldung des Anbieters (fuer das Log; enthaelt keine Schluessel).
+        self.detail = detail
 
 
 @dataclass
@@ -43,6 +46,10 @@ class ToolCall:
     id: str
     name: str
     arguments: dict
+    # Anbieterspezifische Zusatzdaten, die unveraendert zurueckgegeben werden muessen - z. B. die
+    # "thought_signature" von Gemini 3 (extra_content). Ohne sie lehnt Gemini die Folgeanfrage
+    # mit dem Werkzeugergebnis mit HTTP 400 ab.
+    extra: dict | None = None
 
 
 @dataclass
@@ -62,13 +69,36 @@ class ProviderResult:
 
 
 def _retry_after(exc) -> float | None:
+    """Wartezeit laut Anbieter: Header "retry-after" oder (Gemini) "retryDelay": "37s" im Text."""
     response = getattr(exc, "response", None)
     headers = getattr(response, "headers", None) or {}
     try:
         value = headers.get("retry-after")
-        return float(value) if value is not None else None
+        if value is not None:
+            return float(value)
     except (TypeError, ValueError):
-        return None
+        pass
+    try:
+        text = response.text if response is not None else ""
+    except Exception:  # noqa: BLE001
+        text = ""
+    match = re.search(r'"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"', text or "")
+    return float(match.group(1)) if match else None
+
+
+def _detail(exc) -> str | None:
+    """Fehlermeldung des Anbieters, gekuerzt und ohne lange Zahlen-/Schluesselfolgen."""
+    body = getattr(exc, "body", None)
+    message = None
+    if isinstance(body, dict):
+        error = body.get("error") if isinstance(body.get("error"), dict) else body
+        message = error.get("message") if isinstance(error, dict) else None
+    elif isinstance(body, list) and body and isinstance(body[0], dict):
+        error = body[0].get("error") or {}
+        message = error.get("message") if isinstance(error, dict) else None
+    message = message or getattr(exc, "message", None) or ""
+    message = re.sub(r"[A-Za-z0-9_\-]{32,}", "***", str(message))
+    return " ".join(message.split())[:200] or None
 
 
 def _openai_client(provider, timeout: float) -> openai.OpenAI:
@@ -94,7 +124,11 @@ def _openai_messages(system: str, messages: list[dict]) -> list[dict]:
                     "role": "assistant",
                     "content": m.get("content") or None,
                     "tool_calls": [
-                        {"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": json.dumps(c["arguments"], ensure_ascii=False)}}
+                        {
+                            "id": c["id"], "type": "function",
+                            "function": {"name": c["name"], "arguments": json.dumps(c["arguments"], ensure_ascii=False)},
+                            **({"extra_content": c["extra"]} if c.get("extra") else {}),
+                        }
                         for c in m["tool_calls"]
                     ],
                 }
@@ -133,6 +167,14 @@ def _parse_arguments(raw) -> dict:
     return value if isinstance(value, dict) else {}
 
 
+def _extra(call) -> dict | None:
+    """extra_content eines Werkzeugaufrufs (Gemini: thought_signature) unveraendert uebernehmen."""
+    value = getattr(call, "extra_content", None)
+    if value is None and hasattr(call, "model_extra"):
+        value = (call.model_extra or {}).get("extra_content")
+    return value if isinstance(value, dict) and value else None
+
+
 def _call_openai(provider, model_id, system, messages, max_tokens, timeout, tools) -> ProviderResult:
     client = _openai_client(provider, timeout)
     token_param = "max_completion_tokens" if provider.key == "openai" else "max_tokens"
@@ -145,16 +187,16 @@ def _call_openai(provider, model_id, system, messages, max_tokens, timeout, tool
     except openai.APITimeoutError as exc:
         raise ProviderError(TIMEOUT) from exc
     except openai.RateLimitError as exc:
-        raise ProviderError(RATE_LIMIT, _retry_after(exc), 429) from exc
+        raise ProviderError(RATE_LIMIT, _retry_after(exc), 429, _detail(exc)) from exc
     except (openai.AuthenticationError, openai.PermissionDeniedError) as exc:
-        raise ProviderError(AUTH, status=exc.status_code) from exc
+        raise ProviderError(AUTH, status=exc.status_code, detail=_detail(exc)) from exc
     except openai.NotFoundError as exc:
-        raise ProviderError(NOT_FOUND, status=404) from exc
+        raise ProviderError(NOT_FOUND, status=404, detail=_detail(exc)) from exc
     except (openai.BadRequestError, openai.UnprocessableEntityError) as exc:
-        raise ProviderError(BAD_REQUEST, status=exc.status_code) from exc
+        raise ProviderError(BAD_REQUEST, status=exc.status_code, detail=_detail(exc)) from exc
     except openai.APIStatusError as exc:
         kind = RATE_LIMIT if exc.status_code == 429 else UNAVAILABLE
-        raise ProviderError(kind, _retry_after(exc), exc.status_code) from exc
+        raise ProviderError(kind, _retry_after(exc), exc.status_code, _detail(exc)) from exc
     except openai.APIConnectionError as exc:
         raise ProviderError(UNAVAILABLE) from exc
 
@@ -162,7 +204,7 @@ def _call_openai(provider, model_id, system, messages, max_tokens, timeout, tool
     message = choice.message if choice else None
     text = ((message.content if message else None) or "").strip()
     calls = [
-        ToolCall(id=c.id or f"call_{i}", name=c.function.name, arguments=_parse_arguments(c.function.arguments))
+        ToolCall(id=c.id or f"call_{i}", name=c.function.name, arguments=_parse_arguments(c.function.arguments), extra=_extra(c))
         for i, c in enumerate((message.tool_calls if message else None) or [])
         if getattr(c, "function", None)
     ]

@@ -34,6 +34,8 @@ AUTO = "auto"
 MIN_ATTEMPT_SECONDS = 4.0
 # Hoechstens so viele Werkzeug-Runden je Antwort (danach muss das Modell antworten).
 MAX_TOOL_ROUNDS = 4
+# Obergrenze fuer Modellaufrufe je Benutzereingabe (Werkzeugrunden + Ausweichmodelle zusammen).
+MAX_CALLS_PER_REQUEST = 6
 
 # Abkuehlzeiten in Sekunden je Fehlerart; None = keine Sperre.
 COOLDOWNS = {
@@ -49,6 +51,8 @@ COOLDOWNS = {
 
 ERROR_LABELS = {
     adapters.RATE_LIMIT: "Limit erreicht",
+    "skipped": "übersprungen (Anfrage vom Anbieter abgelehnt)",
+    "limit": "nicht versucht (Obergrenze je Anfrage)",
     adapters.AUTH: "Zugang ungültig",
     adapters.NOT_FOUND: "Modell nicht gefunden",
     adapters.UNAVAILABLE: "nicht erreichbar",
@@ -248,7 +252,19 @@ def complete(
     rounds = 0
     totals = {"in": 0, "out": 0, "cost": Decimal("0")}
 
+    calls = 0
+    max_calls = int(current_app.config.get("ZENTRIQ_AI_MAX_CALLS_PER_REQUEST") or MAX_CALLS_PER_REQUEST)
+    # Anbieter, der diese Anfrage als fehlerhaft abgelehnt hat (HTTP 400): dieselbe Anfrage geht
+    # nicht an weitere Modelle desselben Anbieters - sie wuerde dort genauso abgelehnt.
+    rejected_providers: set[str] = set()
+
     for model in candidates:
+        if model.provider in rejected_providers:
+            attempts.append({"model": model.label, "error": "skipped", "free": model.is_free})
+            continue
+        if calls >= max_calls:
+            attempts.append({"model": model.label, "error": "limit", "free": model.is_free})
+            continue
         cooling = state.cooling_reason(model.provider, model.model_id)
         if cooling:
             attempts.append({"model": model.label, "error": "cooldown", "reason": cooling, "free": model.is_free})
@@ -266,17 +282,27 @@ def complete(
             if remaining < MIN_ATTEMPT_SECONDS:
                 failed = True
                 break
+            if calls >= max_calls:
+                failed = True
+                attempts.append({"model": model.label, "error": "limit", "free": model.is_free})
+                break
             offer_tools = tools if (tools and tool_executor and rounds < MAX_TOOL_ROUNDS) else None
             started = time.monotonic()
+            calls += 1
             try:
                 result = adapters.call(
-                    model.provider, model.model_id, system, transcript, max_tokens, min(per_call, remaining), tools=offer_tools
+                    model.provider, model.model_id, system, _for_model(transcript, model), max_tokens, min(per_call, remaining), tools=offer_tools
                 )
             except adapters.ProviderError as exc:
                 latency = int((time.monotonic() - started) * 1000)
                 _record(model, user_id=user_id, tenant_id=tenant_id, conversation_id=conversation_id, purpose=purpose, ok=False, error_type=exc.kind, latency_ms=latency)
-                current_app.logger.warning("zentriq_ai.provider_failed provider=%s model=%s kind=%s", model.provider, model.model_id, exc.kind)
-                attempts.append({"model": model.label, "error": exc.kind, "free": model.is_free})
+                current_app.logger.warning(
+                    "zentriq_ai.provider_failed provider=%s model=%s kind=%s status=%s retry_after=%s call=%s detail=%s",
+                    model.provider, model.model_id, exc.kind, exc.status, exc.retry_after, calls, exc.detail,
+                )
+                attempts.append({"model": model.label, "error": exc.kind, "free": model.is_free, "retry_after": exc.retry_after})
+                if exc.kind == adapters.BAD_REQUEST:
+                    rejected_providers.add(model.provider)
                 rule = COOLDOWNS.get(exc.kind)
                 if rule:
                     scope, seconds = rule
@@ -305,7 +331,8 @@ def complete(
                     {
                         "role": "assistant",
                         "content": result.text,
-                        "tool_calls": [{"id": c.id, "name": c.name, "arguments": c.arguments} for c in result.tool_calls],
+                        "tool_calls": [{"id": c.id, "name": c.name, "arguments": c.arguments, "extra": c.extra,
+                                        "extra_for": f"{model.provider}:{model.model_id}"} for c in result.tool_calls],
                     }
                 )
                 for call in result.tool_calls:
@@ -333,6 +360,8 @@ def complete(
             )
             if cache_key:
                 state.cache_set(cache_key, {"text": result.text, "provider": model.provider, "model": model.model_id, "label": model.label}, cache_ttl)
+            current_app.logger.info("zentriq_ai.request_done model=%s calls=%s tool_rounds=%s failed_attempts=%s", model.model_id, calls, rounds,
+                                    len([a for a in attempts if a.get("error") not in ("cooldown", "skipped", "budget")]))
             return completion
         if failed:
             continue
@@ -359,12 +388,38 @@ def complete(
                 attempts,
             )
         raise AiError("Die Kostengrenze für kostenpflichtige Modelle ist erreicht.", 429, "budget", attempts)
-    raise AiError(
-        "Kein KI-Modell konnte die Anfrage gerade beantworten. Bitte in einer Minute erneut versuchen.",
-        503,
-        "all_failed",
-        attempts,
-    )
+    current_app.logger.warning("zentriq_ai.request_failed calls=%s attempts=%s", calls, ",".join(a["error"] for a in attempts))
+    raise AiError(_failure_message(attempts), 503, "all_failed", attempts)
+
+
+def _failure_message(attempts: list[dict]) -> str:
+    """Ehrliche Meldung: Wartezeit nur, wenn ein Anbieter sie genannt hat - keine pauschale Zusage."""
+    fallback = " Suche, Zählungen, Rückrufe, Notizen und Kalender funktionieren ohne KI weiter."
+    waits = [a["retry_after"] for a in attempts if a.get("retry_after")]
+    kinds = {a["error"] for a in attempts if a["error"] not in ("skipped", "limit")}
+    if kinds and kinds <= {adapters.RATE_LIMIT, "cooldown"} and waits:
+        minutes = max(1, round(min(waits) / 60))
+        return f"Die KI-Modelle sind laut Anbieter gerade ausgelastet (frühestens in ca. {minutes} Min. wieder verfügbar)." + fallback
+    if adapters.BAD_REQUEST in kinds:
+        return "Der KI-Anbieter hat die Anfrage abgelehnt (technischer Fehler, wird protokolliert)." + fallback
+    if kinds and kinds <= {adapters.UNAVAILABLE, adapters.TIMEOUT, "cooldown"}:
+        return "Der KI-Anbieter ist gerade nicht erreichbar." + fallback
+    return "Kein KI-Modell konnte die Anfrage beantworten." + fallback
+
+
+def _for_model(transcript: list[dict], model) -> list[dict]:
+    """Anbieterspezifische Zusatzdaten (z. B. Gemini-Signaturen) nur an das Modell zurueckgeben,
+    das sie erzeugt hat; anderen Modellen ohne diese Felder."""
+    key = f"{model.provider}:{model.model_id}"
+    out = []
+    for message in transcript:
+        if message.get("tool_calls"):
+            message = {**message, "tool_calls": [
+                {k: v for k, v in call.items() if k != "extra_for"} | ({} if call.get("extra_for") == key else {"extra": None})
+                for call in message["tool_calls"]
+            ]}
+        out.append(message)
+    return out
 
 
 def free_quota_exhausted(attempts: list[dict]) -> bool:

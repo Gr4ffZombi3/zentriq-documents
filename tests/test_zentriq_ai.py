@@ -720,4 +720,75 @@ def test_provider_outage_is_not_reported_as_quota(app, world, fake):
     client = login(app, "laura@example.com")
     reply = _send(client, _new(client), "Hallo!").reply
     assert reply["status"] == "error"
-    assert "Kein KI-Modell konnte" in reply["error"] and "Kontingent" not in reply["error"]
+    assert "nicht erreichbar" in reply["error"] and "Kontingent" not in reply["error"]
+    assert "in einer Minute" not in reply["error"]  # keine pauschale Zeitzusage
+
+
+# --- Ausfall 06.11.2026: Gemini 3 thought_signature, Aufrufketten, Wartezeiten ----------------------
+
+
+def test_gemini_signature_is_returned_to_the_same_model(app, world, fake):
+    """Werkzeugaufruf mit extra_content (thought_signature): die Folgeanfrage enthaelt sie wieder."""
+    app.config["GROQ_API_KEY"] = None
+    signature = {"google": {"thought_signature": "sig-123"}}
+    fake.set(
+        "gemini",
+        adapters.ProviderResult("", 10, 5, tool_calls=[adapters.ToolCall("c1", "meine_arbeitszeiten", {"zeitraum": "woche"}, extra=signature)]),
+        adapters.ProviderResult("Diese Woche 8:00 Stunden.", 20, 10),
+    )
+    client = login(app, "dennis@example.com")
+    reply = _send(client, _new(client), "Wie viele Stunden habe ich diese Woche gearbeitet? Erkläre kurz.").reply
+    assert reply["status"] == "done"
+    second = fake.calls[-1]["messages"]
+    assert second[-2]["tool_calls"][0]["extra"] == signature
+    # Adapter-Format (OpenAI-kompatibel): extra_content wird mitgesendet
+    out = adapters._openai_messages("s", second)
+    assert out[-2]["tool_calls"][0]["extra_content"] == signature
+
+
+def test_bad_request_is_not_repeated_on_other_models_of_same_provider(app, world, fake):
+    app.config["GROQ_API_KEY"] = None
+    fake.set(
+        "gemini",
+        adapters.ProviderResult("", 10, 5, tool_calls=[adapters.ToolCall("c1", "meine_arbeitszeiten", {"zeitraum": "woche"})]),
+        adapters.ProviderError(adapters.BAD_REQUEST, status=400, detail="Function call is missing a thought_signature"),
+    )
+    client = login(app, "dennis@example.com")
+    reply = _send(client, _new(client), "Wie viele Stunden habe ich diese Woche gearbeitet? Erkläre kurz.").reply
+    assert reply["status"] == "error"
+    assert len(fake.calls) == 2  # vorher: 1 + 4 Gemini-Modelle = 5 Aufrufe
+    assert "abgelehnt" in reply["error"] and "in einer Minute" not in reply["error"]
+    assert "Rückrufe" in reply["error"]  # Hinweis, was ohne KI weiter funktioniert
+
+
+def test_reported_wait_time_is_used_and_cooling_models_are_not_called(app, world, fake):
+    app.config["GROQ_API_KEY"] = None
+    fake.set("gemini", adapters.ProviderError(adapters.RATE_LIMIT, retry_after=600, status=429))
+    client = login(app, "dennis@example.com")
+    first = _send(client, _new(client), "Hallo, wie geht es?").reply
+    calls_after_first = len(fake.calls)
+    assert first["status"] == "error"
+    second = _send(client, _new(client), "Hallo nochmal").reply
+    # Ausgeschoepfte Modelle werden waehrend der gemeldeten Wartezeit nicht erneut angefragt.
+    assert len(fake.calls) == calls_after_first and second["status"] == "error"
+
+
+def test_call_limit_per_request(app, world, fake):
+    app.config["ZENTRIQ_AI_MAX_CALLS_PER_REQUEST"] = 3
+    loop = adapters.ProviderResult("", 1, 1, tool_calls=[adapters.ToolCall("c", "meine_arbeitszeiten", {"zeitraum": "woche"})])
+    fake.set("gemini", loop)
+    fake.set("groq", loop)
+    client = login(app, "dennis@example.com")
+    _send(client, _new(client), "Analysiere meine Arbeitszeiten ausführlich.")
+    assert len(fake.calls) <= 3
+
+
+def test_retry_delay_from_gemini_body():
+    class Resp:
+        headers = {}
+        text = '{"error": {"code": 429, "details": [{"retryDelay": "37s"}]}}'
+
+    class Exc:
+        response = Resp()
+
+    assert adapters._retry_after(Exc()) == 37.0

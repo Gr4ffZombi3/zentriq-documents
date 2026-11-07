@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "ui/icons.html" import icon %}
 {% block title %}Kfz-Angaben – Zentriq{% endblock %}
+{% block body_class %}huk-page{% endblock %}
 {% block content %}
 {# Folgefragen erscheinen nur, wenn der HUK-Rechner sie stellt (app/services/huk/schema.py,
    Field.condition). Die Anzeige steuert huk-form.js; geprueft wird serverseitig. #}

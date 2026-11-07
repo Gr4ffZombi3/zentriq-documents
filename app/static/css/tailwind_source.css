@@ -7800,4 +7800,12 @@
     .huk-list-item { align-items: flex-start; flex-direction: column; gap: 0.4rem; }
     .huk-form-actions .btn { width: 100%; justify-content: center; }
   }
+  /* Zeiterfassung bleibt erreichbar, ohne den angehefteten Weiter-Knopf oder das Seitenende zu verdecken. */
+  .huk-page main { padding-bottom: 4.5rem; }
+  @media (max-width: 40rem), (pointer: coarse) {
+    .huk-page main .btn, .huk-page main select.field-surface, .huk-page main input.field-surface { min-height: 2.75rem; }
+  }
 }
+
+/* Ausserhalb des Layers: muss die ungelayerte Position aus zentriq.css (.zs-clock) uebersteuern. */
+.huk-page:has(.huk-form-actions) .zs-clock { bottom: calc(4.75rem + env(safe-area-inset-bottom)); }

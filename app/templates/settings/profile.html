@@ -11,7 +11,10 @@
   </div>
 
   <section class="panel">
-    <header class="panel-header"><h2 class="panel-title">Kontodaten</h2></header>
+    <header class="panel-header">
+      <h2 class="panel-title">Kontodaten</h2>
+      {% if can_edit_account %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settings.account_edit') }}">Kontodaten bearbeiten</a>{% endif %}
+    </header>
     <dl class="fact-list">
       <div><dt>Name</dt><dd>{{ profile.display_name if profile and profile.display_name else '–' }}</dd></div>
       <div><dt>E-Mail</dt><dd>{{ current_user.email }}</dd></div>
@@ -21,7 +24,16 @@
       <div><dt>Büro</dt><dd>{{ tenant.name if tenant else '–' }}</dd></div>
       <div><dt>Rolle</dt><dd>{{ current_user.role.label }}</dd></div>
     </dl>
-    <p class="panel-note">Name, E-Mail und Vermittlernummer pflegt Ihr Büro-Admin.</p>
+    {% if pending_email %}
+      <p class="panel-note">Neue E-Mail-Adresse <strong>{{ pending_email }}</strong> wartet auf Bestätigung (Link in der E-Mail). Bis dahin bleibt {{ current_user.email }} aktiv.</p>
+    {% endif %}
+    {% if can_edit_account %}
+      <p class="panel-note">Name, E-Mail und Vermittlernummer pflegen Sie als Büro-Admin selbst über „Kontodaten bearbeiten“. Büro und Rolle sind hier nicht änderbar.</p>
+    {% elif current_user.is_super_admin %}
+      <p class="panel-note">Ihre Kontodaten werden in der Plattformverwaltung gepflegt.</p>
+    {% else %}
+      <p class="panel-note">Name, E-Mail und Vermittlernummer pflegt Ihr Büro-Admin.</p>
+    {% endif %}
   </section>
 
   {# Darstellung: gespeichert im Browser, gesetzt schon vor dem ersten Zeichnen

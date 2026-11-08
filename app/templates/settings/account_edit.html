@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "settings/_form_macros.html" import text_input, errors %}
+{% block title %}Kontodaten bearbeiten – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell page-shell-narrow">
+  <div class="page-toolbar">
+    <h1 class="page-toolbar-title">Kontodaten bearbeiten</h1>
+    <a class="btn btn-secondary btn-sm" href="{{ url_for('settings.profile') }}">Zurück zu Mein Konto</a>
+  </div>
+
+  <section class="panel">
+    <div class="panel-body">
+      <form method="post" class="form-stack" novalidate data-account-form>
+        {{ form.hidden_tag() }}
+        <div class="form-grid form-grid-2">
+          {{ text_input(form.display_name, autocomplete='name') }}
+          {{ text_input(form.email, type='email', autocomplete='email', hint='Neue Adresse wird erst nach Bestätigung per Link aktiv.') }}
+          {{ text_input(form.vermittlernummer, hint='Format z. B. 08/0950-T. Auch alternative Anmeldung.') }}
+        </div>
+        <dl class="fact-list">
+          <div><dt>Büro</dt><dd>{{ tenant.name if tenant else '–' }}</dd></div>
+          <div><dt>Rolle</dt><dd>{{ current_user.role.label }}</dd></div>
+        </dl>
+        <p class="panel-note">Büro und Rolle können hier nicht geändert werden.</p>
+
+        {% if impact %}
+          <div class="notice notice-warning" role="alert" data-impact>
+            <p class="notice-title">Auswirkungen der neuen Vermittlernummer</p>
+            <ul>{% for line in impact %}<li>{{ line }}</li>{% endfor %}</ul>
+            <p>Bestehende Vorgänge und Abrechnungen werden nicht automatisch umgeordnet.</p>
+          </div>
+          <div class="checkbox-row"><label>{{ form.confirm_impact() }} {{ form.confirm_impact.label.text }}</label></div>
+        {% endif %}
+
+        <fieldset class="form-stack">
+          <legend class="field-label">Bestätigung für E-Mail oder Vermittlernummer</legend>
+          <div class="form-grid form-grid-2">
+            {{ text_input(form.current_password, type='password', autocomplete='current-password', hint='Nur nötig, wenn sich E-Mail oder Vermittlernummer ändert.') }}
+            {% if needs_code %}{{ text_input(form.code, autocomplete='one-time-code') }}{% endif %}
+          </div>
+        </fieldset>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+          <a class="btn btn-secondary" href="{{ url_for('settings.profile') }}">Abbrechen</a>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>
+{% endblock %}

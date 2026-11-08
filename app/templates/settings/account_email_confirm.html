@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}E-Mail-Adresse bestätigen – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell page-shell-narrow">
+  <div class="page-toolbar"><h1 class="page-toolbar-title">Neue E-Mail-Adresse bestätigen</h1></div>
+  <section class="panel">
+    <div class="panel-body">
+      <form method="post" class="form-stack" data-email-confirm>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="token" id="token" value="">
+        <p>Mit der Bestätigung wird die neue Adresse Ihre Anmelde-E-Mail. Andere angemeldete Geräte werden abgemeldet.</p>
+        <p id="token-missing" class="form-error hidden">Der Bestätigungslink ist unvollständig. Bitte den Link aus der E-Mail vollständig öffnen.</p>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Neue Adresse bestätigen</button>
+          <a class="btn btn-secondary" href="{{ url_for('settings.profile') }}">Abbrechen</a>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>
+<script>
+  // Token aus dem URL-Fragment (wird nie an den Server gesendet) ins Formular uebernehmen.
+  (function () {
+    var field = document.getElementById("token");
+    var match = window.location.hash.match(/[#&]token=([^&]+)/);
+    if (match) {
+      field.value = decodeURIComponent(match[1]);
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+    if (!field.value) document.getElementById("token-missing").classList.remove("hidden");
+  })();
+</script>
+{% endblock %}

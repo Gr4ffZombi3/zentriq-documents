@@ -24,6 +24,19 @@ class ChangePasswordForm(FlaskForm):
     submit = SubmitField("Passwort ändern")
 
 
+class OwnAccountForm(FlaskForm):
+    """Eigene Kontodaten (Buero-Admin). Buero und Rolle sind bewusst KEINE Felder - sie werden
+    nur angezeigt und koennen ueber dieses Formular nicht uebermittelt werden."""
+
+    display_name = StringField("Name", validators=[Optional(), Length(max=120)])
+    email = StringField("E-Mail (Login)", validators=[DataRequired(), Email(message="Bitte eine gültige E-Mail-Adresse angeben."), Length(max=255)])
+    vermittlernummer = StringField("Vermittlernummer", validators=[Optional(), Length(max=50)])
+    current_password = PasswordField("Aktuelles Passwort", validators=[Optional()])
+    code = StringField("Code aus der Authenticator-App", validators=[Optional(), Length(max=20)])
+    confirm_impact = BooleanField("Ich habe die Auswirkungen gelesen und möchte die Vermittlernummer ändern.")
+    submit = SubmitField("Speichern")
+
+
 WEEKDAY_CHOICES = [("1", "Mo"), ("2", "Di"), ("3", "Mi"), ("4", "Do"), ("5", "Fr"), ("6", "Sa"), ("7", "So")]
 
 

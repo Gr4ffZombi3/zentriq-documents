@@ -479,6 +479,9 @@
     switch (r.kind) {
       case "chat":
         return false;
+      case "appointments_from_chat":
+        if (window.ZentriqChat && window.ZentriqChat.appointmentsFromChat) window.ZentriqChat.appointmentsFromChat(reply);
+        return true;
       case "calendar_saved": {
         var actions = el("div", "zn-actions");
         actions.appendChild(calendarLink(r.calendar_url));

@@ -32,7 +32,20 @@ FORMATS = {"JPEG", "PNG", "WEBP", "HEIF", "HEIC", "MPO"}  # MPO = JPEG mit Zusat
 MONTHS = {"jan": 1, "januar": 1, "feb": 2, "februar": 2, "mär": 3, "märz": 3, "maerz": 3, "mrz": 3, "apr": 4, "april": 4,
           "mai": 5, "jun": 6, "juni": 6, "jul": 7, "juli": 7, "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9,
           "okt": 10, "oktober": 10, "nov": 11, "november": 11, "dez": 12, "dezember": 12}
-REQUEST = re.compile(r"\btermin\w*\b.*\b(?:übernehm\w*|uebernehm\w*|eintrag\w*|auslesen|importier\w*|speicher\w*)\b|\bin\s+den\s+kalender\b", re.I)
+# Befehl "Termine aus dem Bild uebernehmen" - Muster gilt identisch in JavaScript (Template-Attribut
+# data-appt-pattern), daher ohne \b vor Umlauten und ohne Python-Sonderkonstrukte.
+_W = r"[a-zäöü]*"
+_END = r"(?![a-zäöü])"
+# zusammenhaengende Verben ("uebernehmen", "eintragen") und trennbare ("trage ... ein", "lies ... aus", "lege ... an")
+_VERB = rf"(?:eintrag{_W}|übernimm{_W}|übernehm{_W}|uebernimm{_W}|uebernehm{_W}|importier{_W}|speicher{_W}|auslesen|erfass{_W}|anleg{_W}|einles{_W})"
+_SPLIT = [(rf"trag{_W}", "ein"), (rf"lies{_W}", "aus"), (rf"les{_W}", "aus"), (rf"leg{_W}", "an"), (rf"nimm{_W}", "auf")]
+PATTERN = "|".join(
+    [rf"termin{_W}(?:\s.*)?\s{_VERB}", rf"{_VERB}(?:\s.*)?\stermin", r"in\s+den\s+kalender"]
+    + [rf"(?:^|\s){verb}\s(?:.*\s)?termin{_W}(?:\s.*)?\s{particle}{_END}" for verb, particle in _SPLIT]
+    + [rf"termin{_W}(?:\s.*)?\s{particle}\s?{verb}" for verb, particle in _SPLIT]
+)
+REQUEST = re.compile(PATTERN, re.I)
+_IMAGE_WORD = re.compile(r"(?:bild|screenshot|bildschirmfoto|foto|anhang|aufnahme|scan|datei)", re.I)
 
 
 class ImageError(Exception):
@@ -49,8 +62,26 @@ class Candidate:
     problems: list[str] = field(default_factory=list)
 
 
+def summary_lines(items: list[dict]) -> list[str]:
+    """Kurzliste fuer den Chatverlauf (deutsches Datumsformat)."""
+    out = []
+    for i in items:
+        day = date.fromisoformat(i["day"]).strftime("%d.%m.%Y") if i.get("day") else "Datum fehlt"
+        out.append(f"- {day}, {i.get('start') or 'Uhrzeit fehlt'} – {i.get('title')}")
+    return out
+
+
 def is_request(text: str | None) -> bool:
-    return bool(REQUEST.search(text or ""))
+    """Befehl zusammen mit angehaengten Bildern."""
+    return bool(REQUEST.search(" " + (text or "") + " "))
+
+
+def is_chat_request(text: str | None) -> bool:
+    """Befehl OHNE Anhang, bezogen auf das zuvor im Chat hochgeladene Bild ("Trage die Termine aus dem
+    Bild ein"). Verlangt einen Bildbezug - "Termin mit X morgen um 10 eintragen" bleibt ein normaler
+    Kalenderbefehl."""
+    t = text or ""
+    return is_request(t) and bool(_IMAGE_WORD.search(t)) and len(t) <= 200
 
 
 # --- 1. Bild -------------------------------------------------------------------------------
@@ -310,15 +341,19 @@ def _similar(a: str, b: str) -> bool:
 
 def analyse(user, uploads: list[tuple[str, bytes]], today: date) -> dict:
     """uploads: [(dateiname, bytes)]. Ergebnis fuer die Vorschau inkl. Rueckfragen."""
-    from app.services import calendar as cal
-
     if not uploads:
         raise ImageError("Bitte mindestens ein Bild anhängen.")
     if len(uploads) > MAX_IMAGES:
         raise ImageError(f"Höchstens {MAX_IMAGES} Bilder auf einmal.")
-    texts, problems = [], []
-    for name, data in uploads:
-        texts.append((name, read_text(load_image(name, data))))
+    return analyse_texts(user, [(name, read_text(load_image(name, data))) for name, data in uploads], today)
+
+
+def analyse_texts(user, texts: list[tuple[str, str]], today: date) -> dict:
+    """texts: [(dateiname, per OCR erkannter Text)]. Fehlerarten je Bild in "image_status":
+    unreadable (Text nicht lesbar) | none (keine Termine erkannt) | ok."""
+    from app.services import calendar as cal
+
+    problems, image_status = [], []
     candidates: list[Candidate] = []
     used_model = False
     for name, text in texts:
@@ -330,8 +365,15 @@ def analyse(user, uploads: list[tuple[str, bytes]], today: date) -> dict:
                 if via_model:
                     used_model = True
                     local = via_model
-        if not local:
-            problems.append(f"In „{name}“ wurden keine Termine erkannt" + (" (Text kaum lesbar)." if len(text.strip()) < 15 else "."))
+        readable = len(re.sub(r"\W", "", text or "")) >= 12
+        if not local and not readable:
+            image_status.append({"name": name, "status": "unreadable"})
+            problems.append(f"„{name}“: Text nicht lesbar – bitte ein schärferes Bild oder einen Screenshot verwenden.")
+        elif not local:
+            image_status.append({"name": name, "status": "none"})
+            problems.append(f"„{name}“: Text erkannt, aber keine Termine (Datum und Uhrzeit) gefunden.")
+        else:
+            image_status.append({"name": name, "status": "ok", "count": len(local)})
         candidates.extend(local)
     # Dubletten innerhalb der Bilder (gleicher Termin auf zwei Screenshots)
     seen, unique = set(), []
@@ -345,7 +387,7 @@ def analyse(user, uploads: list[tuple[str, bytes]], today: date) -> dict:
     rows = [check(user, c, me) for c in unique]
     for i, row in enumerate(rows):
         row["ref"] = f"bild-{i}"
-    return {"items": rows, "problems": problems, "used_model": used_model, "members": cal.member_payload(cal.office_members()),
+    return {"items": rows, "problems": problems, "image_status": image_status, "used_model": used_model, "members": cal.member_payload(cal.office_members()),
             "default_minutes": _default_minutes(), "lines": sum(len(t.splitlines()) for _, t in texts)}
 
 

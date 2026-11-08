@@ -90,6 +90,7 @@ def _greeting() -> str:
 def index(conversation_id=None):
     return render_template(
         "zentriq/index.html",
+        appt_pattern=__import__("app.services.image_appointments", fromlist=["PATTERN"]).PATTERN,
         conversation_id=conversation_id,
         greeting=_greeting(),
         max_chars=int(current_app.config.get("ZENTRIQ_AI_MAX_INPUT_CHARS") or 12000),
@@ -294,6 +295,12 @@ def api_customer_input():
     data = _payload()
     text = data.get("text") if isinstance(data.get("text"), str) else ""
     mode = data.get("mode") if data.get("mode") in ("note", "search", "create") else None
+    # "Trage die Termine aus dem Bild ein" ohne neuen Anhang: Bild der vorherigen Chat-Nachricht
+    # auswerten (api_appointments_from_chat) - vor allen anderen Weichen und vor dem KI-Router.
+    from app.services import image_appointments
+
+    if mode is None and image_appointments.is_chat_request(text):
+        return jsonify({"kind": "appointments_from_chat"})
     # "Schreibe eine Antwort, um einen Termin zu machen": Auftrag zu einer E-Mail im Gespraech ->
     # Chat (dort app/services/email_reply.py, funktioniert auch ohne KI-Modell). Kein Termin,
     # keine Notiz.
@@ -449,10 +456,74 @@ def api_appointments_from_images():
     if not _calendar_allowed(current_user):
         return _error("Kein Zugriff auf den Bürokalender.", 403, "forbidden")
     uploads = [(os.path.basename(f.filename or "bild"), f.read()) for f in request.files.getlist("files") if f and f.filename]
+    if not uploads:
+        return _error("Bild fehlt: Bitte ein Foto oder einen Screenshot anhängen.", 400, "no_image")
+    if len(uploads) > image_appointments.MAX_IMAGES:
+        return _error(f"Höchstens {image_appointments.MAX_IMAGES} Bilder auf einmal.", 400, "too_many")
+    conversation = None
+    if str(request.form.get("conversation_id") or "").isdigit():
+        try:
+            conversation = chat.get_conversation(current_user, int(request.form["conversation_id"]))
+        except chat.ChatError as exc:
+            return _error(str(exc), exc.status, exc.error_type)
+    texts = []
     try:
-        result = image_appointments.analyse(current_user, uploads, local_today())
+        for name, data in uploads:
+            texts.append((name, len(data), image_appointments.read_text(image_appointments.load_image(name, data))))
     except image_appointments.ImageError as exc:
-        return _error(str(exc), 400, "image")
+        return _error(f"Upload fehlgeschlagen: {exc}", 400, "upload_failed")
+    if conversation is not None:
+        # Bild im Chat behalten - ein spaeterer Befehl ("Trage die Termine aus dem Bild ein") findet es.
+        chat.store_image_message(current_user, conversation, request.form.get("text") or "Termine aus Bild", texts)
+    result = image_appointments.analyse_texts(current_user, [(n, t) for n, _s, t in texts], local_today())
+    if conversation is not None:
+        chat.add_assistant_note(conversation, _appointments_note(result))
+    return jsonify(result)
+
+
+def _appointments_note(result: dict) -> str:
+    items = result.get("items") or []
+    if not items:
+        return "Keine Termine übernommen. " + " ".join(result.get("problems") or [])
+    from app.services import image_appointments
+
+    lines = image_appointments.summary_lines(items)
+    return f"{len(items)} Termin(e) aus dem Bild erkannt (Vorschau zum Prüfen und Eintragen):\n" + "\n".join(lines)
+
+
+@zentriq_bp.post("/api/termine/aus-chat")
+@login_required
+def api_appointments_from_chat():
+    """Befehl ohne Anhang: Bilder der direkt vorangehenden Nachricht dieses Chats (nur eigene
+    Gespraeche) auswerten. Mehrere Bilder -> Rueckfrage; ohne Bild -> "Bild fehlt"."""
+    from app.services import image_appointments
+    from app.services.email_reply import _calendar_allowed
+    from app.services.timetracking.clock import local_today
+
+    if (denied := _office_user_required()) is not None:
+        return denied
+    if not _calendar_allowed(current_user):
+        return _error("Kein Zugriff auf den Bürokalender.", 403, "forbidden")
+    data = _payload()
+    if not str(data.get("conversation_id") or "").isdigit():
+        return _error("Bild fehlt: In diesem Chat wurde noch kein Bild hochgeladen. Bitte über „+ › Fotos und Screenshots“ anhängen.", 400, "no_image")
+    try:
+        conversation = chat.get_conversation(current_user, int(data["conversation_id"]))
+    except chat.ChatError as exc:
+        return _error(str(exc), exc.status, exc.error_type)
+    images, older = chat.latest_image_attachments(conversation)
+    if not images:
+        hint = " Ältere Bilder in diesem Chat bitte erneut anhängen." if older else ""
+        return _error("Bild fehlt: In der vorherigen Nachricht ist kein Bild. Bitte das Bild anhängen und den Befehl erneut senden." + hint, 400, "no_image")
+    wanted = {int(x) for x in data.get("attachment_ids") or [] if str(x).isdigit()}
+    if len(images) > 1 and not wanted:
+        return jsonify({"kind": "choose_image", "message": "Mehrere Bilder kommen infrage – welches soll ausgewertet werden?",
+                        "options": [{"id": a.id, "name": a.filename} for a in images]})
+    chosen = [a for a in images if not wanted or a.id in wanted]
+    if not chosen:
+        return _error("Das gewählte Bild gehört nicht zur vorherigen Nachricht.", 400, "no_image")
+    result = image_appointments.analyse_texts(current_user, [(a.filename, a.text or "") for a in chosen], local_today())
+    chat.add_assistant_note(conversation, _appointments_note(result))
     return jsonify(result)
 
 

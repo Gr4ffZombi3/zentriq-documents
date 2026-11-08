@@ -509,7 +509,7 @@
     text = (text !== undefined ? text : input.value).trim();
     if (busy || (!text && !files.length)) return;
     if (text.length > maxChars) { showAlert("Die Nachricht ist zu lang (maximal " + maxChars + " Zeichen)."); return; }
-    if (files.some(isImage) && APPT_REQUEST.test(text)) { importAppointments(text); return; }
+    if (files.some(isImage) && isApptRequest(text)) { importAppointments(text); return; }
     showAlert("");
     if (!skipNotes && !files.length && window.ZentriqNotes) {
       setBusy(true);
@@ -645,38 +645,73 @@
   });
 
   // --- Termine aus Bildern -------------------------------------------------------------
-  // Kein \b vor Umlauten: in JavaScript-Regex sind "ü" & Co. keine Wortzeichen.
-  var APPT_REQUEST = /termin[a-zäöü]*\s.*(?:übernehm|uebernehm|eintrag|auslesen|importier|speicher)|in\s+den\s+kalender/i;
+  // Gleiches Muster wie im Backend (image_appointments.PATTERN, ohne \b vor Umlauten).
+  var APPT_REQUEST = new RegExp(root.dataset.apptPattern || "termin[a-zäöü]*\\s.*eintrag", "i");
+  function isApptRequest(text) { return APPT_REQUEST.test(" " + (text || "") + " "); }
   function node(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
   function importAppointments(text) {
     var images = files.filter(isImage);
     if (!images.length || busy) return;
     setBusy(true);
     showAlert("");
-    var userEl = renderUser({ content: (text || "Termine übernehmen") + " (" + images.map(function (f) { return f.name; }).join(", ") + ")" });
-    var reply = renderAssistant({ status: "pending", progress: "Lese Bilder (Texterkennung auf dem Server)" });
+    text = text || "Termine aus dem Bild eintragen";
+    renderUser({ content: text + " (" + images.map(function (f) { return f.name; }).join(", ") + ")" });
+    var reply = renderAssistant({ status: "pending", progress: "Lade Bild hoch" });
     input.value = ""; autosize();
-    files = files.filter(function (f) { return !isImage(f); });
-    renderChips();
     stickToBottom = true; scrollDown(true);
-    var body = new FormData();
-    images.forEach(function (f) { body.append("files", f); });
-    request("POST", "/termine/aus-bildern", body, true).then(function (d) {
+    ensureConversation().then(function (c) {
+      var body = new FormData();
+      images.forEach(function (f) { body.append("files", f); });
+      body.append("conversation_id", c.id);
+      body.append("text", text);
+      fillAssistant(reply, { status: "pending", progress: "Lese Text im Bild (auf dem Server)" });
+      return request("POST", "/termine/aus-bildern", body, true);
+    }).then(function (d) {
+      // Erst nach erfolgreichem Upload aus dem Eingabefeld nehmen - das Bild liegt jetzt im Chat.
+      files = files.filter(function (f) { return images.indexOf(f) < 0; });
+      renderChips();
       renderAppointmentPreview(reply, d);
       setBusy(false); scrollDown();
+      if (window.ZentriqShell) window.ZentriqShell.refreshChats();
     }, function (err) {
-      fillAssistant(reply, { status: "error", error: err.message });
-      setBusy(false);
+      var code = err.data && err.data.code;
+      var msg = (code === "upload_failed" || code === "no_image" || code === "too_many") ? err.message
+        : "Upload fehlgeschlagen: " + err.message;
+      fillAssistant(reply, { status: "error", error: msg + " Das Bild bleibt angehängt – bitte erneut senden." });
+      setBusy(false);  // Anhaenge bleiben im Eingabefeld
     });
-    return userEl;
+  }
+  // Befehl ohne neuen Anhang: Bild der vorherigen Nachricht dieses Chats (Backend prueft Zugriff).
+  function appointmentsFromChat(reply, attachmentIds) {
+    if (!current) { fillAssistant(reply, { status: "error", error: "Bild fehlt: In diesem Chat wurde noch kein Bild hochgeladen. Bitte über „+ › Fotos und Screenshots“ anhängen." }); return; }
+    fillAssistant(reply, { status: "pending", progress: "Lese Termine aus dem Bild" });
+    request("POST", "/termine/aus-chat", { conversation_id: current.id, attachment_ids: attachmentIds || [] }).then(function (d) {
+      if (d.kind === "choose_image") {
+        reply.textContent = "";
+        var box = node("div", "zc-appt");
+        box.appendChild(node("p", "zc-appt-head", d.message));
+        var row = node("div", "zc-appt-actions");
+        d.options.forEach(function (o) {
+          var b = node("button", "btn btn-secondary btn-sm", o.name); b.type = "button";
+          b.addEventListener("click", function () { appointmentsFromChat(reply, [o.id]); }); row.appendChild(b);
+        });
+        var all = node("button", "btn btn-secondary btn-sm", "Alle Bilder"); all.type = "button";
+        all.addEventListener("click", function () { appointmentsFromChat(reply, d.options.map(function (o) { return o.id; })); });
+        row.appendChild(all); box.appendChild(row); reply.appendChild(box);
+        return;
+      }
+      renderAppointmentPreview(reply, d);
+      scrollDown();
+    }, function (err) { fillAssistant(reply, { status: "error", error: err.message }); });
   }
   function renderAppointmentPreview(el, d) {
     el.textContent = "";
     var box = node("div", "zc-appt");
     var items = d.items || [];
+    var states = (d.image_status || []).map(function (s) { return s.status; });
     var head = items.length
       ? items.length + (items.length === 1 ? " Termin" : " Termine") + " erkannt – bitte prüfen. " + (d.used_model ? "Zuordnung mit KI-Hilfe aus den erkannten Textzeilen." : "Erkannt ohne KI (Texterkennung auf dem Server).")
-      : "Keine Termine erkannt.";
+      : (states.length && states.every(function (s) { return s === "unreadable"; }) ? "Text nicht lesbar." : "Keine Termine erkannt.");
     box.appendChild(node("p", "zc-appt-head", head));
     (d.problems || []).forEach(function (p) { box.appendChild(node("p", "zc-appt-problem", p)); });
     var list = node("ul", "zc-appt-list");
@@ -707,7 +742,7 @@
     box.appendChild(list);
     if (items.length) {
       var actions = node("div", "zc-appt-actions");
-      var save = node("button", "btn btn-primary btn-sm", "Ausgewählte übernehmen");
+      var save = node("button", "btn btn-primary btn-sm", "Ausgewählte Termine eintragen");
       save.type = "button"; save.setAttribute("data-appt-save", "");
       var batch = "img" + Date.now().toString(36);
       save.addEventListener("click", function () {
@@ -731,15 +766,19 @@
               Array.prototype.forEach.call(li.querySelectorAll("input,select"), function (inp) { inp.disabled = true; });
             }
           });
-          save.disabled = false; save.textContent = "Ausgewählte übernehmen";
+          var saved = (r.results || []).filter(function (x) { return x.status === "saved"; }).length;
+          summary.textContent = saved + " von " + (r.results || []).length + " ausgewählten Terminen eingetragen.";
+          save.disabled = false; save.textContent = "Ausgewählte Termine eintragen";
         }, function (err) {
-          save.disabled = false; save.textContent = "Ausgewählte übernehmen";
+          save.disabled = false; save.textContent = "Ausgewählte Termine eintragen";
           showAlert(err.message);
         });
       });
       actions.appendChild(save);
       var cal = node("a", "zn-link", "Kalender öffnen"); cal.href = "/kalender"; actions.appendChild(cal);
       box.appendChild(actions);
+      var summary = node("p", "zc-appt-summary"); summary.setAttribute("aria-live", "polite"); summary.setAttribute("data-appt-summary", "");
+      box.appendChild(summary);
     }
     el.appendChild(box);
   }
@@ -814,6 +853,7 @@
     // Text unveraendert als Frage an das KI-Modell senden (ohne Kundennotiz-Erkennung).
     send: function (text) { input.value = ""; autosize(); send(text, true); },
     // Rueckfrage "An die KI senden": Antwort erscheint in der Blase der Rueckfrage.
+    appointmentsFromChat: function (reply) { appointmentsFromChat(reply); },
     sendInto: function (text, reply) {
       if (busy) return;
       var asked = reply.previousElementSibling;

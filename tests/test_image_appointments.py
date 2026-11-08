@@ -172,7 +172,7 @@ def test_unreadable_image_asks_back(app, office, no_ai):
     blank = io.BytesIO()
     Image.new("RGB", (800, 600), (200, 200, 200)).save(blank, format="JPEG")
     data = _upload(login(app, "admin-a@example.com"), ("leer.jpg", blank.getvalue())).get_json()
-    assert data["items"] == [] and "keine Termine erkannt" in data["problems"][0]
+    assert data["items"] == [] and "Text nicht lesbar" in data["problems"][0] and data["image_status"][0]["status"] == "unreadable"
 
 
 def test_permissions_and_foreign_assignee(app, office, hours, no_ai):
@@ -217,3 +217,98 @@ def test_chat_accepts_image_attachment_with_local_text(app, office, no_ai):
     with bypass_tenant_scope():
         att = AiAttachment.query.one()
     assert att.kind == "image" and "10:00" in (att.text or "")
+
+
+# --- Befehl im Hauptchat (mit Bild / Bild zuerst, Befehl danach) ----------------------------
+
+
+@pytest.mark.parametrize("text, with_image, without_image", [
+    ("Trage die Termine aus dem Bild ein", True, True),
+    ("Übernimm die Termine vom Screenshot", True, True),
+    ("Lies die Termine aus dem Foto aus", True, True),
+    ("Termine übernehmen", True, False),
+    ("Termin mit Max morgen um 10 Uhr eintragen", True, False),  # ohne Bild: normaler Kalenderbefehl
+    ("Welche Termine habe ich morgen?", False, False),
+    ("Schreib eine Mail mit Terminvorschlägen", False, False),
+    ("Was steht auf dem Bild?", False, False),
+])
+def test_command_variants(text, with_image, without_image):
+    assert ia.is_request(text) is with_image
+    assert ia.is_chat_request(text) is without_image
+
+
+def _conversation(client):
+    return client.post(API + "/conversations", json={}).get_json()["conversation"]["id"]
+
+
+def _upload_to_chat(client, conversation, *images, text="Trage die Termine aus dem Bild ein"):
+    data = {"files": [(io.BytesIO(content), name) for name, content in images], "conversation_id": str(conversation), "text": text}
+    return client.post(API + "/termine/aus-bildern", data=data, content_type="multipart/form-data")
+
+
+def test_image_and_command_together_keeps_image_in_chat(app, office, hours, no_ai):
+    admin = login(app, "admin-a@example.com")
+    conv = _conversation(admin)
+    day = _day()
+    img = screenshot([day.strftime("Montag, %d.%m.%Y"), "09:30 Teambesprechung", "14:00 Beratung Klein"])
+    r = _upload_to_chat(admin, conv, ("IMG_7.PNG", img))
+    assert r.status_code == 200 and [i["title"] for i in r.get_json()["items"]] == ["Teambesprechung", "Beratung Klein"]
+    messages = admin.get(f"{API}/conversations/{conv}").get_json()["messages"]
+    assert messages[0]["role"] == "user" and messages[0]["content"].startswith("Trage die Termine")
+    assert "2 Termin(e) aus dem Bild erkannt" in messages[1]["content"]
+    # derselbe Befehl in der naechsten Eingabe (ohne Anhang) findet das gespeicherte Bild
+    assert admin.post(API + "/kunden/eingabe", json={"text": "Trage die Termine aus dem Bild ein"}).get_json()["kind"] == "appointments_from_chat"
+
+
+def test_image_first_command_afterwards(app, office, hours, no_ai):
+    client = login(app, "laura@example.com")
+    conv = _conversation(client)
+    day = _day()
+    img = screenshot([day.strftime("Dienstag, %d.%m.%Y"), "10:00 Zahnarzt", "16:30 - 17:00 Rückruf Herr Klein"], fmt="JPEG")
+    sent = client.post(f"{API}/conversations/{conv}/messages", data={"content": "", "files": (io.BytesIO(img), "screenshot.jpg")},
+                       content_type="multipart/form-data")
+    assert sent.status_code == 202
+    reply = client.get(f"{API}/conversations/{conv}/messages/{sent.get_json()['reply']['id']}").get_json()["message"]
+    assert reply["status"] == "done" and "2 Termin(e) im Bild erkannt" in reply["content"]  # lokal, ohne Modell
+    routed = client.post(API + "/kunden/eingabe", json={"text": "Übernimm die Termine vom Screenshot"}).get_json()
+    assert routed["kind"] == "appointments_from_chat"
+    data = client.post(API + "/termine/aus-chat", json={"conversation_id": conv}).get_json()
+    items = data["items"]
+    assert [(i["start"], i["title"], i["minutes"]) for i in items] == [("10:00", "Zahnarzt", 45), ("16:30", "Rückruf Herr Klein", 30)]
+    saved = client.post(API + "/termine/uebernehmen", json={"items": items, "batch": "x"}).get_json()["results"]
+    assert [r["status"] for r in saved] == ["saved", "saved"]
+    with bypass_tenant_scope():
+        assert CalendarEvent.query.count() == 2
+
+
+def test_missing_multiple_and_foreign_images(app, office, hours, no_ai):
+    client = login(app, "laura@example.com")
+    conv = _conversation(client)
+    r = client.post(API + "/termine/aus-chat", json={"conversation_id": conv})
+    assert r.status_code == 400 and r.get_json()["code"] == "no_image" and r.get_json()["error"].startswith("Bild fehlt")
+    day = _day()
+    a = screenshot([day.strftime("%d.%m.%Y"), "10:00 Termin A"])
+    b = screenshot([day.strftime("%d.%m.%Y"), "11:00 Termin B"])
+    _upload_to_chat(client, conv, ("a.png", a), ("b.png", b), text="Bilder")
+    choose = client.post(API + "/termine/aus-chat", json={"conversation_id": conv}).get_json()
+    assert choose["kind"] == "choose_image" and [o["name"] for o in choose["options"]] == ["a.png", "b.png"]
+    # Hinweis: die Notiz der KI-freien Auswertung ist die letzte Nachricht; das Bild gehoert zur letzten Benutzernachricht
+    one = client.post(API + "/termine/aus-chat", json={"conversation_id": conv, "attachment_ids": [choose["options"][1]["id"]]}).get_json()
+    assert [i["title"] for i in one["items"]] == ["Termin B"]
+    # fremdes Gespraech (anderer Benutzer) -> nicht gefunden
+    other = login(app, "dennis@example.com")
+    assert other.post(API + "/termine/aus-chat", json={"conversation_id": conv}).status_code == 404
+
+
+def test_error_kinds(app, office, no_ai):
+    client = login(app, "admin-a@example.com")
+    conv = _conversation(client)
+    r = _upload_to_chat(client, conv, ("kaputt.png", b"PK\x03\x04 kein Bild"))
+    assert r.status_code == 400 and r.get_json()["code"] == "upload_failed" and r.get_json()["error"].startswith("Upload fehlgeschlagen")
+    blank = io.BytesIO()
+    Image.new("RGB", (800, 600), (200, 200, 200)).save(blank, format="JPEG")
+    unreadable = _upload_to_chat(client, conv, ("leer.jpg", blank.getvalue())).get_json()
+    assert unreadable["image_status"][0]["status"] == "unreadable" and "Text nicht lesbar" in unreadable["problems"][0]
+    text_only = _upload_to_chat(client, conv, ("brief.png", screenshot(["Sehr geehrte Damen und Herren", "vielen Dank für Ihr Schreiben"]))).get_json()
+    assert text_only["image_status"][0]["status"] == "none" and "keine Termine" in text_only["problems"][0]
+    assert client.post(API + "/termine/aus-bildern", data={}, content_type="multipart/form-data").get_json()["code"] == "no_image"

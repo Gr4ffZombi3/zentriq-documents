@@ -11,7 +11,8 @@
      data-api="{{ url_for('zentriq.index') }}/api"
      data-base="{{ url_for('zentriq.index') }}"
      data-initial="{{ conversation_id or '' }}"
-     data-max-chars="{{ max_chars }}">
+     data-max-chars="{{ max_chars }}"
+     data-appt-pattern="{{ appt_pattern }}">
   <header class="zc-head">
     <button type="button" class="zs-icon-btn zc-nav-toggle" x-on:click="navOpen = !navOpen" aria-label="Menü">{{ icon('menu', class='h-5 w-5') }}</button>
     <div class="zc-model" data-zc-model-root>

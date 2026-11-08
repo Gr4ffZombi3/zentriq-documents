@@ -393,6 +393,46 @@ def submit_message(
     return user_message, pending
 
 
+def store_image_message(user, conversation: AiConversation, content: str, images: list[tuple[str, int, str]]) -> AiMessage:
+    """Bilder (Name, Groesse, OCR-Text) als Benutzernachricht ohne KI-Antwort speichern - fuer
+    "Termine aus dem Bild": so steht das Bild auch fuer die naechste Eingabe im Chat bereit."""
+    message = AiMessage(tenant_id=conversation.tenant_id, conversation_id=conversation.id, role="user",
+                        content=(content or "Termine aus Bild").strip()[:2000])
+    db.session.add(message)
+    db.session.flush()
+    for filename, size, text in images:
+        db.session.add(AiAttachment(tenant_id=conversation.tenant_id, message_id=message.id, filename=filename[:255], kind="image",
+                                    size_bytes=size, text=(text or "")[:MAX_ATTACHMENT_TEXT]))
+    if conversation.title == DEFAULT_TITLE:
+        conversation.title = _title_from(message.content)
+    conversation.updated_at = _now()
+    db.session.commit()
+    return message
+
+
+def add_assistant_note(conversation: AiConversation, text: str) -> AiMessage:
+    """Direkte Antwort (ohne Modell) im Verlauf festhalten."""
+    message = AiMessage(tenant_id=conversation.tenant_id, conversation_id=conversation.id, role="assistant", content=text,
+                        status="done", provider=orchestrator.DIRECT_PROVIDER, model=orchestrator.DIRECT_MODEL, tools_used=["Termine aus Bild"])
+    db.session.add(message)
+    conversation.updated_at = _now()
+    db.session.commit()
+    return message
+
+
+def latest_image_attachments(conversation: AiConversation) -> tuple[list[AiAttachment], bool]:
+    """Bilder der direkt vorangehenden Benutzernachricht. Zweiter Wert: aeltere Nachrichten des
+    Chats enthalten ebenfalls Bilder (fuer eine gezielte Rueckfrage)."""
+    last_user = (AiMessage.query.filter(AiMessage.conversation_id == conversation.id, AiMessage.role == "user")
+                 .order_by(AiMessage.id.desc()).first())
+    if last_user is None:
+        return [], False
+    images = [a for a in (last_user.attachments or []) if a.kind == "image"]
+    older = bool(images) or AiAttachment.query.join(AiMessage, AiAttachment.message_id == AiMessage.id).filter(
+        AiMessage.conversation_id == conversation.id, AiAttachment.kind == "image").first() is not None
+    return images, older and not images
+
+
 def _pending_in(conversation: AiConversation) -> bool:
     pending = AiMessage.query.filter(AiMessage.conversation_id == conversation.id, AiMessage.status == "pending").all()
     busy = False
@@ -486,6 +526,24 @@ def process_pending(user, message_id: int, audio_jobs=None, context_customer_id=
         .first()
     )
     has_attachments = bool(question and question.attachments)
+
+    # 0a. Bilder: Terminbefehl bzw. kein Modell -> lokal antworten (Text wurde schon per OCR gelesen).
+    images = [a for a in (question.attachments or []) if a.kind == "image"] if question is not None else []
+    if images:
+        from app.services import image_appointments
+
+        if image_appointments.is_request(question.content) or not router.can_answer():
+            from app.services.timetracking.clock import local_today
+
+            result = image_appointments.analyse_texts(user, [(a.filename, a.text or "") for a in images], local_today())
+            found = result["items"]
+            text = (f"{len(found)} Termin(e) im Bild erkannt:\n" + "\n".join(image_appointments.summary_lines(found))
+                    if found else "Bild gespeichert. " + " ".join(result["problems"]))
+            text += "\n\nZum Prüfen und Eintragen im Eingabefeld senden: „Trage die Termine aus dem Bild ein“." if found else ""
+            if not router.can_answer() and not image_appointments.is_request(question.content):
+                text = "Derzeit ist kein KI-Modell verfügbar – der Text des Bildes wurde aber lokal gelesen.\n\n" + text
+            _finish(pending, conversation, text, provider=orchestrator.DIRECT_PROVIDER, model=orchestrator.DIRECT_MODEL, tools_used=["Termine aus Bild"])
+            return
 
     # 0. Antwort auf eine Kunden-E-Mail: Kunde, Kalender und Entwurf deterministisch im Backend,
     #    das Modell nur fuer den Mitteltext (app/services/email_reply.py).

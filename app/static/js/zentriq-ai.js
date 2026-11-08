@@ -308,8 +308,33 @@
     alertEl.hidden = !message;
   }
 
+  // Offener Auftrag (Rueckfrage mit Gedaechtnis, app/services/chat_task.py): Wartezeile + Abbrechen.
+  var taskBar = $("[data-zc-task]");
+  function setTask(task) {
+    if (!taskBar) return;
+    taskBar.hidden = !task;
+    taskBar.querySelector("[data-zc-task-text]").textContent = task ? task.label : "";
+    updateComposerHeight();
+  }
+  if (taskBar) {
+    taskBar.querySelector("[data-zc-task-cancel]").addEventListener("click", function () {
+      if (!current) { setTask(null); return; }
+      var id = current.id;
+      request("POST", "/conversations/" + id + "/auftrag/abbrechen", {}).then(function (d) {
+        setTask(null);
+        if (d.cancelled && current && current.id === id) {
+          var el = renderAssistant({ status: "done", content: "Offener Auftrag abgebrochen – es wurde nichts erstellt." });
+          scrollDown(true);
+          el.classList.add("zn-reply");
+        }
+        input.focus();
+      }).catch(function (err) { showAlert(err.message); });
+    });
+  }
+
   function setCurrent(c) {
     current = c;
+    setTask(c ? c.task : null);
     // Titel steht in der Seitenleiste und im Fenstertitel (kein eigener Kopf wie bei Chat-Apps).
     if (titleEl) titleEl.textContent = c ? c.title : "Neue Unterhaltung";
     if (projectEl) {
@@ -874,6 +899,15 @@
       return el;
     },
     scrollDown: function () { scrollDown(); },
+    // Offener Auftrag: Chat-ID mitsenden, neu angelegten Chat uebernehmen, Wartezeile setzen.
+    currentId: function () { return current ? current.id : null; },
+    adopt: function (c) {
+      var isNew = !current || current.id !== c.id;
+      setCurrent(c);
+      if (isNew) { pushUrl(c.id); if (window.ZentriqShell) window.ZentriqShell.refreshChats(); }
+    },
+    setTask: function (task) { setTask(task); },
+    fillReply: function (el, message) { el.classList.remove("zn-reply"); fillAssistant(el, message); },
     focus: function () { input.focus(); },
     setPlaceholder: function (text) { input.placeholder = text || input.dataset.placeholder; },
   };

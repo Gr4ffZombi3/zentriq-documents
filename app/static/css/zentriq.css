@@ -296,6 +296,12 @@
 /* Ausgewaehlter Kunde direkt am Eingabefeld */
 .zn-context { display: flex; align-items: center; gap: 0.35rem; margin: 0 0 0.45rem; padding: 0.2rem 0.3rem 0.2rem 0.6rem; width: fit-content; max-width: 100%; border-radius: 0.6rem; background: var(--color-primary-soft); color: var(--color-primary-strong); font-size: 0.82rem; }
 .zn-context[hidden] { display: none; }
+/* Offener Auftrag: worauf Zentriq wartet (mit "Abbrechen") */
+.zc-task { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.5rem; margin: 0 0 0.45rem; padding: 0.3rem 0.6rem; width: fit-content; max-width: 100%; border-radius: 0.6rem; border: 1px dashed var(--color-primary); color: var(--color-primary-strong); font-size: 0.82rem; }
+.zc-task[hidden] { display: none; }
+.zc-task-label { opacity: 0.8; }
+.zc-task strong { font-weight: 600; }
+.zc-task .zn-link { min-height: 32px; }
 .zn-context-label { color: inherit; opacity: 0.8; }
 .zn-context strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .zn-context button { background: none; border: 0; cursor: pointer; color: inherit; font-size: 1.05rem; line-height: 1; padding: 0.1rem 0.35rem; border-radius: 0.4rem; }

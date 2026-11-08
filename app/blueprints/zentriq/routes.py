@@ -8,10 +8,11 @@ Blueprint "zentriq_admin" (nur SUPER_ADMIN).
 KI-Antworten entstehen asynchron im Celery-Worker: POST .../messages legt die Nachricht und einen
 Platzhalter an (202), der Browser fragt GET .../messages/<id> ab."""
 
+import json
 import os
 from decimal import Decimal
 
-from flask import Blueprint, current_app, jsonify, render_template, request
+from flask import Blueprint, current_app, g, jsonify, render_template, request
 from flask_login import current_user, login_required
 
 from app.extensions import db
@@ -20,6 +21,7 @@ from app.models.ai import AiModel
 from app.models.audit_log import AuditEventType
 from app.services import (
     calendar_intent,
+    chat_task,
     customer_create,
     customer_notes,
     email_context,
@@ -301,6 +303,14 @@ def api_customer_input():
 
     if mode is None and image_appointments.is_chat_request(text):
         return jsonify({"kind": "appointments_from_chat"})
+    # Offener Auftrag des Chats ("Fuer welchen Kunden?" -> nur der Name) bzw. neuer Auftrag
+    # "Termin bestaetigen": im Backend, ohne Modell (app/services/chat_task.py). Ohne offenen
+    # Auftrag bleibt alles wie bisher (ein allein eingegebener Name ist die direkte Kundensuche).
+    if mode is None and not data.get("customer_id"):
+        task_result, task_ended = _chat_task(data, text)
+        if task_result is not None:
+            return task_result
+        g.task_ended = task_ended
     # "Schreibe eine Antwort, um einen Termin zu machen": Auftrag zu einer E-Mail im Gespraech ->
     # Chat (dort app/services/email_reply.py, funktioniert auch ohne KI-Modell). Kein Termin,
     # keine Notiz.
@@ -382,6 +392,77 @@ def api_customer_input():
             "technical",
         )
     return jsonify(result)
+
+
+@zentriq_bp.after_request
+def _mark_task_ended(response):
+    """Andere Eingabe hat den offenen Auftrag beendet: der Browser blendet die Wartezeile aus."""
+    if g.get("task_ended") and response.is_json:
+        body = response.get_json(silent=True)
+        if isinstance(body, dict):
+            body["task_ended"] = True
+            response.set_data(json.dumps(body))
+    return response
+
+
+def _task_conversation(data: dict):
+    raw = data.get("conversation_id")
+    if not str(raw or "").isdigit():
+        return None
+    try:
+        return chat.get_conversation(current_user, int(raw))
+    except chat.ChatError:
+        return None
+
+
+def _chat_task(data: dict, text: str):
+    """(JSON-Antwort | None, Auftrag beendet). Ein Chat wird nur angelegt, wenn ein neuer Auftrag
+    eine Rueckfrage bzw. einen Entwurf erzeugt - die normale Suche legt keinen an."""
+    conversation = _task_conversation(data)
+    choice = data.get("task_choice") if isinstance(data.get("task_choice"), dict) else None
+    if conversation is None and (choice is not None or not chat_task.is_confirm_request(text)):
+        if choice is not None:
+            return _error("Diese Auswahl ist nicht mehr aktuell.", 409, "task"), False
+        return None, False
+    if conversation is None:
+        conversation = chat.create_conversation(current_user)
+    try:
+        reply, ended = chat_task.dispatch(current_user, conversation, text, selected_id=data.get("selected_id"), choice=choice)
+    except chat_task.TaskError as exc:
+        db.session.rollback()
+        return _error(str(exc), 409, "task"), False
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("chat_task.failed user=%s", current_user.id)
+        db.session.rollback()
+        return _error("Technischer Fehler beim offenen Auftrag. Es wurde nichts erstellt – bitte erneut versuchen.", 500, "technical"), False
+    if reply is None:
+        return None, ended
+    shown = (data.get("choice_label") if choice is not None and isinstance(data.get("choice_label"), str) else None) or text
+    _asked, answer = chat.add_direct_turn(conversation, shown, chat_task.render(reply), "Terminbestätigung")
+    return jsonify({
+        "kind": "task",
+        "message": reply.text,
+        "status": reply.status,
+        "options": reply.options,
+        "draft": reply.draft,
+        "used_model": reply.used_model,
+        "assistant": chat.serialize_message(answer, _labels()),
+        "task": chat_task.public(conversation),
+        "conversation": chat.serialize_conversation(conversation),
+    }), ended
+
+
+@zentriq_bp.post("/api/conversations/<int:conversation_id>/auftrag/abbrechen")
+@login_required
+def api_task_cancel(conversation_id):
+    try:
+        conversation = chat.get_conversation(current_user, conversation_id)
+    except chat.ChatError as exc:
+        return _error(str(exc), exc.status, exc.error_type)
+    had = chat_task.clear(conversation)
+    if had:
+        chat.add_assistant_note(conversation, "Offener Auftrag abgebrochen – es wurde nichts erstellt.", "Terminbestätigung")
+    return jsonify({"ok": True, "cancelled": had, "conversation": chat.serialize_conversation(conversation)})
 
 
 @zentriq_bp.patch("/api/kunden/<int:customer_id>")

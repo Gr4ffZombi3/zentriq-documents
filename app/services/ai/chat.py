@@ -31,7 +31,7 @@ from sqlalchemy import or_
 
 from app.extensions import db
 from app.models.ai import AiAction, AiAttachment, AiConversation, AiMessage, AiUsage, _now
-from app.services import email_reply
+from app.services import chat_task, email_reply
 from app.services.ai import actions, orchestrator, router, tools
 from app.services.ai.privacy import Pseudonymizer
 
@@ -410,14 +410,30 @@ def store_image_message(user, conversation: AiConversation, content: str, images
     return message
 
 
-def add_assistant_note(conversation: AiConversation, text: str) -> AiMessage:
+def add_assistant_note(conversation: AiConversation, text: str, tool: str = "Termine aus Bild") -> AiMessage:
     """Direkte Antwort (ohne Modell) im Verlauf festhalten."""
     message = AiMessage(tenant_id=conversation.tenant_id, conversation_id=conversation.id, role="assistant", content=text,
-                        status="done", provider=orchestrator.DIRECT_PROVIDER, model=orchestrator.DIRECT_MODEL, tools_used=["Termine aus Bild"])
+                        status="done", provider=orchestrator.DIRECT_PROVIDER, model=orchestrator.DIRECT_MODEL, tools_used=[tool])
     db.session.add(message)
     conversation.updated_at = _now()
     db.session.commit()
     return message
+
+
+def add_direct_turn(conversation: AiConversation, question: str, answer: str, tool: str) -> tuple[AiMessage, AiMessage]:
+    """Direkt im Backend beantwortete Eingabe (ohne Modell, z. B. offener Auftrag) samt Antwort im
+    Verlauf festhalten - nach dem Neuladen bleiben Rueckfrage und Entwurf sichtbar."""
+    asked = AiMessage(tenant_id=conversation.tenant_id, conversation_id=conversation.id, role="user", content=(question or "").strip()[:4000])
+    db.session.add(asked)
+    db.session.flush()
+    reply = AiMessage(tenant_id=conversation.tenant_id, conversation_id=conversation.id, role="assistant", content=answer,
+                      status="done", provider=orchestrator.DIRECT_PROVIDER, model=orchestrator.DIRECT_MODEL, tools_used=[tool])
+    db.session.add(reply)
+    if conversation.title == DEFAULT_TITLE:
+        conversation.title = _title_from(asked.content)
+    conversation.updated_at = _now()
+    db.session.commit()
+    return asked, reply
 
 
 def latest_image_attachments(conversation: AiConversation) -> tuple[list[AiAttachment], bool]:
@@ -543,6 +559,18 @@ def process_pending(user, message_id: int, audio_jobs=None, context_customer_id=
             if not router.can_answer() and not image_appointments.is_request(question.content):
                 text = "Derzeit ist kein KI-Modell verfügbar – der Text des Bildes wurde aber lokal gelesen.\n\n" + text
             _finish(pending, conversation, text, provider=orchestrator.DIRECT_PROVIDER, model=orchestrator.DIRECT_MODEL, tools_used=["Termine aus Bild"])
+            return
+
+    # 0-. Offener Auftrag bzw. Terminbestaetigung (auch wenn die Eingabe direkt an den Chat ging):
+    #     Rueckfrage/Entwurf im Backend, ohne Modell (app/services/chat_task.py).
+    if question is not None and not has_attachments:
+        try:
+            task_reply, _ended = chat_task.dispatch(user, conversation, question.content, selected_id=context_customer_id)
+        except chat_task.TaskError as exc:
+            task_reply = chat_task.Reply(text=str(exc))
+        if task_reply is not None:
+            _finish(pending, conversation, chat_task.render(task_reply), provider=orchestrator.DIRECT_PROVIDER,
+                    model=orchestrator.DIRECT_MODEL, tools_used=["Terminbestätigung"])
             return
 
     # 0. Antwort auf eine Kunden-E-Mail: Kunde, Kalender und Entwurf deterministisch im Backend,
@@ -858,5 +886,6 @@ def serialize_conversation(conversation: AiConversation) -> dict:
         "pinned": conversation.pinned,
         "project": conversation.project,
         "updated_at": conversation.updated_at.isoformat() + "Z" if conversation.updated_at else None,
+        "task": chat_task.public(conversation),
     }
 

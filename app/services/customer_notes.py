@@ -1044,11 +1044,26 @@ def _note_source_row(note: CustomerNote) -> dict:
 # --- Eingabe --------------------------------------------------------------------------------
 
 
+def _choice_candidates(customers: list[Customer]) -> list[dict]:
+    """Auswahl: zusaetzlich Akte (interne ID) und Zahl der Notizen, damit gleichnamige Akten
+    unterscheidbar sind (sie werden nie automatisch zusammengefuehrt)."""
+    shown = customers[:MAX_CANDIDATES]
+    counts = dict(
+        db.session.execute(
+            select(CustomerNote.customer_id, db.func.count(CustomerNote.id))
+            .where(CustomerNote.customer_id.in_([c.id for c in shown] or [0]))
+            .group_by(CustomerNote.customer_id)
+        ).all()
+    )
+    names = [c.name.strip().lower() for c in shown]
+    return [{**serialize_candidate(c), "notes": counts.get(c.id, 0), "same_name": names.count(c.name.strip().lower()) > 1} for c in shown]
+
+
 def _choice(message: str, customers: list[Customer], create_option: bool = False, **extra) -> dict:
     return {
         "kind": "choose",
         "message": message,
-        "candidates": [serialize_candidate(c) for c in customers[:MAX_CANDIDATES]],
+        "candidates": _choice_candidates(customers),
         "more": len(customers) > MAX_CANDIDATES,
         "create_option": create_option,
         **extra,

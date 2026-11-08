@@ -73,6 +73,8 @@ class AiConversation(TenantScopedMixin, db.Model):
     # Laufende Zusammenfassung aelterer Nachrichten (spart Tokens bei langen Gespraechen).
     summary = db.Column(db.Text, nullable=True)
     summary_upto_id = db.Column(db.Integer, nullable=True)
+    # Offener Auftrag mit Rueckfrage (app/services/chat_task.py): geklaerte Angaben + was fehlt.
+    pending_task = db.Column(db.JSON, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=_now)
     updated_at = db.Column(db.DateTime, nullable=False, default=_now, index=True)
 

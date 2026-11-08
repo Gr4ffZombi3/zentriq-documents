@@ -56,6 +56,10 @@
     <p class="form-error zc-alert" data-zc-alert role="alert" hidden></p>
     <div class="zc-composer-inner">
       <div class="zc-attachments" data-zc-attachments></div>
+      <div class="zc-task" data-zc-task role="status" hidden>
+        <span><span class="zc-task-label">Wartet auf:</span> <strong data-zc-task-text></strong></span>
+        <button type="button" class="zn-link" data-zc-task-cancel>Abbrechen</button>
+      </div>
       {% if customer_notes_enabled %}
       <div class="zn-context" data-zn-context hidden>
         <span class="zn-context-label">Kunde:</span>

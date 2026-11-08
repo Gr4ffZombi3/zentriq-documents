@@ -346,7 +346,56 @@
 
   // --- Rueckfragen -----------------------------------------------------------------------------
   function candidateLabel(c) {
-    return [c.vn, c.place, c.birth ? "geb. " + c.birth : null, c.phone].filter(Boolean).join(" · ") || "keine weiteren Angaben";
+    // Gleichnamige Akten: interne Aktennummer und Notizen, damit sie unterscheidbar sind.
+    var extra = c.same_name ? ["Akte " + c.id, (c.notes || 0) + (c.notes === 1 ? " Notiz" : " Notizen")] : [];
+    return [c.vn, c.place, c.birth ? "geb. " + c.birth : null, c.phone].concat(extra).filter(Boolean).join(" · ") || "keine weiteren Angaben";
+  }
+
+  // --- Offener Auftrag (z. B. Terminbestaetigung): Rueckfrage, Auswahl, Entwurf ---------------------
+  function taskRequest(reply, body, label) {
+    var chatId = window.ZentriqChat && window.ZentriqChat.currentId ? window.ZentriqChat.currentId() : null;
+    if (chatId) body.conversation_id = chatId;
+    if (selected) body.selected_id = selected.id;
+    act(reply, request("POST", "/kunden/eingabe", body), label, function (res) { show(reply, res, body.text); });
+  }
+
+  function renderTask(reply, r) {
+    var chat = window.ZentriqChat;
+    if (chat && r.conversation) chat.adopt(r.conversation);
+    if (chat) chat.setTask(r.task);
+    if (r.draft && r.assistant && chat && chat.fillReply) {
+      chat.fillReply(reply, r.assistant);  // kopierbarer Entwurf, wie im Verlauf nach dem Neuladen
+      return;
+    }
+    var nodes = (r.status || []).map(function (s) { return message(s, /^⚠/.test(s) ? "warn" : "ok"); });
+    nodes.push(message(r.message, r.task ? "info" : null));
+    if (r.options && r.options.length) {
+      var ul = el("ul", "zn-candidates");
+      r.options.forEach(function (o) {
+        var li = el("li");
+        var b = button("", "zn-candidate", function () {
+          taskRequest(reply, { text: o.label, task_choice: o.choice, choice_label: o.label, client_ref: newRef() }, "Wird geladen");
+        });
+        b.appendChild(el("strong", null, o.label));
+        if (o.sub) b.appendChild(el("span", "zn-meta", o.sub));
+        li.appendChild(b);
+        ul.appendChild(li);
+      });
+      nodes.push(ul);
+    }
+    if (r.task) {
+      var row = el("div", "zn-actions");
+      row.appendChild(button("Abbrechen", "zn-link", function () {
+        var chatId = chat && chat.currentId ? chat.currentId() : null;
+        if (!chatId) { fill(reply, [message("Abgebrochen – es wurde nichts erstellt.")]); return; }
+        act(reply, request("POST", "/conversations/" + chatId + "/auftrag/abbrechen", {}), "Wird abgebrochen", function (res) {
+          if (chat) chat.setTask(null);
+          fill(reply, [message(res.cancelled ? "Abgebrochen – es wurde nichts erstellt." : "Der Auftrag war bereits beendet.")]);
+        });
+      }));
+      nodes.push(row);
+    }
+    fill(reply, nodes);
   }
 
   function cancel(reply) {
@@ -479,6 +528,9 @@
     switch (r.kind) {
       case "chat":
         return false;
+      case "task":
+        renderTask(reply, r);
+        return true;
       case "appointments_from_chat":
         if (window.ZentriqChat && window.ZentriqChat.appointmentsFromChat) window.ZentriqChat.appointmentsFromChat(reply);
         return true;
@@ -588,11 +640,14 @@
   function intercept(text, reply) {
     var body = { text: text, client_ref: newRef() };
     if (selected) body.selected_id = selected.id;
+    var chatId = window.ZentriqChat && window.ZentriqChat.currentId ? window.ZentriqChat.currentId() : null;
+    if (chatId) body.conversation_id = chatId;
     showPending(reply, "Wird geprüft");
     chatCustomer = null;
     return request("POST", "/kunden/eingabe", body).then(function (r) {
       // Schreibauftrag an die KI: ausgewaehlter/genannter Kunde geht als Kontext mit.
       if (r.kind === "chat" && r.customer_id) chatCustomer = r.customer_id;
+      if (r.task_ended && window.ZentriqChat) window.ZentriqChat.setTask(null);
       var handled = show(reply, r, text);
       if (handled) loadCallbacks();
       return handled;

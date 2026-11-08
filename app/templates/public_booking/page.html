@@ -1,0 +1,35 @@
+{% extends "public_booking/_base.html" %}
+{% block content %}
+  <p class="office">{{ view.office }}</p>
+  <h1>{{ view.title }}</h1>
+  <p class="meta">{{ view.minutes }} Minuten{% if view.kind %} · {{ view.kind }}{% endif %}</p>
+  <form method="post" class="card" data-booking-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="submission" value="{{ submission }}">
+    {% if error %}<p class="error" role="alert" data-booking-error>{{ error }}</p>{% endif %}
+    <p class="hint">Bitte wählen Sie eine freie Uhrzeit.</p>
+    {% for day, items in days.items() %}
+      <h2>{{ day }}</h2>
+      <div class="slots">
+        {% for item in items %}
+          <label class="slot"><input type="radio" name="slot" value="{{ item.value }}" required{% if selected == item.value %} checked{% endif %}><span>{{ item.time }}</span></label>
+        {% endfor %}
+      </div>
+    {% endfor %}
+    {% if view.needs_contact %}
+      <h2>Ihre Kontaktdaten</h2>
+      <label class="field">Name<input name="name" autocomplete="name" required maxlength="120" value="{{ contact.name or '' }}"></label>
+      <label class="field">Telefon<input name="phone" type="tel" autocomplete="tel" maxlength="30" value="{{ contact.phone or '' }}"></label>
+      <label class="field">E-Mail<input name="email" type="email" autocomplete="email" maxlength="255" value="{{ contact.email or '' }}"></label>
+      <p class="hint">Telefon oder E-Mail genügt.</p>
+    {% endif %}
+    <button type="submit" data-booking-submit>Termin verbindlich buchen</button>
+  </form>
+  <script>
+    // Doppeltes Absenden verhindern (der Server schuetzt zusaetzlich).
+    document.querySelector("[data-booking-form]").addEventListener("submit", function () {
+      var b = document.querySelector("[data-booking-submit]");
+      setTimeout(function () { b.disabled = true; b.textContent = "Wird gebucht …"; }, 0);
+    });
+  </script>
+{% endblock %}

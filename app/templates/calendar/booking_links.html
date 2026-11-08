@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% from "ui/portal.html" import state_tag %}
+{% block title %}Buchungslinks – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell">
+  <div class="page-toolbar">
+    <h1 class="page-toolbar-title">Buchungslinks</h1>
+    <a class="btn btn-secondary btn-sm" href="{{ url_for('calendar.index') }}">Zum Kalender</a>
+  </div>
+
+  <section class="panel" aria-labelledby="bl-neu">
+    <header class="panel-header"><h2 class="panel-title" id="bl-neu">Buchungslink erstellen</h2></header>
+    <div class="panel-body">
+      <form method="post" action="{{ url_for('calendar.booking_link_create') }}" class="form-stack" data-bl-form>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if customer %}
+          <input type="hidden" name="customer_id" value="{{ customer.id }}">
+          <p class="notice notice-info">Für Kundenakte <strong>{{ customer.name }}</strong> – die Buchung wird der Akte intern zugeordnet (nicht im Link sichtbar).</p>
+        {% endif %}
+        <div class="form-grid form-grid-3">
+          <div class="form-field"><label class="field-label" for="bl-title">Terminart (für den Kunden sichtbar)</label>
+            <input id="bl-title" name="title" class="field-surface" required maxlength="120" value="Beratungsgespräch"></div>
+          <div class="form-field"><label class="field-label" for="bl-kind">Art</label>
+            <select id="bl-kind" name="location_kind" class="field-surface"><option value="">–</option>{% for key, label in kinds.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select></div>
+          <div class="form-field"><label class="field-label" for="bl-minutes">Dauer (Minuten)</label>
+            <input id="bl-minutes" name="minutes" type="number" min="10" max="240" step="5" class="field-surface" value="{{ settings.default_minutes if settings and settings.default_minutes else 30 }}"></div>
+          <div class="form-field"><label class="field-label" for="bl-assignee">Mitarbeiter</label>
+            <select id="bl-assignee" name="assignee_id" class="field-surface">{% for m in members %}<option value="{{ m.id }}"{% if (customer and customer.assigned_user_id == m.id) or (not customer and m.id == current_user.id) %} selected{% endif %}>{{ member_name(m) }}</option>{% endfor %}</select></div>
+          <div class="form-field"><label class="field-label" for="bl-valid">Gültig bis</label>
+            <input id="bl-valid" name="valid_until" type="date" class="field-surface" value="{{ defaults.valid }}" required></div>
+        </div>
+        <fieldset class="form-stack">
+          <legend class="field-label">Freigegebene Zeiten</legend>
+          <div class="checkbox-row">
+            <label><input type="radio" name="mode" value="slots" checked data-bl-mode> Einzelne Zeitfenster</label>
+            <label><input type="radio" name="mode" value="range" data-bl-mode> Zeitraum mit Uhrzeiten</label>
+          </div>
+          <div data-bl-slots class="form-grid form-grid-3">
+            {% for i in range(6) %}<input type="datetime-local" name="slots" class="field-surface" aria-label="Zeitfenster {{ i + 1 }}">{% endfor %}
+          </div>
+          <div data-bl-range hidden class="form-stack">
+            <div class="form-grid form-grid-3">
+              <div class="form-field"><label class="field-label" for="bl-from">Von</label><input id="bl-from" name="from" type="date" class="field-surface" value="{{ defaults.from }}"></div>
+              <div class="form-field"><label class="field-label" for="bl-to">Bis</label><input id="bl-to" name="to" type="date" class="field-surface" value="{{ defaults.to }}"></div>
+              <div class="form-field"><label class="field-label" for="bl-times">Uhrzeiten</label><input id="bl-times" name="times" class="field-surface" placeholder="09:00, 10:30, 14:00"></div>
+            </div>
+            <div class="checkbox-row">{% for v, l in [('1','Mo'),('2','Di'),('3','Mi'),('4','Do'),('5','Fr'),('6','Sa'),('7','So')] %}<label><input type="checkbox" name="weekdays" value="{{ v }}"{% if v|int <= 5 %} checked{% endif %}> {{ l }}</label>{% endfor %}</div>
+          </div>
+          <p class="panel-note">Der Kunde sieht nur diese Uhrzeiten und davon nur die, die im Kalender (inkl. Puffer und Abwesenheiten) aktuell frei sind. Ein Link erlaubt eine Buchung.</p>
+        </fieldset>
+        <div class="form-actions"><button type="submit" class="btn btn-primary">Buchungslink erstellen</button></div>
+      </form>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="bl-liste">
+    <header class="panel-header"><h2 class="panel-title" id="bl-liste">Erstellte Links</h2></header>
+    {% if rows %}
+      <div class="table-wrap">
+        <table class="data-table table-stack" data-bl-table>
+          <thead><tr><th scope="col">Terminart</th><th scope="col">Mitarbeiter / Kunde</th><th scope="col">Status</th><th scope="col">Link</th><th scope="col"></th></tr></thead>
+          <tbody>
+          {% for row in rows %}{% set link = row.link %}
+            <tr data-bl-row="{{ link.id }}"{% if new_id == link.id %} class="is-new"{% endif %}>
+              <th scope="row" class="cell-strong stack-full">{{ link.title }}<br><small>{{ link.minutes }} Min. · {{ link.offers | length }} Uhrzeiten · gültig bis {{ link.expires_at | local_dt('%d.%m.%Y') }}</small></th>
+              <td data-label="Mitarbeiter / Kunde">{{ member_name(link.assignee) }}{% if link.customer %}<br><small>{{ link.customer.name }}</small>{% endif %}</td>
+              <td data-label="Status" data-bl-status>
+                {{ state_tag(labels[row.status], {'active': 'success', 'used': 'info', 'expired': 'neutral', 'revoked': 'warning'}[row.status]) }}
+                {% if row.event %}<br><small>Termin {{ row.event.starts_at | local_dt('%d.%m.%Y %H:%M') }} Uhr</small>{% elif row.status == 'active' %}<br><small>{{ row.free }} Zeiten frei</small>{% endif %}
+              </td>
+              <td data-label="Link">{% if row.url and row.status == 'active' %}<code id="bl-url-{{ link.id }}" data-bl-url>{{ row.url }}</code><br><button type="button" class="btn btn-secondary btn-sm" data-copy="#bl-url-{{ link.id }}">Link kopieren</button>{% else %}–{% endif %}</td>
+              <td>{% if row.status == 'active' %}<form method="post" action="{{ url_for('calendar.booking_link_revoke', link_id=link.id) }}" onsubmit="return confirm('Link widerrufen? Er kann danach nicht mehr verwendet werden.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn btn-secondary btn-sm" data-bl-revoke>Widerrufen</button></form>{% endif %}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-note">Noch keine Buchungslinks.</p>
+    {% endif %}
+  </section>
+</div>
+<script>
+  (function () {
+    var slots = document.querySelector("[data-bl-slots]"), range = document.querySelector("[data-bl-range]");
+    Array.prototype.forEach.call(document.querySelectorAll("[data-bl-mode]"), function (r) {
+      r.addEventListener("change", function () { var isRange = r.value === "range" && r.checked; range.hidden = !isRange; slots.hidden = isRange; });
+    });
+  })();
+</script>
+{% endblock %}

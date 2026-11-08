@@ -1,0 +1,11 @@
+{% extends "public_booking/_base.html" %}
+{% block title %}Termin gebucht{% endblock %}
+{% block content %}
+  <p class="office">{{ view.office }}</p>
+  <div class="card" data-booking-confirmed>
+    <p class="ok">✓ Ihr Termin ist gebucht.</p>
+    <p><strong>{{ when.day }}, {{ when.time }} Uhr</strong></p>
+    <p>{{ view.title }} · {{ view.minutes }} Minuten{% if view.kind %} · {{ view.kind }}{% endif %}</p>
+    <p class="hint">Sie können diese Seite schließen. Für Änderungen wenden Sie sich bitte an das Büro.</p>
+  </div>
+{% endblock %}

@@ -433,7 +433,7 @@ def test_super_admin_is_denied_every_business_endpoint(app, world):
     for rule in app.url_map.iter_rules():
         # "zentriq."/"zentriq_admin.": ZentriqAI-Chat (ohne Buerodaten fuer den SUPER_ADMIN) und
         # KI-Einstellungen; Rechte und Trennung prueft test_zentriq_ai.py.
-        if rule.endpoint == "static" or rule.endpoint.startswith(("platform.", "auth.", "zentriq.", "zentriq_admin.")) or rule.endpoint in SUPER_ADMIN_ALLOWED:
+        if rule.endpoint == "static" or rule.endpoint.startswith(("platform.", "auth.", "zentriq.", "zentriq_admin.", "public_booking.")) or rule.endpoint in SUPER_ADMIN_ALLOWED:
             continue
         url = _concrete_url(rule, world)
         for method in sorted(rule.methods - {"HEAD", "OPTIONS"}):

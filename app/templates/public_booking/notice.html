@@ -1,0 +1,9 @@
+{% extends "public_booking/_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+  {% if view %}<p class="office">{{ view.office }}</p>{% endif %}
+  <div class="card" data-booking-notice>
+    <h1>{{ title }}</h1>
+    <p>{{ text }}</p>
+  </div>
+{% endblock %}

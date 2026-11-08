@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>{% block title %}Termin buchen{% endblock %}</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f4f5f7; --card:#fff; --text:#1d2330; --muted:#5d6675; --line:#d9dde4; --accent:#2b5a8a; --accent-text:#fff; --warn:#a15c07; --ok:#1d7a3e; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#14171c; --card:#1d2128; --text:#e8eaee; --muted:#a3abb8; --line:#363c47; --accent:#6aa3dc; --accent-text:#0d1117; --warn:#f0b35a; --ok:#6fd492; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    main { max-width: 34rem; margin: 0 auto; padding: 1.2rem 1rem 3rem; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 1rem; padding: 1.1rem; margin-top: 1rem; }
+    h1 { font-size: 1.35rem; margin: 0 0 0.2rem; }
+    .office { color: var(--muted); font-size: 0.9rem; margin: 0; }
+    .meta { margin: 0.4rem 0 0; color: var(--muted); }
+    h2 { font-size: 1rem; margin: 1.1rem 0 0.5rem; }
+    .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr)); gap: 0.5rem; }
+    .slot input { position: absolute; opacity: 0; pointer-events: none; }
+    .slot span { display: block; text-align: center; padding: 0.75rem 0.2rem; border: 1px solid var(--line); border-radius: 0.7rem; font-weight: 600; cursor: pointer; min-height: 48px; }
+    .slot input:checked + span { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+    .slot input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
+    label.field { display: block; margin-top: 0.8rem; font-size: 0.9rem; color: var(--muted); }
+    label.field input { display: block; width: 100%; margin-top: 0.25rem; font-size: 1rem; padding: 0.7rem; border: 1px solid var(--line); border-radius: 0.6rem; background: var(--card); color: var(--text); }
+    button { margin-top: 1.2rem; width: 100%; font-size: 1.05rem; font-weight: 600; padding: 0.85rem; border: 0; border-radius: 0.8rem; background: var(--accent); color: var(--accent-text); cursor: pointer; min-height: 52px; }
+    button[disabled] { opacity: 0.6; }
+    .error { color: var(--warn); font-weight: 600; margin: 0.6rem 0 0; }
+    .ok { color: var(--ok); font-weight: 700; font-size: 1.1rem; margin: 0; }
+    .hint { color: var(--muted); font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <main>{% block content %}{% endblock %}</main>
+</body>
+</html>

@@ -21,7 +21,8 @@ from flask_login import current_user
 
 # Fuer jeden angemeldeten Benutzer erreichbar (Anmeldung, eigenes Konto, 2FA-Einrichtung).
 # "pwa": Manifest, Service Worker und Offline-Seite (ohne Benutzerdaten).
-COMMON_ALLOWED_BLUEPRINTS = frozenset({"auth", "pwa"})
+# "public_booking": Kunden-Buchungsseite (Token-Link, ohne Anmeldung) - auch angemeldet erreichbar.
+COMMON_ALLOWED_BLUEPRINTS = frozenset({"auth", "pwa", "public_booking"})
 COMMON_ALLOWED_ENDPOINTS = frozenset(
     {
         "static",

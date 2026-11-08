@@ -101,15 +101,37 @@ def api_event(event_id):
     return jsonify({"event": cal.serialize(event, current_user), "history": cal.history(event.id)})
 
 
+def _assignee_lock(assignee_id):
+    """Gleiche Sperre wie Buchungen ueber Eingabefeld und Kunden-Buchungslink
+    (booking.book, booking_links.book): keine gleichzeitige Belegung desselben Mitarbeiters."""
+    from app.services.customer_lock import NamedLock
+
+    try:
+        key = int(assignee_id)
+    except (TypeError, ValueError):
+        key = 0
+    return NamedLock(f"zentriq-cal-{current_user.tenant_id}-{key}", 15)
+
+
 @calendar_bp.post("/api/termine")
 @login_required
 def api_create():
+    from app.services.customer_lock import CustomerLockTimeout, fresh_transaction
+
     _office_member()
     data = _payload()
+    lock = _assignee_lock(data.get("assignee_id"))
     try:
+        lock.acquire()
+    except CustomerLockTimeout:
+        return jsonify({"error": "Der Kalender wird gerade geändert. Bitte erneut speichern.", "code": "busy"}), 409
+    try:
+        fresh_transaction()
         event, created, conflicts = cal.create_event(current_user, data, client_ref=data.get("client_ref"))
     except cal.CalendarError as exc:
         return _error(exc)
+    finally:
+        lock.release()
     return jsonify(
         {"event": cal.serialize(event, current_user), "created": created, "conflicts": cal.conflict_payload(conflicts)}
     ), (201 if created else 200)
@@ -119,14 +141,24 @@ def api_create():
 @login_required
 def api_update(event_id):
     _office_member()
+    from app.services.customer_lock import CustomerLockTimeout
+
     event = get_or_404_scoped(CalendarEvent, event_id)
+    data = _payload()
+    lock = _assignee_lock(data.get("assignee_id") or event.assignee_user_id)
     try:
-        event, changed, conflicts = cal.update_event(current_user, event, _payload())
+        lock.acquire()
+    except CustomerLockTimeout:
+        return jsonify({"error": "Der Kalender wird gerade geändert. Bitte erneut speichern.", "code": "busy"}), 409
+    try:
+        event, changed, conflicts = cal.update_event(current_user, event, data)
     except cal.CalendarError as exc:
         if exc.code == "conflict":
             fresh = get_or_404_scoped(CalendarEvent, event_id)
             return jsonify({"error": str(exc), "code": exc.code, "event": cal.serialize(fresh, current_user)}), 409
         return _error(exc)
+    finally:
+        lock.release()
     return jsonify({"event": cal.serialize(event, current_user), "changed": changed, "conflicts": cal.conflict_payload(conflicts)})
 
 
@@ -270,3 +302,92 @@ def settings():
         errors=errors,
         days=[(iso, _DAY_LABELS[iso - 1], hours.get(iso)) for iso in range(1, 8)],
     )
+
+
+# --- Persoenliche Buchungslinks (nur Buero-Admin) ------------------------------------------
+
+
+def availability_settings():
+    from app.services import availability
+
+    return availability.settings()
+
+
+def _admin_only():
+    if not current_user.is_office_admin:
+        abort(403)
+
+
+@calendar_bp.get("/buchungslinks")
+@login_required
+def booking_links():
+    from app.models import BookingLink, Customer
+    from app.services import booking_links as bl
+
+    _admin_only()
+    customer = None
+    if request.args.get("kunde", type=int):
+        customer = Customer.query.filter(Customer.id == request.args.get("kunde", type=int)).first()
+    links = BookingLink.query.order_by(BookingLink.created_at.desc(), BookingLink.id.desc()).limit(100).all()
+    rows = []
+    for link in links:
+        event = bl.booked_event(link)
+        rows.append({"link": link, "status": bl.status(link), "url": bl.public_url(link), "event": event,
+                     "free": len(bl.free_times(link)) if bl.status(link) == "active" else 0})
+    today = local_today()
+    return render_template(
+        "calendar/booking_links.html", rows=rows, labels=bl.STATUS_LABELS, members=cal.office_members(), member_name=cal.member_name,
+        kinds=cal.LOCATION_KINDS, customer=customer, new_id=request.args.get("neu", type=int),
+        defaults={"from": (today + timedelta(days=1)).isoformat(), "to": (today + timedelta(days=7)).isoformat(),
+                  "valid": (today + timedelta(days=14)).isoformat()},
+        settings=availability_settings(),
+    )
+
+
+@calendar_bp.post("/buchungslinks")
+@login_required
+def booking_link_create():
+    from datetime import time as _time
+
+    from app.services import booking_links as bl
+    from app.services.timetracking.clock import local_to_utc_naive
+
+    _admin_only()
+    form = request.form
+    back = url_for("calendar.booking_links", kunde=form.get("customer_id") or None)
+    try:
+        if form.get("mode") == "range":
+            first, last = date.fromisoformat(form.get("from", "")), date.fromisoformat(form.get("to", ""))
+            weekdays = {int(d) for d in form.getlist("weekdays") if d.isdigit()}
+            times = [t for t in re.split(r"[,;\s]+", form.get("times", "")) if t]
+            if not weekdays or not times:
+                raise bl.LinkError("Bitte Wochentage und mindestens eine Uhrzeit angeben.")
+            offers = bl.offers_from_range(first, last, weekdays, times)
+        else:
+            offers = bl.offers_from_slots(form.getlist("slots"))
+        valid_day = date.fromisoformat(form.get("valid_until", ""))
+        valid_until = local_to_utc_naive(valid_day, _time(23, 59))
+        link, _token = bl.create(
+            current_user, title=form.get("title", ""), location_kind=form.get("location_kind") or None,
+            minutes=int(form.get("minutes") or 30), assignee_id=int(form.get("assignee_id") or 0),
+            customer_id=int(form["customer_id"]) if (form.get("customer_id") or "").isdigit() else None,
+            offers=offers, valid_until=valid_until,
+        )
+    except (ValueError, bl.LinkError) as exc:
+        flash(str(exc) if isinstance(exc, bl.LinkError) else "Bitte Datum, Uhrzeiten und Dauer vollständig angeben.", "error")
+        return redirect(back)
+    flash(f"Buchungslink erstellt ({len(link.offers)} freigegebene Uhrzeiten). Link kopieren und an den Kunden senden.", "success")
+    return redirect(url_for("calendar.booking_links", neu=link.id))
+
+
+@calendar_bp.post("/buchungslinks/<int:link_id>/widerrufen")
+@login_required
+def booking_link_revoke(link_id):
+    from app.models import BookingLink
+    from app.services import booking_links as bl
+
+    _admin_only()
+    link = get_or_404_scoped(BookingLink, link_id)
+    bl.revoke(current_user, link)
+    flash("Buchungslink widerrufen. Er kann nicht mehr verwendet werden.", "success")
+    return redirect(url_for("calendar.booking_links"))

@@ -102,6 +102,9 @@ def create_app(config_object=None):
     app.register_blueprint(calendar_bp)
     app.register_blueprint(huk_bp)
     app.register_blueprint(settlements_bp)
+    from app.blueprints.public_booking.routes import public_booking_bp
+
+    app.register_blueprint(public_booking_bp)
     app.register_blueprint(zentriq_admin_bp)
 
     from app.cli import register_cli

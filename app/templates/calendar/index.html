@@ -23,12 +23,14 @@
     </fieldset>
     {% if current_user.is_office_admin %}
       <a class="cal-settings-link" href="{{ url_for('calendar.settings') }}">Bürozeiten &amp; Büro-Profil</a>
+      <a class="cal-settings-link" href="{{ url_for('calendar.booking_links') }}" data-cal-booking-links>Buchungslink erstellen</a>
     {% endif %}
   </aside>
 
   <section class="cal-main" aria-label="Kalender">
     <header class="cal-toolbar">
       <button type="button" class="btn btn-primary btn-sm cal-new" data-cal-new>{{ icon('plus', class='h-4 w-4') }}<span>Neuer Termin</span></button>
+      {% if current_user.is_office_admin %}<a class="btn btn-secondary btn-sm" href="{{ url_for('calendar.booking_links') }}">Buchungslink erstellen</a>{% endif %}
       <div class="cal-nav">
         <button type="button" class="btn btn-secondary btn-sm" data-cal-today>Heute</button>
         <button type="button" class="zs-icon-btn" data-cal-prev aria-label="Zurück">{{ icon('chevron-right', class='h-5 w-5 cal-flip') }}</button>

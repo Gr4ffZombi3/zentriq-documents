@@ -7,7 +7,8 @@
   if (!root) return;
   var cfg = JSON.parse(document.getElementById("cal-data").textContent);
   var csrfMeta = document.querySelector('meta[name="csrf-token"]');
-  var HOUR_PX = 48, SNAP = 15, DAY_START_SCROLL = 7;
+  // HOUR_PX folgt --cal-hour aus dem CSS (Desktop 48px, Handy 56px) - sonst stehen Termine falsch.
+  var HOUR_PX = 48, SNAP = 15, DAY_START_SCROLL = 7, RESIZE_MIN_PX = 36;
   var WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
   var WEEKDAYS_LONG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
   var MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
@@ -223,6 +224,9 @@
   function renderGrid() {
     var list = days(), now = berlinNow();
     var wrap = el("div", "cal-grid"); wrap.style.setProperty("--cal-days", list.length);
+    els.body.appendChild(wrap);
+    HOUR_PX = parseFloat(getComputedStyle(wrap).getPropertyValue("--cal-hour")) || 48;
+    els.body.removeChild(wrap);
     var head = el("div", "cal-grid-head");
     head.appendChild(el("div", "cal-gutter"));
     list.forEach(function (day) {
@@ -276,9 +280,12 @@
     b.appendChild(el("span", "cal-ev-title", e.title));
     b.appendChild(el("span", "cal-ev-time", hm(e.start) + "–" + hm(e.end)));
     if (seg.e - seg.s >= 60) b.appendChild(el("span", "cal-ev-meta", e.assignee + (e.customer ? " · " + e.customer.name : "")));
-    if (seg.endsHere && e.status !== "cancelled") {
+    // Dauer per Maus nur bei ausreichend hohen Bloecken: bei kurzen Terminen (30 Min. = 22px) belegte der
+    // Griff ein Drittel des Blocks - Ziehen am unteren Rand verlaengerte den Termin, statt ihn zu verschieben.
+    if (seg.endsHere && e.status !== "cancelled" && (seg.e - seg.s) / 60 * HOUR_PX - 2 >= RESIZE_MIN_PX) {
       var handle = el("span", "cal-ev-resize"); handle.setAttribute("aria-hidden", "true"); b.appendChild(handle);
     }
+    if (e.status !== "cancelled" && !small.matches) b.title = "Ziehen zum Verschieben, Klick für Details";
     b.addEventListener("pointerdown", function (ev) { startDrag(ev, b, e, ev.target.classList.contains("cal-ev-resize") ? "resize" : "move", day); });
     b.addEventListener("click", function (ev) { if (b.dataset.dragged) { delete b.dataset.dragged; return; } showDetails(e, b); ev.stopPropagation(); });
     b.addEventListener("keydown", function (ev) { keyMove(ev, e); });
@@ -292,31 +299,47 @@
     var cols = Array.prototype.slice.call(els.body.querySelectorAll(".cal-col"));
     var origTop = parseFloat(block.style.top), origH = parseFloat(block.style.height);
     var deltaMin = 0, deltaDay = 0;
+    var timeEl = block.querySelector(".cal-ev-time"), origTime = timeEl ? timeEl.textContent : "";
+    var duration = diffMinutes(e.start, e.end), startMin = minutesOf(e.start);
     block.setPointerCapture(ev.pointerId);
+    function target() {
+      if (mode === "resize") return { start: e.start, end: addMinutes(e.end, deltaMin) };
+      var start = addMinutes(isoAt(addDays(dayOf(e.start), deltaDay), startMin), deltaMin);
+      return { start: start, end: addMinutes(start, duration) };
+    }
     function onMove(m) {
       var dy = m.clientY - startY, dx = m.clientX - startX;
       if (!moved && Math.abs(dy) < 5 && Math.abs(dx) < 5) return;
       moved = true; state.dragging = true; block.classList.add("is-dragging");
       deltaMin = Math.round(dy / HOUR_PX * 60 / SNAP) * SNAP;
       if (mode === "resize") {
+        deltaMin = Math.max(deltaMin, SNAP - duration);
         block.style.height = Math.max(HOUR_PX / 4 - 2, origH + deltaMin / 60 * HOUR_PX) + "px";
       } else {
+        // innerhalb des Tages bleiben (0:00 bis 24:00), Tag ueber die Spalte unter dem Mauszeiger
+        deltaMin = Math.min(Math.max(deltaMin, -startMin), 1440 - duration - startMin);
         block.style.top = (origTop + deltaMin / 60 * HOUR_PX) + "px";
         var idx = cols.findIndex(function (c) { var r = c.getBoundingClientRect(); return m.clientX >= r.left && m.clientX < r.right; });
         var from = cols.findIndex(function (c) { return c.dataset.day === day; });
         if (idx >= 0 && from >= 0) { deltaDay = idx - from; block.style.transform = "translateX(" + (cols[idx].getBoundingClientRect().left - cols[from].getBoundingClientRect().left) + "px)"; }
       }
+      var t = target();
+      var label = (deltaDay ? dayLabel(dayOf(t.start)) + " " : "") + hm(t.start) + "–" + hm(t.end);
+      if (timeEl) timeEl.textContent = label;
+      block.setAttribute("aria-label", e.title + ", neu: " + label + " Uhr");
     }
     function onUp() {
       block.removeEventListener("pointermove", onMove); block.removeEventListener("pointerup", onUp); block.removeEventListener("pointercancel", onUp);
       state.dragging = false;
       if (!moved) return;
       block.dataset.dragged = "1";
-      var start = e.start, end = e.end;
-      if (mode === "resize") end = addMinutes(e.end, deltaMin);
-      else { start = addMinutes(isoAt(addDays(dayOf(e.start), deltaDay), minutesOf(e.start)), deltaMin); end = addMinutes(start, diffMinutes(e.start, e.end)); }
+      // Nach dem Loslassen wird der Klick auf den Elternknoten gelenkt, wenn die Maus ueber einer anderen
+      // Spalte war - die Markierung darf dann nicht haengen bleiben (naechster Klick soll Details zeigen).
+      setTimeout(function () { delete block.dataset.dragged; }, 400);
+      var t = target(), start = t.start, end = t.end;
       if (diffMinutes(start, end) < SNAP) end = addMinutes(start, SNAP);
-      if (start === e.start && end === e.end) { render(); return; }
+      if (start === e.start && end === e.end) { if (timeEl) timeEl.textContent = origTime; render(); return; }
+      block.classList.add("is-saving");
       saveTimes(e, start, end);
     }
     block.addEventListener("pointermove", onMove); block.addEventListener("pointerup", onUp); block.addEventListener("pointercancel", onUp);
@@ -354,7 +377,8 @@
       status("Verschoben: " + d.event.title + ", " + dayLabel(dayOf(d.event.start)) + " " + hm(d.event.start) + "–" + hm(d.event.end) + " Uhr" + conflictText(d.conflicts), d.conflicts.length ? "warn" : "ok");
       if (refocus) { var b = els.body.querySelector('.cal-ev[data-id="' + d.event.id + '"]'); if (b) b.focus(); }
     }, function (err) {
-      status(err.message, "error"); if (err.data && err.data.event) replaceEvent(err.data.event); render();
+      // Nicht gespeichert: Termin steht wieder an der bisherigen (bzw. vom Server gemeldeten aktuellen) Stelle.
+      status("Nicht verschoben: " + err.message, "error"); if (err.data && err.data.event) replaceEvent(err.data.event); render();
     }).finally(function () { state.busy = false; });
   }
 

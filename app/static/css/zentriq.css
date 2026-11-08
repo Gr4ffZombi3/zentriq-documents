@@ -474,3 +474,6 @@
   .huk-page .huk-field { scroll-margin-top: 5rem; scroll-margin-bottom: 7rem; }
   body.huk-page.huk-typing .zs-clock { display: none; }
 }
+
+/* Kalender: Termin wird nach dem Ziehen gespeichert (calendar.js saveTimes) */
+.cal-ev.is-saving { opacity: 0.6; pointer-events: none; }

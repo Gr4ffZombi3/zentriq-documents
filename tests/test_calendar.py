@@ -155,3 +155,58 @@ def test_customer_search_and_stamp(laura, employee, db, tenant):
     before = laura.get(f"{API}/stand").get_json()["stamp"]
     _create(laura, employee.id)
     assert laura.get(f"{API}/stand").get_json()["stamp"] != before
+
+
+# --- Verschieben per Maus (calendar.js saveTimes: derselbe PATCH wie das Formular) ----------------
+
+
+def _drag_payload(event, start, end):
+    """So sendet die Kalenderoberflaeche nach dem Loslassen (payloadOf + neue Zeiten)."""
+    return {"title": event["title"], "start": start, "end": end, "assignee_id": event["assignee_id"],
+            "customer_id": event["customer"]["id"] if event["customer"] else None, "location_kind": event["location_kind"] or "",
+            "location": event["location"] or "", "note": event["note"] or "", "version": event["version"]}
+
+
+def test_drag_move_keeps_duration_customer_assignee(auth_client, laura, user, employee, tenant):
+    with use_tenant_id(tenant.id):
+        customer = Customer(tenant_id=tenant.id, name="Thomas Horna")
+        from app.extensions import db
+        db.session.add(customer)
+        db.session.commit()
+    event = _create(auth_client, employee.id, customer_id=customer.id, location_kind="vor_ort", location="Büro").get_json()["event"]
+    # anderer Tag + andere Uhrzeit, von der Kollegin verschoben (alle im Buero duerfen aendern)
+    moved = laura.patch(f"{API}/termine/{event['id']}", json=_drag_payload(event, "2026-11-13T09:15", "2026-11-13T09:45"))
+    data = moved.get_json()["event"]
+    assert moved.status_code == 200 and (data["start"], data["end"]) == ("2026-11-13T09:15", "2026-11-13T09:45")
+    assert data["customer"]["id"] == customer.id and data["assignee_id"] == employee.id and data["location"] == "Büro"
+    assert data["version"] == 2
+
+
+def test_drag_move_rejected_cases_leave_event_unchanged(app, auth_client, laura, user, employee, db, tenant):
+    event = _create(auth_client, employee.id).get_json()["event"]
+    # veraltete Fassung (jemand hat inzwischen gespeichert): 409 mit aktueller Fassung zum Zuruecksetzen
+    laura.patch(f"{API}/termine/{event['id']}", json=_drag_payload(event, "2026-11-12T15:00", "2026-11-12T15:30"))
+    stale = auth_client.patch(f"{API}/termine/{event['id']}", json=_drag_payload(event, "2026-11-12T16:00", "2026-11-12T16:30"))
+    assert stale.status_code == 409 and stale.get_json()["event"]["start"] == "2026-11-12T15:00"
+    current = stale.get_json()["event"]
+    # ungueltiger Zielzeitpunkt (Ende vor Beginn) -> 400, nichts gespeichert
+    bad = auth_client.patch(f"{API}/termine/{event['id']}", json=_drag_payload(current, "2026-11-12T16:00", "2026-11-12T15:00"))
+    assert bad.status_code == 400 and "Ende" in bad.get_json()["error"]
+    # fremdes Buero: Termin nicht auffindbar; Plattform-Admin: kein Kalenderzugriff
+    with bypass_tenant_scope():
+        other = Tenant(name="Fremd", slug="fremd-drag")
+        db.session.add(other)
+        db.session.commit()
+        stranger = User(tenant_id=other.id, email="fremd-drag@example.com", is_active=True, role=UserRole.OFFICE_ADMIN)
+        stranger.set_password("fremdpass12345")
+        admin = User(tenant_id=tenant.id, email="platform-drag@example.com", is_active=True, role=UserRole.SUPER_ADMIN)
+        admin.set_password("plattformpass123")
+        db.session.add_all([stranger, admin])
+        db.session.commit()
+    foreign = _login(app, "fremd-drag@example.com", "fremdpass12345")
+    assert foreign.patch(f"{API}/termine/{event['id']}", json=_drag_payload(current, "2026-11-12T08:00", "2026-11-12T08:30")).status_code == 404
+    platform = _login(app, "platform-drag@example.com", "plattformpass123")
+    assert platform.patch(f"{API}/termine/{event['id']}", json=_drag_payload(current, "2026-11-12T08:00", "2026-11-12T08:30")).status_code in (302, 403)
+    with bypass_tenant_scope():
+        fresh = db.session.get(CalendarEvent, event["id"])
+        assert fresh.version == 2 and fresh.starts_at.hour in (14,)  # 15:00 Ortszeit = 14:00 UTC

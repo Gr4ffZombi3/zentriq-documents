@@ -669,7 +669,32 @@ def customer_card(user, customer: Customer) -> dict:
         card["edit"] = customer_create.edit_payload(customer)
     if customer.address:
         card["address"] = customer.address
+    card.update(_calendar_part(user, customer))
     return card
+
+
+def _calendar_part(user, customer: Customer) -> dict:
+    """Naechste Termine (Kunden-ID) und Buchungsvorgaben fuer die Kundenkarte - nur mit Kalenderrecht."""
+    from app.services import availability, chat_task
+    from app.services import calendar as cal
+    from app.services.calendar_intent import _responsible_for
+
+    if not chat_task.calendar_allowed(user):
+        return {"next_events": [], "book": None}
+    events = chat_task.upcoming_events(customer, limit=3)
+    members = cal.office_members()
+    responsible = _responsible_for(customer, members)
+    s = availability.settings()
+    return {
+        "next_events": [{"id": e.id, "label": opt["label"], "sub": opt["sub"]} for e in events for opt in [chat_task._event_option(e)]],
+        "book": {
+            "day": (local_today() + timedelta(days=1)).isoformat(),
+            "minutes": (s.default_minutes if s and s.default_minutes else 30),
+            "assignee_id": responsible.id if responsible is not None else user.id,
+            "members": cal.member_payload(members),
+            "kinds": [{"value": k, "label": v} for k, v in cal.LOCATION_KINDS.items()],
+        },
+    }
 
 
 def open_callbacks(limit: int = CALLBACK_LIMIT) -> list[dict]:

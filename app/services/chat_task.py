@@ -40,6 +40,11 @@ WAITING = {
     "choose_event": "Auswahl des Termins für die Terminbestätigung",
     "event_text": "Datum und Uhrzeit des Termins für die Bestätigung",
 }
+WAITING_BY_TYPE = {
+    "edit_field": {"customer": "Kunde, dessen Angabe korrigiert werden soll"},
+    "change_time": {"choose_event": "Auswahl des Termins, der geändert werden soll",
+                    "confirm": "Bestätigung der Terminänderung"},
+}
 
 _WRITING = re.compile(r"\b(?:schreib\w*|formulier\w*|entw[iu]rf\w*|verfass\w*|e-?mail\w*|mail|nachricht|brief)\b", re.I)
 # "Termin bestaetigen", "Bestaetige den Termin", "Terminbestaetigung" - Befehl, keine Feststellung
@@ -52,7 +57,7 @@ _CANCEL = re.compile(r"^\s*(?:abbrechen|abbruch|stopp?|vergiss\s+es|egal|doch\s+
 # Ausdruecklicher Wunsch nach eigener Formulierung / anderem Ton -> Modell (sonst Vorlage).
 _TONE = re.compile(
     r"\b(?:individuell\w*|pers(?:ö|oe)nlich(?:er|en|e)?\s+formulier\w*|locker\w*|f(?:ö|oe)rmlich\w*|herzlich\w*|"
-    r"freundlicher|k(?:ü|ue)rzer|ausf(?:ü|ue)hrlicher|tonfall|im\s+ton|anderen?\s+ton|du-form|duzen|im\s+du\b|"
+    r"freundlicher|ausf(?:ü|ue)hrlicher|tonfall|im\s+ton|anderen?\s+ton|du-form|duzen|im\s+du\b|"
     r"humorvoll\w*|eigene[nr]?\s+formulierung|anders\s+formulier\w*|kreativ\w*)\b",
     re.I,
 )
@@ -69,6 +74,7 @@ class Reply:
     draft: str | None = None
     status: list[str] = field(default_factory=list)
     used_model: bool = False
+    edit: dict | None = None  # {"customer_id", "field"}: Stammdatenfeld zum Korrigieren oeffnen
 
 
 class TaskError(Exception):
@@ -96,41 +102,84 @@ def is_confirm_request(text: str) -> bool:
     return bool(_CONFIRM_VERB.search(t)) or (writing and bool(_CONFIRM_ANY.search(t)))
 
 
+# "Kuerzer"/"knapp": feste Kurzvorlage statt Modell (Datum, Uhrzeit, Ort bleiben aus dem Kalender).
+_SHORT = re.compile(r"\b(?:k(?:ü|ue)rzer\w*|knapp\w*|kurz(?:e|en|er|fassen)?)\b", re.I)
+
+
 def wants_tone(text: str) -> bool:
     return bool(_TONE.search(text or ""))
+
+
+def wants_short(text: str) -> bool:
+    return bool(_SHORT.search(text or ""))
 
 
 # --- Zustand je Chat ------------------------------------------------------------------------
 
 
-def get(conversation) -> dict | None:
-    task = conversation.pending_task if conversation is not None else None
-    if not isinstance(task, dict) or task.get("type") != TASK_TYPE:
-        return None
+# Zustand je Chat in ai_conversations.pending_task (JSON):
+#   {"task": offene Rueckfrage | None, "draft": zuletzt angezeigter Entwurf, "event": zuletzt gebuchter/geaenderter Termin}
+# Aeltere Eintraege (nur der Auftrag auf oberster Ebene, Stand 2120f1c) werden als "task" gelesen.
+TASK_TYPES = (TASK_TYPE, "edit_field", "change_time")
+
+
+def _state(conversation) -> dict:
+    raw = conversation.pending_task if conversation is not None else None
+    if not isinstance(raw, dict):
+        return {}
+    if "type" in raw:  # altes Format
+        return {"task": raw}
+    return dict(raw)
+
+
+def _write(conversation, state: dict) -> None:
+    state = {k: v for k, v in state.items() if v}
+    conversation.pending_task = state or None
+    db.session.commit()
+
+
+def _fresh(item, ttl: timedelta = TTL) -> bool:
     try:
-        since = datetime.fromisoformat(task.get("since") or "")
+        since = datetime.fromisoformat((item or {}).get("since") or "")
     except ValueError:
-        since = None
-    if since is None or utcnow_naive() - since > TTL:
-        conversation.pending_task = None
-        db.session.commit()
+        return False
+    return utcnow_naive() - since <= ttl
+
+
+def get(conversation) -> dict | None:
+    task = _state(conversation).get("task")
+    if not isinstance(task, dict) or task.get("type") not in TASK_TYPES:
+        return None
+    if not _fresh(task):
+        _write(conversation, {**_state(conversation), "task": None})
         return None
     return task
 
 
 def _save(conversation, task: dict | None) -> None:
     if task is not None:
-        task = {**task, "type": TASK_TYPE, "since": utcnow_naive().isoformat()}
-    conversation.pending_task = task
-    db.session.commit()
+        task = {**task, "type": task.get("type") or TASK_TYPE, "since": utcnow_naive().isoformat()}
+    _write(conversation, {**_state(conversation), "task": task})
 
 
 def clear(conversation) -> bool:
-    had = conversation is not None and conversation.pending_task is not None
+    had = get(conversation) is not None
     if had:
-        conversation.pending_task = None
-        db.session.commit()
+        _write(conversation, {**_state(conversation), "task": None})
     return had
+
+
+def remember(conversation, key: str, value: dict | None) -> None:
+    """Kontext fuer kurze Folgeeingaben merken ("draft": Entwurf fuer "Kuerzer", "event": Termin
+    fuer "Doch um 16:30")."""
+    if conversation is None:
+        return
+    _write(conversation, {**_state(conversation), key: ({**value, "since": utcnow_naive().isoformat()} if value else None)})
+
+
+def recall(conversation, key: str) -> dict | None:
+    item = _state(conversation).get(key)
+    return item if isinstance(item, dict) and _fresh(item, timedelta(hours=12)) else None
 
 
 def public(conversation) -> dict | None:
@@ -138,8 +187,8 @@ def public(conversation) -> dict | None:
     task = get(conversation)
     if task is None:
         return None
-    label = WAITING.get(task.get("step"), "Angabe zum offenen Auftrag")
-    if task.get("customer_name") and task.get("step") in ("choose_event", "event_text"):
+    label = (WAITING_BY_TYPE.get(task.get("type"), {}) or WAITING).get(task.get("step")) or "Angabe zum offenen Auftrag"
+    if task.get("customer_name") and task.get("step") in ("choose_event", "event_text", "confirm"):
         label += f" ({task['customer_name']})"
     return {"label": label, "step": task.get("step")}
 
@@ -280,6 +329,13 @@ def _details(start_local: datetime, end_local: datetime | None, kind: str | None
     return "\n".join(lines)
 
 
+def _short_body(start_local: datetime, end_local: datetime | None, kind: str | None, location: str | None) -> str:
+    from app.services.calendar import LOCATION_KINDS
+
+    where = ", ".join(p for p in (LOCATION_KINDS.get(kind or ""), location) if p)
+    return f"ich bestätige unseren Termin am {_when_label(start_local, end_local)}" + (f" ({where})" if where else "") + "."
+
+
 def _template_body() -> str:
     return ("hiermit bestätige ich Ihnen gern unseren Termin:\n\n" + DETAILS_TOKEN +
             "\n\nSollte Ihnen der Termin doch nicht passen, geben Sie mir bitte kurz Bescheid.")
@@ -312,7 +368,7 @@ def _model_body(user, conversation, instruction: str, customer: Customer, facts:
 
 
 def compose(user, conversation, customer: Customer, instruction: str, *, event: CalendarEvent | None = None,
-            start_local: datetime | None = None, end_local: datetime | None = None) -> Reply:
+            start_local: datetime | None = None, end_local: datetime | None = None, short: bool | None = None) -> Reply:
     from app.models import OfficeSettings
     from app.services import email_reply
     from app.services.calendar import member_name
@@ -331,7 +387,11 @@ def compose(user, conversation, customer: Customer, instruction: str, *, event: 
         reply.status.append(f"Termin laut deiner Angabe: {_when_label(start_local)} (nicht im Kalender gefunden, dort nichts geändert)")
     body = None
     warning = None
-    if wants_tone(instruction):
+    short = wants_short(instruction) if short is None else short
+    if short:
+        body = _short_body(start_local, end_local, kind, location)
+        details = None
+    elif wants_tone(instruction):
         body = _model_body(user, conversation, instruction, customer, _when_label(start_local, end_local))
         if body:
             body = email_reply._clean_model_body(body, email_reply._info_from_customer(customer), s.email if s else None)
@@ -339,11 +399,17 @@ def compose(user, conversation, customer: Customer, instruction: str, *, event: 
         if not body:
             warning = "Individuelle Formulierung ist gerade nicht möglich – Standardtext verwendet."
     body = body or _template_body()
-    body = body.replace(DETAILS_TOKEN, details, 1).replace(DETAILS_TOKEN, "") if DETAILS_TOKEN in body else body.rstrip() + "\n\n" + details
+    if details is not None:
+        body = body.replace(DETAILS_TOKEN, details, 1).replace(DETAILS_TOKEN, "") if DETAILS_TOKEN in body else body.rstrip() + "\n\n" + details
     subject = f"Terminbestätigung: {WEEKDAY_NAMES[start_local.weekday()]}, {start_local:%d.%m.%Y}, {start_local:%H:%M} Uhr"
     info = email_reply._info_from_customer(customer)
     recipient = f"An: {customer.email}\n" if customer.email else ""
-    reply.draft = f"{recipient}Betreff: {subject}\n\n{email_reply._greeting(info)}\n\n{body.strip()}\n\n{email_reply._signature(user, s)}"
+    signature = f"Viele Grüße\n{member_name(user)}" if short else email_reply._signature(user, s)
+    reply.draft = f"{recipient}Betreff: {subject}\n\n{email_reply._greeting(info)}\n\n{body.strip()}\n\n{signature}"
+    # Fuer Folgeeingaben ("Kuerzer"): worauf sich der zuletzt angezeigte Entwurf bezieht.
+    remember(conversation, "draft", {"kind": "confirmation", "customer_id": customer.id, "event_id": event.id if event else None,
+                                     "start": start_local.isoformat() if event is None else None,
+                                     "end": end_local.isoformat() if event is None and end_local else None, "short": bool(short)})
     if warning:
         reply.status.append("⚠ " + warning)
     reply.text = "Entwurf – nicht gesendet, keine Änderung am Kalender."
@@ -424,9 +490,14 @@ def _pick_event(task: dict, text: str) -> CalendarEvent | None:
 
 def answer(user, conversation, task: dict, text: str) -> Reply | None:
     """Eingabe als Antwort auf die offene Rueckfrage. None: keine Antwort, sondern ein neuer Auftrag."""
+    from app.services import chat_followup
+
+    if task.get("type") not in (None, TASK_TYPE):
+        return chat_followup.answer_task(user, conversation, task, text)
     step = task.get("step")
     if step in ("customer", "choose_customer"):
-        if not _looks_like_name_answer(text):
+        # "Kuerzer", "Die Strasse ist falsch", "Doch um 16:30" sind keine Kundennamen.
+        if not _looks_like_name_answer(text) or chat_followup.detect(text):
             return None
         found = _find_customers(text, answer=True)
         if len(found) == 1:
@@ -470,6 +541,10 @@ def choose(user, conversation, task: dict | None, choice: dict) -> Reply:
     """Klick auf eine angebotene Auswahl - nur gueltig fuer den aktuell offenen Auftrag."""
     if task is None:
         raise TaskError("Diese Auswahl ist nicht mehr aktuell – der Auftrag ist bereits erledigt oder abgebrochen.")
+    if task.get("type") not in (None, TASK_TYPE):
+        from app.services import chat_followup
+
+        return chat_followup.choose_task(user, conversation, task, choice)
     if task.get("step") == "choose_customer" and str(choice.get("customer_id") or "").isdigit():
         cid = int(choice["customer_id"])
         if cid not in (task.get("candidate_ids") or []):

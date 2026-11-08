@@ -347,6 +347,23 @@
 .zn-edit { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem 0.75rem; padding: 0.85rem; border: 1px solid var(--color-border); border-radius: 0.9rem; background: var(--color-surface); }
 .zn-edit-field { display: grid; gap: 0.2rem; min-width: 0; }
 .zn-edit-field.is-wide, .zn-edit .zn-actions { grid-column: 1 / -1; }
+.zn-edit-field.is-focus .zn-edit-label { color: var(--color-primary-strong); font-weight: 600; }
+/* Kundenkarte als Arbeitsflaeche: naechste Termine, Aktionen, Formulare in der Karte */
+.zn-events { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.zn-event { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.3rem 0.6rem; padding-top: 0.4rem; border-top: 1px solid var(--color-border); }
+.zn-event .zn-line { flex: 1 1 14rem; }
+.zn-card-tools { padding-top: 0.4rem; border-top: 1px solid var(--color-border); }
+.zn-card-form { display: grid; gap: 0.5rem; padding: 0.6rem; border-radius: 0.6rem; background: var(--color-surface-muted, color-mix(in oklab, var(--color-primary) 5%, transparent)); }
+.zn-card-form.zn-edit { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
+.zn-book-note:empty { display: none; }
+.zn-book-note.is-wide { grid-column: 1 / -1; }
+@media (max-width: 40rem) {
+  .zn-card .btn-sm, .zn-card .zn-link { min-height: 44px; }
+  .zn-card-tools .btn-sm { flex: 1 1 auto; }
+  .zn-event { align-items: flex-end; }
+  .zn-event .btn-sm { margin-left: auto; padding-inline: 0.8rem; }
+  .zn-card-form textarea, .zn-card-form input, .zn-card-form select { font-size: 16px; } /* iOS: kein Zoom beim Fokus */
+}
 .zn-edit-label { font-size: 0.8rem; color: var(--color-text-muted); }
 .zn-edit .field-surface { min-height: 2.75rem; font-size: 1rem; }
 .zn-name-row .zn-missing-input { min-width: 9rem; }

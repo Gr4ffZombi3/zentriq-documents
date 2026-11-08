@@ -548,7 +548,8 @@
         if (!handled) { sendChat(text, { user: userEl, reply: reply }); return; }
         setBusy(false);
         scrollDown();
-        input.focus();
+        // Ein in der Antwort geoeffnetes Formularfeld (z. B. "Die Strasse ist falsch") behaelt den Fokus.
+        if (!thread.contains(document.activeElement)) input.focus();
       }, function () {
         setBusy(false);
         restoreInput(text);
@@ -901,6 +902,8 @@
     scrollDown: function () { scrollDown(); },
     // Offener Auftrag: Chat-ID mitsenden, neu angelegten Chat uebernehmen, Wartezeile setzen.
     currentId: function () { return current ? current.id : null; },
+    // Chat fuer eine Aktion der Kundenkarte sicherstellen (Entwurf/Buchung bleiben im Verlauf).
+    ensure: function () { return ensureConversation(); },
     adopt: function (c) {
       var isNew = !current || current.id !== c.id;
       setCurrent(c);

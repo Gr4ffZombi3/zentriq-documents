@@ -42,7 +42,7 @@
             : (data.error || "Technischer Fehler. Bitte erneut versuchen.");
           // 400/404/409 mit Meldung: fachliche Rueckmeldung; sonst technischer Fehler.
           var technical = resp.status >= 500 || resp.status === 401 || !data.error;
-          throw Object.assign(new Error(msg), { status: resp.status, technical: technical });
+          throw Object.assign(new Error(msg), { status: resp.status, technical: technical, data: data });
         }
         return data;
       });
@@ -163,6 +163,7 @@
     }
     box.appendChild(head);
 
+    // Arbeitsflaeche: offene Rueckrufe, letzte Notiz, naechste Termine - mit passenden Aktionen.
     var open = card.open_contacts || [];
     open.forEach(function (c) {
       var row = el("div", "zn-contact");
@@ -175,33 +176,52 @@
       actions.appendChild(button("Nicht erreicht", null, function () {
         act(reply, request("POST", "/kunden/" + card.id + "/nicht-erreicht", { contact_id: c.id, client_ref: newRef() }), "Wird gespeichert", function (r) { saved(reply, r); });
       }));
-      actions.appendChild(button("Erledigt", "btn btn-primary btn-sm", function () {
+      actions.appendChild(button(open.length > 1 ? "Diesen Rückruf erledigen" : "Rückruf erledigen", "btn btn-primary btn-sm", function () {
         act(reply, request("POST", "/rueckrufe/" + c.id + "/erledigt", { client_ref: newRef() }), "Wird gespeichert", function (r) { saved(reply, r); });
       }));
       row.appendChild(actions);
       box.appendChild(row);
     });
-    if (!open.length) {
-      var row = el("div", "zn-contact");
-      var latest = card.latest;
-      var line = el("p", "zn-line");
-      if (latest) {
-        line.appendChild(el("span", "zn-label", "Letzte Notiz: "));
-        line.appendChild(document.createTextNode(latest.text));
-        line.appendChild(el("span", "zn-meta", " · " + latest.author + ", " + latest.when));
-      } else if (!quiet) {
-        line.appendChild(el("span", "zn-muted-inline", "Keine Notizen vorhanden."));
-      }
-      if (line.childNodes.length) row.appendChild(line);
-      if (latest) {
-        var actions = el("div", "zn-actions");
-        actions.appendChild(button("Nicht erreicht", null, function () {
-          act(reply, request("POST", "/kunden/" + card.id + "/nicht-erreicht", { note_id: latest.id, client_ref: newRef() }), "Wird gespeichert", function (r) { saved(reply, r); });
-        }));
-        row.appendChild(actions);
-      }
-      if (row.childNodes.length) box.appendChild(row);
+    var latest = card.latest;
+    var noteRow = el("div", "zn-contact");
+    var line = el("p", "zn-line");
+    if (latest) {
+      line.appendChild(el("span", "zn-label", "Letzte Notiz: "));
+      line.appendChild(document.createTextNode(latest.text));
+      line.appendChild(el("span", "zn-meta", " · " + latest.author + ", " + latest.when));
+    } else if (!quiet && !open.length) {
+      line.appendChild(el("span", "zn-muted-inline", "Keine Notizen vorhanden."));
     }
+    if (line.childNodes.length) noteRow.appendChild(line);
+    if (latest && !open.length) {
+      var noteActions = el("div", "zn-actions");
+      noteActions.appendChild(button("Nicht erreicht", null, function () {
+        act(reply, request("POST", "/kunden/" + card.id + "/nicht-erreicht", { note_id: latest.id, client_ref: newRef() }), "Wird gespeichert", function (r) { saved(reply, r); });
+      }));
+      noteRow.appendChild(noteActions);
+    }
+    if (noteRow.childNodes.length) box.appendChild(noteRow);
+
+    var events = card.next_events || [];
+    if (events.length) {
+      var list = el("ul", "zn-events");
+      events.forEach(function (ev, i) {
+        var li = el("li", "zn-event");
+        var info = el("p", "zn-line");
+        info.appendChild(el("span", "zn-label", i === 0 ? "Nächster Termin: " : "Danach: "));
+        info.appendChild(document.createTextNode(ev.label));
+        if (ev.sub) info.appendChild(el("span", "zn-meta", " · " + ev.sub));
+        li.appendChild(info);
+        li.appendChild(button("Bestätigung kopieren", "btn btn-secondary btn-sm", function () { copyConfirmation(card, ev, reply); }));
+        list.appendChild(li);
+      });
+      box.appendChild(list);
+    }
+
+    var tools = el("div", "zn-actions zn-card-tools");
+    tools.appendChild(button("Notiz erfassen", "btn btn-secondary btn-sm", function () { renderNoteForm(box, card, reply); }));
+    if (card.book) tools.appendChild(button("Termin buchen", "btn btn-secondary btn-sm", function () { renderBookForm(box, card, reply); }));
+    box.appendChild(tools);
 
     var details = el("details", "zn-more");
     var notes = card.notes || [];
@@ -223,9 +243,130 @@
     return box;
   }
 
+  // --- Aktionen der Kundenkarte ------------------------------------------------------------------
+  function closeForms(box) {
+    box.querySelectorAll(".zn-card-form").forEach(function (f) { f.remove(); });
+  }
+
+  // Notiz direkt zu diesem Kunden (ID der Karte), Doppeltipp: dieselbe client_ref -> eine Notiz.
+  function renderNoteForm(box, card, reply) {
+    closeForms(box);
+    var ref = newRef();
+    var form = el("div", "zn-card-form");
+    var label = el("label", "zn-edit-field is-wide");
+    label.appendChild(el("span", "zn-edit-label", "Notiz zu " + card.name));
+    var input = el("textarea", "field-surface");
+    input.rows = 2;
+    label.appendChild(input);
+    form.appendChild(label);
+    var actions = el("div", "zn-actions");
+    actions.appendChild(button("Notiz speichern", "btn btn-primary btn-sm", function () {
+      if (!input.value.trim()) { input.focus(); return; }
+      act(reply, request("POST", "/kunden/eingabe", { text: input.value, customer_id: card.id, mode: "note", client_ref: ref }), "Wird gespeichert", function (r) { saved(reply, r); });
+    }));
+    actions.appendChild(button("Abbrechen", "zn-link", function () { form.remove(); }));
+    form.appendChild(actions);
+    box.appendChild(form);
+    input.focus();
+  }
+
+  // Termin buchen: vorhandene Buchung im Backend (Sperre, Verfuegbarkeit, Doppeltipp-Schutz).
+  var lastEventId = null;
+  function renderBookForm(box, card, reply) {
+    closeForms(box);
+    var b = card.book, ref = newRef();
+    var form = el("div", "zn-card-form zn-edit");
+    form.setAttribute("data-zn-book-form", "");
+    function field(label, input) {
+      var wrap = el("label", "zn-edit-field");
+      wrap.appendChild(el("span", "zn-edit-label", label));
+      wrap.appendChild(input);
+      form.appendChild(wrap);
+      return input;
+    }
+    var day = field("Datum", el("input", "field-surface")); day.type = "date"; day.value = b.day; day.name = "day";
+    var time = field("Uhrzeit", el("input", "field-surface")); time.type = "time"; time.step = 300; time.name = "time";
+    var minutes = field("Dauer", el("select", "field-surface"));
+    [15, 30, 45, 60, 90].concat([b.minutes]).filter(function (m, i, a) { return a.indexOf(m) === i; }).sort(function (x, y) { return x - y; }).forEach(function (m) {
+      var o = el("option", null, m + " Min."); o.value = m; if (m === b.minutes) o.selected = true; minutes.appendChild(o);
+    });
+    var kind = field("Terminart", el("select", "field-surface"));
+    [{ value: "", label: "–" }].concat(b.kinds).forEach(function (k) { var o = el("option", null, k.label); o.value = k.value; kind.appendChild(o); });
+    var who = field("Zuständig", el("select", "field-surface"));
+    b.members.forEach(function (m) { var o = el("option", null, m.name); o.value = m.id; if (m.id === b.assignee_id) o.selected = true; who.appendChild(o); });
+    var note = el("div", "zn-book-note is-wide");
+    form.appendChild(note);
+    var actions = el("div", "zn-actions");
+    var save = button("Termin speichern", "btn btn-primary btn-sm", function () {
+      if (!day.value || !time.value) { (day.value ? time : day).focus(); return; }
+      save.disabled = true;
+      note.textContent = "Wird gebucht …";
+      var chat = window.ZentriqChat;
+      var ensure = chat && chat.ensure ? chat.ensure() : Promise.resolve(null);
+      ensure.then(function (c) {
+        return request("POST", "/kunden/" + card.id + "/termin", { day: day.value, time: time.value, minutes: Number(minutes.value),
+          location_kind: kind.value, assignee_id: Number(who.value), client_ref: ref, conversation_id: c ? c.id : null });
+      }).then(function (r) {
+        lastEventId = r.event && r.event.id;
+        select(r.card);
+        fill(reply, [message(r.message, "ok"), calendarLink(r.calendar_url), renderCard(r.card, reply, true)]);
+        loadAgenda();
+      }, function (err) {
+        save.disabled = false;
+        note.textContent = "";
+        note.appendChild(message(err.message, err.technical ? "error" : "warn"));
+        var alts = (err.data && err.data.alternatives) || [];
+        if (alts.length) {
+          var row = el("div", "zn-actions");
+          alts.forEach(function (a) {
+            row.appendChild(button(a.label, "btn btn-secondary btn-sm", function () { day.value = a.day; time.value = a.time; note.textContent = "Übernommen – noch nicht gespeichert."; }));
+          });
+          note.appendChild(row);
+        }
+      });
+    });
+    actions.appendChild(save);
+    actions.appendChild(button("Abbrechen", "zn-link", function () { form.remove(); }));
+    form.appendChild(actions);
+    box.appendChild(form);
+    time.focus();
+  }
+
+  // "Bestaetigung kopieren": Entwurf im Backend (Vorlage, kein Versand), erscheint im Chat und wird kopiert.
+  function copyConfirmation(card, ev, reply) {
+    var chat = window.ZentriqChat;
+    var ensure = chat && chat.ensure ? chat.ensure() : Promise.resolve(null);
+    pending = true;
+    ensure.then(function (c) {
+      return request("POST", "/kunden/" + card.id + "/bestaetigung", { event_id: ev.id, conversation_id: c ? c.id : null });
+    }).then(function (r) {
+      pending = false;
+      if (chat && r.conversation) chat.adopt(r.conversation);
+      var bubble = chat ? chat.addReply() : reply;
+      if (chat) chat.fillReply(bubble, r.assistant);
+      copyToClipboard(r.draft, bubble);
+      if (chat) chat.scrollDown();
+    }, function (err) {
+      pending = false;
+      reply.insertBefore(message(err.message, err.technical ? "error" : "warn"), reply.firstChild);
+    });
+  }
+
+  function copyToClipboard(text, bubble) {
+    var note = el("p", "zn-meta");
+    var done = function (ok) {
+      note.textContent = ok ? "In die Zwischenablage kopiert – nicht gesendet." : "Zum Kopieren auf „Kopieren“ am Entwurf tippen – nicht gesendet.";
+      bubble.appendChild(note);
+    };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+      else done(false);
+    } catch (e) { done(false); }
+  }
+
   // Stammdaten bearbeiten: kompaktes Formular in der Karte; gespeichert wird nur nach Klick,
   // der Server prueft Rechte, Format und gleichzeitige Aenderungen (version).
-  function renderEdit(box, card, reply) {
+  function renderEdit(box, card, reply, focusKey) {
     var e = card.edit, v = e.values;
     var form = el("div", "zn-edit");
     var inputs = {};
@@ -264,8 +405,12 @@
     }));
     form.appendChild(actions);
     box.replaceWith(form);
-    var first = form.querySelector("input");
-    if (first) first.focus();
+    var key = focusKey && !inputs[focusKey] && (focusKey === "street" || focusKey === "house_number") ? "address" : focusKey;
+    var target = (key && inputs[key]) || form.querySelector("input");
+    if (target) {
+      target.focus();
+      if (key && inputs[key]) { target.select(); target.closest(".zn-edit-field").classList.add("is-focus"); }
+    }
   }
 
   // Kundenanlage: Vor-/Nachname unklar oder fehlend. Die erkannten Angaben bleiben erhalten -
@@ -363,6 +508,14 @@
     var chat = window.ZentriqChat;
     if (chat && r.conversation) chat.adopt(r.conversation);
     if (chat) chat.setTask(r.task);
+    if (r.edit && r.edit.card) {
+      // "Die Strasse ist falsch": Karte des ausgewaehlten Kunden, Feld zum Korrigieren geoeffnet.
+      select(r.edit.card);
+      var cardBox = renderCard(r.edit.card, reply, true);
+      fill(reply, [message(r.message, "info"), cardBox]);
+      renderEdit(cardBox, r.edit.card, reply, r.edit.field);
+      return;
+    }
     if (r.draft && r.assistant && chat && chat.fillReply) {
       chat.fillReply(reply, r.assistant);  // kopierbarer Entwurf, wie im Verlauf nach dem Neuladen
       return;
@@ -531,10 +684,22 @@
       case "task":
         renderTask(reply, r);
         return true;
+      case "form_time": {
+        // "Doch um 16:30" bei offenem Terminformular: nur das Formular aendern, nichts speichern.
+        var formEl = document.querySelector("[data-zn-book-form]");
+        if (formEl) {
+          formEl.querySelector("input[name=time]").value = r.time;
+          if (r.day) formEl.querySelector("input[name=day]").value = r.day;
+          formEl.querySelector("input[name=time]").focus();
+        }
+        fill(reply, [message(formEl ? r.message : "Kein Terminformular offen.", formEl ? "info" : "warn")]);
+        return true;
+      }
       case "appointments_from_chat":
         if (window.ZentriqChat && window.ZentriqChat.appointmentsFromChat) window.ZentriqChat.appointmentsFromChat(reply);
         return true;
       case "calendar_saved": {
+        if (r.event && r.event.id) lastEventId = r.event.id;  // fuer "Doch um 16:30"
         var actions = el("div", "zn-actions");
         actions.appendChild(calendarLink(r.calendar_url));
         if (!r.duplicate && r.event && r.event.can_delete) actions.appendChild(button("Rückgängig", "zn-link", function () { calendarUndo(reply, r.event); }));
@@ -642,6 +807,9 @@
     if (selected) body.selected_id = selected.id;
     var chatId = window.ZentriqChat && window.ZentriqChat.currentId ? window.ZentriqChat.currentId() : null;
     if (chatId) body.conversation_id = chatId;
+    // Kontext fuer kurze Folgeeingaben: zuletzt gebuchter Termin, offenes Terminformular.
+    if (lastEventId) body.last_event_id = lastEventId;
+    if (document.querySelector("[data-zn-book-form]")) body.form_open = true;
     showPending(reply, "Wird geprüft");
     chatCustomer = null;
     return request("POST", "/kunden/eingabe", body).then(function (r) {

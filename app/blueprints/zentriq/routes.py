@@ -12,7 +12,7 @@ import json
 import os
 from decimal import Decimal
 
-from flask import Blueprint, current_app, g, jsonify, render_template, request
+from flask import Blueprint, current_app, g, jsonify, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.extensions import db
@@ -21,6 +21,7 @@ from app.models.ai import AiModel
 from app.models.audit_log import AuditEventType
 from app.services import (
     calendar_intent,
+    chat_followup,
     chat_task,
     customer_create,
     customer_notes,
@@ -423,7 +424,8 @@ def _chat_task(data: dict, text: str):
     if conversation is None and (choice is not None or not chat_task.is_confirm_request(text)):
         if choice is not None:
             return _error("Diese Auswahl ist nicht mehr aktuell.", 409, "task"), False
-        return None, False
+        kind = chat_followup.detect(text)
+        return (_followup(data, text, kind, None), False) if kind else (None, False)
     if conversation is None:
         conversation = chat.create_conversation(current_user)
     try:
@@ -436,10 +438,18 @@ def _chat_task(data: dict, text: str):
         db.session.rollback()
         return _error("Technischer Fehler beim offenen Auftrag. Es wurde nichts erstellt – bitte erneut versuchen.", 500, "technical"), False
     if reply is None:
-        return None, ended
+        # Kurze Folgeeingabe ("Kuerzer", "Doch um 16:30", "Die Strasse ist falsch") - vor Notiz/Suche.
+        kind = chat_followup.detect(text)
+        if kind is None or choice is not None:
+            return None, ended
+        return _followup(data, text, kind, conversation), ended
     shown = (data.get("choice_label") if choice is not None and isinstance(data.get("choice_label"), str) else None) or text
-    _asked, answer = chat.add_direct_turn(conversation, shown, chat_task.render(reply), "Terminbestätigung")
-    return jsonify({
+    return _task_response(conversation, shown, reply), ended
+
+
+def _task_response(conversation, shown: str, reply, tool: str = "Terminbestätigung"):
+    _asked, answer = chat.add_direct_turn(conversation, shown, chat_task.render(reply), tool)
+    body = {
         "kind": "task",
         "message": reply.text,
         "status": reply.status,
@@ -449,7 +459,97 @@ def _chat_task(data: dict, text: str):
         "assistant": chat.serialize_message(answer, _labels()),
         "task": chat_task.public(conversation),
         "conversation": chat.serialize_conversation(conversation),
-    }), ended
+    }
+    if reply.edit:
+        customer = Customer.query.filter(Customer.id == reply.edit["customer_id"]).first()
+        if customer is not None:
+            body["edit"] = {"field": reply.edit["field"], "card": customer_notes.customer_card(current_user, customer)}
+    return jsonify(body)
+
+
+def _followup(data: dict, text: str, kind: str, conversation):
+    form_open = data.get("form_open") is True
+    if kind == "time" and form_open:
+        return jsonify(chat_followup.handle(current_user, None, text, kind, form_open=True))
+    if conversation is None:
+        conversation = chat.create_conversation(current_user)
+    try:
+        reply = chat_followup.handle(current_user, conversation, text, kind, selected_id=data.get("selected_id"),
+                                     last_event_id=data.get("last_event_id"))
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("chat_followup.failed user=%s", current_user.id)
+        db.session.rollback()
+        return _error("Technischer Fehler. Es wurde nichts geändert – bitte erneut versuchen.", 500, "technical")
+    return _task_response(conversation, text, reply, {"shorter": "Terminbestätigung", "time": "Kalender", "field": "Kundendaten"}[kind])
+
+
+@zentriq_bp.post("/api/kunden/<int:customer_id>/termin")
+@login_required
+def api_customer_book(customer_id):
+    """"Termin buchen" auf der Kundenkarte: vorhandene Buchung (Sperre je Mitarbeiter, Verfuegbarkeit,
+    Doppeltipp-Schutz ueber client_ref). Belegt -> Grund + freie Alternativen, nichts gespeichert."""
+    from datetime import date as _date
+    from datetime import time as _time
+
+    from app.services import booking
+    from app.services import calendar as cal
+    from app.services.timetracking.clock import local_to_utc_naive
+
+    if (denied := _office_user_required()) is not None:
+        return denied
+    if not chat_task.calendar_allowed(current_user):
+        return _error("Kein Zugriff auf den Bürokalender.", 403, "forbidden")
+    customer = get_or_404_scoped(Customer, customer_id)
+    data = _payload()
+    try:
+        day = _date.fromisoformat(str(data.get("day") or ""))
+        hh, mm = (int(x) for x in str(data.get("time") or "").split(":")[:2])
+        start_utc = local_to_utc_naive(day, _time(hh, mm))
+        minutes = int(data.get("minutes") or 30)
+        if not 5 <= minutes <= 480:
+            raise ValueError
+    except (TypeError, ValueError):
+        return _error("Bitte Datum, Uhrzeit und Dauer angeben.", 400, "invalid")
+    members = {u.id: u for u in cal.office_members()}
+    assignee = members.get(int(data["assignee_id"])) if str(data.get("assignee_id") or "").isdigit() else members.get(current_user.id)
+    if assignee is None:
+        return _error("Bitte eine zuständige Person auswählen.", 400, "invalid")
+    kind = data.get("location_kind") if data.get("location_kind") in cal.LOCATION_KINDS else ""
+    result = booking.book(current_user, assignee=assignee, start_utc=start_utc, minutes=minutes, customer=customer,
+                          title=f"Termin {customer.name}", location_kind=kind, client_ref=_client_ref(data))
+    if result.event is None:
+        return jsonify({"error": result.reason or "Der Termin konnte nicht gebucht werden.", "code": "busy",
+                        "alternatives": [{"label": a.label(), "day": cal.local_iso(a.start_utc)[:10], "time": cal.local_iso(a.start_utc)[11:16]}
+                                         for a in result.alternatives]}), 409
+    conversation = _task_conversation(data)
+    chat_task.remember(conversation, "event", {"event_id": result.event.id})
+    label = chat_task._when_label(cal.to_local(result.event.starts_at), cal.to_local(result.event.ends_at))
+    return jsonify({
+        "message": ("Termin gebucht: " if result.created else "Termin war bereits gebucht: ") + f"{customer.name}, {label}, bei {cal.member_name(assignee)}.",
+        "event": cal.serialize(result.event, current_user), "created": result.created,
+        "calendar_url": url_for("calendar.index", tag=cal.local_iso(result.event.starts_at)[:10]),
+        "card": customer_notes.customer_card(current_user, customer),
+    }), (201 if result.created else 200)
+
+
+@zentriq_bp.post("/api/kunden/<int:customer_id>/bestaetigung")
+@login_required
+def api_customer_confirmation(customer_id):
+    """"Bestaetigung kopieren": Entwurf aus der Vorlage (0 Modellaufrufe), im Chat festgehalten -
+    kein Versand, keine Kalenderaenderung."""
+    if (denied := _office_user_required()) is not None:
+        return denied
+    customer = get_or_404_scoped(Customer, customer_id)
+    data = _payload()
+    events = chat_task.upcoming_events(customer) if chat_task.calendar_allowed(current_user) else []
+    event = next((e for e in events if str(e.id) == str(data.get("event_id"))), None)
+    if event is None:
+        return _error("Dieser Termin ist nicht (mehr) als bevorstehender Termin des Kunden eingetragen.", 404, "not_found")
+    conversation = _task_conversation(data) or chat.create_conversation(current_user)
+    chat_task.clear(conversation)
+    reply = chat_task.compose(current_user, conversation, customer, "", event=event)
+    shown = f"Bestätigung für {customer.name}: {chat_task._event_option(event)['label']}"
+    return _task_response(conversation, shown, reply)
 
 
 @zentriq_bp.post("/api/conversations/<int:conversation_id>/auftrag/abbrechen")

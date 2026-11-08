@@ -360,3 +360,48 @@ def test_ai_suggestions_are_marked_and_budget_enforced(auth_client, app, monkeyp
     resp = auth_client.post(f"/kfz-angebot/{job.id}/angaben", data={**_form({}), "aktion": "ki", "ki_text": "SF 12"})
     assert resp.status_code == 422 and "Budget" in resp.get_data(as_text=True)
     assert fake.calls == 1
+
+
+# --- Mobile Eingaben: Datum/Monat ohne Punkte, Fahrleistung, HSN mit fuehrender Null ---------------
+
+MOBILE = {**VALID, "versicherungsbeginn": "09112030", "geburtsdatum": "06082000", "erstzulassung": "112016",
+          "halterzulassung": "11.2016", "fahrleistung": "9.000", "hsn": "0603"}
+
+
+def test_normalize_mobile_inputs():
+    v = schema.normalize(MOBILE)
+    assert (v["versicherungsbeginn"], v["geburtsdatum"], v["erstzulassung"], v["halterzulassung"], v["fahrleistung"], v["hsn"]) == (
+        "09.11.2030", "06.08.2000", "11.2016", "11.2016", "9000", "0603")
+    assert schema.normalize({"versicherungsbeginn": "9.11.2030", "erstzulassung": "1/2016", "fahrleistung": "9.000 km/Jahr"}) == {
+        "versicherungsbeginn": "09.11.2030", "erstzulassung": "01.2016", "fahrleistung": "9000", "fahrer": []}
+    assert schema.normalize({"geburtsdatum": "060800"})["geburtsdatum"] == "060800"  # zweistelliges Jahr wird nicht geraten
+
+
+def test_invalid_date_and_km_question():
+    today = date(2026, 11, 8)
+    v = schema.normalize({**MOBILE, "geburtsdatum": "31022000", "fahrleistung": "9"})
+    _missing, errors = schema.validate(v, today)
+    assert errors["geburtsdatum"] == "Dieses Datum gibt es nicht."  # 31.02.
+    assert errors["fahrleistung"] == "Meinst du 9.000 km/Jahr?" and schema.corrections(v) == {"fahrleistung": "9000"}
+    _m, errors = schema.validate(schema.normalize({**MOBILE, "versicherungsbeginn": "0911202"}), today)
+    assert "vollständiges Datum" in errors["versicherungsbeginn"]
+
+
+def test_mobile_values_reach_summary_and_calculation_identically(auth_client, fake_run):
+    job_id = _draft(auth_client, MOBILE)
+    page = auth_client.get(f"/kfz-angebot/{job_id}").get_data(as_text=True)
+    for shown in ("09.11.2030", "06.08.2000", "11.2016", "9.000 km/Jahr", "0603"):
+        assert shown in page, shown
+    assert _start(auth_client, job_id).status_code == 302
+    sent = fake_run.calls[-1]["values"]
+    assert (sent["versicherungsbeginn"], sent["geburtsdatum"], sent["erstzulassung"], sent["fahrleistung"], sent["hsn"]) == (
+        "09.11.2030", "06.08.2000", "11.2016", "9000", "0603")
+    assert isinstance(sent["hsn"], str) and str(int(sent["fahrleistung"]) // 1000) == "9"  # so tippt der Runner "9" in huk.de
+
+
+def test_km_proposal_and_errors_keep_inputs(auth_client):
+    resp = auth_client.post("/kfz-angebot/neu", data=_form({**MOBILE, "fahrleistung": "9", "geburtsdatum": "31022000"}))
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 422 and "Meinst du 9.000 km/Jahr?" in html and 'data-value="9000"' in html
+    assert 'value="09.11.2030"' in html and 'value="0603"' in html  # bisherige Eingaben bleiben erhalten
+    assert 'inputmode="numeric" maxlength="10" data-huk-format="day"' in html

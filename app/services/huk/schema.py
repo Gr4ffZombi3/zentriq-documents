@@ -78,7 +78,7 @@ FIELDS: tuple[Field, ...] = (
         Option("kein", "Kein Haus- oder Wohneigentum"), Option("haus", "Hauseigentum"), Option("wohnung", "Eigentumswohnung"),
     )),
     # --- Nutzung & Fahrer
-    Field("fahrleistung", "Jährliche Fahrleistung in km (volle Tausend)", "Nutzung", "text", pattern=r"^\d{1,3}000$", placeholder="12000"),
+    Field("fahrleistung", "Jährliche Fahrleistung", "Nutzung", "km", pattern=r"^\d{1,2}000$", placeholder="12.000"),
     Field("abstellplatz", "Regelmäßiger Abstellplatz", "Nutzung", "choice", (
         Option("garage", "Einzel-/Doppelgarage"), Option("tiefgarage", "Reservierter Stellplatz in Tief-/Sammelgarage"),
         Option("carport", "Carport"), Option("sonstiger", "Sonstiger Stellplatz"),
@@ -118,6 +118,48 @@ def active_fields(values: dict) -> list[Field]:
     return [f for f in FIELDS if f.condition is None or f.condition(values)]
 
 
+DAY_FIELDS = ("versicherungsbeginn", "geburtsdatum")
+MONTH_FIELDS = ("erstzulassung", "halterzulassung")
+KM_CHOICES = tuple(range(1000, 100000, 1000))
+
+
+def km_label(value) -> str:
+    return f"{int(value):,} km/Jahr".replace(",", ".")
+
+
+def normalize_day(value: str) -> str:
+    """'09112026' -> '09.11.2026', '9.11.2026' -> '09.11.2026'. Unvollstaendiges bleibt unveraendert
+    (Validierung meldet es) - es wird nichts geraten (auch kein zweistelliges Jahr)."""
+    v = value.strip()
+    if re.fullmatch(r"\d{8}", v):
+        return f"{v[:2]}.{v[2:4]}.{v[4:]}"
+    m = re.fullmatch(r"(\d{1,2})[./-](\d{1,2})[./-](\d{4})", v)
+    return f"{int(m.group(1)):02d}.{int(m.group(2)):02d}.{m.group(3)}" if m else v
+
+
+def normalize_month(value: str) -> str:
+    """'112026' / '11.2026' / '11/2026' / '1.2026' -> 'MM.JJJJ' (Monat und Jahr, kein Tag)."""
+    v = value.strip()
+    if re.fullmatch(r"\d{6}", v):
+        return f"{v[:2]}.{v[2:]}"
+    m = re.fullmatch(r"(\d{1,2})[./-](\d{4})", v)
+    return f"{int(m.group(1)):02d}.{m.group(2)}" if m else v
+
+
+def normalize_km(value: str) -> str:
+    """'9000', '9.000', '9.000 km/Jahr' -> '9000'. '9' bleibt '9' (Rueckfrage "Meinst du 9.000?")."""
+    return re.sub(r"[.\s]|km|/?jahr|pro|p\.?a\.?", "", value, flags=re.I)
+
+
+def corrections(values: dict) -> dict[str, str]:
+    """Konkrete Korrekturvorschlaege (nur mit Bestaetigung uebernommen)."""
+    out = {}
+    km = values.get("fahrleistung") or ""
+    if km.isdigit() and 1 <= int(km) <= 99:
+        out["fahrleistung"] = str(int(km) * 1000)
+    return out
+
+
 def normalize(raw: dict) -> dict:
     """Formular-/JSON-Werte bereinigen (nur bekannte Felder, keine Ergaenzungen)."""
     values = {}
@@ -134,7 +176,11 @@ def normalize(raw: dict) -> dict:
         if f.key in ("hsn", "tsn"):
             value = value.upper().replace(" ", "")
         if f.key == "fahrleistung":
-            value = re.sub(r"[.\s]|km", "", value, flags=re.I)
+            value = normalize_km(value)
+        if f.key in DAY_FIELDS:
+            value = normalize_day(value)
+        if f.key in MONTH_FIELDS:
+            value = normalize_month(value)
         if f.key == "tsn":
             value = value[:3]
         if value:
@@ -165,15 +211,23 @@ def validate(values: dict, today: date) -> tuple[list[str], dict[str, str]]:
         if not value:
             missing.append(f.key)
             continue
+        if f.key == "fahrleistung" and f.key in corrections(values):
+            errors[f.key] = f"Meinst du {km_label(corrections(values)[f.key])}?"
+            continue
         if f.pattern and not re.match(f.pattern, value):
-            errors[f.key] = f"Format: {f.placeholder}" if f.placeholder else "Ungültiges Format."
+            if f.key in DAY_FIELDS:
+                errors[f.key] = "Bitte ein vollständiges Datum eingeben, z. B. 09.11.2026 oder 09112026."
+            elif f.key in MONTH_FIELDS:
+                errors[f.key] = "Bitte Monat und Jahr eingeben, z. B. 11.2026 oder 112026."
+            else:
+                errors[f.key] = f"Format: {f.placeholder}" if f.placeholder else "Ungültiges Format."
             continue
         if f.options and value not in {o.value for o in f.options}:
             errors[f.key] = "Bitte eine der angebotenen Antworten wählen."
     if "versicherungsbeginn" in values and "versicherungsbeginn" not in errors:
         begin = _date(values["versicherungsbeginn"], True)
         if begin is None:
-            errors["versicherungsbeginn"] = "Ungültiges Datum."
+            errors["versicherungsbeginn"] = "Dieses Datum gibt es nicht."
         elif begin < today:
             errors["versicherungsbeginn"] = "Der Versicherungsbeginn darf nicht in der Vergangenheit liegen."
     for key in ("erstzulassung", "halterzulassung"):
@@ -186,10 +240,12 @@ def validate(values: dict, today: date) -> tuple[list[str], dict[str, str]]:
             errors["halterzulassung"] = "Die Zulassung auf den Halter kann nicht vor der Erstzulassung liegen."
     if values.get("geburtsdatum") and "geburtsdatum" not in errors:
         born = _date(values["geburtsdatum"], True)
-        if born is None or not (today.replace(year=today.year - 100) < born <= today.replace(year=today.year - 17)):
+        if born is None:
+            errors["geburtsdatum"] = "Dieses Datum gibt es nicht."
+        elif not (today.replace(year=today.year - 100) < born <= today.replace(year=today.year - 17)):
             errors["geburtsdatum"] = "Ungültiges Geburtsdatum (Versicherungsnehmer mind. 17 Jahre)."
     if values.get("fahrleistung") and "fahrleistung" not in errors and not 1000 <= int(values["fahrleistung"]) <= 99000:
-        errors["fahrleistung"] = "Bitte zwischen 1.000 und 99.000 km."
+        errors["fahrleistung"] = "Bitte zwischen 1.000 und 99.000 km/Jahr wählen."
     return missing, errors
 
 
@@ -218,8 +274,8 @@ def label_of(key: str, value) -> str:
     for o in f.options:
         if o.value == value:
             return o.short or o.label
-    if key == "fahrleistung" and value:
-        return f"{int(value):,} km".replace(",", ".")
+    if key == "fahrleistung" and value and str(value).isdigit():
+        return km_label(value)
     return value or "–"
 
 

@@ -89,6 +89,15 @@
                     {% endfor %}
                   </div>
                 </fieldset>
+              {% elif f.kind == 'km' %}
+                <label class="field-label" for="{{ fid }}">{{ f.question }}</label>
+                <select class="field-surface" id="{{ fid }}" name="{{ f.key }}" data-huk-km {% if bad %}aria-invalid="true" aria-describedby="{{ fid }}-err"{% endif %}>
+                  <option value="">Bitte auswählen</option>
+                  {% for km in km_choices %}<option value="{{ km }}" {% if value == km | string %}selected{% endif %}>{{ km_label(km) }}</option>{% endfor %}
+                </select>
+                {% if proposals.get(f.key) %}
+                  <button type="button" class="huk-proposal" data-huk-proposal="{{ fid }}" data-value="{{ proposals[f.key] }}">{{ km_label(proposals[f.key]) }} übernehmen</button>
+                {% endif %}
               {% elif f.kind == 'sf' %}
                 <label class="field-label" for="{{ fid }}">{{ f.question }}</label>
                 <select class="field-surface" id="{{ fid }}" name="{{ f.key }}" {% if bad %}aria-invalid="true" aria-describedby="{{ fid }}-err"{% endif %}>
@@ -98,9 +107,12 @@
               {% else %}
                 <label class="field-label" for="{{ fid }}">{{ f.question }}</label>
                 <input class="field-surface" id="{{ fid }}" name="{{ f.key }}" value="{{ value or '' }}" placeholder="{{ f.placeholder }}"
-                       autocomplete="off" {% if f.key in ('plz', 'fahrleistung', 'hsn') %}inputmode="numeric"{% elif f.key not in ('tsn',) %}inputmode="decimal"{% endif %}
+                       autocomplete="off" {% if f.key in day_fields %}inputmode="numeric" maxlength="10" data-huk-format="day"{% elif f.key in month_fields %}inputmode="numeric" maxlength="7" data-huk-format="month"{% elif f.key in ('plz', 'hsn') %}inputmode="numeric"{% endif %}
+                       {% if f.key in ('hsn', 'tsn', 'plz') %}spellcheck="false" autocorrect="off"{% endif %}
                        {% if f.key == 'tsn' %}autocapitalize="characters"{% endif %}
                        {% if bad %}aria-invalid="true" aria-describedby="{{ fid }}-err"{% endif %}>
+                {% if f.key in day_fields %}<p class="form-hint">Eingabe mit oder ohne Punkte, z. B. 09112026.</p>
+                {% elif f.key in month_fields %}<p class="form-hint">Monat und Jahr, z. B. 112026.</p>{% endif %}
                 {% if proposals.get(f.key) and not value %}
                   <button type="button" class="huk-proposal" data-huk-proposal="{{ fid }}" data-value="{{ proposals[f.key] }}">Vorschlag: {{ proposals[f.key] }} übernehmen</button>
                 {% endif %}

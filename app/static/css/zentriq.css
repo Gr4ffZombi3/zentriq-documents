@@ -457,3 +457,14 @@
   .zc-appt-actions .btn { width: 100%; min-height: 44px; }
   .zc-attach-menu { min-width: 14rem; }
 }
+
+/* --- Kfz-Angebot (HUK) auf dem Handy: nichts verdeckt Felder ------------------------------
+   Aktionsleiste nicht angeheftet (sonst liegt sie ueber dem fokussierten Feld), Zeiterfassung
+   waehrend der Eingabe ausgeblendet, Felder scrollen mit Abstand in den sichtbaren Bereich. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .huk-page .huk-form-actions { position: static; background: none; padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
+  .huk-page:has(.huk-form-actions) .zs-clock { bottom: calc(1rem + env(safe-area-inset-bottom)); }
+  .huk-page main { padding-bottom: 6.5rem; }
+  .huk-page .huk-field { scroll-margin-top: 5rem; scroll-margin-bottom: 7rem; }
+  body.huk-page.huk-typing .zs-clock { display: none; }
+}

@@ -298,8 +298,12 @@ def _existing_for(conversation: AiConversation, client_ref: str | None):
 
 
 def submit_message(
-    user, conversation: AiConversation, content: str, model_choice: str | None = None, files=(), client_ref: str | None = None
+    user, conversation: AiConversation, content: str, model_choice: str | None = None, files=(), client_ref: str | None = None,
+    context_customer_id: int | None = None,
 ) -> tuple[AiMessage, AiMessage]:
+    """context_customer_id: im Eingabefeld ausgewaehlter Kunde (nur fuer Schreibauftraege wie
+    "Schreib dem Kunden eine Antwort mit drei freien Terminen"); wird im Worker erneut im
+    Mandanten-Kontext geladen."""
     client_ref = (client_ref or "").strip()[:64] or None
     existing = _existing_for(conversation, client_ref)
     if existing:
@@ -367,7 +371,7 @@ def submit_message(
     from app.tasks.ai_tasks import answer_message
 
     try:
-        answer_message.delay(pending.id, conversation.tenant_id, user.id, audio_jobs)
+        answer_message.delay(pending.id, conversation.tenant_id, user.id, audio_jobs, context_customer_id)
     except Exception:  # noqa: BLE001 - Broker nicht erreichbar
         current_app.logger.exception("zentriq_ai.enqueue_failed")
         _fail(pending, "Die Anfrage konnte gerade nicht verarbeitet werden. Bitte erneut versuchen.")
@@ -454,7 +458,7 @@ def _finish(message: AiMessage, conversation: AiConversation, text: str, *, prov
     db.session.commit()
 
 
-def process_pending(user, message_id: int, audio_jobs=None) -> None:
+def process_pending(user, message_id: int, audio_jobs=None, context_customer_id=None) -> None:
     """Orchestrierung im Worker: Direktantwort oder Modell mit Werkzeugen (siehe orchestrator)."""
     pending = AiMessage.query.filter(AiMessage.id == message_id).first()
     if pending is None or pending.status != "pending":
@@ -477,7 +481,7 @@ def process_pending(user, message_id: int, audio_jobs=None) -> None:
     #    das Modell nur fuer den Mitteltext (app/services/email_reply.py).
     if question is not None and email_reply.is_request(question.content):
         _set_progress(pending, "Erstelle Antwortentwurf")
-        reply = email_reply.handle(user, conversation, question)
+        reply = email_reply.handle(user, conversation, question, customer_id=context_customer_id)
         if reply is not None:
             _finish(pending, conversation, reply, provider=orchestrator.DIRECT_PROVIDER, model="email_reply", tools_used=["E-Mail-Antwort"])
             return
@@ -516,6 +520,13 @@ def process_pending(user, message_id: int, audio_jobs=None) -> None:
             text, used = direct
             _finish(pending, conversation, text, provider=orchestrator.DIRECT_PROVIDER, model=orchestrator.DIRECT_MODEL, tools_used=used)
             return
+
+    # 1b. Eingefuegte Kundenmail ohne Auftrag und ohne verfuegbares Modell: lokal einordnen statt
+    #     Fehlermeldung - der Antwortentwurf (Kunde, freie Termine, Vorlage) funktioniert ohne KI.
+    if question is not None and not router.can_answer() and email_reply.looks_like_pasted_mail(question):
+        _finish(pending, conversation, email_reply.mail_received_text(user, question), provider=orchestrator.DIRECT_PROVIDER,
+                model=orchestrator.DIRECT_MODEL, tools_used=["E-Mail erkannt"])
+        return
 
     # 2. Modell mit berechtigten Werkzeugen.
     _set_progress(pending, "Analysiere Anfrage")

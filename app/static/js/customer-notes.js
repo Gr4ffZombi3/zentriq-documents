@@ -586,7 +586,10 @@
     var body = { text: text, client_ref: newRef() };
     if (selected) body.selected_id = selected.id;
     showPending(reply, "Wird geprüft");
+    chatCustomer = null;
     return request("POST", "/kunden/eingabe", body).then(function (r) {
+      // Schreibauftrag an die KI: ausgewaehlter/genannter Kunde geht als Kontext mit.
+      if (r.kind === "chat" && r.customer_id) chatCustomer = r.customer_id;
       var handled = show(reply, r, text);
       if (handled) loadCallbacks();
       return handled;
@@ -670,7 +673,13 @@
     openCustomer(id, null);
   }
 
-  window.ZentriqNotes = { intercept: intercept, clear: function () { select(null); } };
+  var chatCustomer = null;
+  window.ZentriqNotes = {
+    intercept: intercept,
+    clear: function () { select(null); },
+    // Einmalig abholen (naechste Chat-Nachricht), danach geleert.
+    takeCustomer: function () { var id = chatCustomer; chatCustomer = null; return id; },
+  };
   loadCallbacks();
   // zentriq-ai.js stellt ZentriqChat erst nach diesem Skript bereit (beide "defer").
   if (document.readyState === "complete") openFromUrl();

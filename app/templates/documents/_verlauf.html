@@ -16,11 +16,11 @@
   <dl class="info-grid info-grid-compact mt-6 sm:grid-cols-2 lg:grid-cols-4">
     <div class="info-item">
       <dt>Upload</dt>
-      <dd>{{ document.uploaded_at.strftime('%d.%m.%Y %H:%M') if document.uploaded_at else '-' }}</dd>
+      <dd>{{ document.uploaded_at | local_dt('%d.%m.%Y %H:%M', '-') }}</dd>
     </div>
     <div class="info-item">
       <dt>Analysiert am</dt>
-      <dd>{{ document.processed_at.strftime('%d.%m.%Y %H:%M') if document.processed_at else '-' }}</dd>
+      <dd>{{ document.processed_at | local_dt('%d.%m.%Y %H:%M', '-') }}</dd>
     </div>
     <div class="info-item">
       <dt>Bearbeitungsstatus</dt>

@@ -21,7 +21,7 @@
   {% endcall %}
 
   <div class="document-head-meta">
-    <span class="meta-chip">Upload {{ document.uploaded_at.strftime('%d.%m.%Y %H:%M') if document.uploaded_at else '-' }}</span>
+    <span class="meta-chip">Upload {{ document.uploaded_at | local_dt('%d.%m.%Y %H:%M', '-') }}</span>
     {% if document.customer %}<span class="meta-chip">Kunde {{ document.customer.name }}</span>{% endif %}
     {% if document.list_type %}<span class="meta-chip">{{ list_type_labels.get(document.list_type.value, document.list_type.value) }}</span>{% endif %}
     <span class="meta-chip">PDF</span>
@@ -32,7 +32,7 @@
       <div class="flex items-center justify-between border-b border-border px-5 py-4">
         <div>
           <p class="text-sm font-semibold text-text">Originaldokument</p>
-          <p class="mt-1 text-xs text-text-muted">Upload am {{ document.uploaded_at.strftime('%d.%m.%Y %H:%M') if document.uploaded_at else '-' }}</p>
+          <p class="mt-1 text-xs text-text-muted">Upload am {{ document.uploaded_at | local_dt('%d.%m.%Y %H:%M', '-') }}</p>
         </div>
         <span class="meta-chip">PDF</span>
       </div>

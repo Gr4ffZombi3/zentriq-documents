@@ -113,22 +113,67 @@ def _prepare_booking(user, args: dict) -> dict:
         start = time(hh, mm)
     except (TypeError, ValueError):
         return {"fehler": "Datum (JJJJ-MM-TT) und Uhrzeit (HH:MM) sind erforderlich."}
-    assignee, problem = _member(args.get("mitarbeiter"), user)
-    if assignee is None:
-        return {"fehler": problem or "Kein zuständiger Mitarbeiter."}
     customer = None
     if args.get("kunde_id"):
         customer = Customer.query.filter(Customer.id == int(args["kunde_id"])).first()
         if customer is None:
             return {"fehler": "Der Kunde wurde nicht gefunden."}
-    minutes = int(args.get("dauer_minuten") or 30)
+    # Gleiche Regeln wie im Eingabefeld (calendar_intent): genannter Mitarbeiter, sonst
+    # Zustaendige laut Kundendaten, sonst die eingebende Person; Dauer laut Buero-Vorgabe.
+    from app.services import calendar as cal
+    from app.services.calendar_intent import _office_default_minutes, _responsible_for
+
+    if args.get("mitarbeiter"):
+        assignee, problem = _member(args.get("mitarbeiter"), user)
+    else:
+        assignee, problem = _responsible_for(customer, cal.office_members()), None
+        if assignee is None:
+            assignee, problem = _member(None, user)
+    if assignee is None:
+        return {"fehler": problem or "Kein zuständiger Mitarbeiter."}
+    minutes = int(args.get("dauer_minuten") or _office_default_minutes() or 30)
     arguments = {"datum": day.isoformat(), "uhrzeit": start.strftime("%H:%M"), "dauer_minuten": minutes, "mitarbeiter_id": assignee.id,
                  "kunde_id": customer.id if customer else None, "titel": str(args.get("titel") or "")[:120]}
     summary = f"Termin buchen: {day.strftime('%d.%m.%Y')} {start.strftime('%H:%M')} Uhr, {minutes} Min., {member_name(assignee)}" + (f", Kunde {customer.name}" if customer else "")
     return {"aktion": {"tool": "termin_buchen", "arguments": arguments, "summary": summary}}
 
 
+def _prepare_note(user, args: dict) -> dict:
+    """Notiz-Vorschlag des Modells; das Backend prueft Kunde (eigenes Buero) und Text, gespeichert
+    wird erst nach Bestaetigung ueber denselben Ablauf wie im Eingabefeld (inkl. Rueckruf)."""
+    from app.models import Customer
+
+    text = str(args.get("text") or "").strip()
+    if not text or len(text) > 2000:
+        return {"fehler": "Notiztext fehlt oder ist zu lang."}
+    try:
+        customer = Customer.query.filter(Customer.id == int(args.get("kunde_id"))).first()
+    except (TypeError, ValueError):
+        customer = None
+    if customer is None:
+        return {"fehler": "Kunde nicht gefunden – zuerst mit kunden_suchen eindeutig bestimmen (kunde_id)."}
+    return {"aktion": {"tool": "notiz_speichern", "arguments": {"kunde_id": customer.id, "text": text[:2000]},
+                       "summary": f"Notiz bei {customer.name}: {text[:120]}"}}
+
+
 # --- Ausfuehrung nach Bestaetigung (actions.EXECUTORS) ---------------------------------------
+
+
+def execute_note(user, arguments: dict) -> str:
+    from app.models import Customer
+    from app.services import customer_notes
+    from app.services.ai.actions import ActionError
+
+    customer = Customer.query.filter(Customer.id == int(arguments.get("kunde_id") or 0)).first()
+    if customer is None:
+        raise ActionError("Der Kunde wurde nicht gefunden.", 404)
+    try:
+        result = customer_notes.handle_input(user, arguments.get("text") or "", customer_id=customer.id, mode="note")
+    except customer_notes.NoteError as exc:
+        raise ActionError(str(exc), exc.status) from None
+    if result.get("kind") != "saved":
+        raise ActionError(result.get("message") or "Die Notiz wurde nicht gespeichert.", 409)
+    return result.get("message") or f"Bei {customer.name} gespeichert."
 
 
 def execute_customer(user, arguments: dict) -> str:
@@ -194,4 +239,9 @@ TOOLS = (
                                            "kunde_id": {"type": "integer"}, "titel": {"type": "string"}},
           "required": ["datum", "uhrzeit"], "additionalProperties": False},
          "calendar.index", _prepare_booking, label="Termin buchen", progress="Bereite Aktion vor", write=True),
+    Tool("notiz_speichern", "Bereitet eine Kundennotiz vor (nur bei ausdrücklichem Auftrag, kunde_id aus kunden_suchen). "
+         "Wird erst nach Bestätigung gespeichert; 'nicht erreicht' u. ä. legt den Rückrufvermerk an.",
+         {"type": "object", "properties": {"kunde_id": {"type": "integer"}, "text": {"type": "string"}},
+          "required": ["kunde_id", "text"], "additionalProperties": False},
+         "zentriq.api_customer_input", _prepare_note, label="Notiz speichern", progress="Bereite Aktion vor", write=True),
 )

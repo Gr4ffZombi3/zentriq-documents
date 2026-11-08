@@ -198,10 +198,23 @@ def test_simple_requests_use_small_models_first(app, world, fake):
 
 
 def test_provider_outage_pauses_whole_provider(app, world, fake):
-    fake.set("gemini", adapters.ProviderError(adapters.UNAVAILABLE, status=503))
+    # Verbindungsfehler (kein HTTP-Status): ganzer Anbieter pausiert.
+    fake.set("gemini", adapters.ProviderError(adapters.UNAVAILABLE))
     client = _root(app, world)
     assert _send(client, _new(client)).reply["provider"] == "groq"
     assert [c["provider"] for c in fake.calls] == ["gemini", "groq"]
+
+
+def test_http_503_pauses_only_that_model(app, world, fake, monkeypatch):
+    """Produktionsfall 08.11.2026: gemini-flash-latest HTTP 503 - Flash-Lite bleibt nutzbar."""
+    app.config["GROQ_API_KEY"] = None
+    calls = _per_model(monkeypatch, {
+        "gemini-3.6-flash": adapters.ProviderError(adapters.RATE_LIMIT, retry_after=28000, status=429),
+        "gemini-flash-latest": adapters.ProviderError(adapters.UNAVAILABLE, status=503),
+    })
+    client = _root(app, world)
+    reply = _send(client, _new(client)).reply
+    assert reply["status"] == "done" and calls == ["gemini-3.6-flash", "gemini-flash-latest", "gemini-3.5-flash-lite"]
 
 
 def test_all_failed_reports_attempts_and_keeps_user_message(app, world, fake):
@@ -338,7 +351,7 @@ def test_tools_offered_per_role_pseudonymized_without_approval(app, world, fake,
     employee_tools = {t["name"] for t in fake.calls[-1]["tools"]}
     assert employee_tools == {"tagesueberblick", "meine_arbeitszeiten", "offene_vorgaenge", "leipziger_auswertung", "suche",
                               # Buero-Werkzeuge (app/services/ai/office_tools.py): wie in der Oberflaeche
-                              "kunden_suchen", "bueroprofil", "freie_termine", "kunde_anlegen", "termin_buchen"}
+                              "kunden_suchen", "bueroprofil", "freie_termine", "kunde_anlegen", "termin_buchen", "notiz_speichern"}
     assert "Platzhalter" in fake.calls[-1]["system"]
 
     # Mit freigegebenem Anbieter: Buerodaten nur dorthin, ohne Pseudonymisierung.
@@ -856,3 +869,35 @@ def test_failure_message_durations():
     assert router._duration(45) == "1 Min."
     assert router._duration(31467) == "8 Std. 44 Min."
     assert router._duration(7200) == "2 Std."
+
+
+def test_switching_model_mid_tool_round_sends_results_as_text(app, world, fake, monkeypatch):
+    """Produktionsfall 08.11.2026: gemini-flash-latest fordert ein Werkzeug an und laeuft danach in
+    die Zeitueberschreitung; Flash-Lite uebernimmt. Fremde Werkzeugaufrufe gehen als Text (ohne
+    Signatur waere es HTTP 400 "missing thought_signature")."""
+    app.config["GROQ_API_KEY"] = None
+    seen = []
+    state_calls = {"flash": 0}
+
+    def call(provider, model_id, system, messages, max_tokens, timeout, tools=None):
+        seen.append((model_id, messages))
+        if model_id == "gemini-3.6-flash":
+            raise adapters.ProviderError(adapters.RATE_LIMIT, retry_after=28000, status=429)
+        if model_id == "gemini-flash-latest":
+            state_calls["flash"] += 1
+            if state_calls["flash"] == 1:
+                return adapters.ProviderResult("", 10, 5, tool_calls=[adapters.ToolCall(
+                    "c1", "meine_arbeitszeiten", {"zeitraum": "woche"}, extra={"google": {"thought_signature": "sig-A"}})])
+            raise adapters.ProviderError(adapters.TIMEOUT)
+        if any(m.get("tool_calls") for m in messages) or any(m.get("role") == "tool" for m in messages):
+            raise adapters.ProviderError(adapters.BAD_REQUEST, status=400, detail="Function call is missing a thought_signature")
+        return adapters.ProviderResult("Diese Woche 8:00 Stunden.", 20, 10)
+
+    monkeypatch.setattr(adapters, "call", call)
+    client = login(app, "dennis@example.com")
+    reply = _send(client, _new(client), "Wie viele Stunden habe ich diese Woche gearbeitet? Erkläre kurz.").reply
+    assert reply["status"] == "done", reply
+    model, messages = seen[-1]
+    assert model == "gemini-3.5-flash-lite"
+    assert not any(m.get("tool_calls") or m.get("role") == "tool" for m in messages)
+    assert any("Ergebnis von Werkzeug meine_arbeitszeiten" in (m.get("content") or "") for m in messages)

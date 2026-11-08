@@ -539,14 +539,17 @@
     ensureConversation().then(function (c) {
       var body;
       var isForm = sending.length > 0;
+      var contextCustomer = window.ZentriqNotes && window.ZentriqNotes.takeCustomer ? window.ZentriqNotes.takeCustomer() : null;
       if (isForm) {
         body = new FormData();
         body.append("content", text);
         body.append("model", modelChoice);
         body.append("client_ref", ref);
         sending.forEach(function (f) { body.append("files", f); });
+        if (contextCustomer) body.append("customer_id", contextCustomer);
       } else {
         body = { content: text, model: modelChoice, client_ref: ref };
+        if (contextCustomer) body.customer_id = contextCustomer;
       }
       return request("POST", "/conversations/" + c.id + "/messages", body, isForm).then(function (d) {
         if (!slots) { input.value = ""; autosize(); }

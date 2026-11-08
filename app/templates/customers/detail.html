@@ -123,7 +123,7 @@
         </div>
         <div class="ops-meta-item">
           <span class="ops-meta-label">Letzte Änderung</span>
-          <span class="ops-meta-value">{{ customer.updated_at.strftime('%d.%m.%Y %H:%M') if customer.updated_at else '-' }}</span>
+          <span class="ops-meta-value">{{ customer.updated_at | local_dt('%d.%m.%Y %H:%M', '-') }}</span>
         </div>
       </div>
       {% if possible_duplicates %}
@@ -247,6 +247,30 @@
     {% call empty_state('Keine zugeordneten Vorgänge', 'Dieser Kunde wurde noch in keiner Leipziger Liste erfasst.', 'file-text') %}{% endcall %}
   {% endif %}
 
+  <section class="panel" aria-labelledby="kunde-notizen">
+    <header class="panel-header">
+      <h2 class="panel-title" id="kunde-notizen">Notizen &amp; Rückrufe <span class="count-tag">{{ note_card.open_contacts | length }} offen</span></h2>
+      <a class="btn btn-secondary btn-sm" href="{{ url_for('zentriq.index', kunde=customer.id) }}">Im Assistenten bearbeiten</a>
+    </header>
+    {% if note_card.open_contacts or note_card.notes %}
+      <div class="panel-body-flush">
+        {% for c in note_card.open_contacts %}
+          <article class="customer-memo">
+            <div class="customer-memo-head"><span><strong>Rückruf offen</strong>{% if c.topic %} · {{ c.topic }}{% endif %} · {{ c.status_label }} · {{ c.by }}, {{ c.when }}{% if c.attempts and c.attempts > 1 %} · {{ c.attempts }} Versuche{% endif %}</span></div>
+          </article>
+        {% endfor %}
+        {% for n in note_card.notes %}
+          <article class="customer-memo">
+            <div class="customer-memo-head"><span>{{ n.when }} · {{ n.author }}{% if n.event_label %} · {{ n.event_label }}{% endif %}</span></div>
+            <p class="customer-memo-text">{{ n.text }}</p>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="empty-note">Zu diesem Kunden gibt es noch keine Notizen oder Rückrufe.</p>
+    {% endif %}
+  </section>
+
   <section class="panel" aria-labelledby="kunde-memos">
     <header class="panel-header">
       <h2 class="panel-title" id="kunde-memos">Memos <span class="count-tag">{{ memos | length }}</span></h2>
@@ -313,7 +337,7 @@
               <a href="{{ url_for('documents.detail', document_id=doc_customer.document_id) }}" class="ops-inline-link-row">
                 <div class="min-w-0">
                   <p class="truncate text-sm font-semibold text-text">{{ doc_customer.document.original_filename }}</p>
-                  <p class="mt-1 text-xs text-text-soft">{{ doc_customer.document.uploaded_at.strftime('%d.%m.%Y %H:%M') if doc_customer.document.uploaded_at else '-' }}</p>
+                  <p class="mt-1 text-xs text-text-soft">{{ doc_customer.document.uploaded_at | local_dt('%d.%m.%Y %H:%M', '-') }}</p>
                 </div>
                 <span class="text-xs text-primary">Öffnen</span>
               </a>

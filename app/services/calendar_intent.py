@@ -29,6 +29,8 @@ _BOOK = re.compile(r"^\s*(?:bitte\s+)?(?:buche|buchen|reserviere)\b|\btermin\b(?
 _LIST = re.compile(r"^\s*(?:welche|was\s+f[üu]r|habe?\s+ich|hat\s+\w+|gibt\s+es)\b.*\btermine?\b|^\s*(?:meine\s+)?termine\s+(?:heute|morgen|diese\s+woche)\s*\??$", re.I)
 
 _DATE_NUM = re.compile(r"\b(?:am\s+)?(\d{1,2})\.(\d{1,2})\.(\d{2,4})?")
+# "am 9.11 um 17 Uhr" (ohne Schlusspunkt): nur nach "am", damit "16.30" Uhrzeit bleibt.
+_DATE_AM = re.compile(r"\bam\s+(\d{1,2})\.(\d{1,2})(?![.\d])(?!\s*uhr)", re.I)
 _REL_DAY = re.compile(r"\b(heute|morgen|übermorgen|uebermorgen)\b", re.I)
 _WEEKDAY = re.compile(r"\b(?:(nächste[nmr]?|naechste[nmr]?|kommende[nmr]?)\s+(?:woche\s+)?)?(?:am\s+)?(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b", re.I)
 _NEXT_WEEK = re.compile(r"\b(?:nächste|naechste|kommende)\s+woche\b", re.I)
@@ -90,18 +92,16 @@ def is_availability_question(text: str) -> bool:
 def bare_name(text: str) -> str | None:
     """Name ohne "mit"/"fuer" ("09.11.26 Schmidthofer Termin um 16.30"): uebrige grossgeschriebene
     Woerter nach Entfernen von Datum, Uhrzeit, Dauer und Fuellwoertern."""
-    rest = _DATE_NUM.sub(" ", text)
+    rest = _DATE_AM.sub(" ", _DATE_NUM.sub(" ", text))
     rest = _TIME_RANGE.sub(" ", rest)
     rest = _TIME.sub(" ", rest)
     rest = _DURATION.sub(" ", rest)
     rest = _ASSIGNEE_BEI.sub(" ", rest)
     rest = _TOPIC.sub(" ", rest)
-    words = []
-    for word in re.findall(r"[A-Za-zÄÖÜäöüß][\wäöüß-]*", rest):
-        low = word.lower()
-        if low in _NAME_STOP or low in WEEKDAYS or not word[0].isupper():
-            continue
-        words.append(word)
+    tokens = [w for w in re.findall(r"[A-Za-zÄÖÜäöüß][\wäöüß-]*", rest) if w.lower() not in _NAME_STOP and w.lower() not in WEEKDAYS]
+    # Grossgeschriebene Woerter bevorzugt; ganz klein geschriebene Eingaben ("9.11. schmidthofer
+    # termin 17 uhr") liefern die uebrigen Woerter ab 3 Zeichen - die Kundensuche prueft sie.
+    words = [w for w in tokens if w[0].isupper()] or [w for w in tokens if len(w) >= 3]
     return " ".join(words[:3]) or None
 
 
@@ -181,9 +181,10 @@ def _valid_time(h, m) -> time | None:
 def parse(text: str, today: date) -> Parsed:
     p = Parsed()
     rest = text
-    match = _DATE_NUM.search(rest)
+    match = _DATE_NUM.search(rest) or _DATE_AM.search(rest)
     if match:
-        d, mth, y = int(match.group(1)), int(match.group(2)), match.group(3)
+        d, mth = int(match.group(1)), int(match.group(2))
+        y = match.group(3) if match.re is _DATE_NUM else None
         year = int(y) + (2000 if y and len(y) == 2 else 0) if y else today.year
         try:
             candidate = date(year, mth, d)
@@ -265,6 +266,12 @@ def _customers_matching(name: str) -> list[Customer]:
 
     found = _by_name(name)
     return found if found else search_by_name_fragment(name)
+
+
+def _similar_customers(name: str) -> list[Customer]:
+    from app.services.customer_notes import similar_customers
+
+    return similar_customers(name)
 
 
 def _form_url(p: Parsed, assignee_id=None, customer=None, title=None) -> str:
@@ -376,6 +383,10 @@ def handle(user, raw_text: str, choice: dict | None = None, client_ref: str | No
             options = [{"label": c.name + (f" · {c.city}" if c.city else ""), "choice": {**choice, "customer_id": c.id}} for c in found[:6]]
             options.append({"label": "Ohne Kundenverknüpfung", "choice": {**choice, "no_customer": True}})
             return _question(p, f"Mehrere Kunden passen zu „{p.customer_name}“{_when_text(p)}. Welcher ist gemeint?", options, assignee_id=assignee_id)
+        elif (similar := _similar_customers(p.customer_name)):
+            options = [{"label": c.name + (f" · {c.city}" if c.city else ""), "choice": {**choice, "customer_id": c.id}} for c in similar[:6]]
+            options.append({"label": "Ohne Kundenverknüpfung", "choice": {**choice, "no_customer": True}})
+            return _question(p, f"Kein Kunde „{p.customer_name}“{_when_text(p)}. Meinten Sie:", options, assignee_id=assignee_id)
         else:
             return _question(
                 p, f"Ich finde keinen Kunden „{p.customer_name}“. Termin ohne Kundenverknüpfung speichern?",

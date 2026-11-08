@@ -114,9 +114,11 @@ def _calendar_allowed(user) -> bool:
     return bool((user.is_office_admin or user.is_employee) and is_endpoint_allowed(user, "calendar.index", "calendar"))
 
 
-def _assignee(user, instruction: str):
+def _assignee(user, instruction: str, customer=None):
+    """Ausdruecklich genannter Mitarbeiter ("bei Laura"), sonst Zustaendige laut Kundendaten
+    (wie bei der Terminbuchung), sonst die eingebende Person."""
     from app.services import calendar as cal
-    from app.services.calendar_intent import _members_matching
+    from app.services.calendar_intent import _members_matching, _responsible_for
 
     members = cal.office_members()
     m = re.search(r"\b(?:bei|für|fuer|mit)\s+([A-ZÄÖÜ][\wäöüß-]+(?:\s+[A-ZÄÖÜ][\wäöüß-]+)?)", instruction or "")
@@ -124,6 +126,9 @@ def _assignee(user, instruction: str):
         found = _members_matching(m.group(1), members)
         if len(found) == 1:
             return found[0], None
+    responsible = _responsible_for(customer, members)
+    if responsible is not None:
+        return responsible, None
     me = next((u for u in members if u.id == user.id), None)
     return me, None if me else "Kein zuständiger Mitarbeiter gefunden."
 
@@ -153,8 +158,8 @@ def _slot_lines(slots) -> str:
     return "\n".join(f"- {slot.label()}" for slot in slots)
 
 
-def _template_body(info, slots, appointment: bool, calendar_note: str | None) -> str:
-    parts = ["vielen Dank für Ihre Nachricht."]
+def _template_body(info, slots, appointment: bool, calendar_note: str | None, reply: bool = True) -> str:
+    parts = ["vielen Dank für Ihre Nachricht." if reply else "gern melde ich mich bei Ihnen."]
     if appointment and slots:
         parts.append("Gern vereinbaren wir einen Termin. Folgende Termine kann ich Ihnen anbieten:")
         parts.append(SLOT_TOKEN)
@@ -208,7 +213,8 @@ def _model_body(user, conversation, info, known: list[str], slots, appointment: 
         f"Auftrag des Mitarbeiters: {instruction.strip()[:300]}",
         "Bekannt (nicht erneut erfragen): " + (", ".join(known) or "–"),
         "Terminvorschläge liegen vor: " + ("ja" if slots else "nein") + (" (Terminvereinbarung gewünscht)" if appointment else ""),
-        "Kundennachricht (ohne Zitate und Signatur):\n<<<\n" + message + "\n>>>",
+        ("Kundennachricht (ohne Zitate und Signatur):\n<<<\n" + message + "\n>>>") if message.strip()
+        else "Keine Kundennachricht: neues Anschreiben an den Kunden gemäß Auftrag.",
     ]
     try:
         completion = router.complete(
@@ -229,17 +235,51 @@ def _model_body(user, conversation, info, known: list[str], slots, appointment: 
     return pseudo.unmask(text) if pseudo else text
 
 
-def compose(user, conversation, question) -> Draft | None:
-    """None, wenn keine E-Mail im Gespraech gefunden wurde (dann normaler Chat)."""
+_CUSTOMER_REF = re.compile(r"\bkund(?:e|en|in)\b|\bantwort\w*", re.I)
+CLARIFY = ("Für welchen Kunden ist der Entwurf? Bitte den Kunden im Eingabefeld auswählen (Name oder VN-Nummer "
+           "eingeben), seinen Namen im Auftrag nennen oder die Kunden-E-Mail einfügen. Es wurde nichts erstellt oder gesendet.")
+
+
+def customer_from_instruction(instruction: str):
+    """Im Auftrag genannter Kunde ("Schreib Schmidthofer eine Antwort ..."): nur bei eindeutigem
+    Treffer im eigenen Buero, sonst None."""
+    from app.services.customer_notes import _by_name, search_by_name_fragment
+
+    found = _by_name(instruction)
+    if len(found) == 1:
+        return found[0]
+    hits = {}
+    for word in re.findall(r"\b[A-ZÄÖÜ][a-zäöüß-]{3,}\b", instruction or ""):
+        for c in search_by_name_fragment(word):
+            hits[c.id] = c
+    return next(iter(hits.values())) if len(hits) == 1 else None
+
+
+def _info_from_customer(customer) -> email_context.EmailInfo:
+    """Kundendaten statt eingefuegter E-Mail (Anschreiben an einen bekannten Kunden)."""
+    first, last = customer.first_name, customer.last_name
+    if not (first and last) and customer.name and len(customer.name.split()) >= 2:
+        first, last = customer.name.split()[0], customer.name.split()[-1]
+    return email_context.EmailInfo(raw="", first_name=first, last_name=last, sender_email=customer.email or None,
+                                   phone=customer.phone or None, body="")
+
+
+def compose(user, conversation, question, customer=None) -> Draft | None:
+    """None, wenn weder eine E-Mail im Gespraech noch ein bekannter Kunde vorliegt (dann normaler
+    Chat bzw. Rueckfrage). `customer`: im Eingabefeld ausgewaehlter bzw. genannter Kunde."""
     from app.models import OfficeSettings
 
     instruction = instruction_of(question.content or "")
     email_text = find_email(conversation, question)
-    if email_text is None:
+    if email_text is None and customer is None:
+        customer = customer_from_instruction(instruction)
+    if email_text is None and customer is None:
         return None
-    info = email_context.parse(email_text, email_context.office_emails(user.tenant_id))
     draft = Draft()
     s = OfficeSettings.query.first()
+    if email_text is None:
+        return _compose_for(user, conversation, instruction, _info_from_customer(customer), draft, s, customer=customer)
+    info = email_context.parse(email_text, email_context.office_emails(user.tenant_id))
 
     # 2. Kunde
     resolution = email_context.resolve(user, info)
@@ -252,7 +292,12 @@ def compose(user, conversation, question) -> Draft | None:
         draft.warnings.append(resolution.message)
     if info.uncertain:
         draft.warnings.append("Nicht eindeutig lesbar, daher nicht verwendet: " + ", ".join(dict.fromkeys(info.uncertain)) + ".")
+    return _compose_for(user, conversation, instruction, info, draft, s, customer=resolution.customer if resolution.status in ("assigned", "created") else None)
 
+
+def _compose_for(user, conversation, instruction, info, draft: Draft, s, *, customer=None) -> Draft:
+    if customer is not None and not draft.status:
+        draft.status.append(f"Kunde: {customer.name}")
     # 3. Kalender
     # Terminwunsch im Auftrag oder in der Kundennachricht; "ohne Termin" schaltet ab.
     appointment = (bool(_APPOINTMENT.search(instruction)) or bool(_APPOINTMENT.search(info.body))) and not re.search(r"\bohne\s+termin", instruction, re.I)
@@ -263,7 +308,7 @@ def compose(user, conversation, question) -> Draft | None:
         elif not availability.planning_ready(s):
             calendar_note = "Für Terminvorschläge fehlen die Bürozeiten (einmalig einrichten unter Kalender › Bürozeiten & Büro-Profil). Es wurden keine freien Termine geprüft."
         else:
-            assignee, problem = _assignee(user, instruction)
+            assignee, problem = _assignee(user, instruction, customer)
             if assignee is None:
                 calendar_note = problem
             else:
@@ -272,7 +317,7 @@ def compose(user, conversation, question) -> Draft | None:
 
                 minutes = availability.minutes_from(instruction) or availability.minutes_from(info.body) or s.default_minutes or 30
                 prefs = availability.preferences_from(info.body + "\n" + instruction, local_today())
-                slots, honored = availability.free_slots(assignee, minutes, prefs, count=3, s=s)
+                slots, honored = availability.free_slots(assignee, minutes, prefs, count=_slot_count(instruction), s=s)
                 draft.slots = slots
                 if slots:
                     line = f"Kalender geprüft: {len(slots)} freie Termine bei {member_name(assignee)} ({minutes} Min.)"
@@ -292,7 +337,7 @@ def compose(user, conversation, question) -> Draft | None:
         body = _clean_model_body(body, info, s.email if s else None)
         draft.used_model = bool(body)
     if not body:
-        body = _template_body(info, draft.slots, appointment, calendar_note)
+        body = _template_body(info, draft.slots, appointment, calendar_note, reply=bool(info.raw) or bool(_REPLY_WORD.search(instruction)))
     if draft.slots:
         if SLOT_TOKEN in body:
             body = body.replace(SLOT_TOKEN, _slot_lines(draft.slots), 1).replace(SLOT_TOKEN, "")
@@ -300,11 +345,48 @@ def compose(user, conversation, question) -> Draft | None:
             body = body.rstrip() + "\n\nFolgende Termine kann ich Ihnen anbieten:\n" + _slot_lines(draft.slots) + "\n\nBitte teilen Sie mir kurz mit, welcher Termin Ihnen passt."
     else:
         body = body.replace(SLOT_TOKEN, "")
-    subject = info.subject or ("Ihr Terminwunsch" if appointment else "Ihre Nachricht")
-    draft.subject = subject if subject.lower().startswith(("re:", "aw:")) else f"AW: {subject}"
+    if info.raw:
+        subject = info.subject or ("Ihr Terminwunsch" if appointment else "Ihre Nachricht")
+        draft.subject = subject if subject.lower().startswith(("re:", "aw:")) else f"AW: {subject}"
+    else:  # Anschreiben an einen bekannten Kunden (keine eingefuegte E-Mail)
+        draft.subject = "Terminvorschläge" if appointment else "Ihre Anfrage"
     recipient = f"An: {info.sender_email}\n" if info.sender_email else ""
     draft.text = f"{recipient}Betreff: {draft.subject}\n\n{_greeting(info)}\n\n{body.strip()}\n\n{_signature(user, s)}"
     return draft
+
+
+_COUNT_WORDS = {"zwei": 2, "drei": 3, "vier": 4, "fünf": 5, "fuenf": 5}
+
+
+def _slot_count(instruction: str) -> int:
+    m = re.search(r"\b(\d|zwei|drei|vier|f(?:ü|ue)nf)\s+(?:freie[n]?\s+)?(?:termin|zeit|vorschl)", instruction or "", re.I)
+    if not m:
+        return 3
+    value = m.group(1).lower()
+    return max(1, min(5, int(value) if value.isdigit() else _COUNT_WORDS.get(value, 3)))
+
+
+def looks_like_pasted_mail(question) -> bool:
+    texts = [question.content or ""] + [a.text for a in (question.attachments or []) if a.text]
+    return any(email_context.looks_like_email(t) for t in texts)
+
+
+def mail_received_text(user, question) -> str:
+    """Ohne Modell: was Zentriq aus der eingefuegten Mail erkannt hat (nur lesen, nichts anlegen)."""
+    texts = [question.content or ""] + [a.text for a in (question.attachments or []) if a.text]
+    raw = next(t for t in texts if email_context.looks_like_email(t))
+    info = email_context.parse(raw, email_context.office_emails(user.tenant_id))
+    lines = ["Kundenmail erkannt" + (f" von {info.name}" if info.name else (f" von {info.sender_email}" if info.sender_email else "")) + "."]
+    if info.subject:
+        lines.append(f"Betreff: {info.subject}")
+    found = [k for k, v in (("E-Mail", info.sender_email), ("Telefon", info.phone), ("VN-Nummer", info.vn)) if v]
+    if found:
+        lines.append("Erkannt: " + ", ".join(found) + ".")
+    wants = bool(_APPOINTMENT.search(info.body))
+    lines.append("Derzeit ist kein KI-Modell verfügbar. Einen Antwortentwurf erstellt Zentriq trotzdem – mit Kundenzuordnung"
+                 + (", freien Terminen aus dem Bürokalender" if wants else "") + " und Ihrer Büro-Signatur: z. B. „"
+                 + ("Schreibe eine Antwort mit Terminvorschlägen" if wants else "Schreibe eine Antwort") + "“.")
+    return "\n\n".join(lines)
 
 
 def render(draft: Draft) -> str:
@@ -314,9 +396,15 @@ def render(draft: Draft) -> str:
     return "\n\n".join(lines) + "\n\n```E-Mail-Entwurf\n" + draft.text.replace("```", "'''") + "\n```"
 
 
-def handle(user, conversation, question) -> str | None:
+def handle(user, conversation, question, customer_id=None) -> str | None:
+    from app.models import Customer
+
+    customer = Customer.query.filter(Customer.id == int(customer_id)).first() if str(customer_id or "").isdigit() else None
     try:
-        draft = compose(user, conversation, question)
+        draft = compose(user, conversation, question, customer=customer)
+        if draft is None and _CUSTOMER_REF.search(instruction_of(question.content or "")):
+            # "Schreib dem Kunden ..." ohne E-Mail und ohne erkennbaren Kunden: Rueckfrage statt Modell.
+            return CLARIFY
     except availability.PlanningMissing:
         return None
     except Exception:  # noqa: BLE001 - normaler Chat bleibt verfuegbar

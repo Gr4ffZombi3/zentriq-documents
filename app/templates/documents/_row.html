@@ -39,7 +39,7 @@
 
     <div class="document-row-stat">
       <span class="document-row-label">Hochgeladen</span>
-      <span class="document-row-value">{{ document.uploaded_at.strftime('%d.%m.%Y %H:%M') if document.uploaded_at else '-' }}</span>
+      <span class="document-row-value">{{ document.uploaded_at | local_dt('%d.%m.%Y %H:%M', '-') }}</span>
     </div>
 
     <div class="document-row-stat">

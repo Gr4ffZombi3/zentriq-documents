@@ -9,7 +9,7 @@ from app.tenancy import bypass_tenant_scope, use_tenant_id
 
 
 @shared_task(ignore_result=True, soft_time_limit=1200, time_limit=1260, resultrepr_maxsize=1)
-def answer_message(message_id: int, tenant_id: int, user_id: int, audio_jobs=None) -> None:
+def answer_message(message_id: int, tenant_id: int, user_id: int, audio_jobs=None, context_customer_id=None) -> None:
     from app.extensions import db
     from app.models import User
     from app.models.ai import AiMessage
@@ -24,7 +24,7 @@ def answer_message(message_id: int, tenant_id: int, user_id: int, audio_jobs=Non
                 chat._fail(message, "Die Anfrage konnte nicht verarbeitet werden.")
             return
         try:
-            chat.process_pending(user, message_id, audio_jobs)
+            chat.process_pending(user, message_id, audio_jobs, context_customer_id)
         except Exception:
             db.session.rollback()
             message = AiMessage.query.filter(AiMessage.id == message_id).first()

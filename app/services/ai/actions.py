@@ -73,7 +73,13 @@ def _booking(user, arguments: dict) -> str:
     return office_tools.execute_booking(user, arguments)
 
 
-EXECUTORS = {"aufgabe_erledigen": _task_done, "kunde_anlegen": _customer_create, "termin_buchen": _booking}
+def _note(user, arguments: dict) -> str:
+    from app.services.ai import office_tools
+
+    return office_tools.execute_note(user, arguments)
+
+
+EXECUTORS = {"aufgabe_erledigen": _task_done, "kunde_anlegen": _customer_create, "termin_buchen": _booking, "notiz_speichern": _note}
 
 
 def confirm(user, action_id: int) -> AiAction:

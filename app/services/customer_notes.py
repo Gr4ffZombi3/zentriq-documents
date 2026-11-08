@@ -338,6 +338,73 @@ _SEARCH_WORDS = frozenset(
 )
 
 
+def _edit_distance(a: str, b: str, limit: int) -> int:
+    """Levenshtein-Abstand mit Abbruch, sobald `limit` ueberschritten ist."""
+    if abs(len(a) - len(b)) > limit:
+        return limit + 1
+    previous = list(range(len(b) + 1))
+    for i, ca in enumerate(a, start=1):
+        current = [i]
+        for j, cb in enumerate(b, start=1):
+            current.append(min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (ca != cb)))
+        if min(current) > limit:
+            return limit + 1
+        previous = current
+    return previous[-1]
+
+
+def similar_customers(text: str | None) -> list[Customer]:
+    """Harmlose Tippfehler ("Schmidhofer" -> "Schmidthofer"): Kunden, deren Namensbestandteile
+    sich je Wort um hoechstens 1 (ab 8 Zeichen 2) Zeichen unterscheiden. Nur als Vorschlag zur
+    Auswahl ("Meinten Sie ..."), nie als automatische Zuordnung."""
+    words = [w for w in name_parts(text) if len(w) >= 4][:3]
+    if not words:
+        return []
+    rows = Customer.query.with_entities(Customer.id, Customer.name_key).filter(Customer.name_key.isnot(None)).limit(20000).all()
+    ids = []
+    for row in rows:
+        parts = row.name_key.split()
+        if all(any(_edit_distance(w, part, 2 if len(w) >= 8 else 1) <= (2 if len(w) >= 8 else 1) for part in parts) for w in words):
+            ids.append(row.id)
+            if len(ids) > MAX_CANDIDATES:
+                break
+    return Customer.query.filter(Customer.id.in_(ids)).order_by(Customer.name, Customer.id).all() if ids else []
+
+
+# Ausdruecklicher Notizauftrag: "Bei Schmidthofer notieren: ...", "Notiz zu Mustermann: ...".
+_NOTE_COMMAND = re.compile(
+    r"^\s*(?:bitte\s+)?(?:(?:bei|für|fuer|zu)\s+(?P<a>[^:]{2,60}?)\s+(?:notieren|notiere|vermerken|vermerke|festhalten)"
+    r"|(?:notiz|vermerk)\s+(?:bei|für|fuer|zu)\s+(?P<b>[^:]{2,60}?))\s*:\s*(?P<note>.+)$",
+    re.I,
+)
+
+
+_WRITING_OBJECT = re.compile(
+    r"(?:e-?mail|mail|nachricht|antwort|brief|text|notiz|zusammenfassung|angebot|anschreiben|einladung|absage|zusage|"
+    r"erinnerung|gratulation|glückwunsch|glueckwunsch|entschuldigung|bestätigung|bestaetigung|kündigung|kuendigung|"
+    r"beschwerde|whatsapp|sms|post|beitrag|liste|tabelle|vorlage|aufgabe|frage)\w*",
+    re.I,
+)
+
+
+_WRITING_VERB = re.compile(r"\b(?:schreib|formulier|verfass|entw(?:u|ü|ue)rf|entwirf|erstell)\w*", re.I)
+
+
+def vague_writing_order(text: str) -> bool:
+    """Schreibauftrag ohne erkennbares Ergebnis ("Schreib was zu Schmidthofer")."""
+    return bool(_WRITING_VERB.search(text)) and len(text.split()) <= 6 and not _WRITING_OBJECT.search(text)
+
+
+def note_command(text: str) -> tuple[str, str] | None:
+    """(Kundenname, Notiztext) eines ausdruecklichen Notizauftrags, sonst None."""
+    m = _NOTE_COMMAND.match(text or "")
+    if not m:
+        return None
+    name = (m.group("a") or m.group("b") or "").strip()
+    note = m.group("note").strip()
+    return (name, note) if name and note else None
+
+
 def search_subject(text: str) -> str | None:
     """Gesuchter (Teil-)Name einer Such- oder Frageformulierung: "Suche Mustermann",
     "Was wurde bei Mustermann notiert?" -> "Mustermann". Vornamen von Mitarbeitern des Bueros
@@ -1061,6 +1128,21 @@ def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | Non
             raise NoteError("Der Kunde wurde nicht gefunden.", 404)
         return _act(user, customer, text, parsed=parse(text), client_ref=client_ref, mode=mode, contact_choice=contact_choice)
 
+    command = note_command(text) if mode in (None, "note") else None
+    if command is not None:
+        # "Bei Schmidthofer notieren: wegen HUK24 nicht erreicht": eindeutiger Kunde -> Notiz
+        # (inkl. Rueckrufablauf ueber den Notiztext); mehrere -> Auswahl; Tippfehler -> Vorschlag.
+        name, note = command
+        found = _by_name(name) or search_by_name_fragment(name)
+        if len(found) == 1:
+            return _act(user, found[0], note, parsed=parse(note), client_ref=client_ref, mode="note", contact_choice=contact_choice)
+        if found:
+            return _choice(f"Mehrere Kunden passen zu „{name}“ – bei wem soll die Notiz gespeichert werden?", found, pending_note=note)
+        similar = similar_customers(name)
+        if similar:
+            return _choice(f"Kein Kunde „{name}“. Meinten Sie:", similar, pending_note=note)
+        return {"kind": "not_found", "message": f"Kein Kunde „{name}“ in Ihrem Büro gefunden. Es wurde nichts gespeichert."}
+
     parsed = parse(text)
     basis, candidates = find_by_identifiers(parsed)
     if basis is not None and not candidates and not parsed.vn_keys:
@@ -1093,6 +1175,9 @@ def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | Non
                 return _card_result(user, found[0], found[0].name, answer_question(user, found[0], text))
             if found:
                 return _choice("Mehrere Kunden passen – bitte auswählen:", found)
+            similar = similar_customers(subject) if subject else []
+            if similar:
+                return _choice(f"Kein Kunde „{subject}“. Meinten Sie:", similar)
             if subject and _RECORD_QUESTION.search(text) and _looks_like_name(subject, cased=any(ch.isupper() for ch in subject)):
                 # "Was wurde bei Erika Musterfrau notiert?" ohne Treffer: klare Meldung statt KI-Antwort;
                 # ein ausgewaehlter anderer Kunde ist nicht das Ergebnis.
@@ -1104,6 +1189,16 @@ def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | Non
                 return {"kind": "clarify", "message": f"Als Notiz für {selected.name} speichern oder an ZentriqAI senden?",
                         "customer": serialize_candidate(selected), "options": ["note", "chat"]}
             return _act(user, selected, text, parsed=parsed, client_ref=client_ref, mode=mode, contact_choice=contact_choice)
+        if chat_request and vague_writing_order(text):
+            # "Schreib was zu Schmidthofer": unklar, was entstehen soll -> nachfragen (kein Modell).
+            from app.services.email_reply import customer_from_instruction
+
+            target = customer_from_instruction(text)
+            if target is not None:
+                return {"kind": "clarify", "message": f"Was soll zu {target.name} entstehen? Als Notiz speichern oder als Text-/Mail-Entwurf an ZentriqAI senden?",
+                        "customer": serialize_candidate(target), "options": ["note", "chat"]}
+            return {"kind": "facts", "message": "Was soll geschrieben werden – eine Notiz zu einem Kunden, eine E-Mail oder eine Antwort auf eine "
+                    "Kundenmail? Bitte kurz konkretisieren, z. B. „Schreib Schmidthofer eine Antwort mit drei freien Terminen“.", "lines": []}
         if chat_request:
             return {"kind": "chat"}
         outcome, spans = detect_outcome(text)

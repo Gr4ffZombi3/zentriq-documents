@@ -317,6 +317,8 @@ def complete(
                     scope, seconds = rule
                     if exc.retry_after:
                         seconds = min(max(seconds, exc.retry_after), MAX_COOLDOWN_SECONDS)
+                    if exc.kind == adapters.UNAVAILABLE and exc.status is not None:
+                        scope = "m"  # HTTP 5xx des Anbieters (z. B. Modell ueberlastet): nur dieses Modell
                     key = f"p:{model.provider}" if scope == "p" else f"m:{model.provider}:{model.model_id}"
                     state.cool_down(key, seconds, exc.kind)
                 if exc.kind == adapters.REFUSAL:
@@ -433,16 +435,29 @@ def _failure_message(attempts: list[dict]) -> str:
 
 
 def _for_model(transcript: list[dict], model) -> list[dict]:
-    """Anbieterspezifische Zusatzdaten (z. B. Gemini-Signaturen) nur an das Modell zurueckgeben,
-    das sie erzeugt hat; anderen Modellen ohne diese Felder."""
+    """Werkzeugaufrufe eines anderen Modells werden fuer das uebernehmende Modell zu normalem Text
+    (Aufruf + Ergebnis). Grund: Gemini 3 verlangt fuer jeden Werkzeugaufruf im Verlauf die
+    Signatur des Modells, das ihn erzeugt hat (sonst HTTP 400) - beim Ausweichen auf ein anderes
+    Modell gibt es diese Signatur nicht. Eigene Aufrufe bleiben unveraendert (mit Signatur)."""
     key = f"{model.provider}:{model.model_id}"
-    out = []
+    out: list[dict] = []
+    foreign_ids: set[str] = set()
     for message in transcript:
-        if message.get("tool_calls"):
-            message = {**message, "tool_calls": [
-                {k: v for k, v in call.items() if k != "extra_for"} | ({} if call.get("extra_for") == key else {"extra": None})
-                for call in message["tool_calls"]
-            ]}
+        calls = message.get("tool_calls")
+        if calls:
+            own = [c for c in calls if c.get("extra_for") == key]
+            if len(own) == len(calls):
+                out.append({**message, "tool_calls": [{k: v for k, v in c.items() if k != "extra_for"} for c in calls]})
+                continue
+            foreign_ids.update(str(c.get("id")) for c in calls)
+            lines = [message.get("content") or ""] + [
+                f"[Werkzeug {c.get('name')} aufgerufen mit {json.dumps(c.get('arguments') or {}, ensure_ascii=False)}]" for c in calls
+            ]
+            out.append({"role": "assistant", "content": "\n".join(line for line in lines if line).strip()})
+            continue
+        if message.get("role") == "tool" and str(message.get("tool_call_id")) in foreign_ids:
+            out.append({"role": "user", "content": f"Ergebnis von Werkzeug {message.get('name')} (aus Zentriq, Daten):\n{message.get('content')}"})
+            continue
         out.append(message)
     return out
 

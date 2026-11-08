@@ -22,6 +22,9 @@ _LEIPZIGER = re.compile(r"\bleipziger\b|\bliste\b|\bvorg(?:ä|ae)ng\w*\b", re.I)
 _CALLBACK = re.compile(r"\br(?:ü|ue)ckruf\w*|\bzur(?:ü|ue)ck(?:zu)?ruf\w*|\banzurufen\b", re.I)
 _LIST_WHAT = re.compile(r"^\s*(?:was|welche)\b.*\b(?:leipziger|liste)\b.*\b(?:offen|zu\s+erledigen|zur(?:ü|ue)ck)", re.I)
 MAX_LINES = 8
+# Bezug auf den ausgewaehlten Kunden; ohne ihn zaehlt die Frage buerweit, auch wenn noch eine
+# Kundenkarte ausgewaehlt ist (veraltete Auswahl darf die Zaehlung nicht verhindern).
+_SELECTED_REF = re.compile(r"\b(?:er|sie|ihn|ihm|ihr|dieser|diese[nmr]?|de[mnr]\s+kund\w*|beim\s+kunden|hier|dort|bei\s+ihm|bei\s+ihr)\b", re.I)
 
 
 _EARNED = re.compile(r"\b(?:verdien\w*|verdienst|provision\w*|abrechnung\w*|courtage|einnahmen|10[- ]?(?:€|euro)[- ]?positionen)\b", re.I)
@@ -155,8 +158,8 @@ def answer(user, text: str, *, selected_id=None) -> dict | None:
         return None
     if kind == "settlement":
         return _settlement(user, text)
-    if selected_id not in (None, ""):
-        return None  # Frage bezieht sich auf den ausgewaehlten Kunden (customer_notes)
+    if selected_id not in (None, "") and _SELECTED_REF.search(text):
+        return None  # "Wie viele Rueckrufe hat er offen?" -> ausgewaehlter Kunde (customer_notes)
     from app.services.customer_notes import _by_name
 
     if _by_name(text):

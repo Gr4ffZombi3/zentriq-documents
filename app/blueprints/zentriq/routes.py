@@ -207,9 +207,14 @@ def api_send(conversation_id):
         model = data.get("model") if isinstance(data.get("model"), str) else None
         client_ref = data.get("client_ref") if isinstance(data.get("client_ref"), str) else None
         files = []
+    raw_customer = (request.form.get("customer_id") if request.mimetype == "multipart/form-data" else _payload().get("customer_id"))
+    context_customer_id = int(raw_customer) if str(raw_customer or "").isdigit() else None
+    if context_customer_id is not None and Customer.query.filter(Customer.id == context_customer_id).first() is None:
+        context_customer_id = None  # fremdes Buero / geloescht: wird ignoriert
     try:
         conversation = chat.get_conversation(current_user, conversation_id)
-        user_message, pending = chat.submit_message(current_user, conversation, content, model, files, client_ref)
+        user_message, pending = chat.submit_message(current_user, conversation, content, model, files, client_ref,
+                                                    context_customer_id=context_customer_id)
     except chat.ChatError as exc:
         return _error(str(exc), exc.status, exc.error_type)
     labels = _labels()
@@ -292,7 +297,12 @@ def api_customer_input():
     # Chat (dort app/services/email_reply.py, funktioniert auch ohne KI-Modell). Kein Termin,
     # keine Notiz.
     if mode is None and not data.get("customer_id") and email_reply.is_reply_instruction(text) and not customer_create.is_command(text):
-        return jsonify({"kind": "chat"})
+        # Ausgewaehlter bzw. im Auftrag eindeutig genannter Kunde geht mit (Entwurf mit freien Terminen).
+        customer = None
+        if str(data.get("selected_id") or "").isdigit():
+            customer = Customer.query.filter(Customer.id == int(data["selected_id"])).first()
+        customer = customer or email_reply.customer_from_instruction(text)
+        return jsonify({"kind": "chat", **({"customer_id": customer.id, "customer_name": customer.name} if customer else {})})
     # Eingefuegte E-Mail: gehoert ins Gespraech (Kontext fuer "Antwort schreiben"), ist keine
     # Kurznotiz - auch wenn sie Nummern oder Namen enthaelt.
     if mode is None and not data.get("customer_id") and email_context.looks_like_email(text):

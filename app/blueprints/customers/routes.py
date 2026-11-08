@@ -5,7 +5,7 @@ from app.auth.permissions import admin_required
 from app.models import Customer, DocumentCustomer, Task
 from app.models.enums import TaskStatus
 from app.navigation import display_name_for
-from app.services import customer_sources
+from app.services import customer_notes, customer_sources
 from app.services.customer_duplicates import (
     REASON_LABELS,
     MergeError,
@@ -87,6 +87,9 @@ def detail(customer_id):
         huk_jobs=huk_jobs.jobs_for_customer(current_user, customer.id),
         huk_labels=huk_jobs.STATUS_LABELS,
         huk_tones=huk_jobs.STATUS_TONES,
+        # Notizen und offene Rueckrufe aus dem Eingabefeld: dieselbe Quelle wie die Kundenkarte
+        # im Assistenten (customer_notes.customer_card), damit beide Einstiege dasselbe zeigen.
+        note_card=customer_notes.customer_card(current_user, customer),
     )
 
 

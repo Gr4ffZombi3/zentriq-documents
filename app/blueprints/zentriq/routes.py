@@ -8,6 +8,7 @@ Blueprint "zentriq_admin" (nur SUPER_ADMIN).
 KI-Antworten entstehen asynchron im Celery-Worker: POST .../messages legt die Nachricht und einen
 Platzhalter an (202), der Browser fragt GET .../messages/<id> ab."""
 
+import os
 from decimal import Decimal
 
 from flask import Blueprint, current_app, jsonify, render_template, request
@@ -432,6 +433,46 @@ def api_callback_reopen(contact_id):
         return denied
     contact = get_or_404_scoped(CustomerContact, contact_id)
     return jsonify(customer_notes.reopen_contact(current_user, contact, client_ref=_client_ref(_payload())))
+
+
+@zentriq_bp.post("/api/termine/aus-bildern")
+@login_required
+def api_appointments_from_images():
+    """Bilder (Fotos/Screenshots) lesen und erkannte Termine zur Pruefung liefern - nichts wird
+    gespeichert. Gleiche Berechtigung wie der Buerokalender."""
+    from app.services import image_appointments
+    from app.services.email_reply import _calendar_allowed
+    from app.services.timetracking.clock import local_today
+
+    if (denied := _office_user_required()) is not None:
+        return denied
+    if not _calendar_allowed(current_user):
+        return _error("Kein Zugriff auf den Bürokalender.", 403, "forbidden")
+    uploads = [(os.path.basename(f.filename or "bild"), f.read()) for f in request.files.getlist("files") if f and f.filename]
+    try:
+        result = image_appointments.analyse(current_user, uploads, local_today())
+    except image_appointments.ImageError as exc:
+        return _error(str(exc), 400, "image")
+    return jsonify(result)
+
+
+@zentriq_bp.post("/api/termine/uebernehmen")
+@login_required
+def api_appointments_save():
+    """Ausgewaehlte Termine aus der Vorschau speichern (je Termin erneute Pruefung)."""
+    from app.services import image_appointments
+    from app.services.email_reply import _calendar_allowed
+
+    if (denied := _office_user_required()) is not None:
+        return denied
+    if not _calendar_allowed(current_user):
+        return _error("Kein Zugriff auf den Bürokalender.", 403, "forbidden")
+    data = _payload()
+    items = data.get("items") if isinstance(data.get("items"), list) else []
+    if not items:
+        return _error("Keine Termine ausgewählt.", 400, "empty")
+    batch = str(data.get("batch") or "")[:40] or "bild"
+    return jsonify({"results": image_appointments.save(current_user, [i for i in items if isinstance(i, dict)], batch)})
 
 
 @zentriq_bp.get("/api/rueckrufe")

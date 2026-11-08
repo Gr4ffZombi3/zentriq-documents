@@ -33,7 +33,8 @@
   var titleEl = $("[data-zc-title]");
   var projectEl = $("[data-zc-project]");
   var menu = $("[data-zc-menu]");
-  var fileInput = $("[data-zc-file]");
+  var fileInputs = Array.prototype.slice.call(document.querySelectorAll("[data-zc-file]"));
+  var attachMenu = $("[data-zc-attach-menu]");
   var chipsEl = $("[data-zc-attachments]");
 
   var current = null;
@@ -508,6 +509,7 @@
     text = (text !== undefined ? text : input.value).trim();
     if (busy || (!text && !files.length)) return;
     if (text.length > maxChars) { showAlert("Die Nachricht ist zu lang (maximal " + maxChars + " Zeichen)."); return; }
+    if (files.some(isImage) && APPT_REQUEST.test(text)) { importAppointments(text); return; }
     showAlert("");
     if (!skipNotes && !files.length && window.ZentriqNotes) {
       setBusy(true);
@@ -584,8 +586,19 @@
   }
 
   // --- Anhaenge ------------------------------------------------------------------------
+  function isImage(f) { return /^image\//.test(f.type || "") || /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name || ""); }
   function renderChips() {
     chipsEl.textContent = "";
+    if (files.some(isImage)) {
+      // Schnellaktion: Termine aus den angehaengten Bildern in den Buerokalender
+      var action = document.createElement("button");
+      action.type = "button";
+      action.className = "zc-chip zc-chip-action";
+      action.setAttribute("data-zc-appt-start", "");
+      action.textContent = "Termine übernehmen";
+      action.addEventListener("click", function () { importAppointments(input.value.trim()); });
+      chipsEl.appendChild(action);
+    }
     files.forEach(function (f, idx) {
       var chip = document.createElement("span");
       chip.className = "zc-chip";
@@ -601,13 +614,135 @@
     updateSend();
     updateComposerHeight();
   }
-  $("[data-zc-attach]").addEventListener("click", function () { fileInput.click(); });
-  fileInput.addEventListener("change", function () {
-    Array.prototype.forEach.call(fileInput.files, function (f) { if (files.length < 3) files.push(f); });
-    if (fileInput.files.length + files.length > 3) showAlert("Höchstens 3 Dateien pro Nachricht.");
-    fileInput.value = "";
-    renderChips();
+  // Plus-Button: Auswahlmenue mit getrennten Dateifeldern (Fotos / Dokumente / Audio+Video).
+  var attachBtn = $("[data-zc-attach]");
+  function closeAttachMenu() { if (attachMenu) { attachMenu.hidden = true; attachBtn.setAttribute("aria-expanded", "false"); } }
+  attachBtn.addEventListener("click", function (e) {
+    e.stopPropagation();
+    if (!attachMenu) { fileInputs[0].click(); return; }
+    var open = attachMenu.hidden;
+    attachMenu.hidden = !open;
+    attachBtn.setAttribute("aria-expanded", open ? "true" : "false");
   });
+  document.addEventListener("click", function (e) { if (attachMenu && !attachMenu.hidden && !attachMenu.contains(e.target)) closeAttachMenu(); });
+  if (attachMenu) {
+    Array.prototype.forEach.call(attachMenu.querySelectorAll("[data-zc-pick]"), function (btn) {
+      btn.addEventListener("click", function () {
+        closeAttachMenu();
+        var target = fileInputs.filter(function (i) { return i.getAttribute("data-zc-file") === btn.getAttribute("data-zc-pick"); })[0];
+        if (target) target.click();
+      });
+    });
+  }
+  fileInputs.forEach(function (fileInput) {
+    fileInput.addEventListener("change", function () {
+      var dropped = fileInput.files.length + files.length > 3;
+      Array.prototype.forEach.call(fileInput.files, function (f) { if (files.length < 3) files.push(f); });
+      if (dropped) showAlert("Höchstens 3 Dateien pro Nachricht.");
+      fileInput.value = "";
+      renderChips();
+    });
+  });
+
+  // --- Termine aus Bildern -------------------------------------------------------------
+  // Kein \b vor Umlauten: in JavaScript-Regex sind "ü" & Co. keine Wortzeichen.
+  var APPT_REQUEST = /termin[a-zäöü]*\s.*(?:übernehm|uebernehm|eintrag|auslesen|importier|speicher)|in\s+den\s+kalender/i;
+  function node(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+  function importAppointments(text) {
+    var images = files.filter(isImage);
+    if (!images.length || busy) return;
+    setBusy(true);
+    showAlert("");
+    var userEl = renderUser({ content: (text || "Termine übernehmen") + " (" + images.map(function (f) { return f.name; }).join(", ") + ")" });
+    var reply = renderAssistant({ status: "pending", progress: "Lese Bilder (Texterkennung auf dem Server)" });
+    input.value = ""; autosize();
+    files = files.filter(function (f) { return !isImage(f); });
+    renderChips();
+    stickToBottom = true; scrollDown(true);
+    var body = new FormData();
+    images.forEach(function (f) { body.append("files", f); });
+    request("POST", "/termine/aus-bildern", body, true).then(function (d) {
+      renderAppointmentPreview(reply, d);
+      setBusy(false); scrollDown();
+    }, function (err) {
+      fillAssistant(reply, { status: "error", error: err.message });
+      setBusy(false);
+    });
+    return userEl;
+  }
+  function renderAppointmentPreview(el, d) {
+    el.textContent = "";
+    var box = node("div", "zc-appt");
+    var items = d.items || [];
+    var head = items.length
+      ? items.length + (items.length === 1 ? " Termin" : " Termine") + " erkannt – bitte prüfen. " + (d.used_model ? "Zuordnung mit KI-Hilfe aus den erkannten Textzeilen." : "Erkannt ohne KI (Texterkennung auf dem Server).")
+      : "Keine Termine erkannt.";
+    box.appendChild(node("p", "zc-appt-head", head));
+    (d.problems || []).forEach(function (p) { box.appendChild(node("p", "zc-appt-problem", p)); });
+    var list = node("ul", "zc-appt-list");
+    items.forEach(function (it) {
+      var li = node("li", "zc-appt-item is-" + it.state);
+      li.dataset.ref = it.ref;
+      var check = node("input"); check.type = "checkbox"; check.checked = it.state !== "incomplete"; check.setAttribute("aria-label", "Termin übernehmen");
+      check.setAttribute("data-appt-check", "");
+      var top = node("label", "zc-appt-top"); top.appendChild(check); top.appendChild(node("span", "zc-appt-title-label", "Übernehmen"));
+      li.appendChild(top);
+      var grid = node("div", "zc-appt-fields");
+      function field(label, input) { var w = node("label", "zc-appt-field"); w.appendChild(node("span", null, label)); w.appendChild(input); grid.appendChild(w); return input; }
+      var day = node("input"); day.type = "date"; day.value = it.day || ""; day.setAttribute("data-appt", "day");
+      var start = node("input"); start.type = "time"; start.value = it.start || ""; start.setAttribute("data-appt", "start");
+      var mins = node("input"); mins.type = "number"; mins.min = "5"; mins.max = "720"; mins.step = "5"; mins.inputMode = "numeric"; mins.value = it.minutes || d.default_minutes || 30; mins.setAttribute("data-appt", "minutes");
+      var title = node("input"); title.type = "text"; title.maxLength = 120; title.value = it.title || ""; title.setAttribute("data-appt", "title");
+      var who = node("select"); who.setAttribute("data-appt", "assignee_id");
+      (d.members || []).forEach(function (m) { var o = node("option", null, m.name); o.value = m.id; if (m.id === it.assignee_id) o.selected = true; who.appendChild(o); });
+      field("Datum", day); field("Uhrzeit", start); field("Minuten", mins); field("Titel", title); field("Zuständig", who);
+      li.appendChild(grid);
+      var notes = (it.problems || []).concat(it.flags || []);
+      if (notes.length) li.appendChild(node("p", "zc-appt-flags", "⚠ " + notes.join(" · ")));
+      if (it.source) li.appendChild(node("p", "zc-appt-source", "Erkannt: „" + it.source + "“"));
+      var result = node("p", "zc-appt-result"); result.setAttribute("aria-live", "polite"); li.appendChild(result);
+      [day, start].forEach(function (inp) { inp.addEventListener("change", function () { if (day.value && start.value) check.checked = true; }); });
+      list.appendChild(li);
+    });
+    box.appendChild(list);
+    if (items.length) {
+      var actions = node("div", "zc-appt-actions");
+      var save = node("button", "btn btn-primary btn-sm", "Ausgewählte übernehmen");
+      save.type = "button"; save.setAttribute("data-appt-save", "");
+      var batch = "img" + Date.now().toString(36);
+      save.addEventListener("click", function () {
+        var rows = Array.prototype.filter.call(list.children, function (li) { return li.querySelector("[data-appt-check]").checked && !li.classList.contains("is-saved"); });
+        if (!rows.length) return;
+        var payload = rows.map(function (li) {
+          var item = { ref: li.dataset.ref };
+          Array.prototype.forEach.call(li.querySelectorAll("[data-appt]"), function (inp) { item[inp.getAttribute("data-appt")] = inp.value; });
+          return item;
+        });
+        save.disabled = true; save.textContent = "Wird gespeichert …";
+        request("POST", "/termine/uebernehmen", { items: payload, batch: batch }).then(function (r) {
+          (r.results || []).forEach(function (res) {
+            var li = list.querySelector('[data-ref="' + res.ref + '"]');
+            if (!li) return;
+            li.querySelector(".zc-appt-result").textContent = (res.status === "saved" ? "✓ " : res.status === "duplicate" ? "= " : "⚠ ") + res.message;
+            li.classList.remove("is-ok", "is-warn", "is-incomplete", "is-conflict", "is-duplicate");
+            li.classList.add("is-" + (res.status === "saved" ? "saved" : res.status));
+            if (res.status === "saved" || res.status === "duplicate") {
+              li.querySelector("[data-appt-check]").checked = false;
+              Array.prototype.forEach.call(li.querySelectorAll("input,select"), function (inp) { inp.disabled = true; });
+            }
+          });
+          save.disabled = false; save.textContent = "Ausgewählte übernehmen";
+        }, function (err) {
+          save.disabled = false; save.textContent = "Ausgewählte übernehmen";
+          showAlert(err.message);
+        });
+      });
+      actions.appendChild(save);
+      var cal = node("a", "zn-link", "Kalender öffnen"); cal.href = "/kalender"; actions.appendChild(cal);
+      box.appendChild(actions);
+    }
+    el.appendChild(box);
+  }
   root.addEventListener("dragover", function (e) { e.preventDefault(); });
   root.addEventListener("drop", function (e) {
     e.preventDefault();

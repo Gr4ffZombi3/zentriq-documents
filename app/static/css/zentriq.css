@@ -421,3 +421,39 @@
   /* Kennzahlen zweispaltig statt einzeln untereinander. */
   .summary-strip-4, .summary-strip-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* --- Plus-Menue (getrennte Auswahl: Fotos / Dokument / Audio+Video) --- */
+.zc-attach-wrap { position: relative; }
+.zc-attach-menu { position: absolute; bottom: calc(100% + 0.4rem); left: 0; z-index: 30; min-width: 15rem; display: flex; flex-direction: column;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 0.8rem; box-shadow: 0 8px 24px rgb(0 0 0 / 0.12); padding: 0.3rem; }
+.zc-attach-menu[hidden] { display: none; }
+.zc-attach-menu button { text-align: left; background: none; border: 0; border-radius: 0.55rem; padding: 0.7rem 0.8rem; font-size: 0.95rem; color: var(--color-text); cursor: pointer; min-height: 44px; }
+.zc-attach-menu button:hover, .zc-attach-menu button:focus-visible { background: var(--color-surface-muted); }
+.zc-chip-action { cursor: pointer; font-weight: 600; padding-right: 0.6rem; border-color: var(--color-primary, var(--color-border)); }
+
+/* --- Termine aus Bildern: Vorschau --- */
+.zc-appt { display: flex; flex-direction: column; gap: 0.6rem; }
+.zc-appt-head { margin: 0; font-weight: 600; }
+.zc-appt-problem { margin: 0; color: var(--color-text-muted); }
+.zc-appt-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.zc-appt-item { border: 1px solid var(--color-border); border-radius: 0.8rem; padding: 0.6rem 0.7rem; background: var(--color-surface); }
+.zc-appt-item.is-warn, .zc-appt-item.is-conflict { border-color: #d97706; }
+.zc-appt-item.is-incomplete { border-style: dashed; }
+.zc-appt-item.is-saved { border-color: #16a34a; opacity: 0.85; }
+.zc-appt-top { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--color-text-muted); min-height: 32px; }
+.zc-appt-top input { width: 1.2rem; height: 1.2rem; }
+.zc-appt-fields { display: grid; grid-template-columns: repeat(5, minmax(0, auto)); gap: 0.4rem 0.6rem; align-items: end; }
+.zc-appt-field { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.75rem; color: var(--color-text-muted); min-width: 0; }
+.zc-appt-field input, .zc-appt-field select { font-size: 1rem; padding: 0.4rem 0.5rem; border: 1px solid var(--color-border); border-radius: 0.5rem;
+  background: var(--color-surface); color: var(--color-text); min-height: 40px; min-width: 0; width: 100%; }
+.zc-appt-flags { margin: 0.4rem 0 0; font-size: 0.85rem; color: #b45309; }
+.zc-appt-source { margin: 0.25rem 0 0; font-size: 0.75rem; color: var(--color-text-muted); overflow-wrap: anywhere; }
+.zc-appt-result { margin: 0.3rem 0 0; font-size: 0.9rem; }
+.zc-appt-result:empty { display: none; }
+.zc-appt-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem; }
+@media (max-width: 640px) {
+  .zc-appt-fields { grid-template-columns: 1fr 1fr; }
+  .zc-appt-field:nth-child(4), .zc-appt-field:nth-child(5) { grid-column: 1 / -1; }
+  .zc-appt-actions .btn { width: 100%; min-height: 44px; }
+  .zc-attach-menu { min-width: 14rem; }
+}

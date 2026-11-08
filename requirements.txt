@@ -21,6 +21,7 @@ pydantic>=2.9
 pytesseract>=0.3.13
 PyMuPDF>=1.24
 Pillow>=13.0
+pillow-heif>=1.8.1
 python-dotenv>=1.0
 pyotp>=2.9
 segno>=1.6

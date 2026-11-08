@@ -65,9 +65,19 @@
       <label class="sr-only" for="zc-input">Nachricht an ZentriqAI</label>
       <textarea id="zc-input" class="zc-input" data-zc-input rows="1" maxlength="{{ max_chars }}" placeholder="{{ 'Frage stellen, Kunden suchen oder Notiz erfassen …' if customer_notes_enabled else 'Frage stellen …' }}"></textarea>
       <div class="zc-row">
-        <input type="file" data-zc-file multiple hidden
-               accept=".pdf,.txt,.md,.csv,.mp3,.m4a,.wav,.ogg,.opus,.webm,.mp4,.aac,.flac,application/pdf,text/plain,text/csv,audio/*">
-        <button type="button" class="zc-round zc-attach" data-zc-attach aria-label="Datei anhängen" title="Dateien und Sprachnachrichten anhängen">{{ icon('plus', class='h-5 w-5') }}</button>
+        {# Getrennte Auswahlfelder: ein gemeinsames accept mit .mp4/.webm liess iPhone/Android in der
+           Mediathek nur Videos anbieten (Bilder fehlten ganz). #}
+        <input type="file" data-zc-file="images" multiple hidden accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif">
+        <input type="file" data-zc-file="docs" multiple hidden accept=".pdf,.txt,.md,.csv,application/pdf,text/plain,text/csv">
+        <input type="file" data-zc-file="media" multiple hidden accept=".mp3,.m4a,.wav,.ogg,.opus,.webm,.mp4,.aac,.flac,audio/*,video/mp4,video/webm">
+        <div class="zc-attach-wrap">
+          <button type="button" class="zc-round zc-attach" data-zc-attach aria-label="Anhängen" aria-haspopup="menu" aria-expanded="false" title="Fotos, Dateien oder Sprachnachricht anhängen">{{ icon('plus', class='h-5 w-5') }}</button>
+          <div class="zc-attach-menu" data-zc-attach-menu role="menu" hidden>
+            <button type="button" role="menuitem" data-zc-pick="images">Fotos und Screenshots</button>
+            <button type="button" role="menuitem" data-zc-pick="docs">Dokument (PDF, Text, CSV)</button>
+            <button type="button" role="menuitem" data-zc-pick="media">Sprachnachricht oder Video</button>
+          </div>
+        </div>
         <span class="zc-row-hint" data-zc-status aria-live="polite"></span>
         <button type="submit" class="zc-round zc-send" data-zc-send aria-label="Senden" title="Senden" disabled>{{ icon('arrow-up', class='h-5 w-5', stroke_width='2.5') }}</button>
       </div>

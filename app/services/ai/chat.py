@@ -76,6 +76,7 @@ _PATTERNS = (
 )
 
 DOCUMENT_EXTENSIONS = {"pdf", "txt", "md", "csv"}
+IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "heic", "heif"}
 MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
 MAX_PDF_PAGES = 100
 MAX_ATTACHMENT_TEXT = 60000
@@ -272,8 +273,17 @@ def _prepare_files(files, detailed: bool = False) -> tuple[list[dict], bool]:
                 raise ChatError(str(exc), 400, "invalid_audio") from exc
             prepared.append({"filename": filename, "kind": "audio", "size": len(content), "content": content})
             has_audio = True
+        elif extension in IMAGE_EXTENSIONS:
+            # Foto/Screenshot: gleiche Pruefung wie "Termine uebernehmen", Text lokal per OCR.
+            from app.services import image_appointments
+
+            try:
+                text = image_appointments.read_text(image_appointments.load_image(filename, content))
+            except image_appointments.ImageError as exc:
+                raise ChatError(str(exc), 400, "invalid_image") from exc
+            prepared.append({"filename": filename, "kind": "image", "size": len(content), "text": text[:MAX_ATTACHMENT_TEXT]})
         else:
-            raise ChatError("Dieses Dateiformat wird nicht unterstützt (PDF, TXT, MD, CSV oder Audio).", 400, "unsupported_file")
+            raise ChatError("Dieses Dateiformat wird nicht unterstützt (PDF, TXT, MD, CSV, Bild oder Audio).", 400, "unsupported_file")
     return prepared, has_audio
 
 

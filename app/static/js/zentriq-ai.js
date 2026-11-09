@@ -825,6 +825,25 @@
   function updateComposerHeight() {
     document.documentElement.style.setProperty("--zs-composer-h", form.offsetHeight + "px");
   }
+  // iPhone: die Tastatur verkleinert nur den sichtbaren Bereich (visualViewport), nicht 100dvh.
+  // Hoehe des Chats daran koppeln, damit Eingabefeld und Senden ueber der Tastatur bleiben; wer
+  // unten war, bleibt unten (wer aeltere Nachrichten liest, springt nicht).
+  (function () {
+    var vv = window.visualViewport;
+    function fit() {
+      var wasBottom = stickToBottom;
+      if (vv && vv.height < window.innerHeight - 1) {
+        document.documentElement.style.setProperty("--zc-vh", Math.round(vv.height) + "px");
+        if (window.scrollY) window.scrollTo(0, 0);
+      } else {
+        document.documentElement.style.removeProperty("--zc-vh");
+      }
+      updateComposerHeight();
+      if (wasBottom) scrollDown(true);
+    }
+    if (vv) { vv.addEventListener("resize", fit); vv.addEventListener("scroll", fit); }
+    window.addEventListener("resize", fit);
+  })();
   form.addEventListener("submit", function (e) { e.preventDefault(); send(); });
   input.addEventListener("input", autosize);
   input.addEventListener("keydown", function (e) {

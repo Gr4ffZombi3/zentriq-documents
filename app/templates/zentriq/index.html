@@ -91,7 +91,8 @@
     {# Kundennotizen: Eingaben mit Kundenbezug (VN-Nummer, Telefon, Kundenname oder ausgewaehlter
        Kunde) sucht bzw. speichert js/customer-notes.js direkt in Zentriq; Ergebnisse erscheinen im
        Gespraechsverlauf. Alles andere geht an das KI-Modell. #}
-    <details class="zn" data-zn data-api="{{ url_for('zentriq.index') }}/api">
+    <div class="zn-bar">
+    <details class="zn" name="zn-bar" data-zn data-api="{{ url_for('zentriq.index') }}/api">
       <summary class="zn-callbacks-summary">
         <span>Offene Rückrufe</span>
         <span class="zn-count" data-zn-callbacks-count>…</span>
@@ -103,7 +104,7 @@
       </div>
     </details>
     {# Kompakte Vorschau des Buerokalenders (js/customer-notes.js, API calendar.api_upcoming). #}
-    <details class="zn zn-agenda" data-zn-agenda data-url="{{ url_for('calendar.api_upcoming') }}">
+    <details class="zn zn-agenda" name="zn-bar" data-zn-agenda data-url="{{ url_for('calendar.api_upcoming') }}">
       <summary class="zn-callbacks-summary">
         <span>Nächste Termine</span>
         <span class="zn-count is-zero" data-zn-agenda-count>…</span>
@@ -114,6 +115,7 @@
         <a class="zn-link" href="{{ url_for('calendar.index') }}">Zum Kalender</a>
       </div>
     </details>
+    </div>
     {% endif %}
     <p class="zc-disclaimer">KI-Antworten können Fehler enthalten. Wichtige Angaben bitte prüfen.</p>
   </form>

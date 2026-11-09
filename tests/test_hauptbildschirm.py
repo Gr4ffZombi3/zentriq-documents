@@ -74,4 +74,4 @@ def test_main_screen_markup_is_reduced(app, office):
     html = login(app, "laura@example.com").get("/zentriq").get_data(as_text=True)
     assert "Frage stellen, Kunden suchen oder Notiz erfassen …" in html
     assert "zc-suggestion" not in html
-    assert '<details class="zn" data-zn' in html and "Offene Rückrufe" in html
+    assert '<details class="zn" name="zn-bar" data-zn' in html and "Offene Rückrufe" in html

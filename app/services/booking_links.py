@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
 from cryptography.fernet import Fernet, InvalidToken
-from flask import current_app
+from flask import current_app, has_request_context, request
 
 from app.extensions import db
 from app.models import BookingLink, CalendarEvent, Customer, OfficeSettings, Tenant, User
@@ -56,13 +56,19 @@ def token_hash(token: str) -> str:
     return hashlib.sha256((token or "").encode("utf-8")).hexdigest()
 
 
+PUBLIC_PATH = "/termin/buchen/"  # aeltere Links /termin/<token> leiten dorthin weiter
+
+
 def public_url(link: BookingLink) -> str | None:
+    """Vollstaendiger Link zum Weitergeben (immer mit Domain, damit Kopieren/WhatsApp ihn erkennen)."""
     try:
         token = _fernet().decrypt(link.token_enc.encode("ascii")).decode("ascii")
     except (InvalidToken, ValueError):
         return None
     base = (current_app.config.get("PUBLIC_URL") or "").rstrip("/")
-    return f"{base}/termin/{token}"
+    if not base and has_request_context():
+        base = request.url_root.rstrip("/")
+    return f"{base}{PUBLIC_PATH}{token}"
 
 
 # --- Freigaben -----------------------------------------------------------------------------
@@ -191,17 +197,33 @@ def free_times(link: BookingLink, now: datetime | None = None) -> list[datetime]
     return out
 
 
+def _person(link: BookingLink) -> str | None:
+    """Anzeigename des Mitarbeiters - nur der gepflegte Name, nie ein Teil der E-Mail-Adresse."""
+    profile = getattr(link.assignee, "employee_profile", None) if link.assignee else None
+    name = " ".join((getattr(profile, "display_name", "") or "").split())
+    return name or None
+
+
 def public_view(link: BookingLink) -> dict:
-    """Nur das, was der Kunde sehen darf."""
+    """Nur das, was der Kunde sehen darf: Terminart, Mitarbeitername und das Bueroprofil
+    (Name, Anschrift, Kontakt). Nie Kunden-, Kalender- oder Notizdaten - auch nicht in der Linkvorschau."""
     from app.services import calendar as cal
 
     tenant = db.session.get(Tenant, link.tenant_id)
     s = OfficeSettings.query.first()
+    office = (s.office_name if s and s.office_name else (tenant.name if tenant else "")) or ""
+    person = _person(link)
+    heading = f"Termin bei {person} buchen" if person else (f"Termin bei {office} buchen" if office else "Termin buchen")
     return {
+        "heading": heading,
+        "person": person,
         "title": link.title,
         "kind": cal.LOCATION_KINDS.get(link.location_kind or "") if link.location_kind else None,
         "minutes": link.minutes,
-        "office": (s.office_name if s and s.office_name else (tenant.name if tenant else "")),
+        "office": office,
+        "address": (s.address or "").strip() if s else "",
+        "phone": (s.phone or "").strip() if s else "",
+        "email": (s.email or "").strip() if s else "",
         "needs_contact": link.customer_id is None,
     }
 

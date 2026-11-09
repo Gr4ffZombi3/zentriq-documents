@@ -58,7 +58,8 @@ def _create(app, setup, slots=("10:00", "11:00", "14:00"), customer=True, valid_
     assert r.status_code == 200, r.status_code
     html = r.get_data(as_text=True)
     url = re.search(r'data-bl-url>([^<]+)<', html).group(1)
-    token = url.rsplit("/termin/", 1)[1]
+    assert url.startswith("https://zentriq.test/termin/buchen/"), url  # volle Adresse mit Domain
+    token = url.rsplit("/termin/buchen/", 1)[1]
     return admin, token, day
 
 
@@ -95,13 +96,14 @@ def test_public_page_shows_only_released_free_times_and_no_internal_data(app, se
                                       note="vertraulich", status="scheduled"))
         _db.session.commit()
     anon = app.test_client()
-    r = anon.get(f"/termin/{token}")
+    r = anon.get(f"/termin/buchen/{token}")
     html = r.get_data(as_text=True)
     assert r.status_code == 200 and r.headers["Cache-Control"] == "no-store" and "noindex" in r.headers["X-Robots-Tag"]
     times = re.findall(r'name="slot" value="([^"]+)"', html)
     assert times == [_slot(day, "10:00"), _slot(day, "14:00")]
-    for secret in ("Geheime", "Müller", "vertraulich", "Karl", "Geheimkunde", "Laura", "/kalender", "/zentriq", "Abmelden"):
+    for secret in ("Geheime", "Müller", "vertraulich", "Karl", "Geheimkunde", "/kalender", "/zentriq", "Abmelden", "@example.com"):
         assert secret not in html, secret
+    # Der Name der zustaendigen Person steht bewusst in der Ueberschrift ("Termin bei ... buchen").
     for ident in (setup.karl_id, setup.laura_id, setup.tenant_a.id):  # keine IDs als Wert/Parameter
         assert not re.search(rf'value="{ident}"|[?&][a-z_]+={ident}\b|/{ident}["/]', html), ident
     assert "Beratungsgespräch" in html and "30 Minuten" in html and "Telefon" in html
@@ -111,12 +113,12 @@ def test_public_page_shows_only_released_free_times_and_no_internal_data(app, se
 def test_booking_flow_double_submit_and_internal_visibility(app, setup):
     admin, token, day = _create(app, setup)
     anon = app.test_client()
-    sub = _csrf(anon.get(f"/termin/{token}").get_data(as_text=True))
-    r = anon.post(f"/termin/{token}", data={"slot": _slot(day, "14:00"), "submission": sub, "customer_id": "999", "assignee_id": "1"})
+    sub = _csrf(anon.get(f"/termin/buchen/{token}").get_data(as_text=True))
+    r = anon.post(f"/termin/buchen/{token}", data={"slot": _slot(day, "14:00"), "submission": sub, "customer_id": "999", "assignee_id": "1"})
     assert r.status_code == 303
-    page = anon.get(f"/termin/{token}").get_data(as_text=True)
+    page = anon.get(f"/termin/buchen/{token}").get_data(as_text=True)
     assert "Ihr Termin ist gebucht" in page and day.strftime("%d.%m.%Y") in page and "14:00" in page and "Beratungsgespräch" in page
-    again = anon.post(f"/termin/{token}", data={"slot": _slot(day, "14:00"), "submission": sub}, follow_redirects=True)
+    again = anon.post(f"/termin/buchen/{token}", data={"slot": _slot(day, "14:00"), "submission": sub}, follow_redirects=True)
     assert "Ihr Termin ist gebucht" in again.get_data(as_text=True)
     with bypass_tenant_scope():
         [event] = CalendarEvent.query.filter(CalendarEvent.client_ref.like("bl-%")).all()
@@ -124,7 +126,7 @@ def test_booking_flow_double_submit_and_internal_visibility(app, setup):
         assert event.customer_id == setup.karl_id and event.assignee_user_id == setup.laura_id  # manipulierte Felder ignoriert
         assert to_local(event.starts_at).strftime("%H:%M") == "14:00" and link.booking_count == 1 and link.used_at
     # anderer Browser: Link genutzt
-    other = app.test_client().get(f"/termin/{token}").get_data(as_text=True)
+    other = app.test_client().get(f"/termin/buchen/{token}").get_data(as_text=True)
     assert "Bereits gebucht" in other and "14:00" not in other
     # Buero sieht den Termin und den Status "genutzt"
     events = login(app, "laura@example.com").get(f"/kalender/api/termine?von={day.isoformat()}&bis={day.isoformat()}").get_json()["events"]
@@ -137,12 +139,12 @@ def test_booking_flow_double_submit_and_internal_visibility(app, setup):
 def test_slot_taken_meanwhile_shows_remaining_times(app, setup):
     admin, token, day = _create(app, setup)
     anon = app.test_client()
-    sub = _csrf(anon.get(f"/termin/{token}").get_data(as_text=True))
+    sub = _csrf(anon.get(f"/termin/buchen/{token}").get_data(as_text=True))
     # Inzwischen bucht das Buero intern 10:00 bei Laura (interner Kalender)
     r = admin.post("/kalender/api/termine", json={"title": "Intern", "start": _slot(day, "10:00"), "end": _slot(day, "10:30"),
                                                    "assignee_id": setup.laura_id})
     assert r.status_code == 201
-    r = anon.post(f"/termin/{token}", data={"slot": _slot(day, "10:00"), "submission": sub})
+    r = anon.post(f"/termin/buchen/{token}", data={"slot": _slot(day, "10:00"), "submission": sub})
     html = r.get_data(as_text=True)
     assert r.status_code == 409 and "nicht mehr frei" in html
     assert re.findall(r'name="slot" value="([^"]+)"', html) == [_slot(day, "11:00"), _slot(day, "14:00")]
@@ -151,9 +153,9 @@ def test_slot_taken_meanwhile_shows_remaining_times(app, setup):
 def test_manipulated_requests(app, setup):
     _admin, token, day = _create(app, setup)
     anon = app.test_client()
-    sub = _csrf(anon.get(f"/termin/{token}").get_data(as_text=True))
+    sub = _csrf(anon.get(f"/termin/buchen/{token}").get_data(as_text=True))
     # nicht freigegebene Uhrzeit
-    r = anon.post(f"/termin/{token}", data={"slot": _slot(day, "12:00"), "submission": sub})
+    r = anon.post(f"/termin/buchen/{token}", data={"slot": _slot(day, "12:00"), "submission": sub})
     assert r.status_code == 409 and "nicht freigegeben" in r.get_data(as_text=True)
     # fremdes/geratenes Token, IDs im Pfad
     for path in (f"/termin/{token[:-1]}x", "/termin/1", f"/termin/{setup.karl_id}", "/termin/../kalender"):
@@ -169,12 +171,12 @@ def test_manipulated_requests(app, setup):
 def test_contact_required_without_customer(app, setup):
     _admin, token, day = _create(app, setup, customer=False)
     anon = app.test_client()
-    html = anon.get(f"/termin/{token}").get_data(as_text=True)
+    html = anon.get(f"/termin/buchen/{token}").get_data(as_text=True)
     assert 'name="name"' in html and 'name="phone"' in html
     sub = _csrf(html)
-    r = anon.post(f"/termin/{token}", data={"slot": _slot(day, "10:00"), "submission": sub, "name": "Eva Probe"})
+    r = anon.post(f"/termin/buchen/{token}", data={"slot": _slot(day, "10:00"), "submission": sub, "name": "Eva Probe"})
     assert r.status_code == 409 and "Telefonnummer oder E-Mail" in r.get_data(as_text=True)
-    r = anon.post(f"/termin/{token}", data={"slot": _slot(day, "10:00"), "submission": sub, "name": "Eva Probe", "phone": "0171 1112223"})
+    r = anon.post(f"/termin/buchen/{token}", data={"slot": _slot(day, "10:00"), "submission": sub, "name": "Eva Probe", "phone": "0171 1112223"})
     assert r.status_code == 303
     with bypass_tenant_scope():
         event = CalendarEvent.query.filter(CalendarEvent.client_ref.like("bl-%")).one()
@@ -188,14 +190,14 @@ def test_revoked_and_expired(app, setup):
     r = admin.post(f"/kalender/buchungslinks/{link_id}/widerrufen", follow_redirects=True)
     assert "widerrufen" in r.get_data(as_text=True)
     anon = app.test_client()
-    assert anon.get(f"/termin/{token}").status_code == 410
-    assert anon.post(f"/termin/{token}", data={"slot": _slot(day, "10:00")}).status_code == 410
+    assert anon.get(f"/termin/buchen/{token}").status_code == 410
+    assert anon.post(f"/termin/buchen/{token}", data={"slot": _slot(day, "10:00")}).status_code == 410
     _admin, token2, _ = _create(app, setup)
     with bypass_tenant_scope():
         link = BookingLink.query.filter(BookingLink.token_hash == bl.token_hash(token2)).one()
         link.expires_at = utcnow_naive() - timedelta(minutes=1)
         _db.session.commit()
-    r = anon.get(f"/termin/{token2}")
+    r = anon.get(f"/termin/buchen/{token2}")
     assert r.status_code == 410 and "abgelaufen" in r.get_data(as_text=True)
     assert "abgelaufen" in admin.get("/kalender/buchungslinks").get_data(as_text=True)
 
@@ -203,7 +205,7 @@ def test_revoked_and_expired(app, setup):
 def test_all_taken_shows_hint(app, setup):
     admin, token, day = _create(app, setup, slots=("09:00",))
     admin.post("/kalender/api/termine", json={"title": "Intern", "start": _slot(day, "09:00"), "end": _slot(day, "09:30"), "assignee_id": setup.laura_id})
-    r = app.test_client().get(f"/termin/{token}")
+    r = app.test_client().get(f"/termin/buchen/{token}")
     assert "Keine freien Zeiten" in r.get_data(as_text=True)
 
 
@@ -213,3 +215,77 @@ def test_range_offers():
     assert offers == ["2026-11-16T09:00", "2026-11-16T14:30", "2026-11-18T09:00", "2026-11-18T14:30"]
     with pytest.raises(bl.LinkError):
         bl.offers_from_range(first, first + timedelta(days=200), {1}, ["09:00"])
+
+
+def _profile(app, setup, name="Laura Beispiel"):
+    from app.models import EmployeeProfile
+
+    with bypass_tenant_scope():
+        EmployeeProfile.query.filter(EmployeeProfile.user_id == setup.laura_id).one().display_name = name
+        s = OfficeSettings.query.filter(OfficeSettings.tenant_id == setup.tenant_a.id).one()
+        s.office_name, s.address, s.phone, s.email = "Kundendienstbüro Musterstadt", "Hauptstr. 1, 12345 Musterstadt", "02641 123456", "buero@example.com"
+        _db.session.commit()
+
+
+def _head(html):
+    return html.split("</head>", 1)[0]
+
+
+def test_page_heading_office_profile_and_neutral_preview(app, setup):
+    _profile(app, setup)
+    _admin, token, day = _create(app, setup)
+    html = app.test_client().get(f"/termin/buchen/{token}", headers={"User-Agent": "WhatsApp/2.23.20.0"}).get_data(as_text=True)
+    assert "Termin bei Laura Beispiel buchen" in html
+    for part in ("Kundendienstbüro Musterstadt", "Hauptstr. 1, 12345 Musterstadt", 'href="tel:02641123456"', "buero@example.com"):
+        assert part in html, part
+    assert "Wählen Sie eine freie Uhrzeit. Eine Anmeldung ist nicht erforderlich." in html
+    assert "Termin verbindlich buchen" in html and "bereitgestellt von Zentriqai" in html
+    head = _head(html)
+    assert '<meta property="og:title" content="Termin bei Laura Beispiel buchen">' in head
+    assert "<title>Termin bei Laura Beispiel buchen</title>" in head
+    for secret in ("Karl", "Geheimkunde", "Beratungsgespräch", day.strftime("%d.%m.%Y"), "10:00", "Telefon", token):
+        assert secret not in head, secret  # Vorschau ohne Kunden-/Kalenderdaten
+
+
+def test_heading_never_uses_email_without_profile_name(app, setup):
+    _profile(app, setup, name="")
+    with bypass_tenant_scope():
+        OfficeSettings.query.filter(OfficeSettings.tenant_id == setup.tenant_a.id).one().office_name = "Agentur Test"
+        _db.session.commit()
+    _admin, token, _day_ = _create(app, setup)
+    html = app.test_client().get(f"/termin/buchen/{token}").get_data(as_text=True)
+    assert "Termin bei Agentur Test buchen" in html and "laura" not in html.lower()
+
+
+def test_opening_and_preview_do_not_consume_link(app, setup):
+    _admin, token, _day_ = _create(app, setup)
+    for ua in ("WhatsApp/2.23.20.0", "facebookexternalhit/1.1", "Mozilla/5.0 (iPhone)"):
+        c = app.test_client()
+        assert c.get(f"/termin/buchen/{token}", headers={"User-Agent": ua}).status_code == 200
+        assert c.head(f"/termin/buchen/{token}", headers={"User-Agent": ua}).status_code == 200
+        assert c.get(f"/termin/{token}", headers={"User-Agent": ua}).status_code == 301
+    with bypass_tenant_scope():
+        link = BookingLink.query.one()
+        assert link.booking_count == 0 and link.used_at is None and bl.status(link) == "active"
+        assert CalendarEvent.query.filter(CalendarEvent.client_ref.like("bl-%")).count() == 0
+
+
+def test_legacy_link_redirects_and_still_books(app, setup):
+    _admin, token, day = _create(app, setup)
+    anon = app.test_client()
+    r = anon.get(f"/termin/{token}")
+    assert r.status_code == 301 and r.headers["Location"].endswith(f"/termin/buchen/{token}")
+    html = anon.get(f"/termin/{token}", follow_redirects=True).get_data(as_text=True)
+    assert "Termin verbindlich buchen" in html
+    # Formular, das noch unter der alten Adresse offen war
+    r = anon.post(f"/termin/{token}", data={"slot": _slot(day, "11:00"), "submission": _csrf(html)})
+    assert r.status_code == 303 and r.headers["Location"].endswith(f"/termin/buchen/{token}")
+    page = anon.get(r.headers["Location"]).get_data(as_text=True)
+    assert "Ihr Termin ist gebucht" in page and "11:00 Uhr" in page and day.strftime("%d.%m.%Y") in page and "Telefon" in page
+    # widerrufen/abgelaufen gilt auch fuer alte Links
+    _admin2, token2, _ = _create(app, setup)
+    with bypass_tenant_scope():
+        link = BookingLink.query.filter(BookingLink.token_hash == bl.token_hash(token2)).one()
+        link.revoked_at = utcnow_naive()
+        _db.session.commit()
+    assert anon.get(f"/termin/{token2}", follow_redirects=True).status_code == 410

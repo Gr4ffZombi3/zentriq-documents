@@ -2,7 +2,10 @@
 
 Der Link berechtigt ausschliesslich zu: freie Zeiten dieser Freigabe sehen, einen Termin buchen.
 Die Seite bekommt nur public_view() und die freien Uhrzeiten (keine IDs, keine Kalender-/Kunden-
-daten). Antworten werden nicht zwischengespeichert, nicht indexiert, ohne Referrer."""
+daten). Antworten werden nicht zwischengespeichert, nicht indexiert, ohne Referrer.
+
+Adresse: /termin/buchen/<token>. Fruehere Links /termin/<token> bleiben gueltig und leiten weiter.
+Nur POST bucht - Oeffnen der Seite oder Abruf der Linkvorschau (WhatsApp & Co.) verbraucht nichts."""
 
 import secrets
 from collections import OrderedDict
@@ -48,7 +51,22 @@ def _grouped(times) -> "OrderedDict[str, list]":
 
 
 @public_booking_bp.route("/<token>", methods=["GET", "POST"])
+def legacy(token):
+    """Bereits verschickte Links (/termin/<token>) bis zu ihrem Ablauf weiter nutzbar."""
+    if request.method == "POST" or bl.find(token) is None:
+        return _handle(token)
+    response = redirect(url_for("public_booking.page", token=token), 301)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
+@public_booking_bp.route("/buchen/<token>", methods=["GET", "POST"])
 def page(token):
+    return _handle(token)
+
+
+def _handle(token):
     link = bl.find(token)
     if link is None:
         return _notice("Link ungültig", "Dieser Buchungslink ist nicht gültig. Bitte wenden Sie sich an das Büro.", 404)

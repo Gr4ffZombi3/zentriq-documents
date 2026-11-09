@@ -5,19 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <meta name="referrer" content="no-referrer">
-  <title>{% block title %}Termin buchen{% endblock %}</title>
+  {#- Linkvorschau (WhatsApp, Mail): nur neutraler Titel und Buero - keine Kunden- oder Kalenderdaten. -#}
+  {%- set preview_title = view.heading if view else "Termin buchen" %}
+  <title>{% block title %}{{ preview_title }}{% endblock %}</title>
+  <meta name="description" content="Online-Terminbuchung{% if view and view.office %} – {{ view.office }}{% endif %}. Eine Anmeldung ist nicht erforderlich.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Zentriqai">
+  <meta property="og:title" content="{{ preview_title }}">
+  <meta property="og:description" content="Online-Terminbuchung{% if view and view.office %} – {{ view.office }}{% endif %}. Eine Anmeldung ist nicht erforderlich.">
+  <meta name="theme-color" content="#2b5a8a">
   <style>
-    :root { color-scheme: light dark; --bg:#f4f5f7; --card:#fff; --text:#1d2330; --muted:#5d6675; --line:#d9dde4; --accent:#2b5a8a; --accent-text:#fff; --warn:#a15c07; --ok:#1d7a3e; }
-    @media (prefers-color-scheme: dark) { :root { --bg:#14171c; --card:#1d2128; --text:#e8eaee; --muted:#a3abb8; --line:#363c47; --accent:#6aa3dc; --accent-text:#0d1117; --warn:#f0b35a; --ok:#6fd492; } }
+    :root { color-scheme: light dark; --bg:#f4f5f7; --card:#fff; --text:#1d2330; --muted:#5d6675; --line:#d9dde4; --accent:#2b5a8a; --accent-soft:#e8eff7; --accent-text:#fff; --warn:#a15c07; --ok:#1d7a3e; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#14171c; --card:#1d2128; --text:#e8eaee; --muted:#a3abb8; --line:#363c47; --accent:#6aa3dc; --accent-soft:#1f2c3b; --accent-text:#0d1117; --warn:#f0b35a; --ok:#6fd492; } }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-    main { max-width: 34rem; margin: 0 auto; padding: 1.2rem 1rem 3rem; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-text-size-adjust: 100%; }
+    main { max-width: 34rem; margin: 0 auto; padding: 1.4rem 1rem 2rem; }
+    .eyebrow { margin: 0 0 0.3rem; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
+    h1 { font-size: 1.45rem; line-height: 1.25; margin: 0; overflow-wrap: anywhere; }
+    .office { margin: 0.7rem 0 0; color: var(--muted); font-size: 0.95rem; font-style: normal; overflow-wrap: anywhere; }
+    .office strong { color: var(--text); font-weight: 600; }
+    .office a { color: inherit; }
+    .lead { margin: 1.2rem 0 0; font-size: 1.02rem; }
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 1rem; padding: 1.1rem; margin-top: 1rem; }
-    h1 { font-size: 1.35rem; margin: 0 0 0.2rem; }
-    .office { color: var(--muted); font-size: 0.9rem; margin: 0; }
-    .meta { margin: 0.4rem 0 0; color: var(--muted); }
-    h2 { font-size: 1rem; margin: 1.1rem 0 0.5rem; }
+    .kind { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: baseline; margin: 0; }
+    .kind dt { width: 100%; font-size: 0.8rem; color: var(--muted); }
+    .kind dd { margin: 0; font-weight: 600; }
+    .kind .sub { font-weight: 400; color: var(--muted); }
+    h2 { font-size: 0.98rem; margin: 1.2rem 0 0.5rem; }
+    h2:first-child, .card > h2:first-of-type { margin-top: 0.2rem; }
     .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr)); gap: 0.5rem; }
+    .slot { position: relative; }
     .slot input { position: absolute; opacity: 0; pointer-events: none; }
     .slot span { display: block; text-align: center; padding: 0.75rem 0.2rem; border: 1px solid var(--line); border-radius: 0.7rem; font-weight: 600; cursor: pointer; min-height: 48px; }
     .slot input:checked + span { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
@@ -26,12 +43,35 @@
     label.field input { display: block; width: 100%; margin-top: 0.25rem; font-size: 1rem; padding: 0.7rem; border: 1px solid var(--line); border-radius: 0.6rem; background: var(--card); color: var(--text); }
     button { margin-top: 1.2rem; width: 100%; font-size: 1.05rem; font-weight: 600; padding: 0.85rem; border: 0; border-radius: 0.8rem; background: var(--accent); color: var(--accent-text); cursor: pointer; min-height: 52px; }
     button[disabled] { opacity: 0.6; }
-    .error { color: var(--warn); font-weight: 600; margin: 0.6rem 0 0; }
-    .ok { color: var(--ok); font-weight: 700; font-size: 1.1rem; margin: 0; }
-    .hint { color: var(--muted); font-size: 0.85rem; }
+    .error { color: var(--warn); font-weight: 600; margin: 0 0 0.6rem; }
+    .ok { color: var(--ok); font-weight: 700; font-size: 1.15rem; margin: 0 0 0.6rem; }
+    .facts { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 1rem; margin: 0; }
+    .facts dt { color: var(--muted); }
+    .facts dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+    .hint { color: var(--muted); font-size: 0.85rem; margin: 0.8rem 0 0; }
+    footer { max-width: 34rem; margin: 0 auto; padding: 0 1rem 2.5rem; color: var(--muted); font-size: 0.8rem; }
   </style>
 </head>
 <body>
-  <main>{% block content %}{% endblock %}</main>
+  <main>
+    {% if view %}
+      <header>
+        <p class="eyebrow">Online-Terminbuchung</p>
+        <h1>{% block heading %}{{ view.heading }}{% endblock %}</h1>
+        {% if view.office or view.address or view.phone or view.email %}
+          <address class="office" data-booking-office>
+            {% if view.office %}<strong>{{ view.office }}</strong>{% endif %}
+            {% if view.address %}<br>{{ view.address }}{% endif %}
+            {% if view.phone or view.email %}<br>{% if view.phone %}<a href="tel:{{ view.phone | replace(' ', '') }}">{{ view.phone }}</a>{% endif %}{% if view.phone and view.email %} · {% endif %}{% if view.email %}<a href="mailto:{{ view.email }}">{{ view.email }}</a>{% endif %}{% endif %}
+          </address>
+        {% endif %}
+      </header>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  <footer data-booking-provider>
+    {% if view and view.office %}Buchungsseite von {{ view.office }}, bereitgestellt von Zentriqai.{% else %}Buchungsseite bereitgestellt von Zentriqai.{% endif %}
+    Ihre Angaben werden nur für diesen Termin verwendet.
+  </footer>
 </body>
 </html>

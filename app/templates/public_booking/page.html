@@ -1,13 +1,17 @@
 {% extends "public_booking/_base.html" %}
 {% block content %}
-  <p class="office">{{ view.office }}</p>
-  <h1>{{ view.title }}</h1>
-  <p class="meta">{{ view.minutes }} Minuten{% if view.kind %} · {{ view.kind }}{% endif %}</p>
+  <p class="lead" data-booking-lead>Wählen Sie eine freie Uhrzeit. Eine Anmeldung ist nicht erforderlich.</p>
+  <div class="card">
+    <dl class="kind" data-booking-kind>
+      <dt>Terminart</dt>
+      <dd>{{ view.title }}</dd>
+      <dd class="sub">{% if view.kind %}{{ view.kind }} · {% endif %}{{ view.minutes }} Minuten</dd>
+    </dl>
+  </div>
   <form method="post" class="card" data-booking-form>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="submission" value="{{ submission }}">
     {% if error %}<p class="error" role="alert" data-booking-error>{{ error }}</p>{% endif %}
-    <p class="hint">Bitte wählen Sie eine freie Uhrzeit.</p>
     {% for day, items in days.items() %}
       <h2>{{ day }}</h2>
       <div class="slots">

@@ -173,7 +173,7 @@ def test_forgot_password_survives_broker_failure(client, user, monkeypatch):
 def test_reset_page_renders_with_hardening_headers(client):
     page = client.get(RESET_PATH)
     assert page.status_code == 200
-    assert page.headers["Referrer-Policy"] == "no-referrer"
+    assert page.headers["Referrer-Policy"] == "same-origin"
     assert "no-store" in page.headers["Cache-Control"]
     html = page.get_data(as_text=True)
     assert 'name="token"' in html

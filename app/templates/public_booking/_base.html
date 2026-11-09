@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <meta name="referrer" content="no-referrer">
+  <meta name="referrer" content="same-origin">
   {#- Linkvorschau (WhatsApp, Mail): nur neutraler Titel und Buero - keine Kunden- oder Kalenderdaten. -#}
   {%- set preview_title = view.heading if view else "Termin buchen" %}
   <title>{% block title %}{{ preview_title }}{% endblock %}</title>

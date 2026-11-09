@@ -289,3 +289,38 @@ def test_legacy_link_redirects_and_still_books(app, setup):
         link.revoked_at = utcnow_naive()
         _db.session.commit()
     assert anon.get(f"/termin/{token2}", follow_redirects=True).status_code == 410
+
+
+def test_https_post_with_csrf_and_retry_after_lost_response(app, setup):
+    """Regression: Mit no-referrer schickte der Browser keinen Referer, Flask-WTF lehnte jede
+    HTTPS-Buchung mit 400 ab. Ausserdem: Antwort geht verloren -> erneutes Absenden zeigt die
+    bereits gespeicherte Buchung, ohne zweiten Termin."""
+    _admin, token, day = _create(app, setup, customer=False)
+    app.config["WTF_CSRF_ENABLED"] = True
+    try:
+        from flask import g
+
+        g.pop("csrf_token", None)  # Test-App-Kontext teilt g mit den Requests
+        https = "https://zentriq.test"
+        anon = app.test_client()
+        r = anon.get(f"/termin/buchen/{token}", base_url=https)
+        html = r.get_data(as_text=True)
+        assert r.headers["Referrer-Policy"] == "same-origin" and '<meta name="referrer" content="same-origin">' in html
+        csrf = re.search(r'name="csrf_token" value="([^"]+)"', html).group(1)
+        data = {"csrf_token": csrf, "slot": _slot(day, "10:00"), "submission": _csrf(html), "name": "Eva Probe", "phone": "0171 1112223"}
+        referer = {"Referer": f"{https}/termin/buchen/{token}"}  # sendet der Browser bei same-origin
+        assert anon.post(f"/termin/buchen/{token}", data=data, base_url=https).status_code == 400  # ohne Referer
+        r = anon.post(f"/termin/buchen/{token}", data=data, base_url=https, headers=referer)
+        assert r.status_code == 303
+        # Verbindungsabbruch: Bestaetigung (Session-Eintrag) kam nie beim Browser an
+        with anon.session_transaction() as sess:
+            for key in [k for k in sess if k.startswith("bl_ok_")]:
+                sess.pop(key)
+        r = anon.post(f"/termin/buchen/{token}", data=data, base_url=https, headers=referer, follow_redirects=True)
+        page = r.get_data(as_text=True)
+        assert r.status_code == 200 and "Ihr Termin ist gebucht" in page and "10:00 Uhr" in page
+        with bypass_tenant_scope():
+            assert CalendarEvent.query.filter(CalendarEvent.client_ref.like("bl-%")).count() == 1
+            assert BookingLink.query.one().booking_count == 1
+    finally:
+        app.config["WTF_CSRF_ENABLED"] = False

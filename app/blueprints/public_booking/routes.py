@@ -24,7 +24,7 @@ def _page(template: str, status: int = 200, **ctx):
     response = make_response(render_template(template, **ctx), status)
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Robots-Tag"] = "noindex, nofollow"
-    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Referrer-Policy"] = "same-origin"  # Flask-WTF prueft bei HTTPS den Referer
     return response
 
 
@@ -57,7 +57,7 @@ def legacy(token):
         return _handle(token)
     response = redirect(url_for("public_booking.page", token=token), 301)
     response.headers["Cache-Control"] = "no-store"
-    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Referrer-Policy"] = "same-origin"  # Flask-WTF prueft bei HTTPS den Referer
     return response
 
 

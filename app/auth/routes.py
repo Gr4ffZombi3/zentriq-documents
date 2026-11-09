@@ -285,7 +285,7 @@ def reset_password():
 
     response = make_response(render_template("auth/reset_password.html", form=form))
     # Seite verarbeitet ein Token: nicht an Dritte weitergeben und nicht zwischenspeichern.
-    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Referrer-Policy"] = "same-origin"  # Flask-WTF prueft bei HTTPS den Referer
     response.headers["Cache-Control"] = "no-store"
     return response
 

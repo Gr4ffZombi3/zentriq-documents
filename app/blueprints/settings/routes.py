@@ -259,7 +259,7 @@ def account_email_confirm():
             flash(f"Ihre Anmelde-E-Mail lautet jetzt {email}. Andere Sitzungen wurden abgemeldet.", "success")
         return redirect(url_for("settings.profile"))
     response = make_response(render_template("settings/account_email_confirm.html"))
-    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Referrer-Policy"] = "same-origin"  # Flask-WTF prueft bei HTTPS den Referer
     response.headers["Cache-Control"] = "no-store"
     return response
 

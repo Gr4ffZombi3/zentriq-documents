@@ -187,6 +187,11 @@ def test_pasted_email_alone_is_no_instruction():
     assert not email_reply.is_request(EMAIL.replace("einen Termin", "einen Termin, bitte um Rückmeldung"))
     assert email_reply.is_request("Antwort für einen Termin schreiben")
     assert email_reply.is_request("Bitte Antwort mit Terminvorschlägen:\n\n" + EMAIL)
+    # Vorgaben an den Chat sind kein E-Mail-Auftrag (Produktionsfall 09.11.2026)
+    for text in ("Was ist der Unterschied zwischen Teilkasko und Vollkasko? Antworte in zwei Sätzen.",
+                 "Antworte kurz: Was bedeutet Selbstbeteiligung?", "Beantworte bitte die Frage knapp"):
+        assert not email_reply.is_request(text), text
+    assert email_reply.is_request("Antwort an Herrn Meier wegen der Kündigung")
 
 
 def test_input_field_hands_reply_instruction_to_chat(auth_client, office):

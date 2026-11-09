@@ -292,7 +292,9 @@ def _snippets(source: Source, terms: list[str], limit: int = 2) -> list[str]:
     return hits[:limit]
 
 
-def handle(user, conversation, question_text: str) -> str:
+def handle(user, conversation, question_text: str) -> str | None:
+    """Antwort mit Quellen. None, wenn keine Quelle gefunden wurde und nicht ausdruecklich nach einer
+    Internetrecherche gefragt war - dann beantwortet der Chat die Frage normal (Modell)."""
     from app.services.ai import router
 
     query = public_query(user, question_text)
@@ -316,6 +318,8 @@ def handle(user, conversation, question_text: str) -> str:
         notes.append("Die Websuche ist gerade nicht erreichbar.")
     current_app.logger.info("web_research.done huk=%s terms=%s sources=%s", huk, len(terms), len(sources))
     if not sources:
+        if not _EXPLICIT.search(question_text or ""):
+            return None
         return "⚠ " + " ".join(notes or ["Keine passenden Quellen gefunden."]) + " Es wurde keine Antwort aus dem Internet erstellt."
 
     source_block = "\n\n".join(f"[{i}] {s.title} ({s.kind}) – {s.url}\n{s.text}" for i, s in enumerate(sources, start=1))

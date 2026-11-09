@@ -64,3 +64,17 @@ def test_general_search_not_configured_is_reported(app, office):
         admin = User.query.filter_by(email="admin-a@example.com").one()
         reply = w.handle(admin, SimpleNamespace(tenant_id=office.tenant_a.id, model_choice=None, id=1), "Recherchiere die aktuelle Regelung zur Grundsteuer")
     assert "nicht eingerichtet" in reply and "keine Antwort aus dem Internet" in reply
+
+
+def test_no_sources_without_explicit_request_falls_back_to_chat(app, office, monkeypatch):
+    """Produktionsfall 09.11.2026: Fachfrage ohne gefundene Quelle endete mit einer Warnung statt
+    einer normalen Chat-Antwort."""
+    from app.models import User
+
+    app.config["GOOGLE_SEARCH_API_KEY"] = None
+    monkeypatch.setattr(w, "search_huk", lambda query: [])
+    with use_tenant_id(office.tenant_a.id):
+        admin = User.query.filter_by(email="admin-a@example.com").one()
+        reply = w.handle(admin, SimpleNamespace(tenant_id=office.tenant_a.id, model_choice=None, id=1),
+                         "Was ist der Unterschied zwischen Teilkasko und Vollkasko?")
+    assert reply is None

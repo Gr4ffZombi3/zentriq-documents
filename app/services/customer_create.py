@@ -56,10 +56,16 @@ _COMMANDS = (
     # "Kunde(n) anlegen ...", "Kunde Justin Heller anlegen"
     re.compile(rf"^\s*(?:bitte\s+)?(?:(?:einen|eine|neue[nr]?)\s+)?{_KUNDE}\s+anlegen\b", re.I),
     re.compile(rf"^\s*(?:bitte\s+)?{_KUNDE}\b.+\banlegen\s*[.!]?\s*$", re.I),
+    # Verkuerzt: "Kunde Max Mustermann anlegen privat 0171 ..." (Angaben nach "anlegen")
+    re.compile(rf"^\s*(?:bitte\s+)?(?:(?:einen|eine|neue[nr]?)\s+)?{_KUNDE}\s+[A-Za-zÄÖÜäöüß'’-]+(?:\s+[A-Za-zÄÖÜäöüß'’-]+){{0,3}}\s+anlegen\b", re.I),
+    # "Max Mustermann als (neuen) Kunden aufnehmen/anlegen ..."
+    re.compile(rf"\bals\s+(?:neue[nr]?\s+)?{_KUNDE}\s+(?:anlegen|aufnehmen)\b", re.I),
 )
+# Klingt nach Neuanlage, passt aber auf keine feste Regel -> hoechstens ein kurzer Modellaufruf.
+_CREATE_HINT = re.compile(rf"\b{_KUNDE}\b.*\b(?:anleg|aufnehm|erfass)\w*|\b(?:anleg|aufnehm|erfass)\w*\b.*\b{_KUNDE}\b|\bneukund", re.I)
 # Befehlswoerter, die nicht zum Namen gehoeren. "an" nur als Verbzusatz (nicht "An der Kirche 5").
 _COMMAND_WORDS = re.compile(
-    rf"\b(?:bitte|leg(?:e)?|einen|eine|neue[nrs]?|{_KUNDE}|anlegen|als)\b|^\s*(?:den|die)\b", re.I
+    rf"\b(?:bitte|leg(?:e)?|einen|eine|neue[nrs]?|{_KUNDE}|anlegen|aufnehmen|als)\b|^\s*(?:den|die)\b", re.I
 )
 _PARTICLE_AN = re.compile(r"(?<!\S)an(?=[\s:,.;]|$)(?!\s+(?:der|dem|den|die)\s)", re.I)
 _LABELS = re.compile(
@@ -103,6 +109,61 @@ _LOWER_WORDS = {"am", "an", "der", "dem", "den", "die", "im", "in", "auf", "zum"
 
 def is_command(text: str) -> bool:
     return any(rx.search(text or "") for rx in _COMMANDS)
+
+
+def looks_like_create(text: str) -> bool:
+    return bool(_CREATE_HINT.search(text or "")) and not is_command(text) and len(text or "") <= 300
+
+
+_EXTRACT_SYSTEM = (
+    "Du extrahierst aus einer kurzen deutschen Eingabe eines Versicherungsbueros, ob ein neuer Kunde angelegt werden soll. "
+    'Antworte NUR mit JSON: {"anlegen": true|false, "vorname": "", "nachname": "", "festnetz": "", "privat": "", '
+    '"telefon_ohne_typ": "", "strasse": "", "hausnummer": "", "plz": "", "ort": "", "email": ""}. '
+    "Nichts erfinden; unbekannte Felder leer lassen. Eine Telefonnummer nur dann als festnetz/privat, wenn das Wort ausdruecklich davor steht."
+)
+
+
+def handle_with_model(user, text: str) -> dict:
+    """Unklare Anlage-Formulierung: hoechstens EIN kurzer Modellaufruf erkennt Absicht und Felder;
+    gepruefte Werte laufen danach durch dieselbe lokale Anlage (handle), die nur Fehlendes erfragt.
+    Kundendaten gehen nur an einen dafuer freigegebenen Anbieter - sonst Hinweis auf das Format."""
+    import json
+
+    from app.services.ai import router
+
+    hint = ("Den Anlagewunsch habe ich nicht sicher erkannt. Bitte so eingeben: "
+            "„Kunde Vorname Nachname anlegen, privat 0171 …, festnetz 02641 …“.")
+    try:
+        result = router.complete(system=_EXTRACT_SYSTEM, messages=[{"role": "user", "content": text}], user_id=user.id,
+                                 tenant_id=user.tenant_id, customer_data=True, purpose="customer_create", max_tokens=200, max_calls=1)
+    except router.AiError:
+        return {"kind": "not_found", "message": hint}
+    match = re.search(r"\{.*\}", result.text or "", re.S)
+    try:
+        data = json.loads(match.group(0)) if match else {}
+    except ValueError:
+        data = {}
+    if not isinstance(data, dict) or data.get("anlegen") is not True:
+        return {"kind": "not_found", "message": hint}
+
+    def val(key, pattern=None):
+        value = data.get(key)
+        value = " ".join(value.split()) if isinstance(value, str) else ""
+        return value if value and (pattern is None or re.fullmatch(pattern, value)) else ""
+
+    phone = r"[+()0-9 /-]{6,30}"
+    parts = ["Lege Kunden", val("vorname", r"[\wÄÖÜäöüß'’ -]{1,60}"), val("nachname", r"[\wÄÖÜäöüß'’ -]{1,60}"), "an"]
+    for label, key in (("festnetz", "festnetz"), ("privat", "privat"), ("", "telefon_ohne_typ")):
+        if val(key, phone):
+            parts.append(f"{label} {val(key, phone)}".strip())
+    street = val("strasse", r"[\wÄÖÜäöüß.' -]{2,80}")
+    if street:
+        parts.append(f"{street} {val('hausnummer', r'[0-9]{1,4}[a-zA-Z]?')}".strip())
+    if val("plz", r"\d{5}"):
+        parts.append(f"{val('plz')} {val('ort', r'[\wÄÖÜäöüß. -]{2,60}')}".strip())
+    if val("email", r"[^@\s]+@[^@\s]+\.[a-zA-Z]{2,}"):
+        parts.append(val("email"))
+    return handle(user, " ".join(p for p in parts if p))
 
 
 @dataclass

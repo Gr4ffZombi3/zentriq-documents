@@ -165,7 +165,7 @@ def test_no_models_without_keys(app, world):
 
 
 def test_free_first_and_fallback_on_rate_limit(app, world, fake):
-    # Komplexe Anfrage ("formuliere") -> starke kostenlose Modelle zuerst: Gemini (beide starken Modelle) 429 -> Llama 70B.
+    # Kostenlose Modelle zuerst, kleine vor grossen (auch bei "formuliere"): alle Gemini-Modelle 429 -> Llama 70B.
     fake.set("gemini", adapters.ProviderError(adapters.RATE_LIMIT, retry_after=120, status=429))
     client = _root(app, world)
     conversation_id = _new(client)
@@ -174,15 +174,16 @@ def test_free_first_and_fallback_on_rate_limit(app, world, fake):
     assert reply["status"] == "done"
     assert reply["provider"] == "groq"
     assert reply["cost_usd"] == 0
-    assert [c["model"] for c in fake.calls] == ["gemini-3.6-flash", "gemini-flash-latest", "llama-3.3-70b-versatile"]
+    models = [c["model"] for c in fake.calls]
+    assert models[0] == "gemini-3.5-flash-lite" and models[-1] == "llama-3.3-70b-versatile"
+    assert all(m.startswith("gemini") for m in models[:-1])
     usage = _usage()
-    assert [(u.provider, u.ok, u.error_type) for u in usage] == [
-        ("gemini", False, "rate_limit"), ("gemini", False, "rate_limit"), ("groq", True, None)
-    ]
-    assert usage[2].input_tokens == 100 and usage[2].output_tokens == 50
+    assert all((u.provider, u.ok, u.error_type) == ("gemini", False, "rate_limit") for u in usage[:-1])
+    assert (usage[-1].provider, usage[-1].ok) == ("groq", True)
+    assert usage[-1].input_tokens == 100 and usage[-1].output_tokens == 50
 
     # Gemini ist pausiert (Retry-After 120 s) und wird uebersprungen.
-    assert state.cooldown_info("gemini", "gemini-3.6-flash")["seconds"] > 60
+    assert state.cooldown_info("gemini", "gemini-3.5-flash-lite")["seconds"] > 60
     fake.calls.clear()
     fake.set("gemini", adapters.ProviderResult("ok", 1, 1))
     _send(client, conversation_id, "Formuliere noch eine Variante")
@@ -193,8 +194,9 @@ def test_simple_requests_use_small_models_first(app, world, fake):
     client = _root(app, world)
     _send(client, _new(client), "Hallo!")
     assert fake.calls[-1]["model"] == "gemini-3.5-flash-lite"
+    # Auch komplexe Anfragen zuerst an das kleine, zuverlaessige Modell (grosse = Rueckfallebene).
     _send(client, _new(client), "Analysiere bitte diesen Ablauf und bewerte ihn.")
-    assert fake.calls[-1]["model"] == "gemini-3.6-flash"
+    assert fake.calls[-1]["model"] == "gemini-3.5-flash-lite"
 
 
 def test_provider_outage_pauses_whole_provider(app, world, fake):
@@ -206,15 +208,15 @@ def test_provider_outage_pauses_whole_provider(app, world, fake):
 
 
 def test_http_503_pauses_only_that_model(app, world, fake, monkeypatch):
-    """Produktionsfall 08.11.2026: gemini-flash-latest HTTP 503 - Flash-Lite bleibt nutzbar."""
+    """HTTP 503 eines Modells pausiert nur dieses Modell - das naechste Gemini-Modell bleibt nutzbar."""
     app.config["GROQ_API_KEY"] = None
     calls = _per_model(monkeypatch, {
-        "gemini-3.6-flash": adapters.ProviderError(adapters.RATE_LIMIT, retry_after=28000, status=429),
-        "gemini-flash-latest": adapters.ProviderError(adapters.UNAVAILABLE, status=503),
+        "gemini-3.5-flash-lite": adapters.ProviderError(adapters.UNAVAILABLE, status=503),
     })
     client = _root(app, world)
     reply = _send(client, _new(client)).reply
-    assert reply["status"] == "done" and calls == ["gemini-3.6-flash", "gemini-flash-latest", "gemini-3.5-flash-lite"]
+    assert reply["status"] == "done" and calls == ["gemini-3.5-flash-lite", "gemini-flash-lite-latest"]
+    assert state.cooldown_info("gemini", "gemini-flash-lite-latest") is None
 
 
 def test_all_failed_reports_attempts_and_keeps_user_message(app, world, fake):
@@ -491,7 +493,7 @@ def test_conversation_crud_search_pin_project(app, world, fake):
     data = client.get(f"/zentriq/api/conversations/{conversation_id}").get_json()
     assert data["conversation"]["title"] == "Wie plane ich die Urlaubsvertretung?"
     assert [m["role"] for m in data["messages"]] == ["user", "assistant"]
-    assert data["messages"][1]["model"] == "Gemini 3.6 Flash"
+    assert data["messages"][1]["model"] == "Gemini 3.5 Flash-Lite"
 
     assert client.patch(f"/zentriq/api/conversations/{conversation_id}", json={"title": "Vertretung"}).status_code == 200
     assert client.patch(f"/zentriq/api/conversations/{conversation_id}", json={"title": "  "}).status_code == 400
@@ -825,27 +827,27 @@ def _per_model(monkeypatch, behaviour):
 
 
 def test_daily_quota_and_timeout_do_not_block_other_models(app, world, fake, monkeypatch):
-    """Produktionsfall 07.11.2026: gemini-3.6-flash 429 (Tageskontingent 20, retryDelay ~8,7 h),
-    gemini-flash-latest Zeitueberschreitung, Flash-Lite funktioniert."""
+    """Tageskontingent eines Modells erschoepft (429, retryDelay ~8,7 h), naechstes Modell mit
+    Zeitueberschreitung - das dritte antwortet; danach genau ein Aufruf je Eingabe."""
     app.config["GROQ_API_KEY"] = None
     calls = _per_model(monkeypatch, {
-        "gemini-3.6-flash": adapters.ProviderError(adapters.RATE_LIMIT, retry_after=31467, status=429),
-        "gemini-flash-latest": adapters.ProviderError(adapters.TIMEOUT),
+        "gemini-3.5-flash-lite": adapters.ProviderError(adapters.RATE_LIMIT, retry_after=31467, status=429),
+        "gemini-flash-lite-latest": adapters.ProviderError(adapters.TIMEOUT),
     })
     client = _root(app, world)
     conversation_id = _new(client)
     reply = _send(client, conversation_id).reply
-    assert reply["status"] == "done" and reply["model"] == "Gemini 3.5 Flash-Lite"
-    assert calls == ["gemini-3.6-flash", "gemini-flash-latest", "gemini-3.5-flash-lite"]
+    assert reply["status"] == "done" and reply["model"] == "Gemini 3.6 Flash"
+    assert calls == ["gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.6-flash"]
     # Die Wartezeit des Anbieters gilt voll (nicht nach 1 h erneut gegen das leere Kontingent).
-    assert state.cooldown_info("gemini", "gemini-3.6-flash")["seconds"] > 8 * 3600
-    assert state.cooldown_info("gemini", "gemini-flash-latest")["seconds"] > 60
-    assert state.cooldown_info("gemini", "gemini-3.5-flash-lite") is None
+    assert state.cooldown_info("gemini", "gemini-3.5-flash-lite")["seconds"] > 8 * 3600
+    assert state.cooldown_info("gemini", "gemini-flash-lite-latest")["seconds"] > 60
+    assert state.cooldown_info("gemini", "gemini-3.6-flash") is None
 
     calls.clear()
     for _ in range(3):  # weitere Eingaben: genau ein Aufruf, keine Wiederholung am leeren Kontingent
         assert _send(client, conversation_id, "Formuliere noch eine Variante").reply["status"] == "done"
-    assert calls == ["gemini-3.5-flash-lite"] * 3
+    assert calls == ["gemini-3.6-flash"] * 3
 
 
 def test_exhausted_quota_message_names_provider_wait(app, world, fake, monkeypatch):
@@ -881,9 +883,7 @@ def test_switching_model_mid_tool_round_sends_results_as_text(app, world, fake, 
 
     def call(provider, model_id, system, messages, max_tokens, timeout, tools=None):
         seen.append((model_id, messages))
-        if model_id == "gemini-3.6-flash":
-            raise adapters.ProviderError(adapters.RATE_LIMIT, retry_after=28000, status=429)
-        if model_id == "gemini-flash-latest":
+        if model_id == "gemini-3.5-flash-lite":
             state_calls["flash"] += 1
             if state_calls["flash"] == 1:
                 return adapters.ProviderResult("", 10, 5, tool_calls=[adapters.ToolCall(
@@ -898,6 +898,6 @@ def test_switching_model_mid_tool_round_sends_results_as_text(app, world, fake, 
     reply = _send(client, _new(client), "Wie viele Stunden habe ich diese Woche gearbeitet? Erkläre kurz.").reply
     assert reply["status"] == "done", reply
     model, messages = seen[-1]
-    assert model == "gemini-3.5-flash-lite"
+    assert model == "gemini-flash-lite-latest"
     assert not any(m.get("tool_calls") or m.get("role") == "tool" for m in messages)
     assert any("Ergebnis von Werkzeug meine_arbeitszeiten" in (m.get("content") or "") for m in messages)

@@ -22,10 +22,11 @@ from flask import current_app
 
 from app.services import availability, email_context
 
-_REQUEST = re.compile(
-    r"\b(?:antwort\w*|antworte|beantworte\w*|rückmeldung|rueckmeldung)\b"
-    r"|\b(?:schreib\w*|formulier\w*|entw[iu]rf\w*|verfass\w*)\b.*\b(?:mail|e-mail|nachricht)\b",
-    re.I,
+_WRITE_MAIL = re.compile(r"\b(?:schreib\w*|formulier\w*|entw[iu]rf\w*|verfass\w*)\b.*\b(?:mail|e-mail|nachricht)\b", re.I)
+# "Antworte in zwei Saetzen" ist eine Vorgabe an den Chat, kein E-Mail-Auftrag: ein Antwortwort
+# zaehlt nur mit Mail-/Kundenbezug (oder wenn eine E-Mail eingefuegt ist / im Gespraech liegt).
+_REPLY_CONTEXT = re.compile(
+    r"\b(?:e-?mail|mail|nachricht|kund\w*|herrn?|frau|anfrage|schreib\w*|entwurf|termin\w*|vorschl\w*|absag\w*|zusag\w*)\b", re.I
 )
 _APPOINTMENT = re.compile(r"\btermin\w*\b|\bberatungsgespräch\b|\btreffen\b|\bvorbeikommen\b", re.I)
 SLOT_TOKEN = "[[TERMINVORSCHLAEGE]]"
@@ -78,7 +79,10 @@ def is_reply_instruction(text: str) -> bool:
 
 
 def is_request(text: str) -> bool:
-    return bool(_REQUEST.search(instruction_of(text)))
+    instruction = instruction_of(text)
+    if _WRITE_MAIL.search(instruction):
+        return True
+    return bool(_REPLY_WORD.search(instruction)) and (email_context.looks_like_email(text or "") or bool(_REPLY_CONTEXT.search(instruction)))
 
 
 def find_email(conversation, question) -> str | None:

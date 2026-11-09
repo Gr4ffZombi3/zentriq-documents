@@ -259,3 +259,51 @@ def test_existing_untyped_phone_kept_shown_and_found(app, office):
         c = Customer.query.get(office.ids["Justin Heller"])
         assert (c.phone_landline, c.phone_key) == ("0264177777", "+491711234567")
     assert _input(laura, "02641 77777")["card"]["id"] == c.id and _input(laura, "0171 1234567")["card"]["id"] == c.id
+
+
+# --- Verkuerzte Saetze und hoechstens ein Modellaufruf ------------------------------------------
+
+
+@pytest.fixture()
+def no_model(monkeypatch):
+    from app.services.ai import adapters
+
+    calls = []
+    monkeypatch.setattr(adapters, "call", lambda *a, **k: calls.append(a) or (_ for _ in ()).throw(AssertionError("Modellaufruf")))
+    return calls
+
+
+def test_short_create_sentence_needs_no_model(app, fresh_office, no_model):
+    laura = login(app, "laura@example.com")
+    data = _input(laura, "Kunde Max Mustermann anlegen privat 0171 2345678")
+    assert data["created"] is True
+    [c] = _by_name(fresh_office.tenant_a.id, "Max Mustermann")
+    assert (c.first_name, c.last_name, c.phone_private) == ("Max", "Mustermann", "0171 2345678")
+    asked = _input(laura, "Kunde Erika Muster anlegen 0172 3456789")  # Typ offen -> Rueckfrage, kein Raten
+    assert asked["kind"] == "create_phone"
+    assert no_model == []
+
+
+def test_unclear_create_without_customer_data_provider_gives_hint(app, fresh_office, no_model):
+    laura = login(app, "laura@example.com")
+    data = _input(laura, "bitte den Max Mustermann bei uns als Kunden erfassen, Handy 0171 2345678")
+    assert data["kind"] == "not_found" and "Kunde Vorname Nachname anlegen" in data["message"]
+    assert no_model == [] and _by_name(fresh_office.tenant_a.id, "Max Mustermann") == []
+
+
+def test_unclear_create_uses_at_most_one_model_call_and_backend_checks(app, fresh_office, monkeypatch):
+    from app.services.ai import router
+
+    seen = []
+
+    def complete(**kwargs):
+        seen.append(kwargs)
+        return router.Completion(text='{"anlegen": true, "vorname": "Max", "nachname": "Mustermann", "festnetz": "", '
+                                      '"privat": "", "telefon_ohne_typ": "0171 2345678"}', provider="gemini", model="m", model_label="M")
+
+    monkeypatch.setattr(router, "complete", complete)
+    laura = login(app, "laura@example.com")
+    data = _input(laura, "bitte den Max Mustermann bei uns als Kunden erfassen, Handy 0171 2345678")
+    assert len(seen) == 1 and seen[0]["max_calls"] == 1 and seen[0]["customer_data"] is True
+    assert data["kind"] == "create_phone"  # Backend prueft: Typ der Nummer fehlt -> nur danach fragen
+    assert _by_name(fresh_office.tenant_a.id, "Max Mustermann") == []

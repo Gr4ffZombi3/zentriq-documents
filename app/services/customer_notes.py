@@ -1163,6 +1163,11 @@ def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | Non
                                           phone_kinds=phone_kinds)
         except customer_create.CreateError as exc:
             raise NoteError(str(exc), exc.status) from None
+    if customer_id in (None, "") and selected_id in (None, "") and customer_create.looks_like_create(text):
+        try:
+            return customer_create.handle_with_model(user, text)
+        except customer_create.CreateError as exc:
+            raise NoteError(str(exc), exc.status) from None
 
     # Ausdruecklich gewaehlter Kunde (Auswahlliste / Rueckfrage): kein erneutes Erkennen.
     if customer_id not in (None, ""):

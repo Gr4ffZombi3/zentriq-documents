@@ -160,11 +160,13 @@ def available_models(*, customer_data: bool = False, complex_task: bool = False)
         if not model.has_price:
             continue
         models.append(model)
-    # Kostenlose Modelle immer zuerst. Innerhalb davon: einfache Anfragen an kleine/schnelle,
-    # komplexe (Werkzeuge, Dokumente, lange Texte) an starke Modelle; dann Prioritaet, Preis.
+    # Kostenlose Modelle immer zuerst, darin kleine/schnelle vor grossen - auch bei Werkzeugfragen:
+    # die grossen Gemini-Modelle ("denkende" Flash-Modelle) brauchten im Betrieb bis zum Timeout
+    # bzw. lieferten leere Antworten, sodass das Zeitbudget vor dem kleinen Modell aufgebraucht war.
+    # Grosse Modelle bleiben Rueckfallebene. Dann Prioritaet, Preis.
     def order(m):
         tier = m.tier or 1
-        return (not m.is_free, -tier if complex_task else tier, m.priority, Decimal(m.input_price or 0) + Decimal(m.output_price or 0), m.id)
+        return (not m.is_free, tier, m.priority, Decimal(m.input_price or 0) + Decimal(m.output_price or 0), m.id)
 
     return sorted(models, key=order)
 
@@ -224,6 +226,7 @@ def complete(
     tools: list[dict] | None = None,
     tool_executor=None,
     complex_task: bool = False,
+    max_calls: int | None = None,
 ) -> Completion:
     """Beantwortet `messages`. Mit `tools` darf das Modell Werkzeuge anfordern; `tool_executor`
     (name, arguments) -> str fuehrt sie aus (Rechtepruefung dort). Faellt ein Modell mitten im
@@ -260,7 +263,7 @@ def complete(
     totals = {"in": 0, "out": 0, "cost": Decimal("0")}
 
     calls = 0
-    max_calls = int(current_app.config.get("ZENTRIQ_AI_MAX_CALLS_PER_REQUEST") or MAX_CALLS_PER_REQUEST)
+    max_calls = max_calls or int(current_app.config.get("ZENTRIQ_AI_MAX_CALLS_PER_REQUEST") or MAX_CALLS_PER_REQUEST)
     # Anbieter, der diese Anfrage als fehlerhaft abgelehnt hat (HTTP 400): dieselbe Anfrage geht
     # nicht an weitere Modelle desselben Anbieters - sie wuerde dort genauso abgelehnt.
     rejected_providers: set[str] = set()

@@ -575,7 +575,8 @@ def process_pending(user, message_id: int, audio_jobs=None, context_customer_id=
 
     # 0. Antwort auf eine Kunden-E-Mail: Kunde, Kalender und Entwurf deterministisch im Backend,
     #    das Modell nur fuer den Mitteltext (app/services/email_reply.py).
-    if question is not None and email_reply.is_request(question.content):
+    if question is not None and (email_reply.is_request(question.content) or (
+            email_reply.is_reply_instruction(question.content) and email_reply.find_email(conversation, question))):
         _set_progress(pending, "Erstelle Antwortentwurf")
         reply = email_reply.handle(user, conversation, question, customer_id=context_customer_id)
         if reply is not None:
@@ -606,8 +607,10 @@ def process_pending(user, message_id: int, audio_jobs=None, context_customer_id=
         if web_research.is_question(question.content):
             _set_progress(pending, "Recherchiere im Internet")
             reply = web_research.handle(user, conversation, question.content)
-            _finish(pending, conversation, reply, provider=orchestrator.DIRECT_PROVIDER, model="web_research", tools_used=["Webrecherche"])
-            return
+            if reply is not None:
+                _finish(pending, conversation, reply, provider=orchestrator.DIRECT_PROVIDER, model="web_research", tools_used=["Webrecherche"])
+                return
+            _set_progress(pending, "Antwort wird erstellt")
 
     # 1. Direktantwort ohne KI-Aufruf (nur bei automatischer Modellwahl und ohne Anhang).
     if question is not None and not has_attachments and (conversation.model_choice or router.AUTO) == router.AUTO:

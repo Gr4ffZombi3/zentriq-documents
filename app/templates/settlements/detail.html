@@ -22,6 +22,23 @@
       <div><dt>Original</dt><dd><a href="{{ url_for('settlements.original', settlement_id=record.id) }}" target="_blank" rel="noopener">Ansehen</a> · <a href="{{ url_for('settlements.original', settlement_id=record.id, download=1) }}">Herunterladen</a></dd></div>
     </dl>
   </section>
+  {% if blocks %}
+  <section class="panel" aria-labelledby="abr-vm" data-abr-blocks>
+    <header class="panel-header"><h2 class="panel-title" id="abr-vm">Vermittler-Blöcke</h2></header>
+    <div class="panel-body">
+      <p class="form-hint">Jede Buchung zählt für den Mitarbeiter ihres VM-Blocks. Automatisch über die Vermittlernummer im Mitarbeiterprofil; hier bei Bedarf festlegen (bleibt bei „Neu auswerten“ erhalten).</p>
+      <ul class="abr-rows">{% for b in blocks %}
+        <li class="abr-row"><form method="post" action="{{ url_for('settlements.assign_broker', settlement_id=record.id) }}" class="abr-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="vm" value="{{ b.broker }}">
+          <span class="abr-row-ref">VM {{ b.broker }} · {{ b.count }} Buchungen · {{ "{:,.2f}".format(b.total).replace(",", "X").replace(".", ",").replace("X", ".") }} €</span>
+          <label class="sr-only" for="vm-{{ loop.index }}">Mitarbeiter</label>
+          <select class="field-surface" id="vm-{{ loop.index }}" name="mitarbeiter"><option value="">nicht zugeordnet</option>
+            {% for m in members %}<option value="{{ m.id }}" {% if m.id == b.user_id %}selected{% endif %}>{{ member_label(m) }}</option>{% endfor %}</select>
+          <button class="btn btn-secondary btn-sm" type="submit">Zuordnen</button></form></li>
+      {% endfor %}</ul>
+    </div>
+  </section>
+  {% endif %}
   <section class="panel" aria-labelledby="abr-zeilen">
     <header class="panel-header"><h2 class="panel-title" id="abr-zeilen">Buchungen ({{ counts.all }})</h2>
       {% if record.status in ('done', 'needs_review', 'duplicate') %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settlements.reevaluate', settlement_id=record.id) }}" data-abr-reevaluate>Neu auswerten (mit Vorschau)</a>{% endif %}</header>

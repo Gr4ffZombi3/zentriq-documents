@@ -407,9 +407,52 @@ def parse_file(record) -> tuple[ParsedSettlement, list[str] | None, str | None]:
 
 def _owner_map(tenant_id: int) -> dict:
     from app.models import User
+    from app.models.enums import UserRole
     from app.utils.vermittlernummer import vermittlernummer_key
 
-    return {vermittlernummer_key(u.vermittlernummer): u.id for u in User.query.filter(User.tenant_id == tenant_id).all() if u.vermittlernummer}
+    # Nur aktive Mitglieder des Bueros - nie das Plattformkonto (SUPER_ADMIN) oder geloeschte Konten,
+    # auch wenn dort (noch) dieselbe Vermittlernummer hinterlegt ist.
+    users = User.query.filter(User.tenant_id == tenant_id, User.role != UserRole.SUPER_ADMIN, User.deleted_at.is_(None),
+                              User.is_active.is_(True)).all()
+    return {vermittlernummer_key(u.vermittlernummer): u.id for u in users if u.vermittlernummer}
+
+
+UNASSIGNED = "keinem Mitarbeiter zugeordnet"
+
+
+def _clear_unassigned(line) -> None:
+    reasons = [r for r in (line.review_reason or "").split("; ") if r and UNASSIGNED not in r]
+    line.review_reason = "; ".join(reasons) or None
+    if not reasons:
+        line.needs_review = False
+
+
+def broker_blocks(lines) -> list[dict]:
+    """VM-Bloecke eines Belegs mit Anzahl, Summe und zugeordnetem Mitarbeiter."""
+    blocks: dict = {}
+    for line in lines:
+        if not line.broker_number:
+            continue
+        b = blocks.setdefault(line.broker_number, {"broker": line.broker_number, "count": 0, "total": Decimal("0"), "user_id": line.employee_user_id})
+        b["count"] += 1
+        b["total"] += line.amount or Decimal("0")
+    return list(blocks.values())
+
+
+def assign_broker(record, broker: str, user) -> int:
+    """Ordnet alle Zeilen eines VM-Blocks einem aktiven Buero-Mitglied zu (manuelle Zuordnung,
+    bleibt bei einer Neuauswertung erhalten). Gibt die Zahl der Zeilen zurueck."""
+    count = 0
+    for line in record.lines:
+        if line.broker_number == broker:
+            line.employee_user_id = user.id if user else None
+            if user:
+                _clear_unassigned(line)
+            elif UNASSIGNED not in (line.review_reason or ""):
+                line.needs_review = True
+                line.review_reason = "; ".join(filter(None, [line.review_reason, f"Vermittlernummer {broker} {UNASSIGNED}"]))
+            count += 1
+    return count
 
 
 def build_lines(record, parsed: ParsedSettlement) -> list:
@@ -422,7 +465,7 @@ def build_lines(record, parsed: ParsedSettlement) -> list:
         reasons = list(line.reasons)
         owner = owners.get(vermittlernummer_key(line.broker_number)) if line.broker_number else None
         if line.broker_number and owner is None:
-            reasons.append(f"Vermittlernummer {line.broker_number} keinem Mitarbeiter zugeordnet")
+            reasons.append(f"Vermittlernummer {line.broker_number} {UNASSIGNED}")
         out.append(SettlementLine(
             tenant_id=record.tenant_id, position=line.position, page=line.page, raw_text=line.raw, booking_date=line.booking_date,
             contract_ref=line.contract_ref, sparte=line.sparte, booking_type=line.booking_type, booking_label=line.booking_label,
@@ -508,18 +551,26 @@ def reevaluate_preview(record) -> Reevaluation:
     """Liest den Beleg neu, ohne etwas zu speichern, und zeigt die Unterschiede."""
     parsed, _pages, _method = parse_file(record)
     new_lines = build_lines(record, parsed)
+    # Manuelle Block-Zuordnungen des bisherigen Imports uebernehmen (nie still verwerfen).
+    manual = {line.broker_number: line.employee_user_id for line in record.lines if line.broker_number and line.employee_user_id}
+    for line in new_lines:
+        if line.broker_number and line.employee_user_id is None and manual.get(line.broker_number):
+            line.employee_user_id = manual[line.broker_number]
+            _clear_unassigned(line)
     new_keys = {_line_key(line) for line in new_lines}
     old = list(record.lines)
     reviewed = [line for line in old if line.review_state is not None]
-    by_broker: dict = defaultdict(lambda: {"count": 0, "regular": Decimal("0"), "ten": 0})
+    by_broker: dict = defaultdict(lambda: {"count": 0, "regular": Decimal("0"), "ten": 0, "user_id": None})
     for line in new_lines:
         entry = by_broker[line.broker_number or record.broker_number or "–"]
         entry["count"] += 1
+        entry["user_id"] = line.employee_user_id if line.broker_number else record.employee_user_id
         if line.is_ten:
             entry["ten"] += 1
         elif line.amount is not None:
             entry["regular"] += line.amount
-    token = hashlib.sha256((fingerprint(parsed) + "|" + "|".join(f"{line.id}:{line.review_state}" for line in reviewed)).encode()).hexdigest()[:32]
+    token = hashlib.sha256((fingerprint(parsed) + "|" + "|".join(f"{line.id}:{line.review_state}" for line in reviewed)
+                            + "|" + repr(sorted((k, v) for k, v in manual.items()))).encode()).hexdigest()[:32]
     return Reevaluation(
         token=token, old_count=len(old), new_count=len(new_lines),
         removed=[line for line in old if line.amount is not None and _line_key(line) not in new_keys],

@@ -12,7 +12,7 @@
       <div><dt>Buchungen bisher</dt><dd>{{ preview.old_count }}</dd></div>
       <div><dt>Buchungen neu</dt><dd>{{ preview.new_count }} (Summe {{ money(preview.new_total) }}){% if preview.unclear %}, davon {{ preview.unclear }} unklar{% endif %}</dd></div>
       {% for vm, e in preview.by_broker.items() %}
-      <div><dt>VM {{ vm }}</dt><dd>{{ e.count }} Buchungen · ohne 10-€ {{ money(e.regular) }} · {{ e.ten }} × 10-€-Position</dd></div>
+      <div data-reeval-broker="{{ vm }}"><dt>VM {{ vm }} → {{ names.get(e.user_id) or 'nicht zugeordnet' }}</dt><dd>{{ e.count }} Buchungen · ohne 10-€ {{ money(e.regular) }} · {{ e.ten }} × 10-€-Position</dd></div>
       {% endfor %}
       <div><dt>Manuelle Prüfungen</dt><dd>{{ preview.kept_reviews | length }} werden übernommen{% if preview.lost_reviews %}, <strong>{{ preview.lost_reviews | length }} ohne Gegenstück</strong>{% endif %}</dd></div>
     </dl>

@@ -239,6 +239,8 @@ def make_huk_pdf() -> bytes:
     contract("Test Tina", "808/888888-B", "FV", "30,00")
     row((26, "VM-Nr."), (53, "089999Z,"), (88, "Fremd"))
     contract("Fremd Fritz", "808/999999-U", "UC", "5,00")
+    row((26, "VM-Nr."), (53, "080950T,"), (88, "Justin"))  # Nummer haengt (nur) am SUPER_ADMIN-Konto
+    contract("Plattform Paul", "808/121212-K", "KH", "7,00")
     row((26, "Ihre"), (42, "Werbegebühren"), (783, "170,40"))
     data = doc.tobytes()
     doc.close()
@@ -249,11 +251,11 @@ def test_huk_uses_only_detail_rows_amount_column_and_block_broker(app, office):
     parsed = svc.parse_huk(make_huk_pdf())
     assert parsed is not None and str(parsed.period_start) == "2026-10-01"
     amounts = [str(line.amount) for line in parsed.lines]
-    assert amounts == ["85.40", "10.00", "40.00", "10.00", "-60.00", "30.00", "5.00"]  # ohne Deckblatt/Uebertrag/Summen
+    assert amounts == ["85.40", "10.00", "40.00", "10.00", "-60.00", "30.00", "5.00", "7.00"]  # ohne Deckblatt/Uebertrag/Summen
     assert all(line.page == 2 for line in parsed.lines)
     fab = parsed.lines[1]
     assert fab.contract_ref == "808/123456-E-12" and fab.is_ten and fab.sparte == "Kfz" and fab.broker_number == "085555B"
-    assert [line.broker_number for line in parsed.lines][-2:] == ["081234A", "089999Z"]
+    assert [line.broker_number for line in parsed.lines][-3:] == ["081234A", "089999Z", "080950T"]
 
     _upload(login(app, "laura@example.com"), make_huk_pdf(), "huk-oktober.pdf")
     [record] = _records()
@@ -264,7 +266,10 @@ def test_huk_uses_only_detail_rows_amount_column_and_block_broker(app, office):
     assert laura.regular == Decimal("65.40") and laura.ten_pos_count == 2 and laura.ten_sum == Decimal("20.00")
     assert laura.orders == 2 and laura.sales_by_sparte == {"Hausrat": 1, "Kfz": 1}
     assert dennis.regular == Decimal("30.00") and dennis.sales_by_sparte == {"Kfz": 1} and dennis.ten_sum == 0
-    assert unknown.unclear == 1  # Vermittlernummer ohne Mitarbeiter -> erst nach Pruefung
+    assert unknown.unclear == 2  # fremde Nummer + Nummer des Plattformkontos -> erst nach Zuordnung
+    with bypass_tenant_scope():
+        platform = next(line for line in record.lines if line.broker_number == "080950T")
+        assert platform.employee_user_id is None and "keinem Mitarbeiter zugeordnet" in platform.review_reason
     page = login(app, "admin-a@example.com").get("/abrechnungen?monat=2026-10").get_data(as_text=True)
     assert "Vergütung ohne 10-€-Positionen" in page and "65,40 €" in page and "Hausrat: 1" in page
     assert "808/123456-E-12" not in page  # Einzelbuchungen erst in den Details
@@ -296,12 +301,12 @@ def test_huk_reevaluation_checked_without_duplicates(app, office, monkeypatch):
     assert "ausdrücklich bestätigen" in r.get_data(as_text=True)
     assert admin.post(f"/abrechnungen/beleg/{record.id}/neu-auswerten", data={"token": "falsch", "verwerfen": "1"}, follow_redirects=True).status_code == 200
     r = admin.post(f"/abrechnungen/beleg/{record.id}/neu-auswerten", data={"token": token, "verwerfen": "1"}, follow_redirects=True)
-    assert "Neu ausgewertet: 7 Buchungen" in r.get_data(as_text=True)
+    assert "Neu ausgewertet: 8 Buchungen" in r.get_data(as_text=True)
     records = _records()
     assert len(records) == 1  # derselbe Beleg, keine Dublette
     with bypass_tenant_scope():
         lines = SettlementLine.query.filter(SettlementLine.settlement_id == record.id).all()
-        assert len(lines) == 7 and all(line.page == 2 for line in lines)
+        assert len(lines) == 8 and all(line.page == 2 for line in lines)
         assert {r.name: r.regular for r in svc.summary(2026, 10)}["Laura"] == Decimal("65.40")
         # Pruefung einer neuen Zeile bleibt bei erneuter Neuauswertung erhalten
         unknown = next(line for line in lines if line.broker_number == "089999Z")
@@ -313,3 +318,32 @@ def test_huk_reevaluation_checked_without_duplicates(app, office, monkeypatch):
     with bypass_tenant_scope():
         again = SettlementLine.query.filter(SettlementLine.settlement_id == record.id, SettlementLine.broker_number == "089999Z").one()
         assert again.review_state == "ignored" and Settlement.query.count() == 1
+
+
+
+def test_broker_block_assignment_is_manual_and_survives_reevaluation(app, office):
+    _upload(login(app, "laura@example.com"), make_huk_pdf(), "huk-oktober.pdf")
+    [record] = _records()
+    admin = login(app, "admin-a@example.com")
+    page = admin.get(f"/abrechnungen/beleg/{record.id}").get_data(as_text=True)
+    assert "VM 080950T" in page and "data-abr-blocks" in page
+    # SUPER_ADMIN und fremde Bueros sind nicht waehlbar
+    assert admin.post(f"/abrechnungen/beleg/{record.id}/vermittler", data={"vm": "080950T", "mitarbeiter": office.root_id}).status_code == 404
+    assert admin.post(f"/abrechnungen/beleg/{record.id}/vermittler", data={"vm": "080950T", "mitarbeiter": office.bob_id}).status_code == 404
+    r = admin.post(f"/abrechnungen/beleg/{record.id}/vermittler", data={"vm": "080950T", "mitarbeiter": office.admin_a_id}, follow_redirects=True)
+    assert "VM 080950T: 1 Buchungen" in r.get_data(as_text=True)
+    with bypass_tenant_scope():
+        rows = {row.name: row for row in svc.summary(2026, 10)}
+        assert rows["Admin A"].regular == Decimal("7.00") and rows["Nicht zugeordnet"].unclear == 1
+    preview = admin.get(f"/abrechnungen/beleg/{record.id}/neu-auswerten").get_data(as_text=True)
+    assert "VM 080950T → Admin A" in preview
+    token = re.search(r'name="token" value="([^"]+)"', preview).group(1)
+    admin.post(f"/abrechnungen/beleg/{record.id}/neu-auswerten", data={"token": token})
+    with bypass_tenant_scope():
+        line = SettlementLine.query.filter(SettlementLine.broker_number == "080950T").one()
+        assert line.employee_user_id == office.admin_a_id and not line.needs_review and Settlement.query.count() == 1
+        # Das Mitarbeiterfeld am Beleg ueberschreibt die Block-Zuordnung nicht
+    admin.post(f"/abrechnungen/beleg/{record.id}/mitarbeiter", data={"mitarbeiter": office.dennis_id})
+    with bypass_tenant_scope():
+        rows = {row.name: row for row in svc.summary(2026, 10)}
+        assert rows["Laura"].regular == Decimal("65.40") and rows["Admin A"].regular == Decimal("7.00")

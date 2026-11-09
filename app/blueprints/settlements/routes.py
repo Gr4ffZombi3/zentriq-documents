@@ -13,7 +13,7 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, s
 from flask_login import current_user, login_required
 
 from app.extensions import db
-from app.models import Settlement, SettlementLine
+from app.models import Settlement, SettlementLine, User
 from app.services import settlements as svc
 from app.tenancy import get_or_404_scoped
 
@@ -94,12 +94,42 @@ def detail(settlement_id):
     _admin()
     record = get_or_404_scoped(Settlement, settlement_id)
     from app.models import User
+    from app.services.user_admin import office_members_query
 
-    members = User.query.filter(User.tenant_id == current_user.tenant_id, User.is_active.is_(True)).order_by(User.email).all()
+    members = office_members_query().filter(User.is_active.is_(True)).order_by(User.email).all()
     base = SettlementLine.query.filter(SettlementLine.settlement_id == record.id)
     counts = {"all": base.count(), "open": base.filter(SettlementLine.needs_review.is_(True), SettlementLine.review_state.is_(None)).count()}
+    blocks = svc.broker_blocks(SettlementLine.query.filter(SettlementLine.settlement_id == record.id, SettlementLine.broker_number.isnot(None)).all())
     return render_template("settlements/detail.html", record=record, status_labels=STATUS_LABELS, type_labels=svc.TYPE_LABELS,
-                           sparten=svc.sparten(), members=members, counts=counts)
+                           sparten=svc.sparten(), members=members, counts=counts, blocks=blocks, member_label=_member_label)
+
+
+def _member_label(user) -> str:
+    from app.services.calendar import member_name
+
+    return member_name(user) if user else "nicht zugeordnet"
+
+
+@settlements_bp.post("/beleg/<int:settlement_id>/vermittler")
+@login_required
+def assign_broker(settlement_id):
+    """VM-Block einem aktiven Mitglied des eigenen Bueros zuordnen (nie SUPER_ADMIN/geloescht)."""
+    _admin()
+    from app.services.user_admin import office_members_query
+
+    record = get_or_404_scoped(Settlement, settlement_id)
+    broker = (request.form.get("vm") or "").strip()
+    user_id = request.form.get("mitarbeiter", type=int)
+    user = office_members_query().filter(User.id == user_id, User.is_active.is_(True)).first() if user_id else None
+    if user_id and user is None:
+        abort(404)
+    count = svc.assign_broker(record, broker, user)
+    if not count:
+        abort(404)
+    _refresh_status(record)
+    db.session.commit()
+    flash(f"VM {broker}: {count} Buchungen {_member_label(user) if user else 'ohne Zuordnung'}.", "success")
+    return redirect(url_for("settlements.detail", settlement_id=record.id))
 
 
 @settlements_bp.get("/beleg/<int:settlement_id>/zeilen")
@@ -133,11 +163,12 @@ def reevaluate(settlement_id):
         return redirect(url_for("settlements.detail", settlement_id=record.id))
     try:
         preview = svc.reevaluate_preview(record)
+        names = {u.id: _member_label(u) for u in User.query.filter(User.id.in_([e["user_id"] for e in preview.by_broker.values() if e["user_id"]])).all()}
     except svc.SettlementError as exc:
         flash(str(exc), "error")
         return redirect(url_for("settlements.detail", settlement_id=record.id))
     db.session.rollback()  # Vorschau-Zeilen nie speichern
-    return render_template("settlements/reevaluate.html", record=record, preview=preview, type_labels=svc.TYPE_LABELS)
+    return render_template("settlements/reevaluate.html", record=record, preview=preview, type_labels=svc.TYPE_LABELS, names=names)
 
 
 @settlements_bp.get("/beleg/<int:settlement_id>/original")

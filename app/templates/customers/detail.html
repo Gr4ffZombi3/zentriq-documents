@@ -251,7 +251,7 @@
     <header class="panel-header">
       <h2 class="panel-title" id="kunde-notizen">Notizen &amp; Rückrufe <span class="count-tag">{{ note_card.open_contacts | length }} offen</span></h2>
       <a class="btn btn-secondary btn-sm" href="{{ url_for('zentriq.index', kunde=customer.id) }}">Im Assistenten bearbeiten</a>
-      <a class="btn btn-secondary btn-sm" href="{{ url_for('calendar.booking_links', kunde=customer.id) }}">Buchungslink erstellen</a>
+      {% if current_user.may_send_booking_links %}<a class="btn btn-secondary btn-sm" href="{{ url_for('calendar.booking_links', kunde=customer.id) }}">Buchungslink erstellen</a>{% endif %}
     </header>
     {% if note_card.open_contacts or note_card.notes %}
       <div class="panel-body-flush">

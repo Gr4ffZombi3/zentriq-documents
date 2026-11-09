@@ -107,6 +107,36 @@ def offers_from_range(first: date, last: date, weekdays: set[int], times: list[s
     return sorted(set(out))
 
 
+def offers_from_office_hours(assignee: User, minutes: int, now: datetime | None = None) -> tuple[list[str], date]:
+    """Startzeiten aus den vom Buero-Admin festgelegten Buerozeiten (Planungszeitraum, Arbeitstage
+    des Mitarbeiters, Vorlauf, 30-Minuten-Raster). Fuer Mitarbeiter mit Buchungslink-Freigabe:
+    sie waehlen keine Zeiten selbst. Belegte Zeiten filtert free_times() beim Aufruf."""
+    from app.services import availability as av
+
+    s = av.settings()
+    hours = av.office_hours(s)
+    if not hours:
+        raise LinkError("Der Büro-Admin hat noch keine Bürozeiten hinterlegt.")
+    now = now or utcnow_naive()
+    earliest = to_local(now + timedelta(minutes=int(s.lead_minutes or 0))).replace(tzinfo=None)
+    today = earliest.date()
+    last = to_local(now).date() + timedelta(days=max(1, min(int(s.horizon_days or 14), 60)))
+    workdays = av.workdays_of(assignee)
+    out, day = [], today
+    while day <= last and len(out) < MAX_OFFERS:
+        window = hours.get(day.isoweekday())
+        if window and (workdays is None or day.isoweekday() in workdays):
+            cursor, limit = datetime.combine(day, window[0]), datetime.combine(day, window[1])
+            while cursor + timedelta(minutes=minutes) <= limit and len(out) < MAX_OFFERS:
+                if cursor >= earliest:
+                    out.append(cursor.strftime("%Y-%m-%dT%H:%M"))
+                cursor += timedelta(minutes=av.STEP_MINUTES)
+        day += timedelta(days=1)
+    if not out:
+        raise LinkError("In den Bürozeiten des Planungszeitraums ist keine Uhrzeit verfügbar.")
+    return out, last
+
+
 def create(user: User, *, title: str, location_kind: str | None, minutes: int, assignee_id: int, customer_id: int | None,
            offers: list[str], valid_until: datetime) -> tuple[BookingLink, str]:
     from app.services import calendar as cal

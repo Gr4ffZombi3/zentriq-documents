@@ -670,6 +670,8 @@ def customer_card(user, customer: Customer) -> dict:
     if customer.address:
         card["address"] = customer.address
     card.update(_calendar_part(user, customer))
+    # Buchungslink fuer diesen Kunden (Buero-Admin oder Mitarbeiter mit Freigabe)
+    card["booking_link_url"] = f"/kalender/buchungslinks?kunde={customer.id}" if getattr(user, "may_send_booking_links", False) else None
     return card
 
 

@@ -45,6 +45,8 @@ class User(TenantScopedMixin, UserMixin, db.Model):
         onupdate=lambda: datetime.now(timezone.utc),
     )
     last_login_at = db.Column(db.DateTime, nullable=True)
+    # Vom Buero-Admin je Mitarbeiter freigegeben: Buchungslinks fuer die Buerozeiten erstellen.
+    can_send_booking_links = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
 
     @property
     def is_super_admin(self) -> bool:
@@ -63,6 +65,11 @@ class User(TenantScopedMixin, UserMixin, db.Model):
         """Verwaltungsrechte innerhalb eines Bueros (fachliche Daten). Bewusst NICHT fuer
         SUPER_ADMIN - der Plattformbetreiber hat keinen Zugriff auf Buerodaten."""
         return self.is_office_admin
+
+    @property
+    def may_send_booking_links(self) -> bool:
+        """Buero-Admin immer; Mitarbeiter nur mit Freigabe. Zeiten freigeben/aendern bleibt Admin."""
+        return bool(self.is_active and (self.is_office_admin or (self.is_employee and self.can_send_booking_links)))
 
     @property
     def is_deleted(self) -> bool:

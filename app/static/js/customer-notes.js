@@ -221,6 +221,7 @@
     var tools = el("div", "zn-actions zn-card-tools");
     tools.appendChild(button("Notiz erfassen", "btn btn-secondary btn-sm", function () { renderNoteForm(box, card, reply); }));
     if (card.book) tools.appendChild(button("Termin buchen", "btn btn-secondary btn-sm", function () { renderBookForm(box, card, reply); }));
+    if (card.booking_link_url) { var bl = el("a", "btn btn-secondary btn-sm", "Buchungslink erstellen"); bl.href = card.booking_link_url; bl.setAttribute("data-kk-booking-link", ""); tools.appendChild(bl); }
     box.appendChild(tools);
 
     var details = el("details", "zn-more");

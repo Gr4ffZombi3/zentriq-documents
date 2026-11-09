@@ -7,15 +7,17 @@ Loeschen nutzt die bestehenden Formulare und Services unter /settings/users."""
 
 from datetime import time, timedelta
 
-from flask import Blueprint, render_template, request
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.orm import selectinload
 
 from app.auth.permissions import admin_required
+from app.extensions import db
 from app.models import AuditLog, User
-from app.models.audit_log import OFFICE_ACTIVITY_EVENT_TYPES
+from app.models.audit_log import OFFICE_ACTIVITY_EVENT_TYPES, AuditEventType
 from app.services import leipziger_todo
 from app.services.activity import day_label, describe_activities
+from app.services.audit import log_audit_event
 from app.services.timetracking import service as time_service
 from app.services.timetracking.calc import month_bounds, week_bounds
 from app.services.timetracking.clock import local_to_utc_naive, local_today, utcnow_naive
@@ -74,6 +76,22 @@ def staff_detail(user_id):
         has_lists=bool(documents),
         weekday_names=WEEKDAY_NAMES,
     )
+
+
+@office_bp.post("/mitarbeiter/<int:user_id>/buchungslinks")
+@login_required
+@admin_required
+def staff_booking_links(user_id):
+    """Buero-Admin schaltet fuer einen Mitarbeiter das Erstellen von Buchungslinks frei/ab."""
+    member = get_office_member_or_404(user_id)
+    if not member.is_employee:
+        abort(400)
+    member.can_send_booking_links = request.form.get("allowed") == "1"
+    log_audit_event(AuditEventType.USER_UPDATED, user=current_user,
+                    details={"target_user_id": member.id, "can_send_booking_links": member.can_send_booking_links})
+    db.session.commit()
+    flash("Buchungslinks freigegeben." if member.can_send_booking_links else "Freigabe für Buchungslinks entzogen.", "success")
+    return redirect(url_for("office.staff_detail", user_id=member.id))
 
 
 @office_bp.get("/aktivitaeten")

@@ -324,3 +324,78 @@ def test_https_post_with_csrf_and_retry_after_lost_response(app, setup):
             assert BookingLink.query.one().booking_count == 1
     finally:
         app.config["WTF_CSRF_ENABLED"] = False
+
+
+# --- Freigabe fuer Mitarbeiter (Laura) ---------------------------------------------------------
+
+
+def _offers_for_link(token):
+    with bypass_tenant_scope():
+        return BookingLink.query.filter(BookingLink.token_hash == bl.token_hash(token)).one()
+
+
+def test_employee_needs_admin_release(app, setup):
+    laura = login(app, "laura@example.com")
+    assert laura.get("/kalender/buchungslinks").status_code == 403
+    assert laura.post("/kalender/buchungslinks", data={"title": "x", "assignee_id": str(setup.admin_a_id)}).status_code == 403
+    assert "Buchungslink erstellen" not in laura.get("/kalender").get_data(as_text=True)
+    assert laura.get(f"/zentriq/api/kunden/{setup.karl_id}").get_json()["card"]["booking_link_url"] is None
+    # Laura kann sich nicht selbst freischalten, Dennis bleibt ohne Freigabe
+    assert laura.post(f"/mitarbeiter/{setup.laura_id}/buchungslinks", data={"allowed": "1"}).status_code == 403
+    admin = login(app, "admin-a@example.com")
+    r = admin.post(f"/mitarbeiter/{setup.laura_id}/buchungslinks", data={"allowed": "1"}, follow_redirects=True)
+    assert r.status_code == 200 and "Freigabe entziehen" in r.get_data(as_text=True)
+    assert login(app, "dennis@example.com").get("/kalender/buchungslinks").status_code == 403
+    # Admin eines anderen Bueros kann Laura nicht freischalten
+    assert login(app, "admin-b@example.com").post(f"/mitarbeiter/{setup.laura_id}/buchungslinks", data={"allowed": "0"}).status_code == 404
+    admin.post(f"/mitarbeiter/{setup.laura_id}/buchungslinks", data={"allowed": "0"})
+    assert login(app, "laura@example.com").get("/kalender/buchungslinks").status_code == 403
+
+
+def test_employee_link_uses_office_hours_and_books_into_admin_calendar(app, setup):
+    admin = login(app, "admin-a@example.com")
+    admin.post(f"/mitarbeiter/{setup.laura_id}/buchungslinks", data={"allowed": "1"})
+    admin_link_admin, admin_token, _ = _create(app, setup)  # Link des Admins - fuer Laura unsichtbar
+    laura = login(app, "laura@example.com")
+    assert "Buchungslink erstellen" in laura.get("/kalender").get_data(as_text=True)
+    card = laura.get(f"/zentriq/api/kunden/{setup.karl_id}").get_json()["card"]  # Kundenkarte im Hauptbildschirm
+    assert card["booking_link_url"] == f"/kalender/buchungslinks?kunde={setup.karl_id}"
+    page = laura.get(f"/kalender/buchungslinks?kunde={setup.karl_id}").get_data(as_text=True)
+    assert 'name="slots"' not in page and 'name="minutes"' not in page and "data-bl-office-hours" in page
+    assert f'value="{setup.laura_id}"' not in page  # nur Buero-Admins waehlbar
+    # Manipulierte Felder: eigene Zeiten/Dauer/Mitarbeiter werden nicht uebernommen
+    bad = laura.post("/kalender/buchungslinks", data={"title": "Beratung", "assignee_id": str(setup.laura_id)}, follow_redirects=True)
+    assert "Büro-Admin auswählen" in bad.get_data(as_text=True)
+    with bypass_tenant_scope():
+        other_customer = setup.heller_b
+    bad = laura.post("/kalender/buchungslinks", data={"title": "Beratung", "assignee_id": str(setup.admin_a_id), "customer_id": str(other_customer)},
+                     follow_redirects=True)
+    assert "Kunde wurde nicht gefunden" in bad.get_data(as_text=True)
+    r = laura.post("/kalender/buchungslinks", follow_redirects=True, data={
+        "title": "Beratungsgespräch", "location_kind": "telefon", "assignee_id": str(setup.admin_a_id), "customer_id": str(setup.karl_id),
+        "minutes": "200", "mode": "slots", "slots": [f"{_day().isoformat()}T23:30"], "valid_until": "2099-01-01"})
+    html = r.get_data(as_text=True)
+    url = re.search(r'data-bl-url>([^<]+)<', html).group(1)
+    assert url.startswith("https://zentriq.test/termin/buchen/")
+    token = url.rsplit("/", 1)[1]
+    link = _offers_for_link(token)
+    assert link.minutes == 30 and link.assignee_user_id == setup.admin_a_id and link.created_by_user_id == setup.laura_id
+    assert all("08:00" <= o[11:] <= "17:30" for o in link.offers) and f"{_day().isoformat()}T23:30" not in link.offers
+    assert link.expires_at < utcnow_naive() + timedelta(days=16)
+    assert admin_token not in html and html.count("data-bl-row=") == 1  # nur eigene Links
+    # Laura kann den Link des Admins nicht widerrufen
+    admin_link = _offers_for_link(admin_token)
+    assert laura.post(f"/kalender/buchungslinks/{admin_link.id}/widerrufen").status_code == 403
+    # abgemeldet oeffnen und buchen - derselbe Ablauf wie beim Admin
+    anon = app.test_client()
+    page = anon.get(f"/termin/buchen/{token}").get_data(as_text=True)
+    slot = re.findall(r'name="slot" value="([^"]+)"', page)[0]
+    r = anon.post(f"/termin/buchen/{token}", data={"slot": slot, "submission": _csrf(page)})
+    assert r.status_code == 303 and "Ihr Termin ist gebucht" in anon.get(f"/termin/buchen/{token}").get_data(as_text=True)
+    day = slot[:10]
+    events = admin.get(f"/kalender/api/termine?von={day}&bis={day}").get_json()["events"]
+    mine = [e for e in events if e["title"] == "Beratungsgespräch – Karl Geheimkunde"]
+    assert len(mine) == 1 and mine[0]["start"].startswith(slot)
+    with bypass_tenant_scope():
+        event = CalendarEvent.query.filter(CalendarEvent.client_ref == f"bl-{link.id}").one()
+        assert event.assignee_user_id == setup.admin_a_id and event.customer_id == setup.karl_id

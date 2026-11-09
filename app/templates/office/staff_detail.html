@@ -49,6 +49,21 @@
         </div>
       </section>
 
+      {% if member.is_employee %}
+      <section class="panel" data-staff-booking-links>
+        <header class="panel-header"><h2 class="panel-title">Buchungslinks</h2></header>
+        <div class="panel-body">
+          <p>{{ state_tag('Freigegeben', 'success') if member.can_send_booking_links else state_tag('Nicht freigegeben', 'neutral') }}</p>
+          <p class="form-hint">Mit Freigabe kann {{ name }} im Kalender und aus Kundenakten Buchungslinks für die von Ihnen festgelegten Bürozeiten erstellen und selbst verschicken. Zeiten freigeben oder ändern bleibt beim Büro-Admin.</p>
+          <form method="post" action="{{ url_for('office.staff_booking_links', user_id=member.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="allowed" value="{{ '0' if member.can_send_booking_links else '1' }}">
+            <button type="submit" class="btn btn-secondary btn-sm">{{ 'Freigabe entziehen' if member.can_send_booking_links else 'Buchungslinks freigeben' }}</button>
+          </form>
+        </div>
+      </section>
+      {% endif %}
+
       <section class="panel">
         <header class="panel-header"><h2 class="panel-title">Leipziger Liste</h2></header>
         {% if not member.vermittlernummer %}

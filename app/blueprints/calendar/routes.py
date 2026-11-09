@@ -313,9 +313,16 @@ def availability_settings():
     return availability.settings()
 
 
-def _admin_only():
-    if not current_user.is_office_admin:
+def _links_allowed():
+    """Buero-Admin oder Mitarbeiter mit Freigabe (users.can_send_booking_links) - serverseitig."""
+    if not current_user.may_send_booking_links:
         abort(403)
+
+
+def _link_assignees():
+    """Admin: alle Mitarbeiter. Mitarbeiter mit Freigabe: nur Buero-Admins (deren Buerozeiten)."""
+    members = cal.office_members()
+    return members if current_user.is_office_admin else [m for m in members if m.is_office_admin]
 
 
 @calendar_bp.get("/buchungslinks")
@@ -324,11 +331,14 @@ def booking_links():
     from app.models import BookingLink, Customer
     from app.services import booking_links as bl
 
-    _admin_only()
+    _links_allowed()
     customer = None
     if request.args.get("kunde", type=int):
         customer = Customer.query.filter(Customer.id == request.args.get("kunde", type=int)).first()
-    links = BookingLink.query.order_by(BookingLink.created_at.desc(), BookingLink.id.desc()).limit(100).all()
+    query = BookingLink.query
+    if not current_user.is_office_admin:
+        query = query.filter(BookingLink.created_by_user_id == current_user.id)
+    links = query.order_by(BookingLink.created_at.desc(), BookingLink.id.desc()).limit(100).all()
     rows = []
     for link in links:
         event = bl.booked_event(link)
@@ -336,7 +346,7 @@ def booking_links():
                      "free": len(bl.free_times(link)) if bl.status(link) == "active" else 0})
     today = local_today()
     return render_template(
-        "calendar/booking_links.html", rows=rows, labels=bl.STATUS_LABELS, members=cal.office_members(), member_name=cal.member_name,
+        "calendar/booking_links.html", rows=rows, labels=bl.STATUS_LABELS, members=_link_assignees(), member_name=cal.member_name,
         kinds=cal.LOCATION_KINDS, customer=customer, new_id=request.args.get("neu", type=int),
         defaults={"from": (today + timedelta(days=1)).isoformat(), "to": (today + timedelta(days=7)).isoformat(),
                   "valid": (today + timedelta(days=14)).isoformat()},
@@ -352,10 +362,26 @@ def booking_link_create():
     from app.services import booking_links as bl
     from app.services.timetracking.clock import local_to_utc_naive
 
-    _admin_only()
+    _links_allowed()
     form = request.form
     back = url_for("calendar.booking_links", kunde=form.get("customer_id") or None)
     try:
+        assignee_id = int(form.get("assignee_id") or 0)
+        if not current_user.is_office_admin:
+            # Mitarbeiter: Zeiten, Dauer und Gueltigkeit legt der Buero-Admin fest (Buerozeiten).
+            assignee = next((m for m in _link_assignees() if m.id == assignee_id), None)
+            if assignee is None:
+                raise bl.LinkError("Bitte einen Büro-Admin auswählen.")
+            s = availability_settings()
+            minutes = int(s.default_minutes or 30) if s else 30
+            offers, last_day = bl.offers_from_office_hours(assignee, minutes)
+            link, _token = bl.create(
+                current_user, title=form.get("title", ""), location_kind=form.get("location_kind") or None, minutes=minutes,
+                assignee_id=assignee.id, customer_id=int(form["customer_id"]) if (form.get("customer_id") or "").isdigit() else None,
+                offers=offers, valid_until=local_to_utc_naive(last_day, _time(23, 59)),
+            )
+            flash("Buchungslink erstellt. Link kopieren und an den Kunden senden.", "success")
+            return redirect(url_for("calendar.booking_links", neu=link.id))
         if form.get("mode") == "range":
             first, last = date.fromisoformat(form.get("from", "")), date.fromisoformat(form.get("to", ""))
             weekdays = {int(d) for d in form.getlist("weekdays") if d.isdigit()}
@@ -369,7 +395,7 @@ def booking_link_create():
         valid_until = local_to_utc_naive(valid_day, _time(23, 59))
         link, _token = bl.create(
             current_user, title=form.get("title", ""), location_kind=form.get("location_kind") or None,
-            minutes=int(form.get("minutes") or 30), assignee_id=int(form.get("assignee_id") or 0),
+            minutes=int(form.get("minutes") or 30), assignee_id=assignee_id,
             customer_id=int(form["customer_id"]) if (form.get("customer_id") or "").isdigit() else None,
             offers=offers, valid_until=valid_until,
         )
@@ -386,8 +412,10 @@ def booking_link_revoke(link_id):
     from app.models import BookingLink
     from app.services import booking_links as bl
 
-    _admin_only()
+    _links_allowed()
     link = get_or_404_scoped(BookingLink, link_id)
+    if not current_user.is_office_admin and link.created_by_user_id != current_user.id:
+        abort(403)
     bl.revoke(current_user, link)
     flash("Buchungslink widerrufen. Er kann nicht mehr verwendet werden.", "success")
     return redirect(url_for("calendar.booking_links"))

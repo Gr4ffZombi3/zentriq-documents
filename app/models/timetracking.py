@@ -37,6 +37,29 @@ class EmployeeProfile(TenantScopedMixin, db.Model):
     updated_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive, onupdate=utcnow_naive)
 
     user = db.relationship("User", backref=db.backref("employee_profile", uselist=False))
+    # Wochenplaene mit Gueltigkeitsdatum (aelteste zuerst). Ohne Plan: gleichmaessige Verteilung.
+    plans = db.relationship(
+        "EmployeeWorkPlan", primaryjoin="foreign(EmployeeWorkPlan.user_id) == EmployeeProfile.user_id",
+        order_by="EmployeeWorkPlan.valid_from", viewonly=True, lazy="selectin",
+    )
+
+    def plan_for(self, day):
+        """Wochenplan, der an `day` gilt (juengster mit valid_from <= day), sonst None."""
+        current = None
+        for plan in self.plans or []:
+            if plan.valid_from <= day:
+                current = plan
+        return current
+
+    @property
+    def current_weekly_minutes(self) -> int:
+        from app.services.timetracking.clock import local_today
+
+        return self.weekly_minutes_on(local_today())
+
+    def weekly_minutes_on(self, day) -> int:
+        plan = self.plan_for(day)
+        return plan.weekly_minutes if plan is not None else int(self.weekly_target_minutes or 0)
 
     @property
     def workday_numbers(self) -> set[int]:
@@ -44,7 +67,12 @@ class EmployeeProfile(TenantScopedMixin, db.Model):
 
     @property
     def day_plan_label(self) -> str:
-        """Wochenplan wie berechnet (calc.target_seconds_for_day), z. B. "Mo, Di, Do je 4:00 Std."."""
+        """Heute geltender Plan wie berechnet (calc.target_seconds_for_day)."""
+        from app.services.timetracking.clock import local_today
+
+        plan = self.plan_for(local_today())
+        if plan is not None:
+            return plan.label
         days = sorted(self.workday_numbers)
         if not days:
             return "keine Arbeitstage"
@@ -170,3 +198,47 @@ class TimeCorrection(TenantScopedMixin, db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive, index=True)
 
     user = db.relationship("User", foreign_keys=[user_id])
+
+
+WEEKDAY_SHORT = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
+
+
+class EmployeeWorkPlan(TenantScopedMixin, db.Model):
+    """Wochenplan eines Mitarbeiters ab einem Stichtag. days: {"1": {"start": "10:00", "end": "14:00",
+    "break": 0}, ...} - nur Arbeitstage (ISO-Wochentag); fehlende Tage = frei (0 Std.)."""
+
+    __tablename__ = "employee_work_plans"
+    __table_args__ = (db.UniqueConstraint("user_id", "valid_from", name="uq_employee_work_plans_user_from"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    valid_from = db.Column(db.Date, nullable=False)
+    days = db.Column(db.JSON, nullable=False)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
+
+    @staticmethod
+    def _minutes(value: str) -> int:
+        h, m = value.split(":")
+        return int(h) * 60 + int(m)
+
+    def day_minutes(self, isoweekday: int) -> int:
+        d = (self.days or {}).get(str(isoweekday))
+        if not d:
+            return 0
+        return max(0, self._minutes(d["end"]) - self._minutes(d["start"]) - int(d.get("break") or 0))
+
+    @property
+    def weekly_minutes(self) -> int:
+        return sum(self.day_minutes(i) for i in range(1, 8))
+
+    @property
+    def label(self) -> str:
+        parts = []
+        for i in range(1, 8):
+            d = (self.days or {}).get(str(i))
+            if d:
+                m = self.day_minutes(i)
+                pause = f", {int(d.get('break') or 0)} Min. Pause" if int(d.get("break") or 0) else ""
+                parts.append(f"{WEEKDAY_SHORT[i - 1]} {d['start']}–{d['end']}{pause} ({m // 60}:{m % 60:02d})")
+        return "; ".join(parts) + ", übrige Tage 0 Std." if parts else "keine Arbeitstage"

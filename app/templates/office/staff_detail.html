@@ -24,7 +24,7 @@
         <div><dt>E-Mail</dt><dd>{{ member.email }}</dd></div>
         <div><dt>Vermittlernummer</dt><dd>{{ member.vermittlernummer | vermittlernummer if member.vermittlernummer else '–' }}</dd></div>
         <div><dt>Personalnummer</dt><dd>{{ profile.personnel_number if profile and profile.personnel_number else '–' }}</dd></div>
-        <div><dt>Sollstunden</dt><dd>{{ ((profile.weekly_target_minutes * 60) | duration ~ ' Std. pro Woche · ' ~ profile.day_plan_label) if profile else '–' }}</dd></div>
+        <div><dt>Sollstunden</dt><dd>{{ ((profile.weekly_minutes_on(today) * 60) | duration ~ ' Std. pro Woche · ' ~ profile.day_plan_label) if profile else '–' }}</dd></div>
         <div><dt>Arbeitstage</dt><dd>{% if profile %}{% for ch in profile.workdays %}{{ weekday_names.get(ch, ch) }}{{ ', ' if not loop.last }}{% endfor %}{% else %}–{% endif %}</dd></div>
         <div><dt>Accountstatus</dt><dd>{{ state_tag('Aktiv', 'success') if member.is_active else state_tag('Deaktiviert', 'neutral') }}</dd></div>
         <div><dt>Zwei-Faktor</dt><dd>{{ state_tag('Eingerichtet', 'success') if member.two_factor_enabled else state_tag('Nicht eingerichtet', 'warning') }}</dd></div>
@@ -48,6 +48,66 @@
           <a class="btn btn-ghost btn-sm" href="{{ url_for('timetracking.employee_export', user_id=member.id, fmt='pdf', monat=month.start.strftime('%Y-%m')) }}">PDF exportieren</a>
         </div>
       </section>
+
+      <section class="panel" id="wochenplan" data-staff-work-plan>
+        <header class="panel-header"><h2 class="panel-title">Wochenplan</h2></header>
+        <div class="panel-body">
+          {% if plan_form.current %}
+            <p><strong>Gilt seit {{ plan_form.current.valid_from.strftime('%d.%m.%Y') }}:</strong> {{ plan_form.current.label }} · <strong>{{ (plan_form.current.weekly_minutes * 60) | duration }} Std. pro Woche</strong></p>
+          {% else %}
+            <p class="form-hint">Noch kein Wochenplan – es gilt die gleichmäßige Verteilung von {{ ((plan_form.weekly_legacy or 0) * 60) | duration }} Std. pro Woche auf die Arbeitstage.</p>
+          {% endif %}
+          {% for p in plan_form.future %}
+            <form method="post" action="{{ url_for('office.staff_work_plan', user_id=member.id) }}" class="abr-inline" data-plan-future>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="entfernen" value="{{ p.id }}">
+              <span>Ab {{ p.valid_from.strftime('%d.%m.%Y') }}: {{ p.label }} · {{ (p.weekly_minutes * 60) | duration }} Std./Woche</span>
+              <button type="submit" class="btn btn-ghost btn-sm">Entfernen</button>
+            </form>
+          {% endfor %}
+          <form method="post" action="{{ url_for('office.staff_work_plan', user_id=member.id) }}" class="form-stack" data-plan-form>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="table-wrap"><table class="data-table">
+              <thead><tr><th scope="col">Tag</th><th scope="col">Arbeitstag</th><th scope="col">Beginn</th><th scope="col">Ende</th><th scope="col">Pause (Min.)</th><th scope="col" class="num">Soll</th></tr></thead>
+              <tbody>
+              {% for name in ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'] %}{% set i = loop.index %}{% set d = plan_form.days.get(i|string) %}
+                <tr data-plan-day="{{ i }}">
+                  <th scope="row">{{ name }}</th>
+                  <td><input type="checkbox" name="tag_{{ i }}" value="1" aria-label="{{ name }} Arbeitstag" {% if d %}checked{% endif %}></td>
+                  <td><input type="time" name="beginn_{{ i }}" class="field-surface" aria-label="{{ name }} Beginn" value="{{ d.start if d else '' }}"></td>
+                  <td><input type="time" name="ende_{{ i }}" class="field-surface" aria-label="{{ name }} Ende" value="{{ d.end if d else '' }}"></td>
+                  <td><input type="number" name="pause_{{ i }}" class="field-surface" min="0" step="5" aria-label="{{ name }} Pause" value="{{ d.break if d else 0 }}"></td>
+                  <td class="num" data-plan-day-sum>–</td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table></div>
+            <p>Sollstunden pro Woche: <strong data-plan-week-sum>–</strong></p>
+            <div class="form-field"><label class="field-label" for="plan-ab">Gilt ab</label>
+              <input id="plan-ab" type="date" name="gueltig_ab" class="field-surface" min="{{ plan_form.min_date }}" value="{{ plan_form.min_date }}" required></div>
+            <p class="form-hint">Frühestens ab heute – vergangene Sollwerte und erfasste Zeiten bleiben unverändert. Tagessoll = Ende − Beginn − Pause.</p>
+            <div class="form-actions"><button type="submit" class="btn btn-primary btn-sm">Wochenplan speichern</button></div>
+          </form>
+        </div>
+      </section>
+      <script>
+        (function () {
+          var form = document.querySelector("[data-plan-form]"); if (!form) return;
+          function mins(v) { var m = /^(\d{1,2}):(\d{2})$/.exec(v || ""); return m ? (+m[1]) * 60 + (+m[2]) : null; }
+          function fmt(m) { return Math.floor(m / 60) + ":" + ("0" + (m % 60)).slice(-2); }
+          function update() {
+            var total = 0;
+            form.querySelectorAll("[data-plan-day]").forEach(function (row) {
+              var i = row.dataset.planDay, on = form.elements["tag_" + i].checked;
+              var s = mins(form.elements["beginn_" + i].value), e = mins(form.elements["ende_" + i].value), p = +(form.elements["pause_" + i].value || 0);
+              var m = on && s !== null && e !== null && e - s - p > 0 ? e - s - p : 0;
+              row.querySelector("[data-plan-day-sum]").textContent = on ? (m ? fmt(m) : "prüfen") : "0:00";
+              total += m;
+            });
+            form.querySelector("[data-plan-week-sum]").textContent = fmt(total) + " Std.";
+          }
+          form.addEventListener("input", update); update();
+        })();
+      </script>
 
       {% if member.is_employee %}
       <section class="panel" data-staff-booking-links>

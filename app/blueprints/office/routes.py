@@ -75,7 +75,18 @@ def staff_detail(user_id):
         leipziger=leipziger,
         has_lists=bool(documents),
         weekday_names=WEEKDAY_NAMES,
+        plan_form=_plan_form(member, today),
     )
+
+
+def _plan_form(member, today):
+    """Vorbelegung: heute geltender Plan (keine erfundenen Uhrzeiten, wenn noch keiner existiert)."""
+    profile = member.employee_profile
+    current = profile.plan_for(today) if profile else None
+    days = current.days if current else {}
+    future = [p for p in (profile.plans if profile else []) if p.valid_from > today]
+    return {"current": current, "future": future, "days": days, "min_date": today.isoformat(),
+            "weekly_legacy": profile.weekly_target_minutes if profile else None}
 
 
 @office_bp.post("/mitarbeiter/<int:user_id>/buchungslinks")
@@ -92,6 +103,36 @@ def staff_booking_links(user_id):
     db.session.commit()
     flash("Buchungslinks freigegeben." if member.can_send_booking_links else "Freigabe für Buchungslinks entzogen.", "success")
     return redirect(url_for("office.staff_detail", user_id=member.id))
+
+
+@office_bp.post("/mitarbeiter/<int:user_id>/wochenplan")
+@login_required
+@admin_required
+def staff_work_plan(user_id):
+    """Wochenplan ab Stichtag speichern bzw. kuenftigen Plan entfernen (nur Buero-Admin)."""
+    from datetime import date as _date
+
+    from app.services.timetracking import plans
+
+    member = get_office_member_or_404(user_id)
+    try:
+        if request.form.get("entfernen"):
+            plans.delete_future_plan(member, int(request.form["entfernen"]))
+            message = "Künftiger Wochenplan entfernt."
+        else:
+            try:
+                valid_from = _date.fromisoformat(request.form.get("gueltig_ab") or "")
+            except ValueError:
+                raise plans.PlanError("Bitte das Datum angeben, ab dem der Plan gilt.") from None
+            plan = plans.save_plan(current_user, member, valid_from, plans.parse_days(request.form))
+            message = f"Wochenplan ab {valid_from.strftime('%d.%m.%Y')} gespeichert ({plan.weekly_minutes // 60}:{plan.weekly_minutes % 60:02d} Std. pro Woche)."
+        log_audit_event(AuditEventType.USER_UPDATED, user=current_user, details={"target_user_id": member.id, "work_plan": message})
+        db.session.commit()
+        flash(message, "success")
+    except (plans.PlanError, ValueError) as exc:
+        db.session.rollback()
+        flash(str(exc), "error")
+    return redirect(url_for("office.staff_detail", user_id=member.id) + "#wochenplan")
 
 
 @office_bp.get("/aktivitaeten")

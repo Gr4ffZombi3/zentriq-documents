@@ -59,6 +59,7 @@ from app.models.task import Task
 from app.models.tenant import Tenant
 from app.models.timetracking import (
     EmployeeProfile,
+    EmployeeWorkPlan,
     TimeCorrection,
     TimeCorrectionRequest,
     WorkBreak,
@@ -107,6 +108,7 @@ __all__ = [
     "Tenant",
     "TrustedBrowser",
     "EmployeeProfile",
+    "EmployeeWorkPlan",
     "TimeCorrection",
     "TimeCorrectionRequest",
     "WorkBreak",

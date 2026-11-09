@@ -46,8 +46,14 @@ def session_net_seconds(session, now: datetime) -> int:
 
 
 def target_seconds_for_day(profile, day: date) -> int:
+    """Tagessoll: geltender Wochenplan (Ende - Beginn - Pause), sonst bisherige gleichmaessige
+    Verteilung des Wochensolls auf die Arbeitstage (bis ein Plan ab einem Stichtag hinterlegt ist)."""
     if profile is None:
         return 0
+    plan_for = getattr(profile, "plan_for", None)
+    plan = plan_for(day) if plan_for is not None else None
+    if plan is not None:
+        return plan.day_minutes(day.isoweekday()) * 60
     workdays = profile.workday_numbers
     if not workdays or day.isoweekday() not in workdays:
         return 0

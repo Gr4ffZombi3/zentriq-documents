@@ -41,7 +41,7 @@
               </th>
               <td class="whitespace-nowrap tabular-nums" data-label="Vermittlernr.">{{ item.vermittlernummer | vermittlernummer }}</td>
               <td class="whitespace-nowrap" data-label="Rolle">{{ item.role.label }}</td>
-              <td class="num whitespace-nowrap" data-label="Soll/Woche">{{ profile.weekly_target_minutes | hours_short if profile else '–' }}</td>
+              <td class="num whitespace-nowrap" data-label="Soll/Woche">{{ profile.current_weekly_minutes | hours_short if profile else '–' }}</td>
               <td class="whitespace-nowrap" data-label="Arbeitstage">{{ profile.workdays | workdays_short if profile else '–' }}</td>
               <td data-label="Status">{{ state_tag('Aktiv', 'success') if item.is_active else state_tag('Deaktiviert', 'neutral') }}</td>
               <td data-label="2FA"><span title="{{ 'Zwei-Faktor-Authentifizierung eingerichtet' if item.two_factor_enabled else 'Zwei-Faktor-Authentifizierung nicht eingerichtet' }}">{{ state_tag('Aktiv', 'success') if item.two_factor_enabled else state_tag('Nicht eingerichtet', 'warning') }}</span></td>

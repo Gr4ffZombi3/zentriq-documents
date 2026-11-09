@@ -17,7 +17,7 @@
 {% endif %}
 <div class="page-shell page-shell-wide">
   <a class="back-link" href="{{ url_for('timetracking.team') }}">← Team</a>
-  {% call page_header(employee_name, employee.email ~ ' · ' ~ employee.role.label ~ ((' · Wochensoll ' ~ ((profile.weekly_target_minutes * 60) | duration) ~ ' Std. (' ~ profile.day_plan_label ~ ')') if profile else ' · kein Sollprofil hinterlegt')) %}
+  {% call page_header(employee_name, employee.email ~ ' · ' ~ employee.role.label ~ ((' · Wochensoll ' ~ ((profile.weekly_minutes_on(today) * 60) | duration) ~ ' Std. (' ~ profile.day_plan_label ~ ')') if profile else ' · kein Sollprofil hinterlegt')) %}
     <div class="clock-status">{{ presence(state.status) }}</div>
   {% endcall %}
 

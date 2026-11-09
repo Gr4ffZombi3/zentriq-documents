@@ -42,6 +42,16 @@ class EmployeeProfile(TenantScopedMixin, db.Model):
     def workday_numbers(self) -> set[int]:
         return {int(ch) for ch in (self.workdays or "") if ch in "1234567"}
 
+    @property
+    def day_plan_label(self) -> str:
+        """Wochenplan wie berechnet (calc.target_seconds_for_day), z. B. "Mo, Di, Do je 4:00 Std."."""
+        days = sorted(self.workday_numbers)
+        if not days:
+            return "keine Arbeitstage"
+        minutes = round((self.weekly_target_minutes or 0) / len(days))
+        names = ", ".join(("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")[d - 1] for d in days)
+        return f"{names} je {minutes // 60}:{minutes % 60:02d} Std., übrige Tage 0 Std."
+
 
 class WorkSession(TenantScopedMixin, db.Model):
     __tablename__ = "work_sessions"

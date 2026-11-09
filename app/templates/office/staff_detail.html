@@ -24,7 +24,7 @@
         <div><dt>E-Mail</dt><dd>{{ member.email }}</dd></div>
         <div><dt>Vermittlernummer</dt><dd>{{ member.vermittlernummer | vermittlernummer if member.vermittlernummer else '–' }}</dd></div>
         <div><dt>Personalnummer</dt><dd>{{ profile.personnel_number if profile and profile.personnel_number else '–' }}</dd></div>
-        <div><dt>Sollstunden</dt><dd>{{ ((profile.weekly_target_minutes * 60) | duration ~ ' Std. pro Woche') if profile else '–' }}</dd></div>
+        <div><dt>Sollstunden</dt><dd>{{ ((profile.weekly_target_minutes * 60) | duration ~ ' Std. pro Woche · ' ~ profile.day_plan_label) if profile else '–' }}</dd></div>
         <div><dt>Arbeitstage</dt><dd>{% if profile %}{% for ch in profile.workdays %}{{ weekday_names.get(ch, ch) }}{{ ', ' if not loop.last }}{% endfor %}{% else %}–{% endif %}</dd></div>
         <div><dt>Accountstatus</dt><dd>{{ state_tag('Aktiv', 'success') if member.is_active else state_tag('Deaktiviert', 'neutral') }}</dd></div>
         <div><dt>Zwei-Faktor</dt><dd>{{ state_tag('Eingerichtet', 'success') if member.two_factor_enabled else state_tag('Nicht eingerichtet', 'warning') }}</dd></div>

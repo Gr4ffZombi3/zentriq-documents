@@ -37,6 +37,8 @@ FIELDS = (
     (re.compile(r"\b(?:adresse|anschrift)\b", re.I), "street", "Adresse"),
     (re.compile(r"\b(?:plz|postleitzahl)\b", re.I), "postal_code", "PLZ"),
     (re.compile(r"\b(?:wohnort|ort|stadt)\b", re.I), "city", "Ort"),
+    (re.compile(r"\bfestnetz\w*", re.I), "phone_landline", "Festnetznummer"),
+    (re.compile(r"\bprivat(?:telefon|nummer)\w*|\bprivate\s+nummer\b", re.I), "phone_private", "Privatnummer"),
     (re.compile(r"\b(?:telefon\w*|handy\w*|mobil\w*|rufnummer)\b", re.I), "phone", "Telefonnummer"),
     (re.compile(r"\b(?:e-?mail\w*|mail-?adresse)\b", re.I), "email", "E-Mail-Adresse"),
 )

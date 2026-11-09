@@ -41,8 +41,8 @@ def phone_variants(digits: str) -> set[str]:
     return variants
 
 
-def _normalized_phone_column():
-    column = Customer.phone
+def _normalized_phone_column(column=None):
+    column = Customer.phone if column is None else column
     for char in (" ", "-", "/", "(", ")", ".", "+"):
         column = func.replace(column, char, "")
     return column
@@ -58,8 +58,9 @@ def customer_search_condition(query: str):
         conditions.append(Customer.customer_number_key.like(f"{escape_like(number)}%", escape="\\"))
     digits = _digits(query)
     if len(digits) >= MIN_PHONE_DIGITS:
-        phone = _normalized_phone_column()
-        conditions.extend(phone.like(f"%{variant}%") for variant in phone_variants(digits))
+        for column in (Customer.phone, Customer.phone_landline, Customer.phone_private):  # bisherige, Festnetz, privat
+            phone = _normalized_phone_column(column)
+            conditions.extend(phone.like(f"%{variant}%") for variant in phone_variants(digits))
     contract = search_key(query)
     if len(contract) >= MIN_CONTRACT_KEY_LENGTH:
         conditions.append(

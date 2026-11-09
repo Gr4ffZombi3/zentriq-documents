@@ -232,3 +232,25 @@ def test_local_time_conversion_handles_dst():
     winter = local_to_utc_naive(date(2026, 12, 1), datetime.strptime("08:00", "%H:%M").time())
     assert summer.hour == 6
     assert winter.hour == 7
+
+
+
+def test_week_plan_mo_di_do_four_hours_month_target_from_planned_days():
+    """Laura: Mo, Di, Do je 4 Std. (12 Std./Woche) - nicht auf fuenf Tage verteilt. Oktober 2026:
+    13 geplante Tage x 4 Std. = 52 Std.; Uebersicht und Export nutzen dieselbe Berechnung."""
+    from app.models import EmployeeProfile
+    from app.services.timetracking.export import month_csv
+
+    profile = EmployeeProfile(weekly_target_minutes=720, workdays="124")
+    assert target_seconds_for_day(profile, date(2026, 10, 5)) == 4 * 3600  # Montag, geplant
+    assert target_seconds_for_day(profile, date(2026, 10, 7)) == 0  # Mittwoch, frei
+    assert target_seconds_for_day(profile, date(2026, 10, 9)) == 0  # Freitag, frei
+    now = datetime(2026, 11, 2, 12, 0)
+    week = summarize_period([], date(2026, 10, 5), date(2026, 10, 11), profile, date(2026, 11, 2), now)
+    assert week.target_seconds == 12 * 3600
+    month = summarize_period([], date(2026, 10, 1), date(2026, 10, 31), profile, date(2026, 11, 2), now)
+    assert sum(1 for d in month.days if d.target_seconds) == 13 and month.target_seconds == 52 * 3600
+    assert profile.day_plan_label == "Mo, Di, Do je 4:00 Std., übrige Tage 0 Std."
+    csv_text = month_csv("Laura", None, month, date(2026, 11, 2)).decode("utf-8-sig")
+    assert csv_text.splitlines()[-1].split(";")[6] == "52:00"
+    assert "05.10.2026" in csv_text and "4:00" in csv_text

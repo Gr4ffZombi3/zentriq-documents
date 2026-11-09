@@ -35,7 +35,7 @@ def _search_customers(user, args: dict) -> dict:
     elif "@" in term:
         found = Customer.query.filter(func.lower(Customer.email) == term.lower()).limit(10).all()
     elif (phone := normalize_phone(term)) is not None:
-        found = Customer.query.filter(Customer.phone_key == phone).limit(10).all()
+        found = Customer.query.filter(Customer.phone_key_in([phone])).limit(10).all()
     else:
         found = _by_name(term) or search_by_name_fragment(term)
     return {"treffer": [_customer_row(c) for c in found[:10]], "anzahl": len(found)}

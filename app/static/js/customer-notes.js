@@ -385,7 +385,9 @@
     }
     if (e.structured_name) { field("first_name", "Vorname", { auto: "off" }); field("last_name", "Nachname", { auto: "off" }); }
     else field("name", "Name", { wide: true });
-    field("phone", "Telefon", { type: "tel", mode: "tel" });
+    field("phone_landline", "Festnetz", { type: "tel", mode: "tel" });
+    field("phone_private", "Privattelefon", { type: "tel", mode: "tel" });
+    if (e.legacy_phone) field("phone", "Telefon (Typ offen)", { type: "tel", mode: "tel" });
     field("email", "E-Mail", { type: "email", mode: "email" });
     if (e.structured_address) { field("street", "Straße"); field("house_number", "Hausnr."); }
     else field("address", "Adresse", { wide: true });
@@ -407,6 +409,7 @@
     form.appendChild(actions);
     box.replaceWith(form);
     var key = focusKey && !inputs[focusKey] && (focusKey === "street" || focusKey === "house_number") ? "address" : focusKey;
+    if (key === "phone" && !inputs.phone) key = "phone_landline";  // "Telefonnummer falsch" ohne bisherige Nummer: erstes Telefonfeld
     var target = (key && inputs[key]) || form.querySelector("input");
     if (target) {
       target.focus();
@@ -445,6 +448,23 @@
     }
     [first, last].forEach(function (i) { i.addEventListener("keydown", function (ev) { if (ev.key === "Enter") { ev.preventDefault(); go(); } }); });
     setTimeout(function () { (first.value ? last : first).focus(); }, 0);
+  }
+
+  // Kundenanlage: Telefonnummer ohne Stichwort - Typ nicht raten, sondern waehlen lassen.
+  function renderCreatePhone(reply, r) {
+    var nodes = [message(r.message)];
+    if (r.create.facts && r.create.facts.length) nodes.push(el("p", "zn-meta", "Erkannt: " + r.create.facts.join(" · ")));
+    var opts = el("div", "zn-actions");
+    r.options.forEach(function (o) {
+      opts.appendChild(button(o.label, "btn btn-secondary btn-sm", function () {
+        var body = { text: r.create.text, mode: "create", phone_kinds: o.kinds, client_ref: newRef() };
+        if (r.create.first_name && r.create.last_name) { body.first_name = r.create.first_name; body.last_name = r.create.last_name; }
+        act(reply, request("POST", "/kunden/eingabe", body), "Wird angelegt", function (res) { show(reply, res, r.create.text); });
+      }));
+    });
+    opts.appendChild(cancel(reply));
+    nodes.push(opts);
+    fill(reply, nodes);
   }
 
   function renderLeipziger(l) {
@@ -589,6 +609,7 @@
       var body = { text: (create && create.text) || text, mode: "create", create_new: true, client_ref: newRef() };
       if (create && create.name) body.new_name = create.name;
       if (create && create.first_name && create.last_name) { body.first_name = create.first_name; body.last_name = create.last_name; }
+      if (create && create.phone_kinds) body.phone_kinds = create.phone_kinds;
       act(reply, request("POST", "/kunden/eingabe", body), "Wird angelegt", function (r) { show(reply, r, body.text); });
     });
   }
@@ -774,6 +795,10 @@
       case "create_name":
         select(null);
         renderCreateName(reply, r);
+        return true;
+      case "create_phone":
+        select(null);
+        renderCreatePhone(reply, r);
         return true;
       case "confirm_create":
         select(null);

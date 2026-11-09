@@ -49,7 +49,7 @@
                   <tr>
                     <th scope="row" class="cell-strong stack-full"><a class="table-link" href="{{ customer_href }}">{{ customer.name }}</a></th>
                     <td class="tabular-nums" data-label="Kundennummer">{{ customer.customer_number or '–' }}</td>
-                    <td class="tabular-nums whitespace-nowrap" data-label="Telefon">{{ customer.phone or '–' }}</td>
+                    <td class="tabular-nums whitespace-nowrap" data-label="Telefon">{{ [customer.phone_landline and 'Festnetz ' ~ customer.phone_landline, customer.phone_private and 'privat ' ~ customer.phone_private, customer.phone] | select | join(' · ') or '–' }}</td>
                     <td class="tabular-nums whitespace-nowrap" data-label="Vermittler">{{ customer.broker_number or '–' }}</td>
                     {% if is_admin %}
                     <td class="num tabular-nums" data-label="Leipziger">{{ customer.leipziger }}</td>

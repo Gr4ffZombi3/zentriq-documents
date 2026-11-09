@@ -373,6 +373,7 @@ def api_customer_input():
             create_new=data.get("create_new") is True,
             first_name=data.get("first_name") if isinstance(data.get("first_name"), str) else None,
             last_name=data.get("last_name") if isinstance(data.get("last_name"), str) else None,
+            phone_kinds=data.get("phone_kinds") if isinstance(data.get("phone_kinds"), list) else None,
         )
         if result.get("kind") == "chat" and not router.can_answer():
             # Ohne KI-Modell nicht an den Chat weiterreichen (der koennte nur einen Fehler melden) -

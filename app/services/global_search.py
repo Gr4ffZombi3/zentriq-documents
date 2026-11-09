@@ -68,6 +68,8 @@ def search_customers(query: str) -> tuple[list[dict], bool]:
             Customer.name,
             Customer.customer_number,
             Customer.phone,
+            Customer.phone_landline,
+            Customer.phone_private,
             Customer.postal_code,
             Customer.city,
             Customer.broker_number,

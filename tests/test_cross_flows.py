@@ -28,7 +28,7 @@ def _flat(html: str) -> str:
 
 def test_admin_customer_detail_shows_field_notes_and_callbacks(app, office):
     laura = login(app, "laura@example.com")
-    _input(laura, "Neuer Kunde Max Probe 0171 5551234")
+    _input(laura, "Neuer Kunde Max Probe privat 0171 5551234")
     _input(laura, "Max Probe wegen Kfz-Wechsel nicht erreicht")
     with bypass_tenant_scope():
         customer = Customer.query.filter_by(name="Max Probe").one()

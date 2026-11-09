@@ -1,7 +1,11 @@
 """Ausdrueckliche Kundenanlage im ZentriqAI-Eingabefeld - rein lokal, ohne KI.
 
-Beispiel: "lege kunden justin heller an 01795223152 wilhelmstrasse 7 53809"
--> Vorname Justin, Nachname Heller, Telefon 0179 5223152, Wilhelmstrasse 7, PLZ 53809.
+Beispiel: "lege kunden justin heller an festnetz 02641 12345, privat 01795223152 wilhelmstrasse 7 53809"
+-> Vorname Justin, Nachname Heller, Festnetz 02641 12345, Privattelefon 0179 5223152, ...
+
+Telefon: zwei optionale Felder Festnetz und Privattelefon. Zugeordnet wird nur ueber ein
+vorangestelltes Stichwort ("Festnetz", "privat"/"Privattelefon"). Ohne Stichwort wird der Typ nicht
+geraten - der Assistent fragt nach (phone_kinds).
 
 Ablauf (handle):
 1. Anlagebefehl erkennen ("Lege Kunden ... an", "Kunde(n) anlegen ...", "Neuer Kunde ...") -
@@ -61,12 +65,14 @@ _PARTICLE_AN = re.compile(r"(?<!\S)an(?=[\s:,.;]|$)(?!\s+(?:der|dem|den|die)\s)"
 _LABELS = re.compile(
     r"(?<!\S)(?:tel\.?|telefon(?:nummer)?|handy(?:nummer)?|mobil(?:nummer)?|rufnummer|nr\.?|nummer|plz|postleitzahl|"
     r"adresse|anschrift|wohnhaft|wohnt|stra(?:ss|ß)e:|ort|e-?mail|mail|vn(?:-?nr\.?)?|versicherungsnehmer(?:nummer)?|"
-    r"name|vorname|nachname|herr|frau|und|mit|in|aus|,|:|;|-)(?=\s|$)",
+    r"name|vorname|nachname|herr|frau|und|mit|in|aus|festnetz(?:nummer)?|privat(?:telefon|nummer)?|private|,|:|;|-)(?=\s|$)",
     re.I,
 )
 
 # --- Angaben -----------------------------------------------------------------------------------
 
+_PHONE_KIND = re.compile(r"(?:^|[\s,;:(])(festnetz(?:nummer|telefon)?|privat(?:telefon|nummer)?|private\s+nummer|priv\.)\s*[:=]?\s*$", re.I)
+PHONE_KINDS = {"festnetz": "Festnetz", "privat": "Privattelefon"}
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _PHONE = re.compile(r"(?<![\w/+])(?:\+\d{1,3}|0)[\d()]*(?:(?:\s*[/-]\s*|\s)?\(?\d+\)?)*")
 _PLZ_CITY = re.compile(
@@ -103,7 +109,9 @@ def is_command(text: str) -> bool:
 class Draft:
     first_name: str | None = None
     last_name: str | None = None
-    phone: str | None = None  # normalisiert "+49..."
+    phone_landline: str | None = None  # normalisiert "+49..."
+    phone_private: str | None = None
+    phones_open: list[str] = field(default_factory=list)  # ohne Stichwort - Typ wird erfragt
     street: str | None = None
     house_number: str | None = None
     postal_code: str | None = None
@@ -121,13 +129,20 @@ class Draft:
         return None
 
     @property
+    def phones(self) -> list[str]:
+        return [p for p in (self.phone_landline, self.phone_private, *self.phones_open) if p]
+
+    @property
     def address(self) -> str | None:
         return " ".join(filter(None, [self.street, self.house_number])) or None
 
     def facts(self) -> list[str]:
         out = []
-        if self.phone:
-            out.append(f"Telefon {format_phone(self.phone)}")
+        if self.phone_landline:
+            out.append(f"Festnetz {format_phone(self.phone_landline)}")
+        if self.phone_private:
+            out.append(f"Privattelefon {format_phone(self.phone_private)}")
+        out.extend(f"Telefon {format_phone(p)} (Typ offen)" for p in self.phones_open)
         if self.address:
             out.append(self.address)
         place = " ".join(filter(None, [self.postal_code, self.city]))
@@ -201,11 +216,14 @@ def parse(text: str) -> Draft:
         draft.vn = f"{m.group(1)}/{m.group(2)}-{m.group(3).upper()}"
         work = _mask(work, m.start(), m.end())
 
-    for m in list(_PHONE.finditer(work)):
+    search_from = 0
+    while (m := _PHONE.search(work, search_from)) is not None:
         candidate = _phone_candidate(m.group(0))
         if not candidate:
+            search_from = m.end()
             continue
-        # Ende der tatsaechlich verwendeten Ziffern im Original bestimmen.
+        # Ende der tatsaechlich verwendeten Ziffern im Original bestimmen (Rest wird erneut gesucht,
+        # z. B. zwei Nummern direkt hintereinander).
         used, pos = 0, m.start()
         while pos < m.end() and used < len(candidate):
             if work[pos].isdigit() or work[pos] == "+":
@@ -213,11 +231,23 @@ def parse(text: str) -> Draft:
             pos += 1
         end = pos
         normalized = normalize_phone(candidate)
-        if draft.phone is None:
-            draft.phone = normalized
-        elif normalized != draft.phone:
+        offset = max(0, m.start() - 30)
+        label = _PHONE_KIND.search(work[offset:m.start()])
+        kind = None if label is None else ("festnetz" if label.group(1).lower().startswith("fest") else "privat")
+        if normalized in draft.phones:
+            pass
+        elif kind == "festnetz" and draft.phone_landline is None:
+            draft.phone_landline = normalized
+        elif kind == "privat" and draft.phone_private is None:
+            draft.phone_private = normalized
+        elif kind is None and len(draft.phones) < 2:
+            draft.phones_open.append(normalized)
+        else:
             draft.not_taken.append(format_phone(normalized))
         work = _mask(work, m.start(), end)
+        if label is not None:  # Stichwort gilt nur fuer diese Nummer
+            work = _mask(work, offset + label.start(1), offset + label.end(1))
+        search_from = end
 
     for rx in _STREETS:
         m = rx.search(work)
@@ -281,10 +311,38 @@ def _clean_name_part(value) -> str | None:
     return " ".join(_cap(w) for w in words)
 
 
+def apply_phone_kinds(draft: Draft, kinds) -> None:
+    """Typen fuer Nummern ohne Stichwort (Reihenfolge wie im Text), z. B. ["festnetz", "privat"]."""
+    if not draft.phones_open:
+        return
+    if not isinstance(kinds, list) or len(kinds) != len(draft.phones_open) or any(k not in PHONE_KINDS for k in kinds):
+        raise CreateError("Bitte für jede Nummer Festnetz oder Privattelefon wählen.")
+    for number, kind in zip(draft.phones_open, kinds):
+        slot = "phone_landline" if kind == "festnetz" else "phone_private"
+        if getattr(draft, slot) is not None:
+            raise CreateError(f"{PHONE_KINDS[kind]} ist bereits vergeben.")
+        setattr(draft, slot, number)
+    draft.phones_open = []
+
+
+def _phone_question(text: str, draft: Draft) -> dict:
+    numbers = [format_phone(p) for p in draft.phones_open]
+    free = [k for k, slot in (("festnetz", draft.phone_landline), ("privat", draft.phone_private)) if slot is None]
+    if len(numbers) == 1:
+        message = f"Ist {numbers[0]} Festnetz oder Privattelefon?"
+        options = [{"kinds": [k], "label": PHONE_KINDS[k]} for k in free]
+    else:
+        message = "Welche Nummer ist Festnetz, welche Privattelefon?"
+        options = [{"kinds": ["festnetz", "privat"], "label": f"Festnetz {numbers[0]}, privat {numbers[1]}"},
+                   {"kinds": ["privat", "festnetz"], "label": f"Festnetz {numbers[1]}, privat {numbers[0]}"}]
+    return {"kind": "create_phone", "message": message, "options": options, "create": _draft_payload(text, draft)}
+
+
 def _conflicts(customer: Customer, draft: Draft) -> list[str]:
     """Angaben, die einem vorhandenen gleichnamigen Kunden widersprechen."""
     out = []
-    if draft.phone and customer.phone_key and customer.phone_key != draft.phone:
+    keys = customer.phone_keys
+    if draft.phones and keys and not set(draft.phones) & keys:
         out.append("Telefon")
     if draft.postal_code and customer.postal_code and customer.postal_code.strip() != draft.postal_code:
         out.append("PLZ")
@@ -299,8 +357,10 @@ def _conflicts(customer: Customer, draft: Draft) -> list[str]:
 def _missing_in(customer: Customer, draft: Draft) -> list[str]:
     """Neue Angaben, die beim vorhandenen Kunden fehlen (werden NICHT ungefragt eingetragen)."""
     out = []
-    if draft.phone and not customer.phone:
-        out.append("Telefon")
+    if draft.phone_landline and not customer.phone_landline and draft.phone_landline != customer.phone_key:
+        out.append("Festnetz")
+    if draft.phone_private and not customer.phone_private and draft.phone_private != customer.phone_key:
+        out.append("Privattelefon")
     if draft.street and not (customer.street or customer.address):
         out.append("Adresse")
     if draft.postal_code and not customer.postal_code:
@@ -332,10 +392,12 @@ def _draft_payload(text: str, draft: Draft) -> dict:
     return {"text": text, "facts": draft.facts(), "first_name": draft.first_name, "last_name": draft.last_name}
 
 
-def handle(user, text: str, *, first_name=None, last_name=None, create_new: bool = False) -> dict:
+def handle(user, text: str, *, first_name=None, last_name=None, create_new: bool = False, phone_kinds=None) -> dict:
     from app.services.customer_notes import _choice
 
     draft = parse(text)
+    if phone_kinds is not None:
+        apply_phone_kinds(draft, phone_kinds)
     if first_name is not None or last_name is not None:
         first, last = _clean_name_part(first_name), _clean_name_part(last_name)
         if not first or not last:
@@ -361,6 +423,9 @@ def handle(user, text: str, *, first_name=None, last_name=None, create_new: bool
             "create": _draft_payload(text, draft),
         }
 
+    if draft.phones_open:  # Typ nicht raten - nachfragen (die Rueckfrage sendet denselben Text + Typen)
+        return _phone_question(text, draft)
+
     if not create_new:
         fitting, conflicting = _existing(draft)
         if len(fitting) == 1:
@@ -371,7 +436,8 @@ def handle(user, text: str, *, first_name=None, last_name=None, create_new: bool
                 f"{reason} – vorhandenen Kunden öffnen oder neu anlegen?",
                 (fitting or conflicting)[:5],
                 create_option=True,
-                create={"name": draft.name, "text": text, "first_name": draft.first_name, "last_name": draft.last_name},
+                create={"name": draft.name, "text": text, "first_name": draft.first_name, "last_name": draft.last_name,
+                        "phone_kinds": phone_kinds},
             )
     return _create(user, draft, text, create_new=create_new)
 
@@ -405,7 +471,8 @@ def _create(user, draft: Draft, text: str, *, create_new: bool) -> dict:
             "name": draft.name,
             "first_name": draft.first_name,
             "last_name": draft.last_name,
-            "phone": format_phone(draft.phone) if draft.phone else None,
+            "phone_landline": format_phone(draft.phone_landline) if draft.phone_landline else None,
+            "phone_private": format_phone(draft.phone_private) if draft.phone_private else None,
             "street": draft.street,
             "house_number": draft.house_number,
             "address": draft.address,
@@ -439,7 +506,8 @@ def _create(user, draft: Draft, text: str, *, create_new: bool) -> dict:
     except Exception:  # noqa: BLE001 - der Kunde ist gespeichert
         current_app.logger.exception("customer_create.audit_failed customer=%s", customer.id)
         db.session.rollback()
-    shared = [c for c in Customer.query.filter(Customer.phone_key == customer.phone_key, Customer.id != customer.id).limit(3)] if customer.phone_key else []
+    keys = customer.phone_keys
+    shared = Customer.query.filter(Customer.phone_key_in(keys), Customer.id != customer.id).limit(3).all() if keys else []
     notice = []
     if shared:
         notice.append(f"Hinweis: Diese Telefonnummer ist auch bei {', '.join(c.name for c in shared)} hinterlegt.")
@@ -473,7 +541,7 @@ def _recent(customer: Customer) -> bool:
 
 # --- Bearbeiten ueber die Kundenkarte ----------------------------------------------------------
 
-EDIT_FIELDS = ("first_name", "last_name", "name", "phone", "street", "house_number", "address", "postal_code", "city", "email", "customer_number")
+EDIT_FIELDS = ("first_name", "last_name", "name", "phone_landline", "phone_private", "phone", "street", "house_number", "address", "postal_code", "city", "email", "customer_number")
 
 
 def can_edit(user, customer: Customer) -> bool:
@@ -492,6 +560,7 @@ def edit_payload(customer: Customer) -> dict:
         "structured_name": structured_name,
         "structured_address": structured_address,
         "values": {key: getattr(customer, key) or "" for key in EDIT_FIELDS},
+        "legacy_phone": bool(customer.phone),  # bisherige Nummer ohne Typ: nur anzeigen, wenn vorhanden
         "version": version_of(customer),
     }
 
@@ -527,10 +596,15 @@ def update_fields(user, customer: Customer, data: dict) -> Customer:
         if not name:
             raise CreateError("Der Name darf nicht leer sein.")
         values["name"] = name
-    phone = text("phone", 50)
-    if phone and not normalize_phone(phone):
-        raise CreateError("Die Telefonnummer wurde nicht erkannt (mit Vorwahl angeben).")
-    values["phone"] = format_phone(normalize_phone(phone)) if phone else None
+    for key, label in (("phone_landline", "Festnetznummer"), ("phone_private", "Privatnummer"), ("phone", "Telefonnummer")):
+        if key not in data:  # nicht gesendet: unveraendert lassen (aeltere Schreibweisen nicht umformatieren)
+            continue
+        phone = text(key, 50)
+        if phone and normalize_phone(phone) and phone == getattr(customer, key):
+            continue
+        if phone and not normalize_phone(phone):
+            raise CreateError(f"Die {label} wurde nicht erkannt (mit Vorwahl angeben).")
+        values[key] = format_phone(normalize_phone(phone)) if phone else None
     postal = text("postal_code", 20)
     if postal and not re.fullmatch(r"\d{5}", postal):
         raise CreateError("Die Postleitzahl muss fünfstellig sein.")

@@ -307,7 +307,7 @@ class Resolution:
 
 def _differences(customer, info: EmailInfo) -> list[str]:
     out = []
-    if info.phone and customer.phone_key and customer.phone_key != info.phone:
+    if info.phone and customer.phone_keys and info.phone not in customer.phone_keys:
         out.append("Telefon")
     if info.sender_email and customer.email and customer.email.lower() != info.sender_email:
         out.append("E-Mail")
@@ -349,7 +349,7 @@ def resolve(user, info: EmailInfo, *, create: bool = True) -> Resolution:
     named = Customer.query.filter(Customer.name_key == name_key(info.name)).limit(6).all() if info.name else []
     if info.phone:
         # Telefonnummer nur zusammen mit passendem Namen (Familien teilen Nummern).
-        by_phone = [c for c in Customer.query.filter(Customer.phone_key == info.phone).limit(6).all() if not info.name or c in named]
+        by_phone = [c for c in Customer.query.filter(Customer.phone_key_in([info.phone])).limit(6).all() if not info.name or c in named]
         if len(by_phone) == 1 and info.name:
             return done(by_phone[0])
     if named:

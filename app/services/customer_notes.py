@@ -302,7 +302,7 @@ def find_by_identifiers(parsed: Parsed) -> tuple[str | None, list[Customer]]:
     if parsed.vn_digits:
         found["vn"] = {customer_id for digits in parsed.vn_digits for customer_id in customers_by_vn_digits(digits)}
     if parsed.phones:
-        found["phone"] = set(db.session.execute(select(Customer.id).where(Customer.phone_key.in_(parsed.phones))).scalars())
+        found["phone"] = set(db.session.execute(select(Customer.id).where(Customer.phone_key_in(parsed.phones))).scalars())
     if not found:
         return None, []
     hits = {basis: ids for basis, ids in found.items() if ids}
@@ -539,7 +539,7 @@ def serialize_candidate(customer: Customer) -> dict:
         "id": customer.id,
         "name": customer.name,
         "vn": ", ".join(vn_numbers(customer)) or None,
-        "phone": customer.phone or None,
+        "phone": customer.phone_display,
         "place": place,
         "birth": customer.date_of_birth.strftime("%d.%m.%Y") if customer.date_of_birth else None,
     }
@@ -1110,7 +1110,7 @@ def _strip_identifiers(text: str, parsed: Parsed, customer: Customer | None) -> 
     rest = _remove_spans(rest, digit_spans)
     for phone_like in _PHONE_PATTERN.finditer(rest):
         phone = normalize_phone(phone_like.group(0))
-        if phone in parsed.phones and (customer is None or phone == customer.phone_key):
+        if phone in parsed.phones and (customer is None or phone in customer.phone_keys):
             rest = rest.replace(phone_like.group(0), " ", 1)
     for number in parsed.numbers:
         if customer is not None and number != customer.customer_number_key:
@@ -1134,7 +1134,7 @@ def _digits_at(text: str, spans: list[tuple[int, int]]) -> list[str]:
 
 def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | None = None, mode: str | None = None,
                  customer_id=None, contact_choice=None, new_name=None, new_vn=None, create_new: bool = False,
-                 first_name=None, last_name=None) -> dict:
+                 first_name=None, last_name=None, phone_kinds=None) -> dict:
     """Verarbeitet eine Eingabe des ZentriqAI-Feldes. Ergebnis "kind":
     chat | saved | card | choose | choose_contact | conflict | not_found | clarify | need_name | need_vn.
 
@@ -1159,7 +1159,8 @@ def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | Non
     # lokale Zerlegung, keine VN-Nummer noetig, keine Notiz (app/services/customer_create.py).
     if customer_id in (None, "") and customer_create.is_command(text):
         try:
-            return customer_create.handle(user, text, first_name=first_name, last_name=last_name, create_new=create_new)
+            return customer_create.handle(user, text, first_name=first_name, last_name=last_name, create_new=create_new,
+                                          phone_kinds=phone_kinds)
         except customer_create.CreateError as exc:
             raise NoteError(str(exc), exc.status) from None
 
@@ -1587,7 +1588,7 @@ def create_customer_with_note(user, *, name: str, vn: str, note_text: str | None
             customer = owners[0] if len(owners) == 1 else None
             if customer is None:
                 return _choice("Mehrere Kunden gehören zu dieser Nummer – bitte auswählen:", owners, pending_note=note_text)
-            if phone and customer.phone_key != phone and note_with_phone:
+            if phone and phone not in customer.phone_keys and note_with_phone:
                 note_text = note_with_phone
             if note_text:
                 return save_note(user, customer, note_text, client_ref=client_ref)

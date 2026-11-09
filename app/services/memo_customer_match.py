@@ -64,7 +64,7 @@ class MatchResult:
 def _by_phone(phones: list[str]) -> list[Customer]:
     if not phones:
         return []
-    return _load(Customer.query.filter(Customer.phone_key.in_(phones)))
+    return _load(Customer.query.filter(Customer.phone_key_in(phones)))
 
 
 def _by_customer_number(numbers: list[str]) -> list[Customer]:

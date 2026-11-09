@@ -69,8 +69,16 @@ class SettlementLine(TenantScopedMixin, db.Model):
     review_state = db.Column(db.String(20), nullable=True)
     reviewed_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     reviewed_at = db.Column(db.DateTime, nullable=True)
+    # HUK: Vermittlernummer des Tabellenblocks und daraus zugeordneter Mitarbeiter (sonst Beleg)
+    broker_number = db.Column(db.String(20), nullable=True)
+    employee_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
 
     settlement = db.relationship("Settlement", back_populates="lines")
+
+    @property
+    def owner_id(self) -> int | None:
+        """Mitarbeiter der Zeile: bei Block-Vermittlernummer deren Zuordnung, sonst der des Belegs."""
+        return self.employee_user_id if self.broker_number else self.settlement.employee_user_id
 
     @property
     def counts(self) -> bool:

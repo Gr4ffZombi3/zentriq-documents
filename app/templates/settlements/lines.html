@@ -7,11 +7,6 @@
   <div class="page-toolbar"><div><h1 class="page-toolbar-title">Buchungen · {{ label }}</h1>
     <p class="page-subtitle">{{ lines | length }} Buchung(en), Summe <strong>{{ money(total) }}</strong>. Grundlage der angeklickten Zahl.</p></div>
     <a class="btn btn-secondary btn-sm" href="{{ url_for('settlements.index', monat=args.get('monat')) }}">Zur Übersicht</a></div>
-  <section class="panel">
-    <ul class="abr-rows">{% for l in lines %}
-      <li class="abr-row"><div class="abr-row-main"><span class="abr-row-ref">{{ l.contract_ref or 'ohne Referenz' }} · {{ l.sparte or 'Sparte unklar' }} · {{ type_labels.get(l.booking_type, '–') }}{% if l.is_ten %} · 10-€{% endif %}</span><strong>{{ money(l.amount) }}</strong></div>
-        <p class="abr-raw"><a href="{{ url_for('settlements.original', settlement_id=l.settlement_id) }}#page={{ l.page }}" target="_blank" rel="noopener">{{ l.settlement.original_filename }}, Seite {{ l.page }}</a> · „{{ l.raw_text }}“</p></li>
-    {% else %}<li class="abr-row"><p class="form-hint">Keine Buchungen.</p></li>{% endfor %}</ul>
-  </section>
+  <section class="panel"><div class="panel-body">{% include "settlements/_lines.html" %}</div></section>
 </div>
 {% endblock %}

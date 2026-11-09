@@ -96,8 +96,48 @@ def detail(settlement_id):
     from app.models import User
 
     members = User.query.filter(User.tenant_id == current_user.tenant_id, User.is_active.is_(True)).order_by(User.email).all()
+    base = SettlementLine.query.filter(SettlementLine.settlement_id == record.id)
+    counts = {"all": base.count(), "open": base.filter(SettlementLine.needs_review.is_(True), SettlementLine.review_state.is_(None)).count()}
     return render_template("settlements/detail.html", record=record, status_labels=STATUS_LABELS, type_labels=svc.TYPE_LABELS,
-                           sparten=svc.sparten(), members=members)
+                           sparten=svc.sparten(), members=members, counts=counts)
+
+
+@settlements_bp.get("/beleg/<int:settlement_id>/zeilen")
+@login_required
+def detail_lines(settlement_id):
+    """Buchungen eines Belegs - erst beim Aufklappen geladen (nur=unklar: offene Zeilen)."""
+    _admin()
+    record = get_or_404_scoped(Settlement, settlement_id)
+    lines = record.lines
+    if request.args.get("nur") == "unklar":
+        lines = [line for line in lines if line.needs_review and line.review_state is None]
+    return render_template("settlements/_detail_lines.html", record=record, lines=lines, type_labels=svc.TYPE_LABELS, sparten=svc.sparten())
+
+
+@settlements_bp.route("/beleg/<int:settlement_id>/neu-auswerten", methods=["GET", "POST"])
+@login_required
+def reevaluate(settlement_id):
+    """Gepruefte Neuauswertung: erst Vorschau (nichts gespeichert), dann Uebernahme nur mit
+    passendem Vorschau-Token. Gleicher Beleg, keine Dubletten, Pruefungen bleiben erhalten."""
+    _admin()
+    record = get_or_404_scoped(Settlement, settlement_id)
+    if request.method == "POST":
+        try:
+            result = svc.reevaluate_apply(record, request.form.get("token", ""), drop_lost_reviews=request.form.get("verwerfen") == "1",
+                                          user=current_user)
+        except svc.SettlementError as exc:
+            db.session.rollback()
+            flash(str(exc), "error")
+            return redirect(url_for("settlements.reevaluate", settlement_id=record.id))
+        flash(f"Neu ausgewertet: {result.new_count} Buchungen (vorher {result.old_count}), {len(result.kept_reviews)} Prüfung(en) übernommen.", "success")
+        return redirect(url_for("settlements.detail", settlement_id=record.id))
+    try:
+        preview = svc.reevaluate_preview(record)
+    except svc.SettlementError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("settlements.detail", settlement_id=record.id))
+    db.session.rollback()  # Vorschau-Zeilen nie speichern
+    return render_template("settlements/reevaluate.html", record=record, preview=preview, type_labels=svc.TYPE_LABELS)
 
 
 @settlements_bp.get("/beleg/<int:settlement_id>/original")
@@ -164,7 +204,7 @@ def _refresh_status(record) -> None:
     problems = []
     if record.period_start is None:
         problems.append("Abrechnungszeitraum nicht erkannt")
-    if record.employee_user_id is None:
+    if record.employee_user_id is None and any(line.broker_number is None for line in record.lines):
         problems.append("Mitarbeiter/Vermittlernummer nicht zugeordnet")
     if open_lines:
         problems.append(f"{len(open_lines)} unklare Zeile(n)")
@@ -190,6 +230,8 @@ def bookings():
     _admin()
     year, month, lines = _drill_lines()
     total = sum((line.amount or 0 for line in lines), start=0)
+    if request.args.get("teil") == "1":  # beim Aufklappen in der Uebersicht nachgeladen
+        return render_template("settlements/_lines.html", lines=lines, total=total, type_labels=svc.TYPE_LABELS)
     return render_template("settlements/lines.html", lines=lines, total=total, label=svc.month_label(year, month), type_labels=svc.TYPE_LABELS,
                            args=request.args)
 

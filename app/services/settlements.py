@@ -13,6 +13,13 @@ Zerlegen (je Textzeile mit Betrag):
 Fehlt Referenz, Sparte oder Buchungsart, ist die Zeile "unklar" (Pruefung durch den Buero-Admin,
 mit Seite im Original) und zaehlt erst nach Bestaetigung.
 
+HUK-Werbegebuehrenabrechnung (parse_huk, Vorrang vor dem Zeilen-Parser): gezaehlt werden nur
+Zeilen der "Einzelübersicht", Betrag ausschliesslich aus der Spalte "Betrag in Euro" (Wort-
+positionen), Vermittlernummer aus dem jeweiligen Tabellenblock ("VM-Nr. 123456T, Name").
+Deckblatt, Uebertraege, Zwischensummen ("Produktion in ...", "Ihre Werbegebühren") und die
+Summenseiten zaehlen nie. Unterzeilen ohne Vertragsnummer (z. B. FAB = 10-€-Position) gehoeren
+zum Vertrag der Zeile darueber.
+
 Auswerten (summary): je Mitarbeiter und Zeitraum Betraege und Anzahlen aus den gezaehlten
 Buchungen; jede Zahl ist ueber lines_for() bis zu den Buchungen nachvollziehbar."""
 
@@ -56,6 +63,22 @@ TYPES = (
     ("bestand", re.compile(r"\b(?:bestand\w*|folgeprovision|laufend\w*|betreuung\w*)\b", re.I)),
 )
 TYPE_LABELS = {"abschluss": "Abschluss", "bestand": "Bestand", "storno": "Storno", "korrektur": "Korrektur", "sonstig": "Sonstige"}
+
+
+# HUK-Risiko-/Vertragsarten -> Sparte (Annahme nach HUK-Kuerzeln; unbekannte Kuerzel erscheinen als
+# "Kürzel XYZ" und werden trotzdem gezaehlt).
+HUK_CODES = {
+    "Kfz": ("KH", "FV", "FT", "FAU", "ASS", "MOH", "MOF"),
+    "Haftpflicht": ("PHPL", "PHC", "THH"),
+    "Hausrat": ("HC", "HPL"),
+    "Wohngebäude": ("WGC", "WPL"),
+    "Unfall": ("UC", "UCD", "UPL"),
+    "Kranken": ("RK", "CFZ", "CFV", "CFVP", "CHWS", "CHWG"),
+}
+_CODE_SPARTE = {code: sparte for sparte, codes in HUK_CODES.items() for code in codes}
+_HUK_CONTRACT = re.compile(r"^\d{3}/\d{6}-[A-Z](?:-\d{2})?$")
+_HUK_VM = re.compile(r"^(\d{6}[A-Z]),?$")
+_HUK_AMOUNT = re.compile(r"^-?\d{1,3}(?:\.\d{3})*,\d{2}-?$")
 
 
 class SettlementError(ValueError):
@@ -112,6 +135,7 @@ class ParsedLine:
     booking_type: str | None
     booking_label: str | None
     reasons: list[str] = field(default_factory=list)
+    broker_number: str | None = None  # Vermittlernummer des Tabellenblocks (HUK)
 
     @property
     def is_ten(self) -> bool:
@@ -208,6 +232,109 @@ def parse(pages: list[str]) -> ParsedSettlement:
     return result
 
 
+def _huk_date(value: str) -> date | None:
+    m = re.fullmatch(r"(\d{2})\.(\d{2})\.(\d{2})", value or "")
+    if not m:
+        return None
+    try:
+        return date(2000 + int(m.group(3)), int(m.group(2)), int(m.group(1)))
+    except ValueError:
+        return None
+
+
+HUK_NO_SPARTE = ("FAB",)  # 10-€-Position (Festbetrag), keine Sparte
+
+
+def huk_sparte(code: str | None) -> str | None:
+    if not code or code in HUK_NO_SPARTE:
+        return None
+    return _CODE_SPARTE.get(code, f"Kürzel {code}")
+
+
+def parse_huk(data: bytes) -> ParsedSettlement | None:
+    """HUK-Werbegebuehrenabrechnung ueber Wortpositionen. None, wenn keine Einzelübersicht mit
+    Spalte "Betrag in Euro" vorhanden ist (dann gilt der allgemeine Zeilen-Parser)."""
+    import fitz
+
+    try:
+        document = fitz.open(stream=data, filetype="pdf")
+    except Exception:  # noqa: BLE001
+        return None
+    pages = []
+    try:
+        for page in document:
+            pages.append((page.get_text("text"), page.get_text("words")))
+    finally:
+        document.close()
+    detail_pages = [i for i, (text, _w) in enumerate(pages) if "Einzelübersicht" in text and "Betrag" in text and "in Euro" in text]
+    if not detail_pages:
+        return None
+    result = parse([pages[0][0]])  # Zeitraum/Vermittler wie bisher aus dem Deckblatt
+    result.lines = []
+    position, vm, contract, contract_sparte = 0, None, None, None
+    for index in detail_pages:
+        words = pages[index][1]
+        head = {w[4]: w for w in words if w[4] in ("Betrag", "Vertragsnummer", "Risiko-/", "Rolle")}
+        if "Betrag" not in head or "Vertragsnummer" not in head:
+            continue
+        amount_left = head["Betrag"][0] - 25  # rechtsbuendige Spalte "Betrag in Euro"
+        code_left = head["Risiko-/"][0] - 6 if "Risiko-/" in head else head["Vertragsnummer"][2] + 100
+        code_right = code_left + 30  # Kuerzel beginnt am Spaltenanfang (danach folgt z. B. Bonus "J")
+        contract_left, contract_right = head["Vertragsnummer"][0] - 6, head["Vertragsnummer"][2] + 25
+        table_top = max(w[3] for w in words if w[4] in ("Euro", "Werbegebühr") and w[1] >= head["Betrag"][1] - 2) if words else 0
+        rows: dict = {}
+        margin = head["Vertragsnummer"][0] - 100  # senkrechter Randtext links (z. B. "VM WG 9") ignorieren
+        for w in words:
+            if w[1] <= table_top or w[0] < min(margin, 20):
+                continue
+            key = next((k for k in rows if abs(k - w[1]) <= 2.5), w[1])
+            rows.setdefault(key, []).append(w)
+        for y in sorted(rows):
+            cells = sorted(rows[y], key=lambda w: w[0])
+            texts = [c[4] for c in cells]
+            if texts[0] == "VM-Nr." and len(texts) > 1 and (m := _HUK_VM.match(texts[1])):
+                vm, contract, contract_sparte = m.group(1), None, None
+                continue
+            if texts[0] in ("Produktion", "Ihre", "Seite:"):
+                continue  # Zwischensummen und Gesamtbetraege
+            ref_cell = next((c for c in cells if contract_left <= c[0] <= contract_right and _HUK_CONTRACT.match(c[4])), None)
+            code_cell = next((c for c in cells if code_left <= c[0] <= code_right and re.fullmatch(r"[A-ZÄÖÜ]{2,6}", c[4])), None)
+            code = code_cell[4] if code_cell else None
+            if ref_cell is not None:  # Hauptzeile bestimmt den Vertrag - auch ohne eigenen Betrag
+                contract, contract_sparte = ref_cell[4], huk_sparte(code)
+            elif contract_sparte is None:
+                contract_sparte = huk_sparte(code)  # z. B. Hauptzeile FAB, Sparte aus der Unterzeile (KH, FV ...)
+            amount_cells = [c for c in cells if c[0] >= amount_left and _HUK_AMOUNT.match(c[4])]
+            if not amount_cells:
+                continue
+            amount = parse_amount(amount_cells[-1][4])
+            reasons = []
+            if ref_cell is None and contract is None:
+                reasons.append("Zeile ohne Vertrag")
+            if code is None:
+                reasons.append("Risiko-/Vertragsart fehlt")
+            if vm is None:
+                reasons.append("Vermittlernummer des Blocks fehlt")
+            date_cell = next((c for c in cells if _huk_date(c[4])), None)
+            raw = "   ".join(re.sub(r"\s+", " ", c[4]) for c in cells)
+            position += 1
+            result.lines.append(ParsedLine(
+                page=index + 1, position=position, raw=raw[:500], amount=amount, booking_date=_huk_date(date_cell[4]) if date_cell else None,
+                contract_ref=contract, sparte=huk_sparte(code) or contract_sparte,
+                booking_type=("storno" if amount is not None and amount < 0 else "abschluss"), booking_label=code,
+                reasons=reasons, broker_number=vm,
+            ))
+    # Sparte je Vertrag: erstes Kuerzel mit Sparte (FAB-Zeilen erben sie, auch wenn sie davor stehen)
+    first_sparte: dict = {}
+    for line in result.lines:
+        if line.contract_ref and line.sparte and (line.broker_number, line.contract_ref) not in first_sparte:
+            first_sparte[(line.broker_number, line.contract_ref)] = line.sparte
+    for line in result.lines:
+        if line.contract_ref and (line.broker_number, line.contract_ref) in first_sparte:
+            line.sparte = first_sparte[(line.broker_number, line.contract_ref)]
+    return result
+
+
 def fingerprint(parsed: ParsedSettlement) -> str:
     """Inhalt unabhaengig von Datei/Scan: Zeitraum, Vermittler und alle Buchungen (sortiert)."""
     parts = [str(parsed.period_start), str(parsed.period_end), parsed.broker_number or ""]
@@ -265,56 +392,171 @@ def file_path(record):
     return path
 
 
-def process(record) -> None:
-    """Liest und zerlegt einen Beleg (im Celery-Worker)."""
-    from app.extensions import db
-    from app.models import Settlement, SettlementLine, User
+def parse_file(record) -> tuple[ParsedSettlement, list[str] | None, str | None]:
+    """Liest den Beleg: HUK-Einzelübersicht (Wortpositionen) oder allgemeiner Zeilen-Parser."""
+    path = file_path(record)
+    if path is None:
+        raise SettlementError("Die Datei wurde nicht gefunden.")
+    data = path.read_bytes()
+    parsed = parse_huk(data)
+    if parsed is not None:
+        return parsed, None, "text"
+    pages, method = read_pages(data)
+    return parse(pages), pages, method
+
+
+def _owner_map(tenant_id: int) -> dict:
+    from app.models import User
+    from app.utils.vermittlernummer import vermittlernummer_key
+
+    return {vermittlernummer_key(u.vermittlernummer): u.id for u in User.query.filter(User.tenant_id == tenant_id).all() if u.vermittlernummer}
+
+
+def build_lines(record, parsed: ParsedSettlement) -> list:
+    from app.models import SettlementLine
+    from app.utils.vermittlernummer import vermittlernummer_key
+
+    owners = _owner_map(record.tenant_id)
+    out = []
+    for line in parsed.lines:
+        reasons = list(line.reasons)
+        owner = owners.get(vermittlernummer_key(line.broker_number)) if line.broker_number else None
+        if line.broker_number and owner is None:
+            reasons.append(f"Vermittlernummer {line.broker_number} keinem Mitarbeiter zugeordnet")
+        out.append(SettlementLine(
+            tenant_id=record.tenant_id, position=line.position, page=line.page, raw_text=line.raw, booking_date=line.booking_date,
+            contract_ref=line.contract_ref, sparte=line.sparte, booking_type=line.booking_type, booking_label=line.booking_label,
+            amount=line.amount, is_ten=line.is_ten, needs_review=bool(reasons), review_reason="; ".join(reasons) or None,
+            broker_number=line.broker_number, employee_user_id=owner,
+        ))
+    return out
+
+
+def apply_parsed(record, parsed: ParsedSettlement, lines: list, method: str | None, page_count: int | None) -> None:
+    """Uebernimmt ein Leseergebnis in den Beleg (Status, Zuordnung, Doppelpruefung)."""
+    from app.models import Settlement
     from app.models.settlement import _now
     from app.utils.vermittlernummer import vermittlernummer_key
 
-    path = file_path(record)
-    try:
-        if path is None:
-            raise SettlementError("Die Datei wurde nicht gefunden.")
-        pages, method = read_pages(path.read_bytes())
-        parsed = parse(pages)
-    except SettlementError as exc:
-        record.status, record.message = "failed", str(exc)
-        db.session.commit()
-        return
-    record.text_method, record.page_count = method, len(pages)
+    record.text_method = method or record.text_method
+    record.page_count = page_count or record.page_count
     record.period_start, record.period_end, record.broker_number = parsed.period_start, parsed.period_end, parsed.broker_number
     record.content_fingerprint = fingerprint(parsed)
     if parsed.broker_number:
-        key = vermittlernummer_key(parsed.broker_number)
-        owner = next((u for u in User.query.filter(User.tenant_id == record.tenant_id).all() if vermittlernummer_key(u.vermittlernummer) == key), None)
-        record.employee_user_id = owner.id if owner else None
+        record.employee_user_id = _owner_map(record.tenant_id).get(vermittlernummer_key(parsed.broker_number))
     twin = Settlement.query.filter(Settlement.content_fingerprint == record.content_fingerprint, Settlement.id != record.id,
                                    Settlement.status.in_(("done", "needs_review"))).first()
-    record.lines = [
-        SettlementLine(tenant_id=record.tenant_id, position=line.position, page=line.page, raw_text=line.raw, booking_date=line.booking_date,
-                       contract_ref=line.contract_ref, sparte=line.sparte, booking_type=line.booking_type, booking_label=line.booking_label,
-                       amount=line.amount, is_ten=line.is_ten, needs_review=bool(line.reasons), review_reason="; ".join(line.reasons) or None)
-        for line in parsed.lines
-    ]
+    record.lines = lines
     problems = []
     if twin is not None:
         record.status, record.duplicate_of_id = "duplicate", twin.id
         problems.append(f"Inhalt identisch mit „{twin.original_filename}“ – wird nicht gezählt")
     else:
+        record.duplicate_of_id = None
         if record.period_start is None:
             problems.append("Abrechnungszeitraum nicht erkannt")
-        if record.employee_user_id is None:
+        if record.employee_user_id is None and any(line.broker_number is None for line in lines):
             problems.append("Mitarbeiter/Vermittlernummer nicht zugeordnet")
-        if not parsed.lines:
+        if not lines:
             problems.append("keine Buchungen erkannt")
-        unclear = sum(1 for line in parsed.lines if line.reasons)
+        unclear = sum(1 for line in lines if line.needs_review and line.review_state is None)
         if unclear:
             problems.append(f"{unclear} unklare Zeile(n)")
         record.status = "needs_review" if problems else "done"
     record.message = "; ".join(problems) or None
     record.processed_at = _now()
+
+
+def process(record) -> None:
+    """Liest und zerlegt einen Beleg (im Celery-Worker)."""
+    from app.extensions import db
+
+    try:
+        parsed, pages, method = parse_file(record)
+    except SettlementError as exc:
+        record.status, record.message = "failed", str(exc)
+        db.session.commit()
+        return
+    page_count = len(pages) if pages is not None else max((line.page for line in parsed.lines), default=0) or None
+    apply_parsed(record, parsed, build_lines(record, parsed), method, page_count)
     db.session.commit()
+
+
+# --- Geprufte Neuauswertung ------------------------------------------------------------------------
+
+
+def _line_key(line) -> tuple:
+    return (line.page, line.contract_ref or "", str(line.amount))
+
+
+@dataclass
+class Reevaluation:
+    token: str
+    old_count: int
+    new_count: int
+    removed: list  # bisher gezaehlte Zeilen, die entfallen (z. B. Deckblatt, Uebertrag)
+    kept_reviews: list  # manuell gepruefte Zeilen, die uebernommen werden
+    lost_reviews: list  # manuell gepruefte Zeilen ohne Gegenstueck - nie still verwerfen
+    by_broker: dict
+    new_total: Decimal
+    unclear: int
+    parsed: ParsedSettlement | None = None
+    lines: list = field(default_factory=list)
+
+
+def reevaluate_preview(record) -> Reevaluation:
+    """Liest den Beleg neu, ohne etwas zu speichern, und zeigt die Unterschiede."""
+    parsed, _pages, _method = parse_file(record)
+    new_lines = build_lines(record, parsed)
+    new_keys = {_line_key(line) for line in new_lines}
+    old = list(record.lines)
+    reviewed = [line for line in old if line.review_state is not None]
+    by_broker: dict = defaultdict(lambda: {"count": 0, "regular": Decimal("0"), "ten": 0})
+    for line in new_lines:
+        entry = by_broker[line.broker_number or record.broker_number or "–"]
+        entry["count"] += 1
+        if line.is_ten:
+            entry["ten"] += 1
+        elif line.amount is not None:
+            entry["regular"] += line.amount
+    token = hashlib.sha256((fingerprint(parsed) + "|" + "|".join(f"{line.id}:{line.review_state}" for line in reviewed)).encode()).hexdigest()[:32]
+    return Reevaluation(
+        token=token, old_count=len(old), new_count=len(new_lines),
+        removed=[line for line in old if line.amount is not None and _line_key(line) not in new_keys],
+        kept_reviews=[line for line in reviewed if _line_key(line) in new_keys],
+        lost_reviews=[line for line in reviewed if _line_key(line) not in new_keys],
+        by_broker=dict(by_broker), new_total=sum((line.amount or Decimal("0") for line in new_lines), Decimal("0")),
+        unclear=sum(1 for line in new_lines if line.needs_review), parsed=parsed, lines=new_lines,
+    )
+
+
+def reevaluate_apply(record, token: str, *, drop_lost_reviews: bool, user) -> Reevaluation:
+    """Uebernimmt die Neuauswertung nur, wenn sie der gezeigten Vorschau entspricht (token).
+    Manuelle Pruefungen werden auf die passende neue Zeile uebertragen; Pruefungen ohne
+    Gegenstueck nur nach ausdruecklicher Bestaetigung verworfen. Keine neuen Belege (keine Dubletten)."""
+    from app.extensions import db
+
+    preview = reevaluate_preview(record)
+    if preview.token != token:
+        raise SettlementError("Der Beleg oder die Prüfungen haben sich seit der Vorschau geändert. Bitte die Vorschau erneut öffnen.", 409)
+    if preview.lost_reviews and not drop_lost_reviews:
+        raise SettlementError("Manuell geprüfte Zeilen hätten kein Gegenstück. Bitte ausdrücklich bestätigen oder die Zeilen zuerst prüfen.", 409)
+    reviews = {_line_key(line): line for line in record.lines if line.review_state is not None}
+    for line in preview.lines:
+        old = reviews.get(_line_key(line))
+        if old is not None:
+            line.sparte, line.booking_type, line.contract_ref = old.sparte, old.booking_type, old.contract_ref
+            line.review_state, line.reviewed_by_user_id, line.reviewed_at = old.review_state, old.reviewed_by_user_id, old.reviewed_at
+    page_count = max((line.page for line in preview.lines), default=0) or record.page_count
+    apply_parsed(record, preview.parsed, preview.lines, None, max(page_count, record.page_count or 0))
+    from app.models.audit_log import AuditEventType
+    from app.services.audit import log_audit_event
+
+    log_audit_event(AuditEventType.USER_UPDATED, user=user, details={"settlement_reevaluated": record.id, "lines_before": preview.old_count,
+                                                                     "lines_after": preview.new_count, "reviews_kept": len(preview.kept_reviews),
+                                                                     "reviews_dropped": len(preview.lost_reviews)})
+    db.session.commit()
+    return preview
 
 
 # --- Auswertung -----------------------------------------------------------------------------------
@@ -359,9 +601,9 @@ def counted_lines(year: int, month: int, *, user_id=None, exclude_ten=False, exc
     query = SettlementLine.query.join(Settlement).filter(
         Settlement.status.in_(("done", "needs_review")), Settlement.period_start >= start, Settlement.period_start <= end
     )
-    if user_id is not None:
-        query = query.filter(Settlement.employee_user_id == (None if user_id == 0 else user_id))
     lines = query.order_by(Settlement.id, SettlementLine.position).all()
+    if user_id is not None:
+        lines = [line for line in lines if (line.owner_id or 0) == user_id]
     if only == "unclear":
         return [line for line in lines if line.needs_review and line.review_state is None]
     lines = [line for line in lines if line.counts]
@@ -379,15 +621,15 @@ def counted_lines(year: int, month: int, *, user_id=None, exclude_ten=False, exc
 
 
 def summary(year: int, month: int, *, exclude_ten=False, exclude_sparten=()) -> list[EmployeeSummary]:
-    from app.models import Settlement, User
+    from app.models import User
     from app.services.calendar import member_name
 
     lines = counted_lines(year, month, exclude_ten=exclude_ten, exclude_sparten=exclude_sparten)
     unclear = counted_lines(year, month, only="unclear")
     by_user: dict = {}
 
-    def entry(settlement: Settlement) -> EmployeeSummary:
-        uid = settlement.employee_user_id or 0
+    def entry(line) -> EmployeeSummary:
+        uid = line.owner_id or 0
         if uid not in by_user:
             user = User.query.filter(User.id == uid).first() if uid else None
             by_user[uid] = EmployeeSummary(uid, member_name(user) if user else "Nicht zugeordnet")
@@ -395,7 +637,7 @@ def summary(year: int, month: int, *, exclude_ten=False, exclude_sparten=()) -> 
 
     contracts: dict = defaultdict(lambda: defaultdict(list))
     for line in lines:
-        e = entry(line.settlement)
+        e = entry(line)
         e.lines += 1
         if line.is_ten:
             e.ten_sum += line.amount
@@ -415,7 +657,7 @@ def summary(year: int, month: int, *, exclude_ten=False, exclude_sparten=()) -> 
         if line.contract_ref:
             contracts[e.user_id][line.contract_ref].append(line)
     for line in unclear:
-        entry(line.settlement).unclear += 1
+        entry(line).unclear += 1
     for uid, e in by_user.items():
         refs = contracts.get(uid, {})
         # Auftrag/Abschluss nur bei ausdruecklicher Abschlussbuchung; mehrere Zeilen je Vertrag = 1.

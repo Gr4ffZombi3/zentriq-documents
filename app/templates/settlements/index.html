@@ -12,7 +12,7 @@
 {% block content %}
 <div class="page-shell">
   <div class="page-toolbar"><div><h1 class="page-toolbar-title">Abrechnungen</h1>
-    <p class="page-subtitle">Auswertung aus den eingereichten Belegen. Alle Werte werden im Backend aus den einzelnen Buchungen berechnet – jede Zahl ist anklickbar.</p></div></div>
+    <p class="page-subtitle">Auswertung aus den eingereichten Belegen. Je Mitarbeiter (Vermittlernummer des Tabellenblocks) aus den Zeilen der Einzelübersicht, Spalte „Betrag in Euro“. Einzelbuchungen erst in den Details.</p></div></div>
 
   <form method="get" class="panel abr-filter" aria-label="Zeitraum und Filter">
     <div class="panel-body abr-filter-body">
@@ -32,40 +32,22 @@
   <div class="abr-grid">
   {% for r in rows %}
     {% set uid = r.user_id %}
-    <section class="panel abr-card" aria-labelledby="abr-m-{{ uid }}">
-      <header class="panel-header"><h2 class="panel-title" id="abr-m-{{ uid }}">{{ r.name }}</h2>
-        <span class="abr-total">{{ drill(money(r.total), uid) }}</span></header>
-      <h3 class="huk-summary-title">Verdient laut Abrechnung{% if exclude_ten or excluded %} (gefiltert){% endif %}</h3>
-      <dl class="fact-list">
-        <div><dt>Reguläre Beträge</dt><dd>{{ drill(money(r.regular), uid, 'regular') }}</dd></div>
-        <div><dt>10-€-Summe</dt><dd>{% if exclude_ten %}ausgeblendet{% else %}{{ drill(money(r.ten_sum), uid, 'ten') }}{% endif %}</dd></div>
-        <div><dt>Gesamt</dt><dd><strong>{{ drill(money(r.total), uid) }}</strong></dd></div>
-        <div><dt>darin Stornos</dt><dd>{{ drill(money(r.storno_sum), uid, 'storno') }}</dd></div>
-        <div><dt>darin Korrekturen</dt><dd>{{ drill(money(r.korrektur_sum), uid, 'korrektur') }}</dd></div>
-      </dl>
-      <h3 class="huk-summary-title">Aufträge und Verträge</h3>
-      <dl class="fact-list">
-        <div><dt>Geschriebene Aufträge</dt><dd>{% if r.orders is none %}Aus der Abrechnung nicht ermittelbar{% else %}{{ r.orders }}{% if r.orders_cancelled %} (davon {{ r.orders_cancelled }} storniert){% endif %}{% endif %}</dd></div>
-        <div><dt>Verkaufte Verträge nach Sparte</dt><dd>
-          {% if r.orders is none %}Aus der Abrechnung nicht ermittelbar
-          {% elif r.sales_by_sparte %}<ul class="abr-plain">{% for s, n in r.sales_by_sparte.items() %}<li>{{ drill(s ~ ': ' ~ n, uid, None, s) }}</li>{% endfor %}</ul>
-          {% else %}keine (alle storniert){% endif %}</dd></div>
+    {% set base = {'monat': '%04d-%02d' % (year, month), 'mitarbeiter': uid, 'teil': '1'} %}
+    <section class="panel abr-card" aria-labelledby="abr-m-{{ uid }}" data-abr-employee="{{ uid }}">
+      <header class="panel-header"><h2 class="panel-title" id="abr-m-{{ uid }}">{{ r.name }}</h2></header>
+      <dl class="fact-list abr-key">
+        <div><dt>Vergütung ohne 10-€-Positionen</dt><dd data-abr-regular><strong>{{ drill(money(r.regular), uid, 'regular') }}</strong></dd></div>
+        <div><dt>Abgerechnete Neuabschlüsse</dt><dd data-abr-orders>{% if r.orders is none %}–{% else %}{{ r.orders - r.orders_cancelled }}{% if r.orders_cancelled %} <small>(+ {{ r.orders_cancelled }} storniert)</small>{% endif %}{% endif %}</dd></div>
+        <div><dt>Anzahl je Sparte</dt><dd data-abr-sparten>{% if r.sales_by_sparte %}<ul class="abr-plain">{% for s, n in r.sales_by_sparte.items() %}<li>{{ drill(s ~ ': ' ~ n, uid, None, s) }}</li>{% endfor %}</ul>{% else %}–{% endif %}</dd></div>
       </dl>
       {% if not exclude_ten %}
-      <h3 class="huk-summary-title">10-€-Positionen</h3>
-      <dl class="fact-list">
-        <div><dt>+10,00 €</dt><dd>{{ r.ten_pos_count }} × = {{ money(r.ten_pos_sum) }}</dd></div>
-        <div><dt>−10,00 €</dt><dd>{{ r.ten_neg_count }} × = {{ money(r.ten_neg_sum) }}</dd></div>
-        <div><dt>Summe</dt><dd>{{ r.ten_pos_count + r.ten_neg_count }} Positionen = {{ drill(money(r.ten_sum), uid, 'ten') }}</dd></div>
-      </dl>
-      {% if r.ten_lines %}
-        <details class="abr-details"><summary>Einzelpositionen anzeigen ({{ r.ten_lines | length }})</summary>
-          <ul class="abr-lines">{% for l in r.ten_lines %}<li><span>{{ l.contract_ref or 'ohne Referenz' }} · {{ l.sparte or 'Sparte unklar' }} · {{ type_labels.get(l.booking_type, '–') }}</span><strong>{{ money(l.amount) }}</strong>
-            <a class="abr-src" href="{{ url_for('settlements.original', settlement_id=l.settlement_id) }}#page={{ l.page }}" target="_blank" rel="noopener">Seite {{ l.page }}</a></li>{% endfor %}</ul>
-        </details>
-      {% endif %}
+      <p class="abr-ten" data-abr-ten>10-€-Positionen (separat): {{ r.ten_pos_count }} × +10 €{% if r.ten_neg_count %}, {{ r.ten_neg_count }} × −10 €{% endif %} = {{ drill(money(r.ten_sum), uid, 'ten') }}</p>
       {% endif %}
       {% if r.unclear %}<p class="flash flash-error abr-warn">{{ r.unclear }} unklare Zeile(n) noch nicht gezählt – bitte im Beleg prüfen.</p>{% endif %}
+      <details class="abr-details" data-lazy-src="{{ url_for('settlements.bookings', **base) }}{% if exclude_ten %}&ohne_zehn=1{% endif %}{% for s in excluded %}&ohne={{ s | urlencode }}{% endfor %}">
+        <summary>Details: Einzelbuchungen ({{ r.lines }}){% if r.storno_sum %} · Stornos {{ money(r.storno_sum) }}{% endif %} · Gesamt laut Abrechnung {{ money(r.total) }}</summary>
+        <div data-lazy-body></div></details>
+      {% if r.unclear %}<details class="abr-details" data-lazy-src="{{ url_for('settlements.bookings', art='unclear', **base) }}"><summary>Unklare Zeilen ({{ r.unclear }})</summary><div data-lazy-body></div></details>{% endif %}
     </section>
   {% endfor %}
   </div>
@@ -83,5 +65,6 @@
     {% else %}<div class="panel-body"><p class="form-hint">Noch keine Belege.</p></div>{% endif %}
   </section>
   {% include "settlements/_upload.html" %}
+  {% include "settlements/_lazy.html" %}
 </div>
 {% endblock %}

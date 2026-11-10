@@ -1,6 +1,6 @@
 """Vorgaenge ohne Kundenakte (Notizen/Termine, spaetere Zuordnung beim Listenimport)
 
-Revision ID: c3d4e5f6a7b8
+Revision ID: b2049b67a125
 Revises: b7c8d9e0f1a2
 Create Date: 2026-11-10 22:30:00.000000
 
@@ -10,7 +10,7 @@ Rein additiv: zwei neue Tabellen und eine leere Spalte calendar_events.pending_c
 import sqlalchemy as sa
 from alembic import op
 
-revision = "c3d4e5f6a7b8"
+revision = "b2049b67a125"
 down_revision = "b7c8d9e0f1a2"
 branch_labels = None
 depends_on = None

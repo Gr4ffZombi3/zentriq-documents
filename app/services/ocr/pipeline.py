@@ -29,7 +29,7 @@ def _native_page_texts(file_path: str) -> list[str]:
         doc.close()
 
 
-def extract_text(file_path: str) -> tuple[str, OcrEngine, float | None, list[str]]:
+def extract_text(file_path: str, on_page=None) -> tuple[str, OcrEngine, float | None, list[str]]:
     """Extrahiert Text aus einer PDF - immer alle Seiten. Pro Seite zuerst der eingebettete
     PDF-Text; nur Seiten ohne ausreichenden Text (Scans) gehen durch Tesseract, bei niedriger
     Konfidenz oder zu kurzem Ergebnis zusaetzlich durch OpenAI Vision.
@@ -37,11 +37,15 @@ def extract_text(file_path: str) -> tuple[str, OcrEngine, float | None, list[str
     Hintergrund: Tesseract liest breite Tabellen spaltenweise (erst alle Nummern, dann alle
     Namen, dann alle Daten) - die Zeilenzuordnung ginge verloren. Der native Text behaelt sie.
     Gibt (text, engine_used, avg_confidence, page_texts) zurueck; engine_used ist NONE, wenn
-    keine Seite OCR brauchte."""
+    keine Seite OCR brauchte.
+
+    on_page(nummer, gesamt, texterkennung): optional, meldet den tatsaechlichen Stand fuer die
+    Fortschrittsanzeige ("Seite 8 von 24 wird gelesen")."""
     min_confidence = current_app.config["OCR_MIN_CONFIDENCE"]
     min_text_length = current_app.config["OCR_MIN_TEXT_LENGTH"]
 
     page_texts = _native_page_texts(file_path)
+    total = len(page_texts)
     confidences = []
     used_ocr = False
     used_vision = False
@@ -50,6 +54,8 @@ def extract_text(file_path: str) -> tuple[str, OcrEngine, float | None, list[str
     if ocr_pages:
         images = _render_pages(file_path)
         for index in ocr_pages:
+            if on_page is not None:
+                on_page(index + 1, total, True)
             used_ocr = True
             text, confidence = tesseract_ocr.ocr_image(images[index])
             if len(text.strip()) < min_text_length or confidence < min_confidence:

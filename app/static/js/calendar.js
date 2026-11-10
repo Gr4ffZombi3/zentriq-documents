@@ -471,7 +471,13 @@
     fact("Wann", dayLabel(dayOf(e.start), true) + ", " + hm(e.start) + "–" + (same ? "" : dayLabel(dayOf(e.end)) + " ") + hm(e.end) + " Uhr");
     var who = el("span", "cal-pop-who"); who.appendChild(el("span", "cal-swatch cal-c-" + colorOf(e.assignee_id))); who.appendChild(document.createTextNode(e.assignee));
     fact("Zuständig", null, who);
-    if (e.customer) { var a = el("a", null, e.customer.name); a.href = cfg.customerUrl.replace(/0$/, String(e.customer.id)); fact("Kunde", null, a); }
+    if (e.customer) {
+      var a = el("a", null, e.customer.name);
+      a.href = cfg.customerUrl.replace(/0$/, String(e.customer.id));
+      // Kundenakte (Buero-Admin) rechts im Seitenfenster - der Kalender bleibt, wie er ist (workspace.js).
+      if (/\/customers\//.test(a.href)) a.setAttribute("data-zq-panel", "");
+      fact("Kunde", null, a);
+    }
     fact("Art", e.location_label); fact("Ort", e.location); fact("Notiz", e.note);
     fact("Geändert", (e.updated_by || "–") + ", " + (e.updated_at || ""));
     p.appendChild(dl);

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "ui/display.html" import badge, empty_state %}
+{% from "components/saved_views.html" import saved_views_bar %}
 {% block title %}Kunden – Zentriq{% endblock %}
 {% block content %}
 {% set items = customer_directory["items"] %}
@@ -21,6 +22,7 @@
     {% if current_per_page != 25 %}<input type="hidden" name="per_page" value="{{ current_per_page }}">{% endif %}
     <button type="submit" class="btn btn-primary">Suchen</button>
   </form>
+  {% call saved_views_bar('kunden', 'Kunden' ~ (' · „' ~ q ~ '“' if q else ''), {'q': q, 'per_page': current_per_page if current_per_page != 25 else none}) %}{% endcall %}
 
   {% if items %}
     <section class="panel">

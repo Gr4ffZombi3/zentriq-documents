@@ -141,8 +141,36 @@ def merge_progress_into_extra_data(extra_data: dict | None, snapshot: dict[str, 
 def build_document_progress(document) -> dict[str, Any]:
     stored = (document.extra_data or {}).get("analysis_progress")
     if isinstance(stored, dict):
-        return _normalize_snapshot(stored, document)
-    return _fallback_progress(document)
+        progress = _normalize_snapshot(stored, document)
+    else:
+        progress = _fallback_progress(document)
+    if progress["state"] == "failed":
+        progress["recovery"] = recovery_info(document, progress)
+    return progress
+
+
+def _upload_present(document) -> bool:
+    from app.services.storage import resolve_document_path
+
+    try:
+        return bool(document.file_path) and resolve_document_path(document.file_path).is_file()
+    except (ValueError, OSError):
+        return False
+
+
+def recovery_info(document, progress: dict[str, Any]) -> dict[str, Any]:
+    """Nach einem Fehler: Ist der Upload angekommen, welcher Schritt ist fehlgeschlagen und was
+    laesst sich wiederholen? (Anzeige unter der Fortschrittsleiste.)"""
+    failed = next((step for step in progress["steps"] if step["state"] == "failed"), None)
+    uploaded = _upload_present(document)
+    step_label = failed["label"] if failed else "Auswertung"
+    if uploaded:
+        upload_text = "Die Datei ist angekommen und gespeichert – sie muss nicht erneut hochgeladen werden."
+        retry_text = f"Fehlgeschlagen: {step_label}. Mit „Erneut versuchen“ wird die Auswertung derselben Datei wiederholt."
+    else:
+        upload_text = "Die Datei ist nicht mehr auf dem Server vorhanden."
+        retry_text = "Bitte die Datei erneut hochladen."
+    return {"uploaded": uploaded, "step": step_label, "upload_text": upload_text, "retry_text": retry_text, "can_retry": uploaded}
 
 
 def _normalize_snapshot(snapshot: dict[str, Any], document) -> dict[str, Any]:

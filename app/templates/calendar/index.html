@@ -14,6 +14,7 @@
   "customerUrl": url_for('customers.detail', customer_id=0) if current_user.is_office_admin else url_for('zentriq.index') ~ '?kunde=0'
 } | tojson }}</script>
 
+<span hidden data-zq-tab-kind="kalender" data-zq-tab-title="Kalender"></span>
 <div class="cal" data-cal>
   <aside class="cal-side" id="cal-side" data-cal-side>
     <div class="cal-mini" data-cal-mini aria-label="Monatsübersicht"></div>

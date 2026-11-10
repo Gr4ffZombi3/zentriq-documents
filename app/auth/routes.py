@@ -20,7 +20,7 @@ from app.auth.forms import ForgotPasswordForm, LoginForm, ResetPasswordForm, Two
 from app.extensions import db
 from app.models import User
 from app.models.audit_log import AuditEventType, AuditLog
-from app.services import trusted_browsers, user_sessions
+from app.services import trusted_browsers, user_sessions, workspace
 from app.services import two_factor as two_factor_service
 from app.services.account_state import account_login_block_reason
 from app.services.audit import log_audit_event
@@ -76,6 +76,8 @@ def _complete_login(user: User, details: dict | None = None):
     login_user(user)
     user_sessions.start_session(user)
     user.last_login_at = datetime.now(timezone.utc)
+    # Erster erfolgreicher Login des Kalendertags: Tagesbegruessung faellig (app/services/workspace.py).
+    workspace.record_login(user)
     db.session.commit()
     log_audit_event(AuditEventType.LOGIN_SUCCESS, tenant_id=user.tenant_id, user=user, details=details)
     return redirect(url_for("portal.home"))

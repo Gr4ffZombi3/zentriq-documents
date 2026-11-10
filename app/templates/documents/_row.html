@@ -58,6 +58,9 @@
       {% if progress.detail %}
         <p class="doc-row-live-copy">{{ progress.detail }}</p>
       {% endif %}
+      {% if progress.recovery %}
+        <p class="doc-row-live-copy">{{ progress.recovery.upload_text }} {{ progress.recovery.retry_text }}</p>
+      {% endif %}
     </div>
 
     <div class="document-row-action">

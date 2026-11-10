@@ -17,7 +17,10 @@
     {% endif %}
     {# Container fuer den Inhalt: Komponenten richten sich nach dem verfuegbaren Platz
        (@container main), nicht nach der Fensterbreite - die Seitenleiste nimmt Breite weg. #}
+    {% set workspace_member = current_user.is_authenticated and (current_user.is_office_admin or current_user.is_employee) %}
     <div class="app-main-col">
+      {# Tabs (Kundenakten, Kalender, Kfz-Angebote): js/workspace.js, gespeichert im Browser. #}
+      {% if workspace_member %}<nav class="zq-tabs" data-zq-tabs data-user="{{ current_user.id }}" aria-label="Geöffnete Tabs" hidden></nav>{% endif %}
       {% include "components/subnav.html" %}
       <main class="app-content" id="inhalt">
         {% include "components/flash_messages.html" %}
@@ -25,8 +28,9 @@
       </main>
     </div>
   </div>
-  {% if current_user.is_authenticated and (current_user.is_office_admin or current_user.is_employee) %}
+  {% if workspace_member %}
     {% include "components/time_clock.html" %}
+    {% include "components/workspace.html" %}
   {% endif %}
 </body>
 </html>

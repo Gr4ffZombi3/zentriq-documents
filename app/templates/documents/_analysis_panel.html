@@ -30,6 +30,13 @@
     <span style="width: {{ progress.percent }}%"></span>
   </div>
 
+  {% if progress.recovery %}
+    <div class="zq-recovery" role="status">
+      <p><strong>{{ '✓' if progress.recovery.uploaded else '✗' }} Upload:</strong> {{ progress.recovery.upload_text }}</p>
+      <p><strong>Wiederholen:</strong> {{ progress.recovery.retry_text }}</p>
+    </div>
+  {% endif %}
+
   <ol class="analysis-step-list" aria-label="Analysefortschritt">
     {% for step in progress.steps %}
       <li class="analysis-step analysis-step-{{ step.state }}">

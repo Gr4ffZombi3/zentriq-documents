@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Was ist neu? – Zentriq{% endblock %}
+{% block content %}
+{# Vollstaendige Historie: Release-Eintraege (app/release_notes.py) und Eintraege des Bueros,
+   je Rolle gefiltert. Pflege nur fuer Buero-Admins. #}
+<div class="page-shell page-shell-narrow">
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">Was ist neu?</h1>
+      <p class="page-subtitle">Neuerungen in Zentriq, die neuesten zuerst.</p>
+    </div>
+    {% if current_user.is_office_admin %}<a class="btn btn-secondary btn-sm" href="#pflegen">Eintrag hinzufügen</a>{% endif %}
+  </div>
+
+  <section class="panel">
+    {% if items %}
+      <ol class="zq-news">
+        {% for item in items %}
+          {% if loop.first or item.date != loop.previtem.date %}
+            <li class="zq-news-date"><time datetime="{{ item.date.isoformat() }}">{{ item.date.strftime('%d.%m.%Y') }}</time></li>
+          {% endif %}
+          <li class="zq-news-item">
+            <h2 class="zq-news-title">{{ item.title }}{% if item.office %} <span class="zq-news-tag">Büro</span>{% endif %}</h2>
+            <p class="zq-news-text">{{ item.text }}</p>
+          </li>
+        {% endfor %}
+      </ol>
+    {% else %}
+      <p class="panel-body">Noch keine Neuerungen.</p>
+    {% endif %}
+  </section>
+
+  {% if current_user.is_office_admin %}
+    <section class="panel" id="pflegen" aria-labelledby="pflegen-titel">
+      <header class="panel-header"><h2 class="panel-title" id="pflegen-titel">{{ 'Eintrag bearbeiten' if editing else 'Eintrag für Ihr Büro hinzufügen' }}</h2></header>
+      <form class="panel-body zq-news-form" method="post" action="{{ url_for('workspace.save_news') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if editing %}<input type="hidden" name="id" value="{{ editing.id }}">{% endif %}
+        <label class="field-label" for="news-title">Überschrift</label>
+        <input class="field-surface" id="news-title" name="title" maxlength="160" required value="{{ editing.title if editing else '' }}">
+        <label class="field-label" for="news-body">Kurze Beschreibung</label>
+        <textarea class="field-surface" id="news-body" name="body" rows="3" maxlength="2000" required>{{ editing.body if editing else '' }}</textarea>
+        <div class="zq-inline-row">
+          <div>
+            <label class="field-label" for="news-date">Sichtbar ab</label>
+            <input class="field-surface" id="news-date" name="published_on" type="date" value="{{ (editing.published_on if editing else today).isoformat() }}">
+          </div>
+          <div>
+            <label class="field-label" for="news-audience">Für</label>
+            <select class="field-surface" id="news-audience" name="audience">
+              {% for key, label in audiences.items() %}<option value="{{ key }}" {{ 'selected' if editing and editing.audience == key }}>{{ label }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary btn-sm">Speichern</button>
+          {% if editing %}<a class="btn btn-ghost btn-sm" href="{{ url_for('workspace.news') }}">Abbrechen</a>{% endif %}
+        </div>
+      </form>
+      {% if office_items %}
+        <div class="panel-body">
+          <p class="field-label">Einträge Ihres Büros</p>
+          <ul class="zq-news-admin">
+            {% for row in office_items %}
+              <li>
+                <span><strong>{{ row.title }}</strong> · {{ row.published_on.strftime('%d.%m.%Y') }} · {{ audiences.get(row.audience, row.audience) }}</span>
+                <span class="zq-news-admin-actions">
+                  <a class="btn btn-ghost btn-sm" href="{{ url_for('workspace.news', bearbeiten=row.id) }}#pflegen">Bearbeiten</a>
+                  <form method="post" action="{{ url_for('workspace.delete_news', news_id=row.id) }}" onsubmit="return confirm('Eintrag löschen?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-ghost btn-sm">Löschen</button>
+                  </form>
+                </span>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    </section>
+  {% endif %}
+</div>
+{% endblock %}

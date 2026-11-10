@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% from "leipziger/_macros.html" import list_selector, entry_table %}
+{% from "components/saved_views.html" import saved_views_bar %}
 {% block title %}Leipziger Liste – Zentriq{% endblock %}
 
 {% block content %}
-{% set base_args = {'document_id': document.id if document and documents | length > 1 else none, 'q': query or none} %}
+{% set base_args = {'document_id': document.id if document and documents | length > 1 else none, 'q': query or none, 'storno': storno or none} %}
 <div class="page-shell">
   <div class="page-toolbar">
     <h1 class="page-toolbar-title">Leipziger Liste</h1>
@@ -18,12 +19,23 @@
   <form method="get" action="{{ url_for('leipziger.index') }}" class="search-bar" role="search">
     {% if document and documents | length > 1 %}<input type="hidden" name="document_id" value="{{ document.id }}">{% endif %}
     <input type="hidden" name="tab" value="{{ tab }}">
+    {% if storno %}<input type="hidden" name="storno" value="ohne">{% endif %}
     <label class="sr-only" for="leipziger-suche">Vertragsnummer, Kunde oder Vermittlernummer suchen</label>
     <input class="field-surface search-input" type="search" id="leipziger-suche" name="q" value="{{ query }}"
            placeholder="Vertragsnummer, Kunde oder Vermittlernummer" autocomplete="off" maxlength="60">
     <button type="submit" class="btn btn-primary">Suchen</button>
-    {% if query %}<a class="btn btn-ghost" href="{{ url_for('leipziger.index', tab=tab, document_id=base_args.document_id) }}">Zurücksetzen</a>{% endif %}
+    {% if query %}<a class="btn btn-ghost" href="{{ url_for('leipziger.index', tab=tab, document_id=base_args.document_id, storno=base_args.storno) }}">Zurücksetzen</a>{% endif %}
   </form>
+
+  {# Filter "ohne Storno" und gespeicherte Ansichten (je Benutzer, app/services/workspace.py) #}
+  {% set view_label = 'Leipziger Liste · ' ~ tabs[tab] ~ (' · ohne Storno' if storno else '') ~ (' · „' ~ query ~ '“' if query else '') %}
+  {% call saved_views_bar('leipziger', view_label, {'document_id': base_args.document_id, 'tab': tab, 'q': query, 'storno': storno}) %}
+    {% if storno %}
+      <a class="zq-filter-chip is-on" href="{{ url_for('leipziger.index', tab=tab, document_id=base_args.document_id, q=base_args.q) }}" aria-pressed="true">✓ ohne Storno</a>
+    {% else %}
+      <a class="zq-filter-chip" href="{{ url_for('leipziger.index', tab=tab, storno='ohne', **{'document_id': base_args.document_id, 'q': base_args.q}) }}" aria-pressed="false">ohne Storno</a>
+    {% endif %}
+  {% endcall %}
 
   {% if current_user.is_admin and document %}
     <div class="import-info">
@@ -97,7 +109,7 @@
         'mit-datum': 'Keine Vorgänge mit Datum vorhanden.',
         'ohne-datum': 'Keine Vorgänge ohne Datum vorhanden.',
       } %}
-      {{ entry_table(items, broker_names=broker_names if current_user.is_admin else none,
+      {{ entry_table(items, broker_names=broker_names if current_user.is_admin else none, customer_links=current_user.is_admin,
                      empty_text=('Keine Treffer für „' ~ query ~ '“.') if query else empty_texts[tab]) }}
       {% if pages > 1 %}
         <nav class="pager" aria-label="Seiten">

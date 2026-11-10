@@ -1,0 +1,7 @@
+{# Inhalt fuer das Seitenfenster (js/workspace.js laedt die Seite mit ?panel=1): nur der
+   Inhaltsblock, ohne Seitenleiste und Kopf. Skripte der Seite laufen hier nicht - Funktionen im
+   Fenster arbeiten per Ereignis-Delegation (app.js: Kopieren, workspace.js: Feldbearbeitung). #}
+<div class="zq-panel-page" data-zq-panel-title="{% block panel_title %}{% endblock %}">
+  {% include "components/flash_messages.html" %}
+  {% block content %}{% endblock %}
+</div>

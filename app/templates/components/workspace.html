@@ -1,0 +1,46 @@
+{# Arbeitsplatz fuer Buero-Rollen (js/workspace.js): Schnellsuche (Strg/Cmd+K), Seitenfenster fuer
+   Kundenakten und die einmalige Tagesbegruessung auf der Startansicht. #}
+{% set greeting = daily_greeting() %}
+{% if greeting %}
+  <aside class="zq-greeting" role="status" aria-live="polite" data-zq-greeting>
+    <button type="button" class="zq-greeting-close" data-zq-greeting-close aria-label="Begrüßung schließen">×</button>
+    <p class="zq-greeting-hello">{{ greeting.text }}</p>
+    {% if greeting.news %}
+      <p class="zq-greeting-kicker">Neu seit Ihrem letzten Besuch</p>
+      <ul class="zq-greeting-news">
+        {% for item in greeting.news %}<li><strong>{{ item.title }}.</strong> {{ item.text }}</li>{% endfor %}
+      </ul>
+      {% if greeting.more %}<p class="zq-greeting-more">… und {{ greeting.more }} weitere.</p>{% endif %}
+    {% else %}
+      <p class="zq-greeting-none">Heute gibt es keine Neuerungen.</p>
+    {% endif %}
+    <a class="zq-greeting-link" href="{{ url_for('workspace.news') }}">Was ist neu?</a>
+  </aside>
+{% endif %}
+
+<div class="zq-search" data-zq-search data-url="{{ url_for('workspace.quick_search') }}" hidden>
+  <div class="zq-search-backdrop" data-zq-search-close></div>
+  <div class="zq-search-box" role="dialog" aria-modal="true" aria-label="Schnellsuche">
+    <div class="zq-search-row">
+      <input type="search" class="zq-search-input" data-zq-search-input placeholder="Kunde oder Seite, z. B. Kalender" maxlength="60" autocomplete="off"
+             role="combobox" aria-expanded="true" aria-controls="zq-search-list" aria-autocomplete="list">
+      <button type="button" class="zq-search-cancel" data-zq-search-close>Schließen</button>
+    </div>
+    <ul class="zq-search-list" id="zq-search-list" role="listbox" data-zq-search-list></ul>
+    <p class="zq-search-hint">↑ ↓ auswählen · Enter öffnen · Esc schließen</p>
+  </div>
+</div>
+
+<div class="zq-panel" data-zq-panel-root hidden>
+  <div class="zq-panel-backdrop" data-zq-panel-close></div>
+  <section class="zq-panel-box" role="dialog" aria-modal="true" aria-labelledby="zq-panel-title">
+    <header class="zq-panel-head">
+      <button type="button" class="zq-panel-back" data-zq-panel-close>← Zurück</button>
+      <h2 class="zq-panel-title" id="zq-panel-title" data-zq-panel-heading>Kundenakte</h2>
+      <a class="zq-panel-full" href="#" data-zq-panel-full>Als Tab öffnen</a>
+      <button type="button" class="zq-panel-x" data-zq-panel-close aria-label="Seitenfenster schließen">×</button>
+    </header>
+    <div class="zq-panel-body" data-zq-panel-body tabindex="-1"></div>
+  </section>
+</div>
+<script defer src="{{ url_for('static', filename='js/workspace.js', v=static_rev('js/workspace.js')) }}"></script>

@@ -20,6 +20,7 @@ from flask import (
 )
 from flask_login import current_user, login_required
 
+from app.services import workspace
 from app.services.calendar import member_name
 from app.services.huk import ai, jobs, schema
 from app.services.timetracking.clock import local_today
@@ -98,15 +99,25 @@ def edit(job_id):
     return _save(job, customer)
 
 
+def _drop_form_drafts(job, was_new: bool) -> None:
+    """Zwischenstaende des Formulars (app/services/workspace.py) sind nach dem Speichern erledigt."""
+    if was_new:
+        workspace.delete_draft(current_user, "huk:neu")
+    if job is not None:
+        workspace.delete_draft(current_user, f"huk:{job.id}")
+
+
 def _save(job, customer):
     if request.form.get("aktion") == "ki":
         return _ai_suggest(job, customer)
+    was_new = job is None
     try:
         job, missing, errors = jobs.save_draft(current_user, job, _form_values(), customer)
     except jobs.HukJobError as exc:
         abort(exc.status)
     if missing or errors:
         return _render_form(job, job.input_data, customer, missing, errors), 422
+    _drop_form_drafts(job, was_new)
     return redirect(url_for("huk.show", job_id=job.id))
 
 
@@ -116,6 +127,7 @@ def _ai_suggest(job, customer):
     text = request.form.get("ki_text", "")
     if job is None:
         job, _m, _e = jobs.save_draft(current_user, None, values, customer)
+        workspace.delete_draft(current_user, "huk:neu")  # weiter unter dem Entwurf des neuen Auftrags
     try:
         suggested = ai.extract(job, text)
     except ai.HukAiError as exc:

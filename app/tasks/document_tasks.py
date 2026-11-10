@@ -308,9 +308,27 @@ def _run_pipeline_steps(document: Document, customer_lock: NamedLock) -> None:
             run.overall_confidence = overall_confidence
         _commit_with_timing("analysis_run_finished")
 
+    # Tatsaechlicher Stand fuer die Anzeige: "Seite 8 von 24 wird gelesen" (nur Seiten mit
+    # Texterkennung dauern spuerbar; hoechstens ein Commit pro Sekunde).
+    last_report = [0.0]
+
+    def _report_page(number: int, total: int, ocr: bool) -> None:
+        now = time.monotonic()
+        if now - last_report[0] < 1.0 and number != total:
+            return
+        last_report[0] = now
+        _set_progress(
+            completed=["uploaded"],
+            active="ocr",
+            percent=18 + int(30 * number / max(total, 1)),
+            headline=f"Seite {number} von {total} wird gelesen",
+            detail="Texterkennung für gescannte Seiten läuft." if ocr else "Der Text der PDF wird gelesen.",
+        )
+        _commit_with_timing("ocr_page")
+
     stage_start = time.monotonic()
     try:
-        raw_text, engine_used, confidence, page_texts = extract_text(document.file_path)
+        raw_text, engine_used, confidence, page_texts = extract_text(document.file_path, on_page=_report_page)
     except Exception:
         db.session.rollback()
         document.status = DocStatus.FAILED

@@ -5,7 +5,7 @@ from app.auth.permissions import admin_required
 from app.models import Customer, DocumentCustomer, Task
 from app.models.enums import TaskStatus
 from app.navigation import display_name_for
-from app.services import customer_notes, customer_sources
+from app.services import customer_create, customer_notes, customer_sources
 from app.services.customer_duplicates import (
     REASON_LABELS,
     MergeError,
@@ -90,6 +90,11 @@ def detail(customer_id):
         # Notizen und offene Rueckrufe aus dem Eingabefeld: dieselbe Quelle wie die Kundenkarte
         # im Assistenten (customer_notes.customer_card), damit beide Einstiege dasselbe zeigen.
         note_card=customer_notes.customer_card(current_user, customer),
+        # Bearbeiten direkt am Feld: dieselbe Pruefung wie die Kundenkarte (customer_create.update_fields).
+        can_edit=customer_create.can_edit(current_user, customer),
+        edit=customer_create.edit_payload(customer),
+        # Seitenfenster (js/workspace.js): nur der Inhalt, ohne Seitenleiste.
+        panel=request.args.get("panel") == "1",
     )
 
 

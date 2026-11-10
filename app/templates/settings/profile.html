@@ -36,6 +36,26 @@
     {% endif %}
   </section>
 
+  {% if start_views %}
+    {# Startansicht nach dem Login (app/services/workspace.py); dort erscheint auch einmal am Tag
+       die Begruessung mit den Neuerungen. #}
+    <section class="panel" id="startansicht" aria-labelledby="startansicht-titel">
+      <header class="panel-header"><h2 class="panel-title" id="startansicht-titel">Startansicht</h2></header>
+      <form class="panel-body zq-start-form" method="post" action="{{ url_for('workspace.start_view') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="field-label" for="start-view">Nach dem Anmelden öffnen</label>
+        <div class="zq-inline-row">
+          <select class="field-surface" id="start-view" name="start_view">
+            <option value="" {{ 'selected' if not start_view }}>Standard ({{ start_views[0][1] }})</option>
+            {% for endpoint, label in start_views %}<option value="{{ endpoint }}" {{ 'selected' if start_view == endpoint }}>{{ label }}</option>{% endfor %}
+          </select>
+          <button type="submit" class="btn btn-secondary btn-sm">Speichern</button>
+        </div>
+        <p class="panel-note">Beim ersten Anmelden eines Tages begrüßt Zentriq Sie dort einmal und zeigt, was neu ist.</p>
+      </form>
+    </section>
+  {% endif %}
+
   {# Darstellung: gespeichert im Browser, gesetzt schon vor dem ersten Zeichnen
      (components/_head_common.html), umgeschaltet in js/app.js (window.ZentriqTheme). #}
   <section class="panel" id="darstellung" aria-labelledby="darstellung-titel">

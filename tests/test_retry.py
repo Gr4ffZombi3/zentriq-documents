@@ -58,7 +58,7 @@ def test_retry_replaces_old_leipziger_rows_without_duplicates(auth_client, db, t
 
     monkeypatch.setattr(
         "app.tasks.document_tasks.extract_text",
-        lambda file_path: (
+        lambda file_path, on_page=None: (
             "Seite 1\nSeite 2\nSeite 3\nSeite 4",
             OcrEngine.TESSERACT,
             96.0,

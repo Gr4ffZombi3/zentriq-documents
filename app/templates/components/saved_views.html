@@ -1,0 +1,32 @@
+{# Gespeicherte Ansichten einer Liste (je Benutzer; app/services/workspace.py, VIEW_PAGES).
+   Gespeichert werden nur erlaubte Filterparameter - beim Oeffnen prueft die Seite selbst die
+   Rechte, eine Ansicht erweitert also keinen Zugriff. Der Aufrufer liefert (caller) die Filter. #}
+{% macro saved_views_bar(page, suggested_name, params) -%}
+{% set views = saved_views(page) %}
+<div class="zq-views" data-zq-views>
+  <div class="zq-views-filters">{{ caller() if caller }}</div>
+  <div class="zq-views-list" aria-label="Gespeicherte Ansichten">
+    {% for view in views %}
+      <span class="zq-view">
+        <a class="zq-view-link" href="{{ url_for('workspace.open_view', view_id=view.id) }}">{{ view.name }}</a>
+        <form method="post" action="{{ url_for('workspace.delete_view', view_id=view.id) }}" onsubmit="return confirm('Ansicht „{{ view.name | e }}“ löschen?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="zq-view-del" aria-label="Ansicht {{ view.name }} löschen" title="Löschen">×</button>
+        </form>
+      </span>
+    {% endfor %}
+    <details class="zq-view-save">
+      <summary class="zq-filter-chip">＋ Ansicht speichern</summary>
+      <form method="post" action="{{ url_for('workspace.save_view') }}" class="zq-view-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="page" value="{{ page }}">
+        <input type="hidden" name="zurueck" value="{{ request.full_path }}">
+        {% for key, value in params.items() if value %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+        <label class="sr-only" for="zq-view-name-{{ page }}">Name der Ansicht</label>
+        <input class="field-surface" id="zq-view-name-{{ page }}" name="name" maxlength="120" required value="{{ suggested_name }}">
+        <button type="submit" class="btn btn-primary btn-sm">Speichern</button>
+      </form>
+    </details>
+  </div>
+</div>
+{%- endmacro %}

@@ -68,6 +68,7 @@ from app.models.timetracking import (
 from app.models.trusted_browser import TrustedBrowser
 from app.models.user import RecoveryCode, User
 from app.models.user_session import UserSession
+from app.models.workspace import FormDraft, OfficeNews, SavedView, UserPreference
 
 __all__ = [
     "BookingLink",
@@ -75,6 +76,10 @@ __all__ = [
     "CalendarEventChange",
     "HukQuoteJob",
     "OfficeSettings",
+    "FormDraft",
+    "OfficeNews",
+    "SavedView",
+    "UserPreference",
     "Settlement",
     "SettlementLine",
     "AiAction",

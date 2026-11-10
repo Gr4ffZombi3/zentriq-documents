@@ -16,7 +16,7 @@ from app.blueprints.settings.forms import ChangePasswordForm, OwnAccountForm, Tw
 from app.extensions import db
 from app.models import Tenant, User
 from app.models.audit_log import AuditEventType
-from app.services import account_profile, trusted_browsers, two_factor, user_sessions
+from app.services import account_profile, trusted_browsers, two_factor, user_sessions, workspace
 from app.services.audit import log_audit_event
 from app.services.password_reset import is_password_reset_available
 from app.services.user_admin import (
@@ -188,8 +188,11 @@ def profile():
 
     sessions = user_sessions.active_sessions(current_user.id)
     current_record = user_sessions.current_session_record(current_user.id)
+    pref = workspace.preferences(current_user) if workspace.is_office_member(current_user) else None
     return render_template(
         "settings/profile.html",
+        start_views=workspace.start_view_choices(current_user),
+        start_view=(pref.start_view if pref else None) or "",
         tenant=tenant,
         form=form,
         sessions=sessions,

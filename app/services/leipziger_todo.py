@@ -50,6 +50,8 @@ class Entry:
     art: str | None = None
     # Reihenfolge wie in der PDF (Seite, Zeile): Vorgaenge eines Kunden stehen untereinander.
     position: tuple = (10**6, 10**6)
+    # Zugeordneter Zentriq-Kunde (Seitenfenster Kundenakte, nur Buero-Admins verlinkt).
+    customer_id: int | None = None
 
     @property
     def has_date(self) -> bool:
@@ -121,12 +123,12 @@ def _read_entries(document: Document) -> list[Entry]:
     # mit mehreren tausend Zeilen der wesentliche Zeitanteil. Der Tenant-Filter greift ueber
     # den globalen Listener; der explizite Filter ist zusaetzliche Absicherung.
     rows = db.session.execute(
-        select(DocumentCustomer.row_data, Customer.name)
+        select(DocumentCustomer.row_data, Customer.name, DocumentCustomer.customer_id)
         .join(Customer, Customer.id == DocumentCustomer.customer_id, isouter=True)
         .where(DocumentCustomer.document_id == document.id, DocumentCustomer.tenant_id == document.tenant_id)
     ).all()
     entries = []
-    for row_data, customer_name in rows:
+    for row_data, customer_name, customer_id in rows:
         for row in row_data or []:
             if not isinstance(row, dict):
                 continue
@@ -149,6 +151,7 @@ def _read_entries(document: Document) -> list[Entry]:
                     customer=(row_customer.get("name") or customer_name or "").strip() or None,
                     art=(row.get("product_line") or "").strip() or None,
                     position=(_int_or_max(row.get("source_page")), _int_or_max(row.get("source_row"))),
+                    customer_id=customer_id,
                 )
             )
     return entries
@@ -236,6 +239,11 @@ def search_entries(entries: list[Entry], query: str | None) -> list[Entry]:
         or (entry.broker_key and needle in entry.broker_key)
         or (entry.customer and needle in _search_key(entry.customer))
     ]
+
+
+def without_storno(entries: list[Entry]) -> list[Entry]:
+    """Filter "ohne Storno" (gespeicherte Ansichten, z. B. "ohne Datum · ohne Storno")."""
+    return [entry for entry in entries if entry.status_key != "storno"]
 
 
 def _search_key(value: str | None) -> str:

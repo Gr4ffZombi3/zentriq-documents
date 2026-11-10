@@ -1,8 +1,9 @@
-{% extends "base.html" %}
+{% extends "base_panel.html" if panel else "base.html" %}
 {% from "ui/icons.html" import icon %}
 {% from "ui/display.html" import badge, card, empty_state, page_header %}
 {% from "ui/forms.html" import button %}
 {% block title %}{{ customer.name }} – Zentriq{% endblock %}
+{% block panel_title %}{{ customer.name }}{% endblock %}
 {% block content %}
 {% set summary = customer_summary %}
 {% set doc_links = customer_view["document_customers"] %}
@@ -13,9 +14,15 @@
 {% set back_label = 'Zur Suche' if back_ok and came_from.startswith('/search') else ('Zurück zur Liste' if back_ok else 'Alle Kunden') %}
 
 <div class="page-shell page-shell-wide">
-  {% call page_header(customer.name, 'Stammdaten, zugeordnete Dokumente und alle erkannten Leipziger-Vorgänge in einer kompakten Akte.', 'Kundenakte') %}
-    {{ button(back_label, href=back_url, variant='secondary', icon_name='arrow-left') }}
-  {% endcall %}
+  {# Tab-Kennung (js/workspace.js): Kundenakten lassen sich parallel als Tabs offen halten. #}
+  <span hidden data-zq-tab-kind="kunde" data-zq-tab-title="{{ customer.name }}"></span>
+  {% if panel %}
+    <p class="zq-panel-kicker">Kundenakte</p>
+  {% else %}
+    {% call page_header(customer.name, 'Stammdaten, zugeordnete Dokumente und alle erkannten Leipziger-Vorgänge in einer kompakten Akte.', 'Kundenakte') %}
+      {{ button(back_label, href=back_url, variant='secondary', icon_name='arrow-left') }}
+    {% endcall %}
+  {% endif %}
 
   <div class="chip-bar">
     {% if customer.date_of_birth %}
@@ -90,11 +97,32 @@
         </div>
       {%- endmacro %}
       {% set field_sources = customer.field_sources or {} %}
-      <dl class="customer-facts mt-5">
+      <dl class="customer-facts mt-5" {% if can_edit %}data-zq-version="{{ edit.version }}"{% endif %}>
         {{ fact('Name', customer.name, 'name', copy=true) }}
         {{ fact('Kundennummer', customer.customer_number, 'customer_number', copy=true) }}
-        {{ fact('Telefon', customer.phone, 'phone', copy=true) }}
-        {{ fact('PLZ / Ort', ((customer.postal_code or '') ~ ' ' ~ (customer.city or '')).strip(), 'city') }}
+        {% if customer.phone or not can_edit %}{{ fact('Telefon', customer.phone, 'phone', copy=true) }}{% endif %}
+        {# Direkt am Feld bearbeiten (js/workspace.js -> PATCH /zentriq/api/kunden/<id>, serverseitige
+           Pruefung customer_create.update_fields). Ohne Recht: reine Anzeige. #}
+        {% set v = edit['values'] %}
+        {% set address_fields = [('street', 'Straße'), ('house_number', 'Hausnr.')] if edit.structured_address else [('address', 'Straße und Hausnr.')] %}
+        {% set address_line = ((v.street ~ ' ' ~ v.house_number).strip() if edit.structured_address else v.address) %}
+        {% set place_line = (v.postal_code ~ ' ' ~ v.city).strip() %}
+        {% for key, label, kind, value, fields in [
+          ('phone_landline', 'Festnetz', 'tel', v.phone_landline, [('phone_landline', 'Festnetz')]),
+          ('phone_private', 'Privattelefon', 'tel', v.phone_private, [('phone_private', 'Privattelefon')]),
+          ('email', 'E-Mail', 'email', v.email, [('email', 'E-Mail')]),
+          ('address', 'Adresse', 'text', ', '.join([address_line, place_line] | select), address_fields + [('postal_code', 'PLZ'), ('city', 'Ort')]),
+        ] %}
+          <div class="zq-field" {% if can_edit %}data-zq-inline data-url="{{ url_for('zentriq.api_customer_update', customer_id=customer.id) }}"
+               data-fields="{{ fields | tojson | forceescape }}" data-values="{{ v | tojson | forceescape }}" data-kind="{{ kind }}"{% endif %}>
+            <dt>{{ label }}{% if field_sources.get(key) %} <span class="customer-source">· {{ source_labels.get(field_sources[key], field_sources[key]) }}</span>{% endif %}</dt>
+            <dd>
+              <span data-zq-value>{{ value or '–' }}</span>
+              {% if can_edit %}<button type="button" class="zq-field-edit" data-zq-edit aria-label="{{ label }} bearbeiten">Bearbeiten</button>{% endif %}
+              <span class="zq-field-status" data-zq-status role="status" aria-live="polite"></span>
+            </dd>
+          </div>
+        {% endfor %}
         {{ fact('Geburtsdatum', customer.date_of_birth.strftime('%d.%m.%Y') if customer.date_of_birth else none, 'date_of_birth') }}
         {{ fact('Vermittlernummer', customer.broker_number, 'broker_number', copy=true) }}
       </dl>

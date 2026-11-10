@@ -288,7 +288,7 @@ def test_process_document_task_uses_page_texts_and_stores_analysis_meta(app, db,
 
     monkeypatch.setattr(
         "app.tasks.document_tasks.extract_text",
-        lambda file_path: (
+        lambda file_path, on_page=None: (
             "Seite 1\nSeite 2\nSeite 3\nSeite 4",
             OcrEngine.TESSERACT,
             96.0,

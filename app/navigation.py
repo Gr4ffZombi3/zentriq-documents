@@ -271,6 +271,11 @@ def display_name_for(user) -> str:
 def home_endpoint_for(user) -> str:
     """Startseite nach dem Login: fuer alle Rollen der ZentriqAI-Chat. Ist ZentriqAI abgeschaltet,
     wie bisher Plattformverwaltung bzw. persoenliche Uebersicht (Fallback: Profil)."""
+    from app.services.workspace import start_endpoint
+
+    chosen = start_endpoint(user)  # persoenliche Startansicht (Mein Konto), sofern erlaubt
+    if chosen:
+        return chosen
     candidates = ("platform.index",) if user.is_super_admin else ("portal.overview",)
     if current_app.config.get("ZENTRIQ_AI_ENABLED", True):
         candidates = ("zentriq.index", *candidates)

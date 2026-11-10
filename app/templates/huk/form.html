@@ -26,7 +26,21 @@
     <p class="flash flash-error" role="alert">Bitte die markierten Angaben ergänzen bzw. korrigieren ({{ (missing | length) + (errors | length) }}).</p>
   {% endif %}
 
-  <form method="post" action="{{ action }}" class="huk-form" data-huk-form novalidate>
+  {# Entwurf (js/workspace.js): Eingaben werden fuer den angemeldeten Benutzer serverseitig
+     zwischengespeichert - nur Eingaben, keine Berechnung, nichts wird gesendet. #}
+  {% set draft_key = 'huk:' ~ (job.id if job else 'neu') %}
+  <span hidden data-zq-tab-kind="angebot" data-zq-tab-title="Kfz · {{ customer.name if customer else ('Angebot' if job else 'neues Angebot') }}"></span>
+  <div class="zq-draft-banner" data-zq-draft-banner hidden role="status">
+    <p>Es gibt einen nicht abgeschlossenen Entwurf vom <strong data-zq-draft-time></strong>.</p>
+    <div class="zq-inline-row">
+      <button type="button" class="btn btn-primary btn-sm" data-zq-draft-resume>Fortsetzen</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-zq-draft-discard>Verwerfen</button>
+    </div>
+  </div>
+  <p class="zq-draft-state" data-zq-draft-state aria-live="polite"></p>
+  <form method="post" action="{{ action }}" class="huk-form" data-huk-form novalidate
+        data-zq-draft="{{ draft_key }}" data-zq-draft-url="{{ url_for('workspace.draft', key=draft_key) }}"
+        {% if missing or errors or suggested or ai_text %}data-zq-draft-server{% endif %}>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <section class="panel" aria-labelledby="huk-kunde">

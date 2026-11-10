@@ -23,6 +23,8 @@ Regeln gelten ausnahmslos für jede Sitzung.
   temporäre SQLite-DB, nicht die Produktionsdatenbank). Zusätzlich `.venv/bin/ruff check .`.
 - Danach `git diff` prüfen.
 - GitHub (`origin`) bleibt die Versionssicherung.
+- Jedes Release mit sichtbaren Änderungen ergänzt `app/release_notes.py` („Was ist neu?“):
+  wenige verständliche Sätze, Zielgruppe je Rolle, keine technischen Details oder Kundendaten.
 - Arbeite nur innerhalb von `/root/Zentriqai`, außer der Nutzer erlaubt ausdrücklich etwas
   anderes.
 

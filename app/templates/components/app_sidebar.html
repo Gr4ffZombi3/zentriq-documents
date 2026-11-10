@@ -32,6 +32,10 @@
     {{ icon('menu', class='h-5 w-5') }}
   </button>
   <a href="{{ url_for('portal.home') }}" class="app-brand" aria-label="ZentriqAI – Startseite"><span class="wordmark">Zentriq<span class="zs-ai">AI</span></span></a>
+  {% if office_member %}
+    {# Schnellsuche auf dem Handy: sichtbarer Knopf (Desktop zusaetzlich Strg/Cmd+K). #}
+    <button type="button" class="zs-icon-btn" data-zq-search-open aria-label="Schnellsuche" title="Schnellsuche">{{ icon('search', class='h-5 w-5') }}</button>
+  {% endif %}
   <a href="{{ url_for('zentriq.index') }}" class="zs-icon-btn" data-zs-new aria-label="Neuer Chat" title="Neuer Chat">{{ icon('square-pen', class='h-5 w-5') }}</a>
 </header>
 
@@ -58,6 +62,9 @@
           <input type="search" name="q" aria-label="Kunden und Vorgänge suchen" placeholder="Kunden suchen …" maxlength="60" autocomplete="off"
                  value="{{ request.args.get('q', '') if request.endpoint == 'search.search' else '' }}">
         </form>
+        <button type="button" class="zs-item zs-quick" data-zq-search-open title="Schnellsuche: Kunden und Seiten (Strg+K / Cmd+K)">
+          {{ icon('search', class='zs-ico') }}<span class="zs-label">Schnellsuche</span><kbd class="zs-kbd" data-zq-kbd>Strg K</kbd>
+        </button>
       {% endif %}
     </div>
 
@@ -104,6 +111,9 @@
     <div class="zs-profile-menu">
       <a href="{{ url_for('settings.profile') }}" class="zs-item {{ 'is-active' if nav_settings_active else '' }}">{{ icon('user-cog', class='zs-ico') }}<span class="zs-label">{{ nav_settings_label }}</span></a>
       <a href="{{ url_for('settings.profile') }}#darstellung" class="zs-item">{{ icon('monitor', class='zs-ico') }}<span class="zs-label">Darstellung</span></a>
+      {% if office_member %}
+        <a href="{{ url_for('workspace.news') }}" class="zs-item {{ 'is-active' if request.endpoint == 'workspace.news' else '' }}">{{ icon('sparkles', class='zs-ico') }}<span class="zs-label">Was ist neu?</span></a>
+      {% endif %}
       <form method="post" action="{{ url_for('auth.logout') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="zs-item">{{ icon('log-out', class='zs-ico') }}<span class="zs-label">Abmelden</span></button>

@@ -20,7 +20,7 @@
 {%- endmacro %}
 
 {# Ein Einzelvorgang je Zeile: NUMMER | STATUS | KUNDE | ART | DATUM | VERMITTLER. #}
-{% macro entry_table(entries, with_date=True, broker_names=None, empty_text='Keine Einträge.') -%}
+{% macro entry_table(entries, with_date=True, broker_names=None, empty_text='Keine Einträge.', customer_links=False) -%}
 {% if entries %}
   <div class="table-wrap">
   <table class="data-table worklist table-stack">
@@ -40,7 +40,8 @@
         <tr class="{{ 'worklist-same-customer' if same_customer else '' }}">
           <td class="worklist-number" data-label="Nummer">{{ entry.number }}<button type="button" class="copy-inline" data-copy-text="{{ entry.number }}" aria-label="Nummer {{ entry.number }} kopieren">Kopieren</button></td>
           <td class="whitespace-nowrap" data-label="Status"><span title="{{ entry.label }}">{{ entry.status_code or entry.label }}</span></td>
-          <td class="stack-full" data-label="Kunde">{{ entry.customer or '–' }}</td>
+          {# Kundenakte im Seitenfenster (js/workspace.js); Liste behaelt Filter und Scrollposition. #}
+          <td class="stack-full" data-label="Kunde">{% if customer_links and entry.customer_id %}<a href="{{ url_for('customers.detail', customer_id=entry.customer_id) }}" data-zq-panel>{{ entry.customer or 'Kundenakte' }}</a>{% else %}{{ entry.customer or '–' }}{% endif %}</td>
           <td class="whitespace-nowrap" data-label="Art">{{ entry.art or '–' }}</td>
           <td class="whitespace-nowrap tabular-nums" data-label="Datum">{{ entry_date(entry) }}</td>
           <td class="whitespace-nowrap" data-label="Vermittler">

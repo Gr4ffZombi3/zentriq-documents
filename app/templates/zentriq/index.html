@@ -41,6 +41,10 @@
         <button type="button" class="is-danger" data-zc-action="delete">Löschen</button>
       </div>
     </details>
+    {% if current_user.is_office_admin or current_user.is_employee %}
+      {# Schnellsuche auf dem Handy (eigene Kopfzeile des Chats; js/workspace.js) #}
+      <button type="button" class="zs-icon-btn zc-new-mobile" data-zq-search-open aria-label="Schnellsuche" title="Schnellsuche">{{ icon('search', class='h-5 w-5') }}</button>
+    {% endif %}
     <a href="{{ url_for('zentriq.index') }}" class="zs-icon-btn zc-new-mobile" data-zs-new aria-label="Neuer Chat">{{ icon('square-pen', class='h-5 w-5') }}</a>
   </header>
 

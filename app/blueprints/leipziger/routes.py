@@ -34,6 +34,9 @@ def index():
     )
     query = (request.args.get("q") or "").strip()[:60]
     entries = leipziger_todo.search_entries(entries, query)
+    storno = "ohne" if request.args.get("storno") == "ohne" else ""
+    if storno:
+        entries = leipziger_todo.without_storno(entries)
     tab = request.args.get("tab")
     if tab not in leipziger_todo.TABS:
         tab = "zu-erledigen"
@@ -54,6 +57,7 @@ def index():
         tabs=leipziger_todo.TABS,
         counts=leipziger_todo.tab_counts(entries),
         query=query,
+        storno=storno,
         broker_names=leipziger_todo.broker_names(leipziger_todo.team_members()) if current_user.is_admin else {},
         has_own_number=own_key is not None,
         import_stats=leipziger_todo.import_stats(document) if current_user.is_admin else None,

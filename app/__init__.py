@@ -72,6 +72,7 @@ def create_app(config_object=None):
     from app.blueprints.timetracking.routes import timetracking_bp
     from app.blueprints.tools.routes import tools_bp
     from app.blueprints.upload.routes import upload_bp
+    from app.blueprints.workspace.routes import workspace_bp
     from app.blueprints.zentriq.routes import zentriq_bp
     from app.blueprints.zentriq_admin.routes import zentriq_admin_bp
     from app.models import User
@@ -102,6 +103,7 @@ def create_app(config_object=None):
     app.register_blueprint(calendar_bp)
     app.register_blueprint(huk_bp)
     app.register_blueprint(settlements_bp)
+    app.register_blueprint(workspace_bp)
     from app.blueprints.public_booking.routes import public_booking_bp
 
     app.register_blueprint(public_booking_bp)
@@ -114,6 +116,26 @@ def create_app(config_object=None):
     app.jinja_env.globals["build_document_progress"] = build_document_progress
     app.jinja_env.globals["is_document_active_status"] = is_document_active_status
     app.jinja_env.globals["public_error_message"] = public_error_message
+
+    def daily_greeting():
+        """Einmalige Tagesbegruessung auf der Startansicht (nur ganze Seiten, kein HTMX/Seitenfenster)."""
+        from flask_login import current_user
+
+        from app.services import workspace
+
+        if request.method != "GET" or request.headers.get("HX-Request") or request.args.get("panel"):
+            return None
+        return workspace.consume_greeting(current_user, request.endpoint)
+
+    def saved_views(page):
+        from flask_login import current_user
+
+        from app.services import workspace
+
+        return workspace.views_for(current_user, page)
+
+    app.jinja_env.globals["daily_greeting"] = daily_greeting
+    app.jinja_env.globals["saved_views"] = saved_views
 
     from app.navigation import build_navigation
     from app.template_filters import register_template_filters

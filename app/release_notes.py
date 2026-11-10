@@ -75,7 +75,8 @@ RELEASE_NOTES = (
     {
         "date": date(2026, 11, 11),
         "title": "Persönliche Begrüßung am Morgen",
-        "text": "Beim ersten Login des Tages zeigt Zentriq Ihren nächsten Termin und bis zu zwei Neuerungen. "
+        "text": "Beim ersten Login des Tages begrüßt Zentriq Sie mit Namen und zeigt bis zu drei Neuerungen, die "
+        "für Sie wichtig sind – einmal am Tag, auch wenn Sie mehrere Geräte nutzen. "
         "Neue Funktionen tragen außerdem ein kleines „Neu“ – antippen erklärt, was sich geändert hat.",
         "audience": "alle",
     },

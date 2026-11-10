@@ -878,3 +878,14 @@ html.zs-collapsed .zs-kbd { display: none; }
 @keyframes zq-conn-in { from { opacity: 0; transform: translate(-50%, 0.5rem); } to { opacity: 1; transform: translate(-50%, 0); } }
 @keyframes zq-conn-pulse { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .zq-conn, .zq-conn--offline .zq-conn-dot { animation: none; } }
+/* Tagesbegruessung: "Los geht’s" + Handy oben (bleibt bis zum Schliessen, verdeckt keine Eingabe). */
+.zq-greeting-go { min-height: 2.25rem; padding: 0 1rem; margin-right: 0.4rem; border: 0; border-radius: 999px; background: var(--color-primary); color: #fff; font: inherit; font-weight: 650; cursor: pointer; }
+.zq-greeting-go:focus-visible, .zq-greeting-close:focus-visible, .zq-greeting-link:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.zq-greeting-news li strong { display: block; }
+@media (max-width: 47.99rem) {
+  .zq-greeting, .zs-chat-page .zq-greeting { top: calc(3.75rem + env(safe-area-inset-top)); bottom: auto; animation-name: zq-greet-right; }
+  .zq-greeting-go { min-height: 2.75rem; }
+}
+/* Reduzierte Bewegung gilt auch fuer die Handy-Regel oben (sonst ueberschreibt animation-name). */
+@media (prefers-reduced-motion: reduce) { .zq-greeting, .zs-chat-page .zq-greeting { animation: none; transition: none; } }
+.zq-greeting-more { margin: 0 0 0 0.3rem; }

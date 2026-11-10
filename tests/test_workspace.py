@@ -70,8 +70,8 @@ def _start_page(client):
 def test_greeting_once_per_day_on_start_view(app, db, laura):
     client = _login(app, laura)
     page = _start_page(client).get_data(as_text=True)
-    assert "Hallo Laura, wie geht’s dir heute?" in page
-    assert "data-zq-greeting" in page
+    assert ", Laura!" in page and "data-zq-greeting" in page
+    assert "Los geht’s" in page and 'aria-label="Begrüßung schließen"' in page
     # Neuladen und weiterer Tab: nicht noch einmal
     assert "data-zq-greeting" not in _start_page(client).get_data(as_text=True)
     other_tab = app.test_client()
@@ -92,7 +92,7 @@ def test_greeting_returns_after_day_change(app, db, laura):
     pref.last_login_day = workspace.office_today() - timedelta(days=1)
     db.session.commit()
     again = _login(app, laura)
-    assert "Hallo Laura" in _start_page(again).get_data(as_text=True)
+    assert ", Laura!" in _start_page(again).get_data(as_text=True)
 
 
 def test_day_boundary_uses_berlin_time(app, db, laura):
@@ -117,9 +117,10 @@ def test_greeting_without_display_name_and_no_news(app, db, tenant):
     pref.last_login_day = None
     db.session.commit()
     page = _start_page(_login(app, user)).get_data(as_text=True)
-    assert "Hallo, wie geht’s dir heute?" in page
-    assert "ohne-name@example.com, wie" not in page
-    assert "Heute gibt es keine Neuerungen." in page
+    assert "data-zq-greeting" in page
+    assert "ohne-name@example.com" not in page.split("data-zq-greeting", 1)[1].split("</aside>", 1)[0]
+    assert "Schön, dass du da bist. Wir wünschen dir einen schönen Tag!" in page
+    assert "zq-greeting-news" not in page and "Alle Neuerungen" not in page
 
 
 def test_greeting_shows_news_since_last_visit(app, db, laura):
@@ -450,8 +451,8 @@ def test_next_appointment_is_own_and_scheduled(app, db, laura, mitarbeiter):
         assert workspace.next_appointment(mitarbeiter, evening) == {"day": "morgen", "time": "10:00 Uhr", "url": "/kalender"}
 
 
-def test_greeting_card_with_appointment_and_two_news(app, db, laura, release_day):
-    from datetime import datetime, timezone
+def test_greeting_card_with_up_to_three_news(app, db, laura, release_day):
+    from datetime import datetime
 
     client = _login(app, laura)
     _start_page(client)
@@ -459,22 +460,78 @@ def test_greeting_card_with_appointment_and_two_news(app, db, laura, release_day
     pref.last_login_day = None
     pref.news_seen_at = datetime(2026, 11, 10, 18, 0)  # nach dem letzten Release gelesen
     db.session.commit()
-    _event(db, laura, datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1))
     page = _start_page(_login(app, laura)).get_data(as_text=True)
-    assert "Hallo Laura, wie geht’s dir heute?" in page
-    assert "Dein nächster Termin ist" in page
-    assert '<a class="zq-greeting-link" href="/kalender">Zum Kalender</a>' in page
-    assert page.count("Neu in Zentriq:") == 2  # hoechstens zwei, Rest unter "Was ist neu?"
-    assert "weitere unter „Was ist neu?“" in page
-    assert "Tabs, Schnellsuche und Seitenfenster" not in page  # schon gelesen
-    assert "data-zq-greeting-close" in page and "Schließen" in page
+    card = page.split("data-zq-greeting", 1)[1].split("</aside>", 1)[0]
+    assert ", Laura!" in card and "👋" in card
+    assert "Hier sind die neuesten Funktionen für dich." in card
+    assert 1 <= card.count("<li>") <= workspace.GREETING_NEWS
+    assert "Tabs, Schnellsuche und Seitenfenster" not in card  # schon gelesen
+    assert 'href="/arbeitsplatz/neuigkeiten">Alle Neuerungen' in card
+    assert "Los geht’s" in card and "Dein nächster Termin" not in card
 
 
-def test_greeting_without_appointment_has_no_appointment_line(app, db, laura, release_day):
-    page = _start_page(_login(app, laura)).get_data(as_text=True)
-    assert "data-zq-greeting" in page
-    assert "Dein nächster Termin" not in page
-    assert '<a class="zq-greeting-link" href="/kalender">Zum Kalender</a>' not in page
+def _greet_employee(app, db, user):
+    """Mitarbeiter hat bisher alles gelesen; danach erster Login des (neuen) Tages."""
+    from datetime import datetime
+
+    _login(app, user).get("/arbeitsplatz/neuigkeiten")
+    pref = UserPreference.query.filter_by(user_id=user.id).one()
+    pref.last_login_day = None
+    pref.news_seen_at = datetime.combine(date.today() + timedelta(days=1), datetime.min.time())  # alles bis morgen gelesen
+    db.session.commit()
+
+
+def test_employee_greeting_without_relevant_news_hides_admin_entries(app, db, mitarbeiter):
+    _greet_employee(app, db, mitarbeiter)
+    db.session.add(OfficeNews(tenant_id=mitarbeiter.tenant_id, published_on=date.today() + timedelta(days=3), title="Nur für Admins", body="Neue Rechteverwaltung.", audience="admin"))
+    db.session.commit()
+    from unittest import mock
+
+    with mock.patch.object(workspace, "office_today", lambda now=None: date.today() + timedelta(days=3)):
+        page = _start_page(_login(app, mitarbeiter)).get_data(as_text=True)
+    card = page.split("data-zq-greeting", 1)[1].split("</aside>", 1)[0]
+    assert ", Mia!" in card
+    assert "Nur für Admins" not in page
+    assert "Schön, dass du da bist. Wir wünschen dir einen schönen Tag!" in card
+    assert "Alle Neuerungen" not in card
+
+
+def test_employee_greeting_with_relevant_news(app, db, mitarbeiter):
+    _greet_employee(app, db, mitarbeiter)
+    later = date.today() + timedelta(days=3)
+    db.session.add(OfficeNews(tenant_id=mitarbeiter.tenant_id, published_on=later, title="Neue Bürozeiten", body="Ab Montag 8 Uhr. Details im Aushang.", audience="mitarbeiter"))
+    db.session.add(OfficeNews(tenant_id=mitarbeiter.tenant_id, published_on=later, title="Nur für Admins", body="Neue Rechteverwaltung.", audience="admin"))
+    db.session.commit()
+    from unittest import mock
+
+    with mock.patch.object(workspace, "office_today", lambda now=None: later):
+        page = _start_page(_login(app, mitarbeiter)).get_data(as_text=True)
+    card = page.split("data-zq-greeting", 1)[1].split("</aside>", 1)[0]
+    assert "Hier sind die neuesten Funktionen für dich." in card
+    assert "<strong>Neue Bürozeiten</strong> Ab Montag 8 Uhr." in card
+    assert "Details im Aushang" not in card  # nur der erste Satz
+    assert "Nur für Admins" not in card
+    assert "Alle Neuerungen" in card
+
+
+def test_daytime_salutation_berlin():
+    from datetime import datetime, timezone
+
+    assert workspace.daytime_salutation(datetime(2026, 11, 11, 6, 0, tzinfo=timezone.utc)) == "Guten Morgen"  # 07:00
+    assert workspace.daytime_salutation(datetime(2026, 11, 11, 10, 0, tzinfo=timezone.utc)) == "Guten Tag"  # 11:00
+    assert workspace.daytime_salutation(datetime(2026, 11, 11, 17, 0, tzinfo=timezone.utc)) == "Guten Abend"  # 18:00
+
+
+def test_greeting_parallel_tabs_only_one_wins(app, db, laura):
+    """Zwei Tabs laden gleichzeitig: das atomare Leeren laesst genau einen gewinnen."""
+    client = _login(app, laura)
+    other = app.test_client()
+    with client.session_transaction() as session:
+        cookie = dict(session)
+    with other.session_transaction() as session:
+        session.update(cookie)
+    pages = [_start_page(c).get_data(as_text=True) for c in (other, client)]
+    assert sum("data-zq-greeting" in p for p in pages) == 1
 
 
 def test_greeting_second_login_and_day_change_with_release_day(app, db, laura, monkeypatch):

@@ -113,7 +113,10 @@ def first_name(user) -> str:
     return name.split()[0]
 
 
-GREETING_NEWS = 2  # hoechstens zwei Neuerungen in der Begruessung, der Rest unter "Was ist neu?"
+GREETING_NEWS = 3  # hoechstens drei Neuerungen in der Begruessung, der Rest unter "Was ist neu?"
+# Erste Begruessung ueberhaupt (noch nie etwas gelesen): nur Neuerungen der letzten Tage, keine
+# alten Eintraege aus der Historie.
+GREETING_FIRST_NEWS_DAYS = 14
 APPOINTMENT_HORIZON = timedelta(days=14)
 _WEEKDAYS = ("Mo.", "Di.", "Mi.", "Do.", "Fr.", "Sa.", "So.")
 
@@ -180,18 +183,34 @@ def consume_greeting(user, endpoint: str | None, now: datetime | None = None) ->
     since = pref.news_seen_at
     news = news_for(user, today)
     if since is None:
-        fresh = news[:GREETING_NEWS]
+        fresh = [item for item in news if item["date"] > today - timedelta(days=GREETING_FIRST_NEWS_DAYS)]
     else:
         fresh = [item for item in news if item["published_at"] > since]
     pref.news_seen_at = _utcnow()
     db.session.commit()
     name = first_name(user)
+    salutation = daytime_salutation(now)
     return {
-        "text": f"Hallo {name}, wie geht’s dir heute?" if name else "Hallo, wie geht’s dir heute?",
-        "appointment": next_appointment(user, now),
+        "title": f"{salutation}, {name}!" if name else f"{salutation}!",
+        "text": "Hier sind die neuesten Funktionen für dich." if fresh
+        else "Schön, dass du da bist. Wir wünschen dir einen schönen Tag!",
         "news": fresh[:GREETING_NEWS],
         "more": max(0, len(fresh) - GREETING_NEWS),
     }
+
+
+def daytime_salutation(now: datetime | None = None) -> str:
+    """Guten Morgen (bis 11 Uhr) / Guten Tag (bis 18 Uhr) / Guten Abend - Ortszeit des Bueros,
+    dieselben Grenzen wie die Uebersicht (portal)."""
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    hour = now.astimezone(OFFICE_TZ).hour
+    if hour < 11:
+        return "Guten Morgen"
+    if hour < 18:
+        return "Guten Tag"
+    return "Guten Abend"
 
 
 # --- Feierabendgruss -----------------------------------------------------------------------

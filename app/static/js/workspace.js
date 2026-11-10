@@ -619,12 +619,11 @@
       if (root.classList.contains("zq-panel-open") || root.classList.contains("zq-search-open")) return;
       closeGreeting();
     });
-    // Handy: die Karte liegt unten - tippt der Nutzer in ein Eingabefeld (Tastatur), weicht sie.
-    // Bewusst am Antippen, nicht am Fokus: Seiten wie der Chat setzen den Fokus beim Laden selbst.
-    document.addEventListener("pointerdown", function (ev) {
-      if (!greeting.parentNode || greeting.contains(ev.target) || !ev.target.closest) return;
-      if (window.matchMedia("(max-width: 47.99rem)").matches && ev.target.closest("input, textarea, select, [contenteditable]")) closeGreeting();
-    }, true);
+    // Tastatur: ohne anderen Fokus auf "Los geht’s" (Enter schliesst), ohne zu scrollen.
+    var primary = greeting.querySelector("[data-zq-greeting-primary]");
+    if (primary && (!document.activeElement || document.activeElement === document.body)) {
+      try { primary.focus({ preventScroll: true }); } catch (e) { primary.focus(); }
+    }
   }
 
   // =========================================================================================

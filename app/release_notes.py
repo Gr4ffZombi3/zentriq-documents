@@ -18,6 +18,14 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 11),
+        "title": "Vorschau beim Tippen im Assistenten",
+        "text": "Schon beim Tippen zeigt der Assistent, was er verstanden hat: passende Kunden, die Notiz zur "
+        "Kundenakte oder einen Termin mit Kunde, Datum, Uhrzeit, Mitarbeiter und ob die Zeit frei ist. Ein Klick auf "
+        "ein Feld ändert es, zum Beispiel auf eine freie Uhrzeit. Gespeichert wird erst mit „Termin speichern“ bzw. Enter.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 11),
         "title": "Notiz oder Termin ohne Kundenakte",
         "text": "Findet die Suche keinen Kunden, können Sie direkt einen Vorgang ohne Kundenakte erfassen – mit Name, "
         "falls bekannt der Versicherungsnehmernummer, einer Notiz oder einem Termin im Bürokalender. Taucht die Nummer "

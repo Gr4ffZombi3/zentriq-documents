@@ -126,4 +126,6 @@
 </div>
 {% if customer_notes_enabled %}<script defer src="{{ url_for('static', filename='js/customer-notes.js', v=static_rev('js/customer-notes.js')) }}"></script>{% endif %}
 <script defer src="{{ url_for('static', filename='js/zentriq-ai.js', v=static_rev('js/zentriq-ai.js')) }}"></script>
+{# Live-Vorschau fuer Kundensuche, Notiz und Termin beim Tippen (liest nur; app/services/live_input.py). #}
+{% if customer_notes_enabled %}<script defer src="{{ url_for('static', filename='js/live-input.js', v=static_rev('js/live-input.js')) }}"></script>{% endif %}
 {% endblock %}

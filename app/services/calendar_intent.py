@@ -332,7 +332,9 @@ def handle(user, raw_text: str, choice: dict | None = None, client_ref: str | No
     short = is_booking_command(text)
     if is_availability_question(text) and not choice:
         return _availability_answer(user, p, members, text)
-    p.booking = p.booking or short
+    # Speichern aus der Live-Vorschau ("book"): immer als Buchung mit erneuter Pruefung von
+    # Buerozeiten und Belegung unmittelbar vor dem Speichern.
+    p.booking = p.booking or short or choice.get("book") is True
     # Auswahl aus einer Rueckfrage (freie Alternative, Dauer) ueberschreibt die erkannten Werte.
     if isinstance(choice.get("start"), str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", choice["start"]):
         p.day, p.start, p.end = date.fromisoformat(choice["start"][:10]), time(int(choice["start"][11:13]), int(choice["start"][14:16])), None

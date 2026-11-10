@@ -931,6 +931,10 @@
     clear: function () { select(null); },
     // Einmalig abholen (naechste Chat-Nachricht), danach geleert.
     takeCustomer: function () { var id = chatCustomer; chatCustomer = null; return id; },
+    // Live-Vorschau (js/live-input.js): gleiche Darstellung und Kundenkarte wie beim Absenden.
+    show: function (reply, r, text) { var handled = show(reply, r, text); if (handled) loadCallbacks(); return handled; },
+    openCustomer: function (id, label) { openCustomer(id, label); },
+    post: function (body) { return request("POST", "/kunden/eingabe", Object.assign({ client_ref: newRef() }, body)); },
   };
   loadCallbacks();
   // zentriq-ai.js stellt ZentriqChat erst nach diesem Skript bereit (beide "defer").

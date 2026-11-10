@@ -290,6 +290,27 @@ def _client_ref(data: dict) -> str | None:
     return value.strip()[:64] or None if isinstance(value, str) else None
 
 
+@zentriq_bp.get("/api/vorschau")
+@login_required
+def api_live_preview():
+    """Live-Vorschau beim Tippen (app/services/live_input.py): liest nur, speichert nie."""
+    if (denied := _office_user_required()) is not None:
+        return denied
+    from app.services import live_input
+
+    args = request.args
+    overrides = {key: args.get(key) for key in ("customer_id", "assignee_id", "start", "minutes") if args.get(key)}
+    if args.get("no_customer") == "1":
+        overrides["no_customer"] = True
+    try:
+        result = live_input.preview(current_user, (args.get("text") or "")[:300], overrides, want_slots=args.get("slots") == "1")
+    except Exception:  # noqa: BLE001 - Vorschau ist Komfort: im Fehlerfall keine Vorschau, Absenden bleibt
+        current_app.logger.exception("live_input.preview_failed user=%s", current_user.id)
+        db.session.rollback()
+        return jsonify({"kind": None})
+    return jsonify({"seq": args.get("seq"), **result})
+
+
 @zentriq_bp.post("/api/kunden/eingabe")
 @login_required
 def api_customer_input():

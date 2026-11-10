@@ -875,10 +875,20 @@
     if (vv) { vv.addEventListener("resize", fit); vv.addEventListener("scroll", fit); }
     window.addEventListener("resize", fit);
   })();
-  form.addEventListener("submit", function (e) { e.preventDefault(); send(); });
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (window.ZentriqLive && window.ZentriqLive.handleEnter()) return;
+    send();
+  });
   input.addEventListener("input", autosize);
   input.addEventListener("keydown", function (e) {
-    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      // Live-Vorschau (js/live-input.js) uebernimmt Enter nur, wenn der Auftrag eindeutig,
+      // vollstaendig und die passende Aktion sichtbar ist; sonst wie bisher absenden.
+      if (window.ZentriqLive && window.ZentriqLive.handleEnter()) return;
+      send();
+    }
   });
 
   customerBox.addEventListener("change", function () {
@@ -950,6 +960,16 @@
       return el;
     },
     scrollDown: function () { scrollDown(); },
+    // Live-Vorschau: gespeicherten Auftrag als normalen Gespraechsschritt zeigen.
+    addTurn: function (text) {
+      renderUser({ content: text });
+      var el = renderAssistant({ status: "pending", progress: "Wird gespeichert" });
+      stickToBottom = true;
+      scrollDown(true);
+      return el;
+    },
+    clearInput: function () { input.value = ""; autosize(); updateSend(); },
+    isBusy: function () { return busy; },
     // Offener Auftrag: Chat-ID mitsenden, neu angelegten Chat uebernehmen, Wartezeile setzen.
     currentId: function () { return current ? current.id : null; },
     // Chat fuer eine Aktion der Kundenkarte sicherstellen (Entwurf/Buchung bleiben im Verlauf).

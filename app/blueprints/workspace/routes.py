@@ -19,7 +19,8 @@ workspace_bp = Blueprint("workspace", __name__, url_prefix="/arbeitsplatz")
 
 @workspace_bp.before_request
 def _office_only():
-    if not workspace.is_office_member(current_user):
+    # Nicht angemeldet: login_required der Route leitet zur Anmeldung weiter.
+    if current_user.is_authenticated and not workspace.is_office_member(current_user):
         abort(403)
 
 

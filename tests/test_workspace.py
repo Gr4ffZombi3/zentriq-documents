@@ -403,3 +403,9 @@ def test_pages_render_workspace_elements(app, db, laura, mitarbeiter):
     assert "Was ist neu?" in customers
     staff_profile = _login(app, mitarbeiter).get("/settings/profile").get_data(as_text=True)
     assert 'value="customers.list_customers"' not in staff_profile
+
+
+def test_workspace_requires_login_redirect(client):
+    response = client.get("/arbeitsplatz/neuigkeiten")
+    assert response.status_code == 302 and "/auth/login" in response.headers["Location"]
+    assert client.get("/arbeitsplatz/suche?q=x").status_code in (302, 401)

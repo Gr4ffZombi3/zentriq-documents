@@ -7,6 +7,7 @@ from flask import (
     abort,
     current_app,
     flash,
+    jsonify,
     make_response,
     redirect,
     render_template,
@@ -15,12 +16,13 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required, login_user, logout_user
+from flask_wtf.csrf import generate_csrf
 
 from app.auth.forms import ForgotPasswordForm, LoginForm, ResetPasswordForm, TwoFactorForm
 from app.extensions import db
 from app.models import User
 from app.models.audit_log import AuditEventType, AuditLog
-from app.services import trusted_browsers, user_sessions, workspace
+from app.services import idempotency, trusted_browsers, user_sessions, workspace
 from app.services import two_factor as two_factor_service
 from app.services.account_state import account_login_block_reason
 from app.services.audit import log_audit_event
@@ -352,3 +354,30 @@ def _logout_time_tracking(user, choice: str | None):
         return f"Du bist ausgestempelt (heute erfasst: {workspace.format_worked(net)}).", net
     since = to_local(state.open_session.started_at).strftime("%H:%M")
     return f"Deine Zeiterfassung läuft weiter (seit {since} Uhr).", None
+
+
+@auth_bp.get("/sitzung")
+def session_state():
+    """Fuer js/session-guard.js: Ist die Anmeldung noch gueltig, und welches CSRF-Token gilt?
+
+    Wird nur bei Bedarf abgefragt (Fehler beim Speichern, Rueckkehr in den Tab), nicht im Takt.
+    Liefert ohne Anmeldung kein Token fuer fremde Daten, nur den Status."""
+    response = jsonify(
+        {
+            "authenticated": bool(current_user.is_authenticated),
+            "user_id": current_user.id if current_user.is_authenticated else None,
+            "csrf_token": generate_csrf(),
+        }
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@auth_bp.get("/aktion/<key>")
+@login_required
+def action_state(key):
+    """Wurde eine Aktion mit diesem Idempotenz-Schluessel bereits gespeichert?
+    Nur fuer den eigenen Benutzer (app/services/idempotency.py)."""
+    response = jsonify(idempotency.status_for(current_user.id, key))
+    response.headers["Cache-Control"] = "no-store"
+    return response

@@ -16,6 +16,7 @@
 })();
 </script>
 <meta name="csrf-token" content="{{ csrf_token() }}">
+{% if current_user is defined and current_user.is_authenticated %}<meta name="zq-user" content="{{ current_user.id }}">{% endif %}
 {# Version aus dem Dateiinhalt (static_rev): neues CSS bekommt immer eine neue URL. Der feste Wert
    greift nur, solange nach einem git pull noch der alte Python-Prozess laeuft. #}
 {% set _rev = static_rev if static_rev is defined else none %}
@@ -36,6 +37,9 @@
 <meta name="apple-mobile-web-app-title" content="Zentriq">
 <meta name="application-name" content="Zentriq">
 {# Lokal ausgeliefert und per defer geladen: kein blockierender Abruf von einem fremden CDN. #}
+{# Als erstes Skript: erneuert veraltete Sicherheitstoken, verhindert doppeltes Speichern und
+   sichert Aktionen bei abgelaufener Anmeldung (js/session-guard.js). #}
+<script defer src="{{ url_for('static', filename='js/session-guard.js', v=_rev('js/session-guard.js') if _rev else '1') }}"></script>
 <script defer src="{{ url_for('static', filename='vendor/htmx-2.0.4.min.js') }}"></script>
 <script defer src="{{ url_for('static', filename='vendor/alpine-3.14.9.min.js') }}"></script>
 <script defer src="{{ url_for('static', filename='js/htmx-csrf.js', v=_rev('js/htmx-csrf.js') if _rev else '20261001-layout-1') }}"></script>

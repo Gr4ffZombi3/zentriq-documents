@@ -843,3 +843,38 @@ html.zs-collapsed .zs-kbd { display: none; }
   .zl-actions .btn { min-height: 2.75rem; flex: 1; }
   .zl-note { font-size: 1rem; }
 }
+
+/* --- Verbindung / Anmeldung (js/session-guard.js) ----------------------------------------
+   Kleine Leiste unten mittig: "Verbindung wird wiederhergestellt", "Anmeldung abgelaufen",
+   gesicherte Aktionen. Ueberdeckt keine Eingabefelder dauerhaft (Handy: ueber dem Rand,
+   respektiert die sichere Zone); bei reduzierter Bewegung ohne Einblenden. */
+.zq-conn {
+  position: fixed; left: 50%; bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px) + var(--zs-composer-h, 0px)); z-index: 90;
+  transform: translateX(-50%); max-width: min(36rem, calc(100vw - 1.5rem));
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; padding: 0.45rem 0.75rem;
+  border: 1px solid var(--color-border-strong); border-radius: 999px; background: var(--color-surface);
+  color: var(--color-text); font-size: 0.85rem; line-height: 1.3; box-shadow: 0 6px 20px var(--color-shadow-strong);
+  animation: zq-conn-in 200ms ease-out;
+}
+.zq-conn[hidden] { display: none; }
+.zq-conn--expired, .zq-conn--unsent { border-radius: 0.75rem; }
+.zq-conn-dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; flex: none; background: var(--color-warning); }
+.zq-conn--offline .zq-conn-dot { animation: zq-conn-pulse 1.2s ease-in-out infinite; }
+.zq-conn--expired .zq-conn-dot { background: var(--color-error); }
+.zq-conn--saved .zq-conn-dot { background: var(--color-success); }
+.zq-conn-text { flex: 1 1 auto; min-width: 0; max-width: 26rem; }
+.zq-conn-btn:first-of-type { margin-left: auto; }
+.zq-conn-btn {
+  flex: none; padding: 0.3rem 0.7rem; border: 1px solid var(--color-border-strong); border-radius: 999px;
+  background: var(--color-surface-muted); color: var(--color-text); font: inherit; font-weight: 600; cursor: pointer; text-decoration: none;
+}
+.zq-conn-btn:first-of-type { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+.zq-conn-btn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+/* Handy: oben unter der Kopfleiste - unten liegen Termin-Knopf, Zeiterfassung und Tastatur. */
+@media (max-width: 640px) {
+  .zq-conn { top: calc(env(safe-area-inset-top, 0px) + 3.75rem); bottom: auto; width: calc(100vw - 1.5rem); border-radius: 0.75rem; flex-wrap: wrap; }
+  .zq-conn-text { flex: 1 1 calc(100% - 1.5rem); max-width: none; }
+}
+@keyframes zq-conn-in { from { opacity: 0; transform: translate(-50%, 0.5rem); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes zq-conn-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .zq-conn, .zq-conn--offline .zq-conn-dot { animation: none; } }

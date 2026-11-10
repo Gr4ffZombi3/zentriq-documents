@@ -128,6 +128,11 @@ class BaseConfig:
     # Sitzung endet nach 8 Stunden ohne Aktivitaet (gleitend, auch serverseitig geprueft in
     # app/services/user_sessions.py) - nicht mehr beim Schliessen des Browsers.
     PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
+    # Das CSRF-Token gilt so lange wie die Sitzung (Flask-WTF-Standard waeren 60 Minuten). Bis
+    # 11/2026 scheiterte Speichern auf Seiten, die laenger als eine Stunde offen waren, mit
+    # "Seite veraltet", obwohl die Anmeldung noch gueltig war. Das Token bleibt an die Sitzung
+    # gebunden; js/session-guard.js holt nach einer neuen Anmeldung ein frisches.
+    WTF_CSRF_TIME_LIMIT = int(PERMANENT_SESSION_LIFETIME.total_seconds())
 
     # Oeffentliche Basis-URL fuer Links in E-Mails. Bewusst NICHT aus dem Host-Header des
     # Requests abgeleitet, damit Reset-Links nicht per Host-Header-Injection umgelenkt werden.

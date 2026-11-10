@@ -220,11 +220,21 @@ def create_app(config_object=None):
     # Tenant-Kontext des Nutzers.
     app.before_request(enforce_role_access)
 
+    # Wiederholte Speicher-Anfragen (Verbindungsabbruch, Doppelklick, erneutes Senden nach neuer
+    # Anmeldung) liefern die gespeicherte Antwort statt einer zweiten Wirkung. Nach der Rollen-
+    # pruefung registriert: abgelehnte Anfragen legen keine Quittung an.
+    from app.services import idempotency
+
+    app.before_request(idempotency.before_request)
+    app.after_request(idempotency.after_request)
+
     from flask_login.utils import login_url
     from flask_wtf.csrf import CSRFError
 
     def _wants_json() -> bool:
-        return request.accept_mimetypes.best == "application/json"
+        # X-Zentriq-Fetch setzt js/session-guard.js bei jedem fetch der eigenen Seiten - auch
+        # dort, wo kein Accept-Kopf mitgeschickt wird.
+        return request.accept_mimetypes.best == "application/json" or request.headers.get("X-Zentriq-Fetch") == "1"
 
     # JSON-Aufrufe (fetch) bekommen eindeutige Fehler mit "code" statt einer HTML-Seite oder
     # einer Weiterleitung - nur so kann der Browser einen echten Sitzungsablauf von anderen
@@ -242,6 +252,16 @@ def create_app(config_object=None):
         message = "Die Seite ist veraltet (Sicherheitstoken ungültig). Bitte die Seite neu laden und erneut versuchen."
         if _wants_json():
             return {"error": message, "code": "csrf"}, 400
+        if request.endpoint == "auth.login" and request.method == "POST":
+            # Anmeldeformular war zu lange offen (oder das Sitzungs-Cookie fehlt): Formular mit
+            # frischem Token und der bereits eingegebenen Kennung erneut zeigen statt einer
+            # Fehlerseite. Das Passwort wird bewusst nicht vorbelegt.
+            from app.auth.forms import LoginForm
+
+            form = LoginForm(formdata=None, identifier=(request.form.get("identifier") or "")[:255],
+                             login_type=request.form.get("login_type") or None)
+            flash("Das Anmeldeformular war zu lange geöffnet. Bitte das Passwort erneut eingeben.", "error")
+            return render_template("auth/login.html", form=form), 400
         return render_template("errors/error.html", title="Seite veraltet", message=message), 400
 
     @app.errorhandler(403)

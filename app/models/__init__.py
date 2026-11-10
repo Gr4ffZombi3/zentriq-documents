@@ -54,6 +54,7 @@ from app.models.mailbox_case import (
 from app.models.office_settings import OfficeSettings
 from app.models.pending_case import PendingCase, PendingCaseNote
 from app.models.recommendation import Recommendation
+from app.models.request_receipt import RequestReceipt
 from app.models.settlement import Settlement, SettlementLine
 from app.models.system_error import SystemErrorEvent
 from app.models.task import Task
@@ -110,6 +111,7 @@ __all__ = [
     "ListComparison",
     "ListComparisonEntry",
     "Recommendation",
+    "RequestReceipt",
     "RecommendationFeedback",
     "SystemErrorEvent",
     "Task",

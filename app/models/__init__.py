@@ -52,6 +52,7 @@ from app.models.mailbox_case import (
     MailboxSyncCursor,
 )
 from app.models.office_settings import OfficeSettings
+from app.models.pending_case import PendingCase, PendingCaseNote
 from app.models.recommendation import Recommendation
 from app.models.settlement import Settlement, SettlementLine
 from app.models.system_error import SystemErrorEvent
@@ -73,6 +74,8 @@ from app.models.workspace import FormDraft, OfficeNews, SavedView, UserPreferenc
 __all__ = [
     "BookingLink",
     "CalendarEvent",
+    "PendingCase",
+    "PendingCaseNote",
     "CalendarEventChange",
     "HukQuoteJob",
     "OfficeSettings",

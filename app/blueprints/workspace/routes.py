@@ -12,7 +12,7 @@ from app.auth.permissions import admin_required
 from app.extensions import db
 from app.models import OfficeNews
 from app.navigation import build_navigation
-from app.services import workspace
+from app.services import pending_cases, workspace
 from app.tenancy import get_or_404_scoped
 
 workspace_bp = Blueprint("workspace", __name__, url_prefix="/arbeitsplatz")
@@ -39,7 +39,14 @@ def quick_search():
     query = (request.args.get("q") or "").strip()[:60]
     pages = workspace.search_pages(build_navigation()["nav_groups"], query)
     customers = workspace.search_customer_hits(current_user, query)
-    return jsonify({"pages": pages, "customers": customers})
+    cases = [
+        {"label": case.name, "detail": " · ".join(v for v in (case.vn_number, pending_cases.NOT_LINKED_LABEL if case.is_open else "zugeordnet") if v),
+         "url": url_for("workspace.pending_detail", case_id=case.id)}
+        for case in pending_cases.search(query, limit=5, include_linked=True)
+    ]
+    # Kein Kunde gefunden: direkt anbieten, den Vorgang ohne Kundenakte zu erfassen.
+    create = url_for("workspace.pending_new", name=query) if len(query) >= 2 and not customers else None
+    return jsonify({"pages": pages, "customers": customers, "cases": cases, "create": create})
 
 
 # --- Formularentwuerfe ------------------------------------------------------------------------
@@ -134,6 +141,146 @@ def list_density():
     if not workspace.set_list_density(current_user, value):
         return jsonify({"error": "Diese Darstellung gibt es nicht."}), 400
     return jsonify({"ok": True, "density": value, "label": workspace.DENSITIES[value]})
+
+
+# --- Vorgaenge ohne Kundenakte ---------------------------------------------------------------
+
+DURATIONS = (15, 30, 45, 60, 90)
+
+
+def _appointment_data(form) -> dict | None:
+    """Terminfelder des Formulars -> Kalenderdaten; None, wenn kein Termin gewuenscht ist."""
+    from datetime import datetime, timedelta
+
+    day, clock = (form.get("termin_datum") or "").strip(), (form.get("termin_zeit") or "").strip()
+    if not day and not clock:
+        return None
+    try:
+        start = datetime.strptime(f"{day}T{clock}", "%Y-%m-%dT%H:%M")
+    except ValueError as exc:
+        raise pending_cases.CaseError("Für den Termin bitte Datum und Uhrzeit angeben.") from exc
+    minutes = form.get("termin_dauer", type=int) or 30
+    if minutes not in DURATIONS:
+        minutes = 30
+    return {
+        "title": form.get("termin_titel", ""),
+        "start": start.strftime("%Y-%m-%dT%H:%M"),
+        "end": (start + timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M"),
+        "assignee_id": form.get("termin_mitarbeiter") or current_user.id,
+    }
+
+
+def _pending_form_context(**extra) -> dict:
+    from app.services.calendar import member_payload, office_members
+
+    day, clock = pending_cases.default_slot()
+    return {"members": member_payload(office_members()), "durations": DURATIONS, "default_day": day, "default_time": clock, **extra}
+
+
+def _own_case(case_id: int):
+    from app.models import PendingCase
+
+    return get_or_404_scoped(PendingCase, case_id)
+
+
+@workspace_bp.get("/vorgaenge")
+@login_required
+def pending_list():
+    from app.models import PendingCase
+
+    query = (request.args.get("q") or "").strip()[:60]
+    if query:
+        cases = pending_cases.search(query, limit=50, include_linked=True)
+    else:
+        cases = PendingCase.query.filter(PendingCase.status == "open").order_by(PendingCase.created_at.desc()).limit(100).all()
+    return render_template("workspace/pending_list.html", cases=cases, q=query)
+
+
+@workspace_bp.route("/vorgaenge/neu", methods=["GET", "POST"])
+@login_required
+def pending_new():
+    form = request.form if request.method == "POST" else request.args
+    if request.method == "POST":
+        try:
+            appointment = _appointment_data(request.form)
+            note_text = (request.form.get("notiz") or "").strip()
+            if not note_text and appointment is None:
+                raise pending_cases.CaseError("Bitte eine Notiz eingeben oder einen Termin wählen.")
+            case, _created = pending_cases.find_or_create(current_user, request.form.get("name"), request.form.get("vn"))
+            ref = (request.form.get("client_ref") or "").strip()[:60] or None
+            if note_text:
+                pending_cases.add_note(current_user, case, note_text, client_ref=f"{ref}-n" if ref else None)
+            db.session.commit()
+            if appointment is not None:
+                pending_cases.book_appointment(current_user, case, appointment, client_ref=f"{ref}-t" if ref else None)
+        except pending_cases.CaseError as exc:
+            db.session.rollback()
+            # Eingaben bleiben stehen; Hinweis direkt ueber dem Formular.
+            return render_template("workspace/pending_new.html", form=request.form, error=str(exc), **_pending_form_context()), 400
+        done = [part for part, ok in (("Notiz gespeichert", note_text), ("Termin gebucht", appointment)) if ok]
+        flash(" und ".join(done) + " – " + pending_cases.NOT_LINKED_LABEL + ".", "success")
+        return redirect(url_for("workspace.pending_detail", case_id=case.id))
+    return render_template("workspace/pending_new.html", form=form, error=None, **_pending_form_context())
+
+
+@workspace_bp.get("/vorgaenge/<int:case_id>")
+@login_required
+def pending_detail(case_id):
+    case = _own_case(case_id)
+    return render_template(
+        "workspace/pending_detail.html",
+        case=case,
+        events=pending_cases.events_of(case),
+        candidates=pending_cases.candidates(case) if case.is_open else [],
+        **_pending_form_context(),
+    )
+
+
+@workspace_bp.post("/vorgaenge/<int:case_id>/notiz")
+@login_required
+def pending_note(case_id):
+    case = _own_case(case_id)
+    try:
+        pending_cases.add_note(current_user, case, request.form.get("notiz", ""), client_ref=request.form.get("client_ref"))
+        db.session.commit()
+    except pending_cases.CaseError as exc:
+        db.session.rollback()
+        flash(str(exc), "error")
+        return redirect(url_for("workspace.pending_detail", case_id=case.id, notiz=request.form.get("notiz", "")[:2000]) + "#notiz")
+    flash("Notiz gespeichert." if case.is_open else "Notiz gespeichert und in der Kundenakte abgelegt.", "success")
+    return redirect(url_for("workspace.pending_detail", case_id=case.id))
+
+
+@workspace_bp.post("/vorgaenge/<int:case_id>/termin")
+@login_required
+def pending_appointment(case_id):
+    case = _own_case(case_id)
+    try:
+        data = _appointment_data(request.form)
+        if data is None:
+            raise pending_cases.CaseError("Für den Termin bitte Datum und Uhrzeit angeben.")
+        pending_cases.book_appointment(current_user, case, data, client_ref=request.form.get("client_ref"))
+    except pending_cases.CaseError as exc:
+        db.session.rollback()
+        flash(str(exc), "error")
+        return redirect(url_for("workspace.pending_detail", case_id=case.id) + "#termin")
+    flash("Termin gebucht – er steht im Bürokalender.", "success")
+    return redirect(url_for("workspace.pending_detail", case_id=case.id))
+
+
+@workspace_bp.post("/vorgaenge/<int:case_id>/zuordnen")
+@login_required
+def pending_link(case_id):
+    from app.models import Customer
+
+    case = _own_case(case_id)
+    customer = get_or_404_scoped(Customer, request.form.get("customer_id", type=int))
+    if pending_cases.link(case, customer, current_user, basis="manual"):
+        db.session.commit()
+        flash(f"Vorgang mit der Kundenakte „{customer.name}“ verknüpft. Notizen und Termine stehen jetzt dort.", "success")
+    else:
+        flash("Dieser Vorgang ist bereits einer Kundenakte zugeordnet.", "info")
+    return redirect(url_for("workspace.pending_detail", case_id=case.id))
 
 
 # --- Was ist neu? -----------------------------------------------------------------------------

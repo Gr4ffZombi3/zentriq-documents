@@ -1,0 +1,19 @@
+{# Terminfelder fuer Vorgaenge ohne Kundenakte (Kalender: app/services/calendar.create_event). #}
+{% macro appointment_fields(form, members, durations, default_day, default_time, optional=true) -%}
+<div class="zq-case-grid">
+  <label class="zq-case-field"><span class="field-label">Datum</span>
+    <input class="field-surface" type="date" name="termin_datum" value="{{ form.get('termin_datum', '' if optional else default_day) }}"></label>
+  <label class="zq-case-field"><span class="field-label">Uhrzeit</span>
+    <input class="field-surface" type="time" name="termin_zeit" step="300" value="{{ form.get('termin_zeit', '' if optional else default_time) }}"></label>
+  <label class="zq-case-field"><span class="field-label">Dauer</span>
+    <select class="field-surface" name="termin_dauer">
+      {% for m in durations %}<option value="{{ m }}" {{ 'selected' if (form.get('termin_dauer') or '30') == m | string }}>{{ m }} Min.</option>{% endfor %}
+    </select></label>
+  <label class="zq-case-field"><span class="field-label">Zuständig</span>
+    <select class="field-surface" name="termin_mitarbeiter">
+      {% for m in members %}<option value="{{ m.id }}" {{ 'selected' if (form.get('termin_mitarbeiter') or current_user.id | string) == m.id | string }}>{{ m.name }}</option>{% endfor %}
+    </select></label>
+  <label class="zq-case-field zq-case-wide"><span class="field-label">Titel (optional)</span>
+    <input class="field-surface" name="termin_titel" maxlength="200" value="{{ form.get('termin_titel', '') }}" placeholder="z. B. Beratung Kfz"></label>
+</div>
+{%- endmacro %}

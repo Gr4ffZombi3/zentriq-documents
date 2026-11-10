@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/pending_cases.html" import pending_offer, pending_list %}
 {% block title %}Suche – Zentriq{% endblock %}
 {% block content %}
 {% set q = results.query %}
@@ -64,7 +65,17 @@
           {% if results.customers_more %}<p class="panel-note">Weitere Treffer – bitte genauer suchen.</p>{% endif %}
         {% else %}
           <p class="empty-note">Keine Kunden gefunden. Prüfen Sie die Schreibweise oder suchen Sie nur nach Nachname oder Telefonnummer – Ihre Eingabe steht oben noch im Feld.</p>
+          <p class="panel-note">Gibt es noch keine Kundenakte? {{ pending_offer(q) }}</p>
         {% endif %}
+      </section>
+    {% endif %}
+
+    {% if pending %}
+      <section class="panel" aria-labelledby="treffer-vorgaenge">
+        <header class="panel-header">
+          <h2 class="panel-title" id="treffer-vorgaenge">Vorgänge ohne Kundenakte <span class="count-tag">{{ pending | length }}</span></h2>
+        </header>
+        {{ pending_list(pending) }}
       </section>
     {% endif %}
 

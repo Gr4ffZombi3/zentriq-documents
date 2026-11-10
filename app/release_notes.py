@@ -18,6 +18,21 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 11),
+        "title": "Notiz oder Termin ohne Kundenakte",
+        "text": "Findet die Suche keinen Kunden, können Sie direkt einen Vorgang ohne Kundenakte erfassen – mit Name, "
+        "falls bekannt der Versicherungsnehmernummer, einer Notiz oder einem Termin im Bürokalender. Taucht die Nummer "
+        "später in einer Leipziger Liste auf, landen Notiz und Termin automatisch in der passenden Kundenakte.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 11),
+        "title": "Feierabendgruß und Abmelden mit Zeiterfassung",
+        "text": "Nach dem Ausstempeln zeigt Zentriq kurz, wie viel Zeit heute erfasst ist. Wer sich bei laufender "
+        "Zeiterfassung abmeldet, kann wählen: ausstempeln und abmelden oder die Zeit weiterlaufen lassen.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 11),
         "title": "Listen kompakt oder geräumig",
         "text": "Listen wie die Leipziger Liste lassen sich kompakt oder geräumig anzeigen. "
         "Die Wahl gilt nur für Sie und bleibt auf allen Geräten erhalten.",

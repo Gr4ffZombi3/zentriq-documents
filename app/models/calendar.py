@@ -30,6 +30,9 @@ class CalendarEvent(TenantScopedMixin, db.Model):
     ends_at = db.Column(db.DateTime, nullable=False)
     assignee_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     customer_id = db.Column(db.Integer, db.ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)
+    # Termin zu einem Vorgang ohne Kundenakte (app/models/pending_case.py); bleibt nach dem
+    # Verknuepfen als Herkunft stehen, customer_id wird dann gesetzt.
+    pending_case_id = db.Column(db.Integer, db.ForeignKey("pending_cases.id", ondelete="SET NULL"), nullable=True, index=True)
     # "vor_ort" | "telefon" | "video" | None
     location_kind = db.Column(db.String(20), nullable=True)
     location = db.Column(db.String(255), nullable=True)
@@ -45,6 +48,7 @@ class CalendarEvent(TenantScopedMixin, db.Model):
 
     assignee = db.relationship("User", foreign_keys=[assignee_user_id])
     customer = db.relationship("Customer", foreign_keys=[customer_id])
+    pending_case = db.relationship("PendingCase", foreign_keys=[pending_case_id])
     created_by = db.relationship("User", foreign_keys=[created_by_user_id])
     updated_by = db.relationship("User", foreign_keys=[updated_by_user_id])
 

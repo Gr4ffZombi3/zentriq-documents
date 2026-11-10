@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "components/pending_cases.html" import pending_list, pending_offer %}
+{% block title %}Vorgänge ohne Kundenakte – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell page-shell-narrow">
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">Vorgänge ohne Kundenakte</h1>
+      <p class="page-subtitle">Notizen und Termine zu Personen, die noch keiner Kundenakte zugeordnet sind.</p>
+    </div>
+    {{ pending_offer(q) }}
+  </div>
+  <form method="get" class="customer-search" role="search">
+    <label class="sr-only" for="vorgang-suche">Vorgang suchen</label>
+    <input class="field-surface" type="search" id="vorgang-suche" name="q" value="{{ q }}" maxlength="60" placeholder="Name oder Versicherungsnehmernummer">
+    <button type="submit" class="btn btn-primary">Suchen</button>
+  </form>
+  <section class="panel">
+    {% if cases %}{{ pending_list(cases) }}
+    {% elif q %}<p class="panel-body">Kein Vorgang zu „{{ q }}“ gefunden.</p>
+    {% else %}<p class="panel-body">Zurzeit ist jeder Vorgang einer Kundenakte zugeordnet.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

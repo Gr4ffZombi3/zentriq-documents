@@ -299,6 +299,11 @@ def logout():
     "Abmelden und diesem Browser nicht mehr vertrauen" (forget_browser=1)."""
     forget = request.form.get("forget_browser") == "1"
     user = current_user._get_current_object()
+    # Laufende Zeiterfassung: "Ausstempeln und abmelden" meldet erst nach erfolgreichem
+    # Ausstempeln ab; "Abmelden und Zeit weiterlaufen lassen" laesst die Buchung unveraendert.
+    clock_note, farewell_seconds = _logout_time_tracking(user, request.form.get("stempel"))
+    if clock_note is False:
+        return redirect(_logout_back())
     log_audit_event(AuditEventType.LOGOUT, tenant_id=user.tenant_id, user=user, details={"forget_browser": True} if forget else None)
     response = make_response(redirect(url_for("auth.login")))
     if forget:
@@ -306,5 +311,44 @@ def logout():
     user_sessions.end_current_session(user.id)
     logout_user()
     session.pop(PENDING_2FA_KEY, None)
-    flash("Du wurdest abgemeldet. Dieser Browser ist nicht mehr vertraut." if forget else "Du wurdest abgemeldet.", "success")
+    message = "Du wurdest abgemeldet. Dieser Browser ist nicht mehr vertraut." if forget else "Du wurdest abgemeldet."
+    flash(f"{clock_note} {message}" if clock_note else message, "success")
+    if farewell_seconds is not None:
+        workspace.remember_farewell(user, farewell_seconds)
     return response
+
+
+def _logout_back() -> str:
+    target = request.referrer or ""
+    host = request.host_url.rstrip("/")
+    if target.startswith(host + "/"):
+        return target[len(host):]
+    return url_for("portal.home")
+
+
+def _logout_time_tracking(user, choice: str | None):
+    """-> (Hinweis | None | False, Tagesnettozeit nach dem Ausstempeln | None). False = nicht
+    abmelden (Ausstempeln fehlgeschlagen, Fehlermeldung ist gesetzt)."""
+    if not (user.is_office_admin or user.is_employee):
+        return None, None
+    from app.services.timetracking import service as tt
+    from app.services.timetracking.clock import local_today, to_local, utcnow_naive
+
+    now = utcnow_naive()
+    state = tt.get_stamp_state(user.id, now)
+    if state.status == "out":
+        # Inzwischen anderswo ausgestempelt: das Ziel ist erreicht, nur Bescheid geben.
+        return ("Du warst bereits ausgestempelt." if choice == "aus" else None), None
+    if choice == "aus":
+        try:
+            tt.clock_out(user)
+        except tt.TimeTrackingError as exc:
+            db.session.rollback()
+            flash(f"Ausstempeln nicht möglich: {exc} Du bist weiterhin angemeldet.", "error")
+            return False, None
+        log_audit_event(AuditEventType.TIME_CLOCK_OUT, user=user)
+        today = local_today()
+        net = tt.summarize_user_period(user, today, today).net_seconds
+        return f"Du bist ausgestempelt (heute erfasst: {workspace.format_worked(net)}).", net
+    since = to_local(state.open_session.started_at).strftime("%H:%M")
+    return f"Deine Zeiterfassung läuft weiter (seit {since} Uhr).", None

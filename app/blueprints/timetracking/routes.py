@@ -169,6 +169,8 @@ def status():
 
 
 def _stamp(action, success_message: str, event_type: AuditEventType | None = None):
+    from app.services import workspace
+
     try:
         action(current_user)
     except TimeTrackingError as exc:
@@ -179,8 +181,15 @@ def _stamp(action, success_message: str, event_type: AuditEventType | None = Non
         if event_type is not None:
             # Aktivitaetsprotokoll des Bueros: nur das Ereignis, keine weiteren Daten.
             log_audit_event(event_type, user=current_user)
+        payload = _status_payload()
+        if action is service.clock_out:
+            # Feierabendgruss erst nach erfolgreichem Ausstempeln, mit der berechneten Tageszeit.
+            fare = workspace.farewell(current_user, payload["today_net_seconds"])
+            if _wants_json():
+                return jsonify({"message": success_message, "farewell": fare, **payload})
+            workspace.remember_farewell(current_user, payload["today_net_seconds"])
         if _wants_json():
-            return jsonify({"message": success_message, **_status_payload()})
+            return jsonify({"message": success_message, **payload})
         flash(success_message, "success")
     return redirect(_safe_next() or url_for("timetracking.index"))
 

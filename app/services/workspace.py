@@ -194,6 +194,43 @@ def consume_greeting(user, endpoint: str | None, now: datetime | None = None) ->
     }
 
 
+# --- Feierabendgruss -----------------------------------------------------------------------
+
+FAREWELL_KEY = "zq_farewell"
+
+
+def format_worked(seconds: int | float) -> str:
+    """Erfasste Nettozeit wie "4 Std. 02 Min." (abgerundet auf volle Minuten)."""
+    minutes = max(0, int(seconds) // 60)
+    return f"{minutes // 60} Std. {minutes % 60:02d} Min."
+
+
+def farewell(user, net_seconds) -> dict:
+    """Karte nach erfolgreichem Ausstempeln; Zeit = bereits berechnete Tagesarbeitszeit
+    (timetracking.service.summarize_user_period)."""
+    name = first_name(user)
+    return {
+        "title": f"Schönen Feierabend, {name}!" if name else "Schönen Feierabend!",
+        "detail": f"Heute erfasst: {format_worked(net_seconds)}",
+    }
+
+
+def remember_farewell(user, net_seconds) -> None:
+    """Fuer die naechste ganze Seite (Formular ohne JavaScript, Abmelden mit Ausstempeln)."""
+    from flask import session
+
+    session[FAREWELL_KEY] = farewell(user, net_seconds)
+
+
+def pop_farewell() -> dict | None:
+    from flask import request, session
+
+    if request.method != "GET" or request.headers.get("HX-Request") or request.args.get("panel"):
+        return None
+    value = session.pop(FAREWELL_KEY, None)
+    return value if isinstance(value, dict) and value.get("title") else None
+
+
 # --- Was ist neu? ---------------------------------------------------------------------------
 
 AUDIENCES = {"alle": "Alle", "admin": "Nur Büro-Admins", "mitarbeiter": "Nur Mitarbeiter"}

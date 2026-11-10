@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "ui/display.html" import badge, empty_state %}
 {% from "components/saved_views.html" import saved_views_bar %}
+{% from "components/pending_cases.html" import pending_offer %}
 {% block title %}Kunden – Zentriq{% endblock %}
 {% block content %}
 {% set items = customer_directory["items"] %}
@@ -13,6 +14,7 @@
       <h1 class="page-toolbar-title">Kunden</h1>
       <p class="page-subtitle">Zentriq-Kundenstamm aus Leipziger Liste und Memos – zum Wiedererkennen, kein Ersatz für das HUK-System.</p>
     </div>
+    <a class="btn btn-secondary btn-sm" href="{{ url_for('workspace.pending_list') }}">Vorgänge ohne Kundenakte</a>
   </div>
 
   <form method="get" action="{{ url_for('customers.list_customers') }}" class="customer-search" role="search">
@@ -81,8 +83,8 @@
   {% elif q %}
     {# Suchbegriff bleibt oben im Feld stehen - korrigieren statt neu tippen. #}
     {% call empty_state('Keine Kunden gefunden', 'Für „' ~ q ~ '“ gibt es keinen Kunden im Kundenstamm Ihres Büros. Prüfen Sie die Schreibweise oder suchen Sie nur nach Nachname, Telefonnummer oder Kundennummer.', 'search') %}
-      <label class="btn btn-primary btn-sm" for="kunden-suche">Suche ändern</label>
-      <a class="btn btn-secondary btn-sm" href="{{ url_for('customers.list_customers') }}">Alle Kunden anzeigen</a>
+      <label class="btn btn-secondary btn-sm" for="kunden-suche">Suche ändern</label>
+      {{ pending_offer(q) }}
     {% endcall %}
   {% else %}
     {% call empty_state('Noch keine Kunden', 'Kunden entstehen automatisch beim Import einer Leipziger Liste und aus Memos.', 'users') %}{% endcall %}

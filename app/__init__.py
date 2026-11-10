@@ -148,7 +148,13 @@ def create_app(config_object=None):
 
         return workspace.list_density(current_user) if current_user.is_authenticated else "geraeumig"
 
+    def pop_farewell():
+        from app.services import workspace
+
+        return workspace.pop_farewell()
+
     app.jinja_env.globals["daily_greeting"] = daily_greeting
+    app.jinja_env.globals["pop_farewell"] = pop_farewell
     app.jinja_env.globals["feature_news"] = feature_news
     app.jinja_env.globals["list_density"] = list_density
     app.jinja_env.globals["saved_views"] = saved_views

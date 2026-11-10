@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "workspace/_appointment_fields.html" import appointment_fields with context %}
+{% block title %}Vorgang ohne Kundenakte – Zentriq{% endblock %}
+{% block content %}
+{# Notiz/Termin fuer eine Person ohne Kundenakte (app/services/pending_cases.py). Bei Fehlern
+   bleiben alle Eingaben stehen. #}
+<div class="page-shell page-shell-narrow">
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">Vorgang ohne Kundenakte erfassen</h1>
+      <p class="page-subtitle">Für Personen, die noch keine Kundenakte haben. Sobald die Versicherungsnehmernummer in einer Leipziger Liste auftaucht, ordnet Zentriq den Vorgang der Akte zu.</p>
+    </div>
+  </div>
+  {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+  <form method="post" action="{{ url_for('workspace.pending_new') }}" class="panel panel-body zq-case-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="client_ref" value="{{ form.get('client_ref') or range(10**8, 10**9) | random }}">
+    <div class="zq-case-grid">
+      <label class="zq-case-field zq-case-wide"><span class="field-label">Name *</span>
+        <input class="field-surface" name="name" required maxlength="200" autocomplete="off" value="{{ form.get('name', '') }}" placeholder="Vor- und Nachname"></label>
+      <label class="zq-case-field zq-case-wide"><span class="field-label">Versicherungsnehmernummer (falls bekannt)</span>
+        <input class="field-surface" name="vn" maxlength="30" autocomplete="off" value="{{ form.get('vn', '') }}" placeholder="808/123456-E"></label>
+    </div>
+    <fieldset class="zq-case-section">
+      <legend>Notiz</legend>
+      <textarea class="field-surface" name="notiz" rows="4" maxlength="5000" placeholder="Was wurde besprochen?">{{ form.get('notiz', '') }}</textarea>
+    </fieldset>
+    <fieldset class="zq-case-section">
+      <legend>Termin buchen (optional)</legend>
+      {{ appointment_fields(form, members, durations, default_day, default_time) }}
+    </fieldset>
+    <div class="form-actions zq-case-actions">
+      <button type="submit" class="btn btn-primary">Speichern</button>
+      <a class="btn btn-secondary" href="{{ url_for('workspace.pending_list') }}">Abbrechen</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

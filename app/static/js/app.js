@@ -978,3 +978,61 @@
   });
   window.addEventListener("resize", function () { Array.prototype.forEach.call(bars, update); });
 })();
+
+// Feierabendgruss: kleine Karte nach erfolgreichem Ausstempeln (gleiches Aussehen wie der
+// Morgengruss, CSS .zq-greeting). Schliessen per Knopf, Escape oder nach einigen Sekunden; bei
+// reduzierter Bewegung ohne Animation (CSS). Serverseitig gerenderte Karte: components/farewell.html.
+(function () {
+  "use strict";
+  function arm(card) {
+    var timer = null;
+    function close() {
+      if (!card.parentNode) return;
+      clearTimeout(timer);
+      var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      card.classList.add("is-leaving");
+      setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, reduce ? 0 : 200);
+      document.removeEventListener("keydown", onKey);
+    }
+    function onKey(ev) { if (ev.key === "Escape") close(); }
+    var btn = card.querySelector("[data-zq-card-close]");
+    if (btn) btn.addEventListener("click", close);
+    document.addEventListener("keydown", onKey);
+    // Kurz sichtbar; solange Maus oder Fokus auf der Karte liegt, bleibt sie stehen.
+    function later() { clearTimeout(timer); timer = setTimeout(close, 9000); }
+    card.addEventListener("mouseenter", function () { clearTimeout(timer); });
+    card.addEventListener("mouseleave", later);
+    card.addEventListener("focusin", function () { clearTimeout(timer); });
+    later();
+    return close;
+  }
+  function showFarewell(data) {
+    if (!data || !data.title) return;
+    var old = document.querySelector("[data-zq-farewell]");
+    if (old) old.parentNode.removeChild(old);
+    var card = document.createElement("aside");
+    card.className = "zq-greeting zq-farewell";
+    card.setAttribute("role", "status");
+    card.setAttribute("aria-live", "polite");
+    card.setAttribute("data-zq-farewell", "");
+    var x = document.createElement("button");
+    x.type = "button";
+    x.className = "zq-greeting-close";
+    x.setAttribute("data-zq-card-close", "");
+    x.setAttribute("aria-label", "Feierabendgruß schließen");
+    x.textContent = "×";
+    var h = document.createElement("p");
+    h.className = "zq-greeting-hello";
+    h.textContent = data.title;
+    var d = document.createElement("p");
+    d.className = "zq-greeting-line";
+    d.textContent = data.detail || "";
+    card.appendChild(x); card.appendChild(h); card.appendChild(d);
+    document.body.appendChild(card);
+    arm(card);
+  }
+  window.Zentriq = window.Zentriq || {};
+  window.Zentriq.showFarewell = showFarewell;
+  var existing = document.querySelector("[data-zq-farewell]");
+  if (existing) arm(existing);
+})();

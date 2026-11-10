@@ -1,0 +1,10 @@
+{# Feierabendgruss nach erfolgreichem Ausstempeln (einmalig, aus der Sitzung; js/app.js schliesst
+   ihn per Knopf, Escape oder nach kurzer Zeit). Gleiche Karte wie der Morgengruss. #}
+{% set farewell = pop_farewell() %}
+{% if farewell %}
+  <aside class="zq-greeting zq-farewell" role="status" aria-live="polite" data-zq-farewell>
+    <button type="button" class="zq-greeting-close" data-zq-card-close aria-label="Feierabendgruß schließen">×</button>
+    <p class="zq-greeting-hello">{{ farewell.title }}</p>
+    <p class="zq-greeting-line">{{ farewell.detail }}</p>
+  </aside>
+{% endif %}

@@ -128,6 +128,19 @@ def _mark_unexpected_failure(document_id: int) -> None:
         current_app.logger.exception("document.analysis.failure_not_recorded document_id=%s", document_id)
 
 
+def _match_pending_cases(document: Document) -> None:
+    """Offene Vorgaenge ohne Kundenakte mit den nun bekannten Vorgangsnummern abgleichen
+    (app/services/pending_cases.py). Eigener Sicherungspunkt: ein Fehler hier darf den Import
+    nicht scheitern lassen - die Vorgaenge bleiben dann einfach offen."""
+    from app.services.pending_cases import match_open_cases
+
+    try:
+        with db.session.begin_nested():
+            match_open_cases()
+    except Exception:
+        current_app.logger.exception("pending_cases.match_failed tenant_id=%s document_id=%s", document.tenant_id, document.id)
+
+
 def _reset_previous_results(document: Document) -> None:
     """Entfernt alle Ergebnisse einer frueheren Auswertung dieses Dokuments, damit ein erneuter
     Durchlauf (Retry, Neu einlesen) keine Kunden-Zuordnungen, Vergleiche oder Aenderungs-
@@ -486,6 +499,7 @@ def _run_pipeline_steps(document: Document, customer_lock: NamedLock) -> None:
             # Normalisierte Vorgaenge (Suche, Zuordnung) und Vergleich mit der vorherigen Liste.
             rebuild_entries(document)
             db.session.flush()
+            _match_pending_cases(document)
             if analysis_meta["is_complete"]:
                 document.extra_data = {
                     **document.extra_data,

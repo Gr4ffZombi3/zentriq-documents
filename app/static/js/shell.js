@@ -222,7 +222,11 @@
       if (action === "out" && !window.confirm("Jetzt ausstempeln?")) return;
       busy = true;
       errorEl.hidden = true;
-      postJSON(urls[action]).then(apply).catch(function (err) {
+      postJSON(urls[action]).then(function (data) {
+        apply(data);
+        // Feierabendgruss erst nach bestaetigtem Ausstempeln (Serverantwort mit Tageszeit).
+        if (action === "out" && data.farewell && window.Zentriq && window.Zentriq.showFarewell) window.Zentriq.showFarewell(data.farewell);
+      }).catch(function (err) {
         errorEl.textContent = err.message;
         errorEl.hidden = false;
         if (err.data && err.data.status) apply(err.data);
@@ -238,6 +242,40 @@
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && !panel.hidden) { panel.hidden = true; pill.setAttribute("aria-expanded", "false"); }
   });
+
+  // --- Abmelden bei laufender Zeiterfassung -------------------------------------------
+  var logoutDialog = document.querySelector("[data-zs-logout-dialog]");
+  if (logoutDialog && logoutDialog.showModal) {
+    var logoutText = logoutDialog.querySelector("[data-zs-logout-text]");
+    document.addEventListener("submit", function (ev) {
+      var form = ev.target;
+      if (logoutDialog.contains(form) || !/\/auth\/logout$/.test(form.getAttribute("action") || "") || form.dataset.zsChecked) return;
+      ev.preventDefault();
+      // Aktuellen Stand holen (anderer Tab/Geraet koennte schon ausgestempelt haben).
+      getJSON(clock.dataset.statusUrl).then(function (data) {
+        apply(data);
+        if (data.status === "out") throw new Error("out");
+        var forget = form.querySelector('[name="forget_browser"]');
+        logoutDialog.querySelector("[data-zs-logout-forget]").value = forget ? forget.value : "";
+        logoutText.textContent = (data.status === "break" ? "Du bist in der Pause (Arbeitsbeginn " : "Du bist eingestempelt seit ") + data.since + " Uhr" +
+          (data.status === "break" ? ")" : "") + ". Heute erfasst: " + fmt(netNow()).replace(":", " Std. ") + " Min.";
+        logoutDialog.showModal();
+      }).catch(function () {
+        form.dataset.zsChecked = "1";
+        form.submit();
+      });
+    });
+    logoutDialog.querySelector("[data-zs-logout-cancel]").addEventListener("click", function () { logoutDialog.close(); });
+    logoutDialog.querySelector("form").addEventListener("submit", function (ev) {
+      var out = ev.submitter && ev.submitter.value === "aus";
+      Array.prototype.forEach.call(logoutDialog.querySelectorAll("button"), function (b) { b.disabled = true; });
+      if (out) logoutDialog.querySelector("[data-zs-logout-out]").textContent = "Wird ausgestempelt …";
+      // Der Wert des gedrueckten Knopfs geht durch das Deaktivieren verloren -> als Feld mitgeben.
+      var keep = document.createElement("input");
+      keep.type = "hidden"; keep.name = "stempel"; keep.value = out ? "aus" : "weiter";
+      ev.target.appendChild(keep);
+    });
+  }
 
   load();
   setInterval(render, 30000);

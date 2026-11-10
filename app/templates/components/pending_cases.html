@@ -1,0 +1,22 @@
+{# Vorgaenge ohne Kundenakte (app/services/pending_cases.py): Angebot bei erfolgloser Suche und
+   Trefferliste. Kennzeichnung immer "Noch keiner Kundenakte zugeordnet". #}
+{% macro pending_offer(q, cls='btn btn-primary btn-sm') -%}
+<a class="{{ cls }}" href="{{ url_for('workspace.pending_new', name=q if q else none) }}">Vorgang ohne Kundenakte erfassen</a>
+{%- endmacro %}
+
+{% macro pending_status(case) -%}
+{% if case.is_open %}<span class="zq-pending-tag">Noch keiner Kundenakte zugeordnet</span>
+{% else %}<span class="zq-pending-tag is-linked">Zugeordnet{% if case.customer %}: {{ case.customer.name }}{% endif %}</span>{% endif %}
+{%- endmacro %}
+
+{% macro pending_list(cases) -%}
+<ul class="zq-pending-list">
+  {% for case in cases %}
+    <li>
+      <a href="{{ url_for('workspace.pending_detail', case_id=case.id) }}" class="zq-pending-name">{{ case.name }}</a>
+      {% if case.vn_number %}<span class="tabular-nums">{{ case.vn_number }}</span>{% endif %}
+      {{ pending_status(case) }}
+    </li>
+  {% endfor %}
+</ul>
+{%- endmacro %}

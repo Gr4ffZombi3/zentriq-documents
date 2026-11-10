@@ -545,7 +545,9 @@
         .then(function (d) {
           if (mine !== seq) return;
           hits = d.pages.map(function (p) { return { label: p.label, url: p.url, group: "Seiten" }; })
-            .concat(d.customers.map(function (c) { return { label: c.label, detail: c.detail, url: c.url, group: "Kunden" }; }));
+            .concat(d.customers.map(function (c) { return { label: c.label, detail: c.detail, url: c.url, group: "Kunden" }; }))
+            .concat((d.cases || []).map(function (c) { return { label: c.label, detail: c.detail, url: c.url, group: "Vorgänge ohne Kundenakte" }; }));
+          if (d.create) hits.push({ label: "Vorgang ohne Kundenakte erfassen", detail: "„" + q + "“", url: d.create, group: "Kunde nicht gefunden?" });
           selected = 0;
           render(hits.length ? null : (q.length < 2 ? "Bitte mindestens zwei Zeichen eingeben." : "Keine Treffer für „" + q + "“."));
         })

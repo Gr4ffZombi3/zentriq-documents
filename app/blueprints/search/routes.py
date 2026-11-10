@@ -16,4 +16,7 @@ def search():
     if not (current_user.is_office_admin or current_user.is_employee):
         abort(403)
     results = global_search(current_user, request.args.get("q"))
-    return render_template("search/results.html", results=results, min_length=MIN_QUERY_LENGTH)
+    from app.services import pending_cases
+
+    pending = pending_cases.search(results.query, include_linked=True) if len(results.query) >= MIN_QUERY_LENGTH else []
+    return render_template("search/results.html", results=results, min_length=MIN_QUERY_LENGTH, pending=pending)

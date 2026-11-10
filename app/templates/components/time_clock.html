@@ -25,3 +25,20 @@
     <a class="zs-clock-link" href="{{ url_for('timetracking.index') }}">Zeiterfassung öffnen</a>
   </div>
 </aside>
+
+{# Abmelden bei laufender Zeiterfassung (js/shell.js oeffnet den Dialog vor dem Abmelden).
+   "Ausstempeln und abmelden": der Server stempelt aus und meldet erst danach ab (bei einem Fehler
+   bleibt die Anmeldung bestehen). Ohne JavaScript wird wie bisher abgemeldet, die Zeit laeuft weiter. #}
+<dialog class="zq-logout-dialog" data-zs-logout-dialog aria-labelledby="zq-logout-title">
+  <form method="post" action="{{ url_for('auth.logout') }}" class="zq-logout-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="forget_browser" value="" data-zs-logout-forget>
+    <h2 id="zq-logout-title">Deine Zeiterfassung läuft noch</h2>
+    <p data-zs-logout-text>Möchtest du vor dem Abmelden ausstempeln?</p>
+    <div class="zq-logout-actions">
+      <button type="submit" class="btn btn-primary" name="stempel" value="aus" data-zs-logout-out>Ausstempeln und abmelden</button>
+      <button type="submit" class="btn btn-secondary" name="stempel" value="weiter">Abmelden und Zeit weiterlaufen lassen</button>
+      <button type="button" class="btn btn-ghost" data-zs-logout-cancel>Abbrechen</button>
+    </div>
+  </form>
+</dialog>

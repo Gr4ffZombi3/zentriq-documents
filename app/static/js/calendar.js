@@ -489,6 +489,12 @@
       // Kundenakte (Buero-Admin) rechts im Seitenfenster - der Kalender bleibt, wie er ist (workspace.js).
       if (/\/customers\//.test(a.href)) a.setAttribute("data-zq-panel", "");
       fact("Kunde", null, a);
+    } else if (e.pending_case) {
+      var pc = el("span", "cal-pop-pending");
+      var pa = el("a", null, e.pending_case.name); pa.href = e.pending_case.url;
+      pc.appendChild(pa);
+      pc.appendChild(el("span", "zq-pending-tag", "Noch keiner Kundenakte zugeordnet"));
+      fact("Kunde", null, pc);
     }
     fact("Art", e.location_label); fact("Ort", e.location); fact("Notiz", e.note);
     fact("Geändert", (e.updated_by || "–") + ", " + (e.updated_at || ""));

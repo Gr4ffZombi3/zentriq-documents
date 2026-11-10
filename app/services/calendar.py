@@ -144,6 +144,8 @@ def serialize(event: CalendarEvent, user: User | None = None) -> dict:
         "assignee_id": event.assignee_user_id,
         "assignee": member_name(event.assignee),
         "customer": {"id": customer.id, "name": customer.name} if customer is not None else None,
+        # Termin zu einem Vorgang ohne Kundenakte (noch keiner Akte zugeordnet).
+        "pending_case": _pending_payload(event) if customer is None and event.pending_case_id else None,
         "location_kind": event.location_kind,
         "location_label": LOCATION_KINDS.get(event.location_kind or ""),
         "location": event.location,
@@ -155,6 +157,15 @@ def serialize(event: CalendarEvent, user: User | None = None) -> dict:
         "updated_at": to_local(event.updated_at).strftime("%d.%m.%Y %H:%M") if event.updated_at else None,
         "can_delete": bool(user is not None and can_delete(user, event)),
     }
+
+
+def _pending_payload(event: CalendarEvent) -> dict | None:
+    from flask import url_for
+
+    case = event.pending_case
+    if case is None:
+        return None
+    return {"id": case.id, "name": case.name, "url": url_for("workspace.pending_detail", case_id=case.id)}
 
 
 def conflict_payload(items: list[CalendarEvent]) -> list[dict]:

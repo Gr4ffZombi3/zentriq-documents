@@ -144,13 +144,40 @@
   function scrollDown(force) { if (force || stickToBottom) scroller.scrollTop = scroller.scrollHeight; }
 
   function copyText(text, button) {
-    if (!navigator.clipboard) return;
-    navigator.clipboard.writeText(text).then(function () {
+    var shown = function () {
       var old = button.textContent;
       button.textContent = "Kopiert";
       setTimeout(function () { button.textContent = old; }, 1500);
-    });
+    };
+    // Rueckfall ohne Clipboard-API: Kopierbefehl, dessen copy-Ereignis nur text/plain setzt.
+    var fallback = function () {
+      var put = function (e) { e.clipboardData.setData("text/plain", text); e.preventDefault(); };
+      document.addEventListener("copy", put, true);
+      var ok = false;
+      try { ok = document.execCommand("copy"); } catch (err) { ok = false; }
+      document.removeEventListener("copy", put, true);
+      if (ok) shown();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(shown, fallback);
+    else fallback();
   }
+
+  // E-Mail-Entwurf manuell markiert und kopiert (Strg/Cmd+C, Kontextmenue, iPhone): beruehrt die
+  // Markierung einen Entwurf, nur den markierten Text als text/plain - sonst uebernimmt Outlook den
+  // Hintergrund aus dem HTML. Zeilenumbrueche (Absaetze, Aufzaehlungen) bleiben im <pre> erhalten.
+  // Markierungen ohne Entwurf kopiert der Browser wie bisher.
+  thread.addEventListener("copy", function (e) {
+    var sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !e.clipboardData) return;
+    var drafts = thread.querySelectorAll(".zc-code-prose code");
+    var hit = false;
+    for (var r = 0; r < sel.rangeCount && !hit; r++) {
+      for (var d = 0; d < drafts.length && !hit; d++) hit = sel.getRangeAt(r).intersectsNode(drafts[d]);
+    }
+    if (!hit) return;
+    e.clipboardData.setData("text/plain", sel.toString());
+    e.preventDefault();
+  });
 
   function formatCost(v) { return v === null || v === undefined ? "" : (v === 0 ? "kostenlos" : v.toFixed(4) + " USD"); }
 

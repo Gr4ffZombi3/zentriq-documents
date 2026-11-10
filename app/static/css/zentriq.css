@@ -200,7 +200,7 @@
 .zc-md blockquote { border-left: 3px solid var(--color-border-strong, var(--color-border)); padding-left: 0.85rem; color: var(--color-text-muted); }
 .zc-md code { font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.86em; background: var(--color-surface-muted); border-radius: 0.3rem; padding: 0.1rem 0.3rem; }
 .zc-code { position: relative; border-radius: 0.75rem; overflow: hidden; border: 1px solid var(--color-border); }
-.zc-code-head { display: flex; justify-content: space-between; align-items: center; padding: 0.35rem 0.75rem; background: var(--color-surface-muted); font-size: 0.75rem; color: var(--color-text-muted); }
+.zc-code-head { user-select: none; -webkit-user-select: none; display: flex; justify-content: space-between; align-items: center; padding: 0.35rem 0.75rem; background: var(--color-surface-muted); font-size: 0.75rem; color: var(--color-text-muted); }
 .zc-code-head button { background: none; border: 0; color: var(--color-text-muted); font-size: 0.75rem; cursor: pointer; padding: 0; }
 .zc-md pre { margin: 0; padding: 0.85rem 1rem; overflow-x: auto; background: var(--color-surface); }
 .zc-md pre code { background: none; padding: 0; font-size: 0.84rem; white-space: pre; }

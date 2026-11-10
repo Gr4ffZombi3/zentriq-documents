@@ -409,3 +409,132 @@ def test_workspace_requires_login_redirect(client):
     response = client.get("/arbeitsplatz/neuigkeiten")
     assert response.status_code == 302 and "/auth/login" in response.headers["Location"]
     assert client.get("/arbeitsplatz/suche?q=x").status_code in (302, 401)
+
+
+# --- Begruessungskarte, "Neu"-Markierung, Listendichte (Release 11.11.2026) --------------------
+
+RELEASE_DAY = date(2026, 11, 11)
+
+
+@pytest.fixture()
+def release_day(monkeypatch):
+    """Bueroeigener 'heute' = Veroeffentlichungstag der neuen Eintraege (unabhaengig vom Testlauf-Datum)."""
+    monkeypatch.setattr(workspace, "office_today", lambda now=None: RELEASE_DAY)
+    return RELEASE_DAY
+
+
+def _event(db, user, start_utc, title="Beratung", status="scheduled"):
+    from app.models import CalendarEvent
+
+    event = CalendarEvent(tenant_id=user.tenant_id, title=title, starts_at=start_utc, ends_at=start_utc + timedelta(minutes=30), assignee_user_id=user.id, status=status)
+    db.session.add(event)
+    db.session.commit()
+    return event
+
+
+def test_next_appointment_is_own_and_scheduled(app, db, laura, mitarbeiter):
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 11, 11, 8, 0, tzinfo=timezone.utc)  # 09:00 Berlin
+    with app.test_request_context():
+        assert workspace.next_appointment(laura, now) is None
+        _event(db, mitarbeiter, datetime(2026, 11, 11, 9, 0))  # fremder Termin
+        _event(db, laura, datetime(2026, 11, 11, 9, 15), status="cancelled")  # abgesagt
+        _event(db, laura, datetime(2026, 11, 11, 7, 0))  # schon vorbei
+        assert workspace.next_appointment(laura, now) is None
+        _event(db, laura, datetime(2026, 11, 11, 10, 30))  # 11:30 Berlin
+        assert workspace.next_appointment(laura, now) == {"day": "", "time": "11:30 Uhr", "url": "/kalender"}
+        assert workspace.next_appointment(mitarbeiter, now)["time"] == "10:00 Uhr"
+        _event(db, mitarbeiter, datetime(2026, 11, 12, 9, 0))
+        evening = datetime(2026, 11, 11, 20, 0, tzinfo=timezone.utc)
+        assert workspace.next_appointment(mitarbeiter, evening) == {"day": "morgen", "time": "10:00 Uhr", "url": "/kalender"}
+
+
+def test_greeting_card_with_appointment_and_two_news(app, db, laura, release_day):
+    from datetime import datetime, timezone
+
+    client = _login(app, laura)
+    _start_page(client)
+    pref = UserPreference.query.filter_by(user_id=laura.id).one()
+    pref.last_login_day = None
+    pref.news_seen_at = datetime(2026, 11, 10, 18, 0)  # nach dem letzten Release gelesen
+    db.session.commit()
+    _event(db, laura, datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1))
+    page = _start_page(_login(app, laura)).get_data(as_text=True)
+    assert "Hallo Laura, wie geht’s dir heute?" in page
+    assert "Dein nächster Termin ist" in page
+    assert '<a class="zq-greeting-link" href="/kalender">Zum Kalender</a>' in page
+    assert page.count("Neu in Zentriq:") == 2  # hoechstens zwei, Rest unter "Was ist neu?"
+    assert "weitere unter „Was ist neu?“" in page
+    assert "Tabs, Schnellsuche und Seitenfenster" not in page  # schon gelesen
+    assert "data-zq-greeting-close" in page and "Schließen" in page
+
+
+def test_greeting_without_appointment_has_no_appointment_line(app, db, laura, release_day):
+    page = _start_page(_login(app, laura)).get_data(as_text=True)
+    assert "data-zq-greeting" in page
+    assert "Dein nächster Termin" not in page
+    assert '<a class="zq-greeting-link" href="/kalender">Zum Kalender</a>' not in page
+
+
+def test_greeting_second_login_and_day_change_with_release_day(app, db, laura, monkeypatch):
+    monkeypatch.setattr(workspace, "office_today", lambda now=None: RELEASE_DAY)
+    assert "data-zq-greeting" in _start_page(_login(app, laura)).get_data(as_text=True)
+    assert "data-zq-greeting" not in _start_page(_login(app, laura)).get_data(as_text=True)
+    monkeypatch.setattr(workspace, "office_today", lambda now=None: RELEASE_DAY + timedelta(days=1))
+    client = _login(app, laura)
+    assert "data-zq-greeting" in _start_page(client).get_data(as_text=True)
+    assert "data-zq-greeting" not in _start_page(client).get_data(as_text=True)  # Neuladen
+
+
+def test_feature_badge_shown_until_opened(app, db, laura, mitarbeiter, release_day):
+    client = _login(app, laura)
+    page = client.get("/kalender").get_data(as_text=True)
+    assert 'data-zq-new="termin-buchen"' in page
+    assert "Termin buchen" in page
+    response = client.post("/arbeitsplatz/neu/termin-buchen/gesehen")
+    assert response.status_code == 200 and response.get_json() == {"ok": True}
+    assert 'data-zq-new="termin-buchen"' not in client.get("/kalender").get_data(as_text=True)
+    assert UserPreference.query.filter_by(user_id=laura.id).one().seen_features == ["termin-buchen"]
+    # Gilt je Benutzer: Mitarbeiterin sieht die Markierung weiterhin
+    assert 'data-zq-new="termin-buchen"' in _login(app, mitarbeiter).get("/kalender").get_data(as_text=True)
+    # Unbekannte Schluessel werden nicht gespeichert
+    assert client.post("/arbeitsplatz/neu/gibt-es-nicht/gesehen").status_code == 404
+    # Dieselben Eintraege stehen in der Historie
+    history = client.get("/arbeitsplatz/neuigkeiten").get_data(as_text=True)
+    assert "Termin buchen in Daumenreichweite" in history and "Listen kompakt oder geräumig" in history
+
+
+def test_feature_badge_expires_and_not_before_release(app, db, laura):
+    with app.test_request_context():
+        assert workspace.feature_news(laura, "listen-dichte", today=RELEASE_DAY - timedelta(days=1)) is None
+        assert workspace.feature_news(laura, "listen-dichte", today=RELEASE_DAY)["hint"]
+        assert workspace.feature_news(laura, "listen-dichte", today=RELEASE_DAY + timedelta(days=31)) is None
+        assert workspace.feature_news(laura, "<script>", today=RELEASE_DAY) is None
+
+
+def test_list_density_per_user(app, db, laura, mitarbeiter, super_admin, release_day):
+    client = _login(app, laura)
+    page = client.get("/customers").get_data(as_text=True)
+    assert "density-geraeumig" in page and "data-zq-density" in page and 'data-zq-new="listen-dichte"' in page
+    response = client.post("/arbeitsplatz/listendichte", json={"density": "kompakt"})
+    assert response.status_code == 200 and response.get_json()["density"] == "kompakt"
+    assert "density-kompakt" in client.get("/customers").get_data(as_text=True)
+    assert client.post("/arbeitsplatz/listendichte", json={"density": "winzig"}).status_code == 400
+    assert UserPreference.query.filter_by(user_id=laura.id).one().list_density == "kompakt"
+    # Andere Benutzer unberuehrt
+    assert "density-geraeumig" in _login(app, mitarbeiter).get("/leipziger-liste").get_data(as_text=True)
+    assert _login(app, super_admin).post("/arbeitsplatz/listendichte", json={"density": "kompakt"}).status_code == 403
+    # Ohne Anmeldung kein Erfolg (Weiterleitung zur Anmeldung, kein JSON)
+    assert app.test_client().post("/arbeitsplatz/listendichte", json={"density": "kompakt"}).status_code == 302
+
+
+def test_customer_list_opens_panel_and_keeps_failed_search(app, db, laura, tenant):
+    db.session.add(Customer(tenant_id=tenant.id, name="Erika Beispiel"))
+    db.session.commit()
+    client = _login(app, laura)
+    page = client.get("/customers").get_data(as_text=True)
+    assert "data-zq-panel" in page
+    miss = client.get("/customers?q=Xyzabc").get_data(as_text=True)
+    assert 'value="Xyzabc"' in miss
+    assert "Keine Kunden gefunden" in miss and "Suche ändern" in miss

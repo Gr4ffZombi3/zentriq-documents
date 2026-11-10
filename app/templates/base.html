@@ -5,7 +5,7 @@
   {% include "components/_head_common.html" %}
   {% block head %}{% endblock %}
 </head>
-<body x-data="{ navOpen: false }" class="app-body {% block body_class %}{% endblock %}" :class="{ 'nav-open': navOpen }">
+<body x-data="{ navOpen: false }" class="app-body density-{{ list_density() }} {% block body_class %}{% endblock %}" :class="{ 'nav-open': navOpen }">
   <a class="skip-link" href="#inhalt">Zum Inhalt springen</a>
   <div class="app-shell {{ 'has-sidebar' if current_user.is_authenticated else '' }}">
     {% if current_user.is_authenticated %}

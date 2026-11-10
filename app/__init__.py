@@ -134,7 +134,23 @@ def create_app(config_object=None):
 
         return workspace.views_for(current_user, page)
 
+    def feature_news(key):
+        from flask_login import current_user
+
+        from app.services import workspace
+
+        return workspace.feature_news(current_user, key) if current_user.is_authenticated else None
+
+    def list_density():
+        from flask_login import current_user
+
+        from app.services import workspace
+
+        return workspace.list_density(current_user) if current_user.is_authenticated else "geraeumig"
+
     app.jinja_env.globals["daily_greeting"] = daily_greeting
+    app.jinja_env.globals["feature_news"] = feature_news
+    app.jinja_env.globals["list_density"] = list_density
     app.jinja_env.globals["saved_views"] = saved_views
 
     from app.navigation import build_navigation

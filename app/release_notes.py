@@ -5,6 +5,10 @@ Bei JEDEM Release mit sichtbaren Aenderungen hier einen Eintrag ergaenzen (neues
 - title / text: wenige verstaendliche Saetze aus Sicht der Nutzer - keine Technik, keine
   Dateinamen, keine internen Bezeichnungen, keine Kundendaten
 - audience: "alle", "admin" (nur Buero-Admins) oder "mitarbeiter"
+- feature / hint (optional): markiert die geaenderte Funktion mit einem kleinen "Neu".
+  feature = Schluessel, den das Template per new_badge("...") an die Funktion setzt;
+  hint = ein Satz, der beim Antippen erscheint. Danach verschwindet die Markierung fuer diesen
+  Benutzer (laengstens 30 Tage nach dem Datum sichtbar).
 
 Buero-Admins koennen zusaetzlich eigene Eintraege fuer ihr Buero pflegen (Was ist neu? ->
 Eintrag hinzufuegen, Tabelle office_news)."""
@@ -12,6 +16,38 @@ Eintrag hinzufuegen, Tabelle office_news)."""
 from datetime import date
 
 RELEASE_NOTES = (
+    {
+        "date": date(2026, 11, 11),
+        "title": "Listen kompakt oder geräumig",
+        "text": "Listen wie die Leipziger Liste lassen sich kompakt oder geräumig anzeigen. "
+        "Die Wahl gilt nur für Sie und bleibt auf allen Geräten erhalten.",
+        "audience": "alle",
+        "feature": "listen-dichte",
+        "hint": "Hier wählen Sie, ob Listen kompakt oder geräumig angezeigt werden – die Einstellung gilt nur für Sie.",
+    },
+    {
+        "date": date(2026, 11, 11),
+        "title": "Termin buchen in Daumenreichweite",
+        "text": "Auf dem Handy liegt „Termin buchen“ im Kalender unten rechts. Ist ein Tag noch leer, "
+        "führt Sie der Kalender direkt zum ersten Termin.",
+        "audience": "alle",
+        "feature": "termin-buchen",
+        "hint": "Neue Termine buchen Sie hier – auf dem Handy liegt der Knopf unten rechts in Daumenreichweite.",
+    },
+    {
+        "date": date(2026, 11, 11),
+        "title": "Rückmeldung direkt am Knopf",
+        "text": "Nach dem Kopieren zeigt der Knopf kurz „Kopiert ✓“, gespeicherte Felder zeigen „Gespeichert“. "
+        "Klappt etwas nicht, bleiben Ihre Eingaben stehen und Sie sehen, was zu tun ist.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 11),
+        "title": "Persönliche Begrüßung am Morgen",
+        "text": "Beim ersten Login des Tages zeigt Zentriq Ihren nächsten Termin und bis zu zwei Neuerungen. "
+        "Neue Funktionen tragen außerdem ein kleines „Neu“ – antippen erklärt, was sich geändert hat.",
+        "audience": "alle",
+    },
     {
         "date": date(2026, 11, 10),
         "title": "Tabs, Schnellsuche und Seitenfenster",

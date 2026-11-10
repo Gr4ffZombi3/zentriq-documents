@@ -4,6 +4,7 @@
 // 3. Bearbeiten direkt am Feld (Kundenakte) ueber die vorhandene serverseitige Pruefung.
 // 4. Formularentwuerfe (Kfz-Angebot): Zwischenstand serverseitig je Benutzer, fortsetzen/verwerfen.
 // 5. Schnellsuche (Strg/Cmd+K, Lupen-Knopf): Kunden und Seiten.
+// 6. Tagesbegruessung, "Neu"-Markierungen, Listendichte und Handy-Tastatur.
 // Alles ohne KI-Aufrufe. Rechte prueft immer der Server.
 (function () {
   "use strict";
@@ -34,9 +35,21 @@
       keepalive: !!keepalive,
       headers: { "Content-Type": "application/json", Accept: "application/json", "X-CSRFToken": csrf() },
       body: body === undefined ? undefined : JSON.stringify(body),
+    }).catch(function () {
+      var err = new Error("Keine Verbindung zum Server. Ihre Eingaben bleiben erhalten – bitte erneut versuchen.");
+      err.status = 0;
+      throw err;
     }).then(function (r) {
+      // Erfolg nur bei echter JSON-Antwort: eine Weiterleitung zur Anmeldung (Sitzung abgelaufen)
+      // liefert HTML mit Status 200 und darf nicht als "gespeichert" gelten.
+      var isJSON = (r.headers.get("Content-Type") || "").indexOf("json") >= 0;
+      if (r.redirected || (r.ok && !isJSON)) {
+        var expired = new Error("Ihre Anmeldung ist abgelaufen. Bitte in einem neuen Tab anmelden und dann erneut speichern – die Eingaben bleiben stehen.");
+        expired.status = 401;
+        throw expired;
+      }
       return r.json().catch(function () { return {}; }).then(function (data) {
-        if (!r.ok) { var err = new Error(data.error || "Speichern nicht möglich."); err.status = r.status; throw err; }
+        if (!r.ok) { var err = new Error(data.error || "Speichern nicht möglich. Bitte erneut versuchen."); err.status = r.status; throw err; }
         return data;
       });
     });
@@ -324,7 +337,10 @@
     if (panel.hidden) panelScroll = window.scrollY || document.documentElement.scrollTop || 0;
     panelUrl = url;
     panelBody.textContent = "";
-    panelBody.appendChild(el("p", "zq-panel-loading", "Kundenakte wird geladen …"));
+    var loading = el("p", "zq-panel-loading", "Kundenakte wird geladen …");
+    loading.setAttribute("role", "status");
+    panelBody.appendChild(loading);
+    panelBody.setAttribute("aria-busy", "true");
     panel.querySelector("[data-zq-panel-full]").href = url;
     panel.querySelector("[data-zq-panel-heading]").textContent = "Kundenakte";
     panel.hidden = false;
@@ -337,13 +353,38 @@
       })
       .then(function (html) {
         if (panelUrl !== url) return;
+        panelBody.removeAttribute("aria-busy");
         panelBody.innerHTML = html;
         var page = panelBody.querySelector("[data-zq-panel-title]");
         if (page && page.getAttribute("data-zq-panel-title")) panel.querySelector("[data-zq-panel-heading]").textContent = page.getAttribute("data-zq-panel-title");
         panelBody.scrollTop = 0;
         panelBody.focus();
       })
-      .catch(function () { location.href = url; });
+      .catch(function () {
+        if (panelUrl !== url) return;
+        // Fehler im Fenster zeigen (Liste bleibt, wo sie war) - mit erneutem Versuch.
+        panelBody.removeAttribute("aria-busy");
+        panelBody.textContent = "";
+        var box = el("div", "zq-panel-error");
+        box.setAttribute("role", "alert");
+        box.appendChild(el("p", null, "Die Kundenakte konnte gerade nicht geladen werden."));
+        var retry = el("button", "btn btn-primary btn-sm", "Erneut versuchen");
+        retry.type = "button";
+        retry.addEventListener("click", function () { openPanel(url, panelOpener); });
+        var page = el("a", "btn btn-secondary btn-sm", "Als Seite öffnen");
+        page.href = url;
+        box.appendChild(retry);
+        box.appendChild(page);
+        panelBody.appendChild(box);
+      });
+  }
+
+  // Angeklickte Zeile sofort markieren (bleibt markiert, bis eine andere gewaehlt wird).
+  function pickRow(link) {
+    var row = link && link.closest("tr, li");
+    if (!row) return;
+    Array.prototype.forEach.call(document.querySelectorAll(".zq-row-picked"), function (r) { r.classList.remove("zq-row-picked"); });
+    row.classList.add("zq-row-picked");
   }
 
   if (panel) {
@@ -355,6 +396,7 @@
       if (!link || ev.defaultPrevented || ev.button !== 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
       if (panel.contains(link)) return;  // Links im Fenster selbst normal oeffnen
       ev.preventDefault();
+      pickRow(link);
       openPanel(link.getAttribute("href"), link);
     });
     Array.prototype.forEach.call(panel.querySelectorAll("[data-zq-panel-close]"), function (b) {
@@ -368,7 +410,7 @@
       if (!panel.hidden && !(ev.state && ev.state.zqPanel)) closePanel(true);
     });
     document.addEventListener("keydown", function (ev) {
-      if (ev.key === "Escape" && !panel.hidden && !document.querySelector("[data-zq-inline] form")) closePanel(false);
+      if (ev.key === "Escape" && !panel.hidden && !document.querySelector("[data-zq-inline] form")) { ev.preventDefault(); closePanel(false); }
     });
   }
 
@@ -432,6 +474,7 @@
       Object.keys(inputs).forEach(function (k) { body[k] = inputs[k].value; });
       save.disabled = true;
       status.textContent = "Wird gespeichert …";
+      Object.keys(inputs).forEach(function (k) { inputs[k].removeAttribute("aria-invalid"); });
       status.className = "zq-field-status";
       sendJSON("PATCH", box.getAttribute("data-url"), body).then(function (r) {
         var edit = r.card && r.card.edit;
@@ -444,13 +487,17 @@
           });
         }
         end();
-        status.textContent = "✓ Gespeichert";
+        status.textContent = "Gespeichert ✓";
         status.className = "zq-field-status is-ok";
+        clearTimeout(status._timer);
+        status._timer = setTimeout(function () { if (status.textContent === "Gespeichert ✓") status.textContent = ""; }, 4000);
       }, function (err) {
         save.disabled = false;
+        save.textContent = err.status === 0 || err.status >= 500 ? "Erneut versuchen" : "Speichern";
         status.textContent = err.status === 409 ? err.message + " (Seite neu laden)" : err.message;
         status.className = "zq-field-status is-error";
-        Object.keys(inputs).forEach(function (k) { inputs[k].setAttribute("aria-invalid", "true"); });
+        // Nur bei Eingabefehlern die Felder markieren - bei Verbindungsproblemen ist die Eingabe in Ordnung.
+        if (err.status === 400 || err.status === 422) Object.keys(inputs).forEach(function (k) { inputs[k].setAttribute("aria-invalid", "true"); });
         form.querySelector("input").focus();
       });
     });
@@ -553,10 +600,129 @@
   }
 
   // =========================================================================================
-  // Tagesbegruessung
+  // Tagesbegruessung: gleitet herein (Desktop rechts oben, Handy von unten; CSS), nicht modal.
   // =========================================================================================
   var greeting = document.querySelector("[data-zq-greeting]");
   if (greeting) {
-    greeting.querySelector("[data-zq-greeting-close]").addEventListener("click", function () { greeting.remove(); });
+    var closeGreeting = function () {
+      if (!greeting.parentNode) return;
+      var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      greeting.classList.add("is-leaving");
+      setTimeout(function () { greeting.remove(); }, reduce ? 0 : 200);
+    };
+    Array.prototype.forEach.call(greeting.querySelectorAll("[data-zq-greeting-close]"), function (b) { b.addEventListener("click", closeGreeting); });
+    document.addEventListener("keydown", function (ev) {
+      var root = document.documentElement;
+      if (ev.key !== "Escape" || !greeting.parentNode || ev.defaultPrevented || openTip) return;
+      if (root.classList.contains("zq-panel-open") || root.classList.contains("zq-search-open")) return;
+      closeGreeting();
+    });
+    // Handy: die Karte liegt unten - tippt der Nutzer in ein Eingabefeld (Tastatur), weicht sie.
+    // Bewusst am Antippen, nicht am Fokus: Seiten wie der Chat setzen den Fokus beim Laden selbst.
+    document.addEventListener("pointerdown", function (ev) {
+      if (!greeting.parentNode || greeting.contains(ev.target) || !ev.target.closest) return;
+      if (window.matchMedia("(max-width: 47.99rem)").matches && ev.target.closest("input, textarea, select, [contenteditable]")) closeGreeting();
+    }, true);
+  }
+
+  // =========================================================================================
+  // "Neu"-Markierung: Antippen erklaert in einem Satz, danach verschwindet sie fuer diesen Benutzer.
+  // =========================================================================================
+  var openTip = null;
+  function closeTip() {
+    if (!openTip) return;
+    var t = openTip;
+    openTip = null;
+    t.tip.remove();
+    t.badge.setAttribute("aria-expanded", "false");
+    if (t.seen) t.badge.remove();
+  }
+  document.addEventListener("click", function (ev) {
+    var badge = ev.target.closest && ev.target.closest("[data-zq-new]");
+    if (openTip && badge === openTip.badge) { ev.preventDefault(); closeTip(); return; }
+    if (openTip && !openTip.tip.contains(ev.target)) closeTip();
+    if (!badge || openTip) return;
+    ev.preventDefault();
+    var tip = el("span", "zq-new-tip");
+    tip.setAttribute("role", "status");
+    tip.appendChild(el("span", null, badge.getAttribute("data-hint")));
+    var ok = el("button", "zq-new-ok", "Verstanden");
+    ok.type = "button";
+    ok.addEventListener("click", function () { closeTip(); });
+    tip.appendChild(ok);
+    document.body.appendChild(tip);
+    // Neben der Markierung, innerhalb des Fensters (unten, sonst oben).
+    var r = badge.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
+    var left = Math.max(12, Math.min(r.left, window.innerWidth - tw - 12));
+    var top = r.bottom + 8 + th > window.innerHeight ? r.top - th - 8 : r.bottom + 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(8, top) + "px";
+    badge.setAttribute("aria-expanded", "true");
+    var entry = { badge: badge, tip: tip, seen: false };
+    openTip = entry;
+    sendJSON("POST", badge.getAttribute("data-url")).then(function () {
+      entry.seen = true;
+      // Andere Stellen derselben Neuerung auf dieser Seite ebenfalls ausblenden.
+      Array.prototype.forEach.call(document.querySelectorAll('[data-zq-new="' + badge.getAttribute("data-zq-new") + '"]'), function (b) { if (b !== badge) b.remove(); });
+      if (openTip !== entry) badge.remove();
+    }, function () { /* nicht gemerkt: Markierung bleibt und erscheint beim naechsten Mal wieder */ });
+    ok.focus();
+  });
+  window.addEventListener("scroll", closeTip, true);
+  window.addEventListener("resize", closeTip);
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape" && openTip) { var b = openTip.badge; closeTip(); ev.preventDefault(); if (document.contains(b)) b.focus(); }
+  });
+
+  // =========================================================================================
+  // Listen: Kompakt / Geraeumig (je Benutzer, serverseitig gespeichert)
+  // =========================================================================================
+  document.addEventListener("click", function (ev) {
+    var opt = ev.target.closest && ev.target.closest("[data-zq-density] .zq-density-opt");
+    if (!opt) return;
+    var box = opt.closest("[data-zq-density]"), value = opt.getAttribute("data-value");
+    var status = box.querySelector("[data-zq-density-status]");
+    var body = document.body, before = body.classList.contains("density-kompakt") ? "kompakt" : "geraeumig";
+    if (value === before) return;
+    var setUi = function (v) {
+      body.classList.remove("density-kompakt", "density-geraeumig");
+      body.classList.add("density-" + v);
+      Array.prototype.forEach.call(document.querySelectorAll("[data-zq-density] .zq-density-opt"), function (b) {
+        var on = b.getAttribute("data-value") === v;
+        b.classList.toggle("is-on", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+    };
+    setUi(value);  // sofort sichtbar; bei Fehler zurueck
+    status.className = "zq-density-status";
+    status.textContent = "";
+    sendJSON("POST", box.getAttribute("data-url"), { density: value }).then(function () {
+      status.textContent = "Gespeichert ✓";
+      status.classList.add("is-ok");
+      clearTimeout(status._timer);
+      status._timer = setTimeout(function () { status.textContent = ""; }, 2500);
+    }, function (err) {
+      setUi(before);
+      status.textContent = err.status === 0 ? "Nicht gespeichert – keine Verbindung. Bitte erneut tippen." : err.message;
+      status.classList.add("is-error");
+    });
+  });
+
+  // =========================================================================================
+  // Handy-Tastatur: Fokussiertes Feld (und seine Knoepfe) im sichtbaren Bereich halten.
+  // =========================================================================================
+  var vv = window.visualViewport;
+  if (vv) {
+    var syncViewport = function () { document.documentElement.style.setProperty("--zq-vvh", vv.height + "px"); };
+    vv.addEventListener("resize", syncViewport);
+    syncViewport();
+    document.addEventListener("focusin", function (ev) {
+      var t = ev.target;
+      if (!t.matches || !t.matches("input:not([type=checkbox]):not([type=radio]), textarea, select")) return;
+      setTimeout(function () {
+        var r = t.getBoundingClientRect();
+        if (r.bottom > vv.height - 8 || r.top < 0) t.scrollIntoView({ block: "center", behavior: "auto" });
+      }, 300);  // nach dem Aufklappen der Tastatur
+    });
   }
 })();

@@ -113,6 +113,48 @@ def first_name(user) -> str:
     return name.split()[0]
 
 
+GREETING_NEWS = 2  # hoechstens zwei Neuerungen in der Begruessung, der Rest unter "Was ist neu?"
+APPOINTMENT_HORIZON = timedelta(days=14)
+_WEEKDAYS = ("Mo.", "Di.", "Mi.", "Do.", "Fr.", "Sa.", "So.")
+
+
+def next_appointment(user, now: datetime | None = None) -> dict | None:
+    """Naechster eigener Termin (zustaendig, nicht abgesagt) in den kommenden 14 Tagen - nur fuer
+    Rollen, die den Kalender oeffnen duerfen. Keine Kundendaten, nur Zeitpunkt."""
+    if not is_office_member(user) or "calendar.index" not in current_app.view_functions:
+        return None
+    if not is_endpoint_allowed(user, "calendar.index", "calendar"):
+        return None
+    from app.models import CalendarEvent
+
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    now_utc = now.astimezone(timezone.utc).replace(tzinfo=None)
+    event = (
+        CalendarEvent.query.filter(
+            CalendarEvent.assignee_user_id == user.id,
+            CalendarEvent.status == "scheduled",
+            CalendarEvent.starts_at >= now_utc,
+            CalendarEvent.starts_at < now_utc + APPOINTMENT_HORIZON,
+        )
+        .order_by(CalendarEvent.starts_at, CalendarEvent.id)
+        .first()
+    )
+    if event is None:
+        return None
+    local = event.starts_at.replace(tzinfo=timezone.utc).astimezone(OFFICE_TZ)
+    today = office_today(now)
+    clock = local.strftime("%H:%M Uhr")
+    if local.date() == today:
+        day = ""
+    elif local.date() == today + timedelta(days=1):
+        day = "morgen"
+    else:
+        day = f"am {_WEEKDAYS[local.weekday()]} {local.strftime('%d.%m.')}"
+    return {"day": day, "time": clock, "url": url_for("calendar.index")}
+
+
 def consume_greeting(user, endpoint: str | None, now: datetime | None = None) -> dict | None:
     """Begruessung genau einmal: nur auf der Startansicht und nur, wenn sie heute faellig ist.
     Das Leeren geschieht atomar (UPDATE ... WHERE greeting_due_on = heute) - ein Neuladen oder
@@ -136,9 +178,9 @@ def consume_greeting(user, endpoint: str | None, now: datetime | None = None) ->
     pref = preferences(user)
     db.session.refresh(pref)
     since = pref.news_seen_at
-    news = news_for(user)
+    news = news_for(user, today)
     if since is None:
-        fresh = news[:3]
+        fresh = news[:GREETING_NEWS]
     else:
         fresh = [item for item in news if item["published_at"] > since]
     pref.news_seen_at = _utcnow()
@@ -146,8 +188,9 @@ def consume_greeting(user, endpoint: str | None, now: datetime | None = None) ->
     name = first_name(user)
     return {
         "text": f"Hallo {name}, wie geht’s dir heute?" if name else "Hallo, wie geht’s dir heute?",
-        "news": fresh[:5],
-        "more": max(0, len(fresh) - 5),
+        "appointment": next_appointment(user, now),
+        "news": fresh[:GREETING_NEWS],
+        "more": max(0, len(fresh) - GREETING_NEWS),
     }
 
 
@@ -178,6 +221,8 @@ def news_for(user, today: date | None = None) -> list[dict]:
             "text": note["text"],
             "audience": note["audience"],
             "office": False,
+            "feature": note.get("feature"),
+            "hint": note.get("hint"),
         }
         for note in RELEASE_NOTES
         if note["date"] <= today and _relevant(note["audience"], user)
@@ -185,9 +230,12 @@ def news_for(user, today: date | None = None) -> list[dict]:
     for row in OfficeNews.query.filter(OfficeNews.published_on <= today).all():
         if _relevant(row.audience, user):
             items.append(
-                {"id": row.id, "date": row.published_on, "title": row.title, "text": row.body, "audience": row.audience, "office": True}
+                {"id": row.id, "date": row.published_on, "title": row.title, "text": row.body, "audience": row.audience, "office": True, "feature": None, "hint": None}
             )
     for item in items:
+        # Kurzfassung fuer die Begruessung: erster Satz (vollstaendiger Text unter "Was ist neu?").
+        first = re.split(r"(?<=[.!?])\s", item["text"].strip(), maxsplit=1)[0]
+        item["summary"] = first
         # Beginn des Veroeffentlichungstags (Ortszeit) als UTC - Vergleich mit news_seen_at.
         start = datetime.combine(item["date"], datetime.min.time(), OFFICE_TZ)
         item["published_at"] = start.astimezone(timezone.utc).replace(tzinfo=None)
@@ -201,6 +249,67 @@ def mark_news_seen(user) -> None:
     pref = preferences(user, create=True)
     pref.news_seen_at = _utcnow()
     db.session.commit()
+
+
+# --- "Neu"-Markierung direkt an der Funktion ------------------------------------------------
+# Dieselben Eintraege wie Begruessung und "Was ist neu?": ein Release-Eintrag mit "feature"
+# (Schluessel im Template: new_badge("...")) und "hint" (ein Satz) markiert die Funktion, bis
+# der Benutzer die Markierung einmal geoeffnet hat - laengstens FEATURE_BADGE_DAYS Tage.
+
+FEATURE_BADGE_DAYS = 30
+FEATURE_KEY = re.compile(r"^[a-z0-9-]{1,40}$")
+
+
+def _seen_features(user) -> list[str]:
+    pref = preferences(user)
+    value = pref.seen_features if pref is not None else None
+    return list(value) if isinstance(value, list) else []
+
+
+def feature_news(user, key: str, today: date | None = None) -> dict | None:
+    """Eintrag zur Markierung, falls sie fuer diesen Benutzer (noch) sichtbar ist."""
+    if not is_office_member(user) or not FEATURE_KEY.fullmatch(key or ""):
+        return None
+    today = today or office_today()
+    for item in news_for(user, today):
+        if item["feature"] == key:
+            if item["date"] < today - timedelta(days=FEATURE_BADGE_DAYS) or key in _seen_features(user):
+                return None
+            return item
+    return None
+
+
+def mark_feature_seen(user, key: str) -> bool:
+    """Nur Schluessel bekannter Release-Eintraege; je Benutzer gespeichert (alle Geraete)."""
+    if not is_office_member(user) or not any(note.get("feature") == key for note in RELEASE_NOTES):
+        return False
+    pref = preferences(user, create=True)
+    seen = _seen_features(user)
+    if key not in seen:
+        pref.seen_features = (seen + [key])[-100:]
+    db.session.commit()
+    return True
+
+
+# --- Listendichte ---------------------------------------------------------------------------
+
+DENSITIES = {"geraeumig": "Geräumig", "kompakt": "Kompakt"}
+
+
+def list_density(user) -> str:
+    if not is_office_member(user):
+        return "geraeumig"
+    pref = preferences(user)
+    return pref.list_density if pref is not None and pref.list_density in DENSITIES else "geraeumig"
+
+
+def set_list_density(user, value: str) -> bool:
+    if not is_office_member(user) or value not in DENSITIES:
+        return False
+    pref = preferences(user, create=True)
+    pref.list_density = value
+    db.session.commit()
+    return True
 
 
 class NewsError(ValueError):

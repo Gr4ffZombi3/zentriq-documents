@@ -1,5 +1,6 @@
 """Arbeitsplatz-Funktionen fuer Buero-Rollen (Buero-Admin und Mitarbeiter): Schnellsuche,
-Formularentwuerfe, gespeicherte Ansichten, Startansicht und "Was ist neu?".
+Formularentwuerfe, gespeicherte Ansichten, Startansicht, Listendichte, "Neu"-Markierungen
+und "Was ist neu?".
 
 Jede Route arbeitet ausschliesslich mit den Daten des angemeldeten Benutzers (user_id) im
 eigenen Buero; SUPER_ADMIN erreicht den Blueprint nicht (app/auth/permissions.py)."""
@@ -113,6 +114,26 @@ def start_view():
     else:
         flash("Diese Startansicht ist nicht verfügbar.", "error")
     return redirect(url_for("settings.profile") + "#startansicht")
+
+
+# --- "Neu"-Markierung und Listendichte -------------------------------------------------------
+
+
+@workspace_bp.post("/neu/<key>/gesehen")
+@login_required
+def feature_seen(key):
+    if not workspace.mark_feature_seen(current_user, key):
+        return jsonify({"error": "Unbekannte Neuerung."}), 404
+    return jsonify({"ok": True})
+
+
+@workspace_bp.post("/listendichte")
+@login_required
+def list_density():
+    value = _json_body().get("density") or request.form.get("density", "")
+    if not workspace.set_list_density(current_user, value):
+        return jsonify({"error": "Diese Darstellung gibt es nicht."}), 400
+    return jsonify({"ok": True, "density": value, "label": workspace.DENSITIES[value]})
 
 
 # --- Was ist neu? -----------------------------------------------------------------------------

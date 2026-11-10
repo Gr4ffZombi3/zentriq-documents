@@ -797,20 +797,25 @@
         if (ok) { resolve(); } else { reject(new Error("copy")); }
       });
     }
+    // Erfolg erst, wenn die Zwischenablage den Text wirklich angenommen hat; danach kehrt die
+    // urspruengliche Beschriftung zurueck. Fehlschlag: kurzer Hinweis am Knopf, Text bleibt sichtbar.
+    function flash(label, cls, ms) {
+      if (!button) return;
+      if (!button.dataset.copyLabel) button.dataset.copyLabel = button.textContent;
+      button.textContent = label;
+      button.classList.remove("is-copied", "is-copy-failed");
+      button.classList.add(cls);
+      window.clearTimeout(button._copyTimer);
+      button._copyTimer = window.setTimeout(function () {
+        button.textContent = button.dataset.copyLabel;
+        button.classList.remove(cls);
+      }, ms);
+    }
     return write.then(function () {
-      if (button) {
-        if (!button.dataset.copyLabel) button.dataset.copyLabel = button.textContent;
-        button.textContent = "✓ Kopiert";
-        button.classList.add("is-copied");
-        window.clearTimeout(button._copyTimer);
-        button._copyTimer = window.setTimeout(function () {
-          button.textContent = button.dataset.copyLabel;
-          button.classList.remove("is-copied");
-        }, 1500);
-      }
+      flash("Kopiert ✓", "is-copied", 1600);
       return true;
     }).catch(function () {
-      if (button) button.textContent = "Kopieren nicht möglich";
+      flash(/Mac|iPhone|iPad/.test(navigator.userAgent) ? "Nicht kopiert – bitte markieren und ⌘C" : "Nicht kopiert – bitte markieren und Strg+C", "is-copy-failed", 4000);
       return false;
     });
   }

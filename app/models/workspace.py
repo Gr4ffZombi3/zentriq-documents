@@ -1,7 +1,7 @@
 """Persoenlicher Arbeitsplatz je Benutzer (alle Tabellen mandantengebunden):
 
 - UserPreference: Startansicht, Tagesbegruessung (einmal je Kalendertag nach dem ersten Login)
-  und Zeitpunkt, bis zu dem "Was ist neu?" gelesen wurde.
+  Zeitpunkt, bis zu dem "Was ist neu?" gelesen wurde, Listendichte und gelesene "Neu"-Markierungen.
 - SavedView: benannte Filterkombination einer Liste. Gespeichert werden nur erlaubte
   Parameter; beim Oeffnen prueft die Zielseite wie immer selbst die Rechte.
 - FormDraft: Zwischenstand eines Formulars (zuerst Kfz-Angebot) - nur Eingaben, startet nichts.
@@ -31,6 +31,10 @@ class UserPreference(TenantScopedMixin, db.Model):
     # Gesetzt beim ersten Login eines Tages; beim Anzeigen atomar geleert (nur einmal sichtbar).
     greeting_due_on = db.Column(db.Date, nullable=True)
     news_seen_at = db.Column(db.DateTime, nullable=True)
+    # Listen "kompakt" oder "geraeumig"; leer = Standard (geraeumig).
+    list_density = db.Column(db.String(12), nullable=True)
+    # Schluessel der "Neu"-Markierungen (app/release_notes.py), die der Benutzer angesehen hat.
+    seen_features = db.Column(db.JSON, nullable=True)
     updated_at = db.Column(db.DateTime, nullable=False, default=_now, onupdate=_now)
 
 

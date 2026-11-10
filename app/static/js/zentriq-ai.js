@@ -144,11 +144,15 @@
   function scrollDown(force) { if (force || stickToBottom) scroller.scrollTop = scroller.scrollHeight; }
 
   function copyText(text, button) {
-    var shown = function () {
-      var old = button.textContent;
-      button.textContent = "Kopiert";
-      setTimeout(function () { button.textContent = old; }, 1500);
+    var old = button.dataset.copyLabel || button.textContent;
+    button.dataset.copyLabel = old;
+    var show = function (label, ms) {
+      button.textContent = label;
+      clearTimeout(button._copyTimer);
+      button._copyTimer = setTimeout(function () { button.textContent = old; }, ms);
     };
+    var shown = function () { show("Kopiert ✓", 1600); };
+    var failed = function () { show("Nicht kopiert – Text markieren und kopieren", 4000); };
     // Rueckfall ohne Clipboard-API: Kopierbefehl, dessen copy-Ereignis nur text/plain setzt.
     var fallback = function () {
       var put = function (e) { e.clipboardData.setData("text/plain", text); e.preventDefault(); };
@@ -156,7 +160,7 @@
       var ok = false;
       try { ok = document.execCommand("copy"); } catch (err) { ok = false; }
       document.removeEventListener("copy", put, true);
-      if (ok) shown();
+      if (ok) shown(); else failed();
     };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(shown, fallback);
     else fallback();

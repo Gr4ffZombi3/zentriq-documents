@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "ui/icons.html" import icon %}
+{% from "components/new_badge.html" import new_badge %}
 {% block title %}Kalender – Zentriq{% endblock %}
 {% block body_class %}cal-page{% endblock %}
 {% block content %}
@@ -32,7 +33,7 @@
 
   <section class="cal-main" aria-label="Kalender">
     <header class="cal-toolbar">
-      <button type="button" class="btn btn-primary btn-sm cal-new" data-cal-new>{{ icon('plus', class='h-4 w-4') }}<span>Neuer Termin</span></button>
+      <button type="button" class="btn btn-primary btn-sm cal-new" data-cal-new>{{ icon('plus', class='h-4 w-4') }}<span>Termin buchen</span></button>{{ new_badge('termin-buchen') }}
       {% if current_user.may_send_booking_links %}<a class="btn btn-secondary btn-sm" href="{{ url_for('calendar.booking_links') }}">Buchungslink erstellen</a>{% endif %}
       <div class="cal-nav">
         <button type="button" class="btn btn-secondary btn-sm" data-cal-today>Heute</button>

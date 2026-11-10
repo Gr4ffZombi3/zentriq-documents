@@ -1,6 +1,7 @@
 {# Gespeicherte Ansichten einer Liste (je Benutzer; app/services/workspace.py, VIEW_PAGES).
    Gespeichert werden nur erlaubte Filterparameter - beim Oeffnen prueft die Seite selbst die
    Rechte, eine Ansicht erweitert also keinen Zugriff. Der Aufrufer liefert (caller) die Filter. #}
+{% from "components/new_badge.html" import density_toggle %}
 {% macro saved_views_bar(page, suggested_name, params) -%}
 {% set views = saved_views(page) %}
 <div class="zq-views" data-zq-views>
@@ -27,6 +28,7 @@
         <button type="submit" class="btn btn-primary btn-sm">Speichern</button>
       </form>
     </details>
+    {{ density_toggle() }}
   </div>
 </div>
 {%- endmacro %}

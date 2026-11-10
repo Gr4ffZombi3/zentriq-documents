@@ -584,7 +584,7 @@
 .zq-panel-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 1rem; padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
 .zq-panel-body:focus { outline: none; }
 .zq-panel-body .page-shell { max-width: none; padding: 0; margin: 0; }
-.zq-panel-loading { color: var(--color-text-muted); }
+.zq-panel-loading { color: var(--color-text-muted); margin: 0; }
 .zq-panel-kicker { margin: 0 0 0.6rem; font-size: 0.75rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-soft); }
 @media (max-width: 47.99rem) {
   .zq-panel-box { width: 100vw; border-left: 0; box-shadow: none; }
@@ -614,18 +614,98 @@
 .zs-kbd { margin-left: auto; font-size: 0.68rem; padding: 0.05rem 0.35rem; border: 1px solid var(--color-border-strong); border-radius: 0.35rem; color: var(--color-text-soft); font-family: inherit; }
 html.zs-collapsed .zs-kbd { display: none; }
 
-/* Tagesbegruessung (einmal am Tag auf der Startansicht) */
-.zq-greeting { position: fixed; z-index: 70; right: 1rem; top: 1rem; width: min(24rem, calc(100vw - 2rem)); background: var(--color-surface); border: 1px solid var(--color-border-strong); border-radius: 1rem; padding: 1rem 1.1rem; box-shadow: 0 14px 36px rgba(16, 24, 40, 0.2); }
-.zq-greeting-close { position: absolute; top: 0.45rem; right: 0.55rem; border: 0; background: none; font-size: 1.25rem; color: var(--color-text-muted); cursor: pointer; }
-.zq-greeting-hello { margin: 0 1.5rem 0.4rem 0; font-size: 1.05rem; font-weight: 600; }
-.zq-greeting-kicker { margin: 0.4rem 0 0.2rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-soft); }
-.zq-greeting-news { margin: 0; padding-left: 1.1rem; list-style: disc; font-size: 0.88rem; color: var(--color-text-muted); }
-.zq-greeting-news li { margin: 0.25rem 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+/* Tagesbegruessung (einmal am Tag auf der Startansicht): Desktop rechts oben, Handy unten.
+   Nicht modal; ~250 ms Einblenden, bei reduzierter Bewegung ohne Animation. */
+.zq-greeting { position: fixed; z-index: 70; right: 1rem; top: 1rem; width: min(24rem, calc(100vw - 2rem)); background: var(--color-surface); border: 1px solid var(--color-border-strong); border-radius: 1rem; padding: 1rem 1.1rem 0.6rem; box-shadow: 0 14px 36px rgba(16, 24, 40, 0.2); animation: zq-greet-right 250ms cubic-bezier(0.2, 0.8, 0.2, 1) both; transition: opacity 180ms ease, transform 180ms ease; }
+.zq-greeting.is-leaving { opacity: 0; transform: translateX(1.5rem); }
+@keyframes zq-greet-right { from { opacity: 0; transform: translateX(2rem); } to { opacity: 1; transform: none; } }
+@keyframes zq-greet-up { from { opacity: 0; transform: translateY(110%); } to { opacity: 1; transform: none; } }
+.zq-greeting-close { position: absolute; top: 0.3rem; right: 0.35rem; width: 2.25rem; height: 2.25rem; border: 0; border-radius: 0.5rem; background: none; font-size: 1.25rem; color: var(--color-text-muted); cursor: pointer; }
+.zq-greeting-close:hover { background: var(--color-surface-muted); }
+.zq-greeting-hello { margin: 0 1.75rem 0.35rem 0; font-size: 1.05rem; font-weight: 650; }
+.zq-greeting-line { margin: 0 0 0.35rem; font-size: 0.92rem; }
+.zq-greeting-news { margin: 0.2rem 0 0; padding: 0; list-style: none; font-size: 0.88rem; color: var(--color-text-muted); }
+.zq-greeting-news li { margin: 0.3rem 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
+.zq-greeting-news strong { color: var(--color-text); }
 .zq-greeting-none, .zq-greeting-more { margin: 0.3rem 0 0; font-size: 0.88rem; color: var(--color-text-muted); }
-.zq-greeting-link { display: inline-block; margin-top: 0.55rem; font-size: 0.85rem; color: var(--color-primary); }
+.zq-greeting-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0 0.15rem; margin: 0.4rem 0 0; font-size: 0.88rem; color: var(--color-text-soft); }
+.zq-greeting-link { display: inline-flex; align-items: center; min-height: 2.25rem; padding: 0 0.3rem; border: 0; background: none; font: inherit; font-weight: 600; color: var(--color-primary); cursor: pointer; text-decoration: none; border-radius: 0.4rem; }
+.zq-greeting-link:first-child { padding-left: 0; }
+.zq-greeting-link:hover { text-decoration: underline; }
 @media (max-width: 63.99rem) {
-  .zq-greeting { top: calc(3.75rem + env(safe-area-inset-top)); max-height: 55vh; overflow-y: auto; padding: 0.85rem 1rem; }
-  .zq-greeting-news li { -webkit-line-clamp: 2; line-clamp: 2; }
+  .zq-greeting { top: calc(3.75rem + env(safe-area-inset-top)); max-height: 55vh; overflow-y: auto; padding: 0.85rem 1rem 0.5rem; }
+  .zq-greeting-news li { -webkit-line-clamp: 3; line-clamp: 3; }
+}
+@media (max-width: 47.99rem) {
+  /* Handy: von unten, oberhalb der Zeiterfassung bzw. des Chat-Eingabefelds. */
+  .zq-greeting { top: auto; left: 0.6rem; right: 0.6rem; width: auto; bottom: calc(3.2rem + env(safe-area-inset-bottom)); max-height: 50vh; animation-name: zq-greet-up; }
+  .zs-chat-page .zq-greeting { bottom: calc(var(--zs-composer-h, 4.5rem) + 3rem); }
+  .zq-greeting.is-leaving { transform: translateY(1.5rem); }
+  .zq-greeting-link { min-height: 2.75rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .zq-greeting { animation: none; transition: none; }
+  .zq-greeting.is-leaving { transform: none; }
+}
+
+/* "Neu" direkt an der geaenderten Funktion */
+.zq-new { position: relative; display: inline-flex; align-items: center; vertical-align: middle; margin-left: 0.35rem; padding: 0.1rem 0.45rem; border: 0; border-radius: 999px; background: var(--color-primary); color: #fff; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.02em; line-height: 1.3; cursor: pointer; }
+.zq-new::after { content: ""; position: absolute; inset: -0.6rem -0.4rem; } /* groessere Tippflaeche */
+.zq-new:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.zq-new-tip { position: fixed; z-index: 95; display: flex; flex-direction: column; align-items: flex-start; gap: 0.4rem; width: max-content; max-width: min(20rem, calc(100vw - 1.5rem)); padding: 0.65rem 0.8rem; border: 1px solid var(--color-border-strong); border-radius: 0.75rem; background: var(--color-surface); color: var(--color-text); box-shadow: 0 10px 28px rgba(16, 24, 40, 0.18); font-size: 0.86rem; line-height: 1.45; font-weight: 400; text-align: left; white-space: normal; }
+.zq-new-ok { min-height: 2.25rem; padding: 0 0.2rem; border: 0; background: none; color: var(--color-primary); font: inherit; font-weight: 600; cursor: pointer; }
+
+/* Listen: Kompakt / Geraeumig (je Benutzer) */
+.zq-density { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.15rem; }
+.zq-density-opt { padding: 0.28rem 0.65rem; border: 1px solid var(--color-border-strong); background: var(--color-surface); color: var(--color-text-muted); font-size: 0.8rem; cursor: pointer; }
+.zq-density-opt:first-child { border-radius: 999px 0 0 999px; }
+.zq-density-opt:nth-child(2) { border-radius: 0 999px 999px 0; margin-left: -0.15rem; }
+.zq-density-opt.is-on { background: var(--color-primary-soft); border-color: var(--color-primary); color: var(--color-primary-strong); font-weight: 600; position: relative; }
+.zq-density-status { font-size: 0.78rem; margin-left: 0.3rem; }
+.zq-density-status.is-ok { color: var(--color-success-text, var(--color-success)); }
+.zq-density-status.is-error { color: var(--color-error-text, var(--color-error)); }
+.density-kompakt .data-table th, .density-kompakt .data-table td { padding-top: 0.28rem; padding-bottom: 0.28rem; }
+.density-kompakt .data-table { font-size: 0.86rem; }
+.density-geraeumig .data-table-dense th, .density-geraeumig .data-table-dense td { padding-top: 0.6rem; padding-bottom: 0.6rem; }
+@media (max-width: 47.99rem), (pointer: coarse) {
+  .zq-density-opt { min-height: 2.75rem; padding: 0 0.9rem; }
+  /* Auch kompakt bleiben Links und Knoepfe in Zeilen gut antippbar. */
+  .density-kompakt .data-table a, .density-kompakt .data-table button { min-height: 2.75rem; display: inline-flex; align-items: center; }
+}
+
+/* Angeklickte Zeile (Seitenfenster) sofort markieren */
+.zq-row-picked > * { background: var(--color-primary-soft) !important; }
+.zq-row-picked > :first-child { box-shadow: inset 3px 0 0 var(--color-primary); }
+
+/* Rueckmeldung am Knopf */
+.is-copy-failed { color: var(--color-warning-text, var(--color-warning)) !important; border-color: var(--color-warning) !important; }
+.worklist .copy-inline.is-copy-failed { opacity: 1; }
+
+/* Seitenfenster: Laden und Fehler */
+.zq-panel-loading { display: flex; align-items: center; gap: 0.5rem; }
+.zq-panel-loading::before { content: ""; width: 1rem; height: 1rem; border: 2px solid var(--color-border-strong); border-top-color: var(--color-primary); border-radius: 50%; animation: zq-spin 0.8s linear infinite; }
+@keyframes zq-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .zq-panel-loading::before { animation: none; } }
+.zq-panel-error { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.8rem 1rem; border: 1px solid var(--color-border-strong); border-radius: 0.75rem; background: var(--color-surface-muted); }
+.zq-panel-error p { flex-basis: 100%; margin: 0; }
+
+/* Kalender: leerer Tag mit naechstem Schritt; "Termin buchen" auf dem Handy in Daumenreichweite */
+.cal-empty-today { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.9rem; margin: 0 0 0.6rem; padding: 0.7rem 0.9rem; border: 1px dashed var(--color-border-strong); border-radius: 0.75rem; background: var(--color-surface); }
+.cal-empty-today p { margin: 0; color: var(--color-text-muted); }
+@media (max-width: 47.99rem) {
+  .cal-page .cal-new { position: fixed; z-index: 46; right: 0.6rem; bottom: calc(3.2rem + env(safe-area-inset-bottom)); min-height: 3rem; padding: 0 1.1rem; border-radius: 999px; box-shadow: 0 6px 18px rgba(16, 24, 40, 0.25); }
+  .cal-page .cal-new + .zq-new { position: fixed; z-index: 47; right: 0.9rem; bottom: calc(5.85rem + env(safe-area-inset-bottom)); }
+  .cal-page .cal-body { padding-bottom: 4.5rem; }
+  .cal-empty-today .btn { min-height: 2.75rem; }
+  /* Formular bei geoeffneter Tastatur: nur so hoch wie der sichtbare Bereich, Speichern bleibt unten sichtbar. */
+  .cal-dialog { height: var(--zq-vvh, 100dvh); max-height: var(--zq-vvh, 100dvh); }
+}
+
+/* Feldbearbeitung auf dem Handy: Knoepfe gross und direkt unter dem Feld */
+@media (max-width: 47.99rem) {
+  .zq-field-actions { width: 100%; }
+  .zq-field-actions .btn { flex: 1; min-height: 2.75rem; }
+  .zq-field-input .field-surface { min-height: 2.75rem; font-size: 1rem; }
 }
 
 /* Was ist neu? */

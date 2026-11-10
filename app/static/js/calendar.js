@@ -261,7 +261,9 @@
       }
       body.appendChild(col);
     });
-    scroll.appendChild(body); wrap.appendChild(scroll); els.body.appendChild(wrap);
+    scroll.appendChild(body); wrap.appendChild(scroll);
+    if (list.length === 1 && list[0] === cfg.today && !segmentsFor(cfg.today).length) els.body.appendChild(emptyToday());
+    els.body.appendChild(wrap);
     scroll.scrollTop = DAY_START_SCROLL * HOUR_PX - 8;
   }
 
@@ -421,6 +423,16 @@
     els.body.appendChild(grid);
   }
 
+  // Leerer Tag: passender naechster Schritt statt nur "Keine Termine".
+  function emptyToday() {
+    var box = el("div", "cal-empty-today");
+    box.appendChild(el("p", null, "Heute ist noch kein Termin eingetragen."));
+    var b = el("button", "btn btn-primary btn-sm", "Termin buchen"); b.type = "button";
+    b.onclick = function () { root.querySelector("[data-cal-new]").click(); };
+    box.appendChild(b);
+    return box;
+  }
+
   function renderList() {
     var wrap = el("div", "cal-list"), any = false;
     days().forEach(function (day) {
@@ -430,7 +442,7 @@
       var section = el("section", "cal-list-day" + (day === cfg.today ? " is-today" : ""));
       var h = el("h2", "cal-list-head", dayLabel(day, true) + (day === cfg.today ? " · Heute" : ""));
       section.appendChild(h);
-      if (!segs.length) section.appendChild(el("p", "cal-empty", "Keine Termine."));
+      if (!segs.length) section.appendChild(day === cfg.today ? emptyToday() : el("p", "cal-empty", "Keine Termine."));
       segs.forEach(function (seg) {
         var e = seg.ev;
         var item = el("button", "cal-list-item cal-c-" + colorOf(e.assignee_id) + (e.status === "cancelled" ? " is-cancelled" : ""));
@@ -448,7 +460,7 @@
       section.appendChild(add);
       wrap.appendChild(section);
     });
-    if (!any) wrap.appendChild(el("p", "cal-empty", "In den nächsten 14 Tagen sind keine Termine eingetragen."));
+    if (!any && state.anchor !== cfg.today) wrap.appendChild(el("p", "cal-empty", "In den nächsten 14 Tagen sind keine Termine eingetragen."));
     els.body.appendChild(wrap);
   }
 

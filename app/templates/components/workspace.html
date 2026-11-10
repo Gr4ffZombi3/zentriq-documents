@@ -1,20 +1,28 @@
 {# Arbeitsplatz fuer Buero-Rollen (js/workspace.js): Schnellsuche (Strg/Cmd+K), Seitenfenster fuer
-   Kundenakten und die einmalige Tagesbegruessung auf der Startansicht. #}
+   Kundenakten und die einmalige Tagesbegruessung auf der Startansicht. "Neu"-Markierungen:
+   components/new_badge.html. #}
 {% set greeting = daily_greeting() %}
 {% if greeting %}
-  <aside class="zq-greeting" role="status" aria-live="polite" data-zq-greeting>
+  {# Nicht modal: die Seite bleibt bedienbar. Schliessen per Knopf oder Escape; am Handy auch,
+     sobald ein Eingabefeld den Fokus bekommt (die Karte laege sonst ueber dem Eingabefeld). #}
+  <aside class="zq-greeting" role="status" aria-live="polite" aria-labelledby="zq-greeting-hello" data-zq-greeting>
     <button type="button" class="zq-greeting-close" data-zq-greeting-close aria-label="Begrüßung schließen">×</button>
-    <p class="zq-greeting-hello">{{ greeting.text }}</p>
+    <p class="zq-greeting-hello" id="zq-greeting-hello">{{ greeting.text }}</p>
+    {% set appt = greeting.appointment %}
+    {% if appt %}<p class="zq-greeting-line">Dein nächster Termin ist {{ appt.day ~ ' ' if appt.day }}um <strong>{{ appt.time }}</strong>.</p>{% endif %}
     {% if greeting.news %}
-      <p class="zq-greeting-kicker">Neu seit Ihrem letzten Besuch</p>
       <ul class="zq-greeting-news">
-        {% for item in greeting.news %}<li><strong>{{ item.title }}.</strong> {{ item.text }}</li>{% endfor %}
+        {% for item in greeting.news %}<li><strong>Neu in Zentriq:</strong> {{ item.title }}. {{ item.summary }}</li>{% endfor %}
       </ul>
-      {% if greeting.more %}<p class="zq-greeting-more">… und {{ greeting.more }} weitere.</p>{% endif %}
+      {% if greeting.more %}<p class="zq-greeting-more">… und {{ greeting.more }} weitere unter „Was ist neu?“.</p>{% endif %}
     {% else %}
       <p class="zq-greeting-none">Heute gibt es keine Neuerungen.</p>
     {% endif %}
-    <a class="zq-greeting-link" href="{{ url_for('workspace.news') }}">Was ist neu?</a>
+    <p class="zq-greeting-actions">
+      {% if appt %}<a class="zq-greeting-link" href="{{ appt.url }}">Zum Kalender</a><span aria-hidden="true"> · </span>{% endif %}
+      <a class="zq-greeting-link" href="{{ url_for('workspace.news') }}">Was ist neu?</a><span aria-hidden="true"> · </span>
+      <button type="button" class="zq-greeting-link" data-zq-greeting-close>Schließen</button>
+    </p>
   </aside>
 {% endif %}
 

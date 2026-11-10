@@ -1,0 +1,20 @@
+{# Kleines "Neu" direkt an einer geaenderten Funktion. Inhalt aus app/release_notes.py (feature/hint) -
+   dieselben Eintraege wie Begruessung und "Was ist neu?". Antippen zeigt den Satz und merkt sich
+   serverseitig, dass der Benutzer ihn gesehen hat (js/workspace.js). #}
+{% macro new_badge(key) -%}
+{% set item = feature_news(key) %}
+{% if item %}<button type="button" class="zq-new" data-zq-new="{{ key }}" data-url="{{ url_for('workspace.feature_seen', key=key) }}"
+  data-hint="{{ item.hint or item.text }}" aria-expanded="false" title="Neu: {{ item.title }}">Neu<span class="sr-only"> – {{ item.title }}, antippen für Erklärung</span></button>{% endif %}
+{%- endmacro %}
+
+{# Kompakt / Geraeumig fuer Listen (je Benutzer, app/services/workspace.py DENSITIES). #}
+{% macro density_toggle() -%}
+{% set current = list_density() %}
+<div class="zq-density" role="group" aria-label="Listendarstellung" data-zq-density data-url="{{ url_for('workspace.list_density') }}">
+  {% for value, label in [('kompakt', 'Kompakt'), ('geraeumig', 'Geräumig')] %}
+    <button type="button" class="zq-density-opt{{ ' is-on' if current == value }}" data-value="{{ value }}" aria-pressed="{{ 'true' if current == value else 'false' }}">{{ label }}</button>
+  {% endfor %}
+  {{ new_badge('listen-dichte') }}
+  <span class="zq-density-status" data-zq-density-status aria-live="polite"></span>
+</div>
+{%- endmacro %}

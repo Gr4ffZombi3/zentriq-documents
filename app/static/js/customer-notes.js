@@ -241,7 +241,31 @@
       details.appendChild(link);
     }
     box.appendChild(details);
+    liveRoot(box, card);
+    // Live-Hinweis "Aktualisieren" (js/live.js): Karte mit aktuellem Stand neu zeichnen.
+    box.addEventListener("zq:live-refresh", function () {
+      request("GET", "/kunden/" + card.id).then(function (r) {
+        if (r.card && document.contains(box)) box.replaceWith(renderCard(r.card, reply, quiet));
+      });
+    });
     return box;
+  }
+
+  // Live-Zusammenarbeit (js/live.js): nur die zuletzt gezeigte Karte eines Kunden ist "live" -
+  // aeltere Karten im Verlauf geben ihre Verbindung ab.
+  function liveRoot(node, card) {
+    if (!card.id) return;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-zq-live-customer="' + card.id + '"]'), function (old) {
+      old.removeAttribute("data-zq-live");
+    });
+    node.setAttribute("data-zq-live", "/arbeitsplatz/live/kunde/" + card.id + "/token");
+    node.setAttribute("data-zq-live-editing", "/arbeitsplatz/live/kunde/" + card.id + "/bearbeiten");
+    node.setAttribute("data-zq-live-customer", String(card.id));
+    node.setAttribute("data-zq-live-scope", "");
+    var bar = el("div", "zq-live zq-live--card");
+    bar.setAttribute("data-zq-live-bar", "");
+    bar.hidden = true;
+    node.insertBefore(bar, node.firstChild ? node.firstChild.nextSibling : null);
   }
 
   // --- Aktionen der Kundenkarte ------------------------------------------------------------------
@@ -407,7 +431,12 @@
       form.replaceWith(renderCard(card, reply, true));
     }));
     form.appendChild(actions);
+    liveRoot(form, card);
     box.replaceWith(form);
+    // Erst melden, wenn js/live.js das Formular erkannt hat (MutationObserver, ~50 ms).
+    setTimeout(function () {
+      if (document.contains(form)) form.dispatchEvent(new CustomEvent("zq:editing", { bubbles: true, detail: { on: true, part: "Stammdaten" } }));
+    }, 150);
     var key = focusKey && !inputs[focusKey] && (focusKey === "street" || focusKey === "house_number") ? "address" : focusKey;
     if (key === "phone" && !inputs.phone) key = "phone_landline";  // "Telefonnummer falsch" ohne bisherige Nummer: erstes Telefonfeld
     var target = (key && inputs[key]) || form.querySelector("input");

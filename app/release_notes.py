@@ -18,6 +18,14 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 11),
+        "title": "Sehen, wer gerade in der Kundenakte ist",
+        "text": "In der Kundenakte und in der Kundenkarte im Assistenten sehen Sie, wer den Kunden gerade ebenfalls "
+        "geöffnet hat und wer gerade die Kundendaten bearbeitet. Ändert jemand etwas, erscheint ein Hinweis mit "
+        "„Aktualisieren“ – so überschreibt niemand versehentlich die Eingabe eines Kollegen.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 11),
         "title": "Weniger „Seite veraltet“, nichts geht doppelt",
         "text": "Seiten, die lange offen waren, speichern jetzt ohne die Meldung „Seite veraltet“. Bricht die Verbindung "
         "kurz ab, zeigt Zentriq „Verbindung wird wiederhergestellt“ – und erneutes Speichern legt nichts doppelt an. "

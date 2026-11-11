@@ -47,3 +47,4 @@
   </section>
 </div>
 <script defer src="{{ url_for('static', filename='js/workspace.js', v=static_rev('js/workspace.js')) }}"></script>
+{% if config.LIVE_ENABLED %}<script defer src="{{ url_for('static', filename='js/live.js', v=static_rev('js/live.js')) }}"></script>{% endif %}

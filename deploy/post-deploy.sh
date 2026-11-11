@@ -82,6 +82,14 @@ main() {
             FAILED=1
         fi
     done
+    # Live-Dienst ist optional (deploy/enable-live.sh): nur pruefen, wenn installiert.
+    if systemctl list-unit-files zentriq-live.service 2>/dev/null | grep -q '^zentriq-live\.service'; then
+        if systemctl is-active --quiet zentriq-live 2>/dev/null; then
+            echo "    zentriq-live: aktiv"
+        else
+            echo "    WARNUNG: zentriq-live laeuft nicht (App funktioniert, nur ohne Live-Hinweise)"
+        fi
+    fi
 
     echo "[post-deploy] Flask-Direktcheck..."
     sleep 2

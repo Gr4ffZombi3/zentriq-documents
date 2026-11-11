@@ -1,0 +1,21 @@
+[Unit]
+Description=Zentriq Live (SSE: Anwesenheit und Aenderungshinweise in Kundenakten)
+After=network.target redis-server.service
+Wants=redis-server.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=__APP_DIR__
+EnvironmentFile=__APP_DIR__/.env
+Environment=LIVE_HOST=127.0.0.1
+Environment=LIVE_PORT=8001
+ExecStart=__APP_DIR__/.venv/bin/python -m live_service.server
+Restart=always
+RestartSec=3
+# Klein halten: ein Prozess, wenig Speicher; Verbindungen sind langlebig, aber leicht.
+MemoryMax=200M
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

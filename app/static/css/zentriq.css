@@ -563,12 +563,14 @@
    Leerer Chat: Begruessung direkt ueber der Eingabe. Keine Mindesthoehe, sonst rutscht die Eingabe
    bei kleinem sichtbarem Bereich (Tastatur, Adressleiste) aus dem Bild. */
 .zc-clock-slot { display: none; }
+/* Alle Breiten: Hoehe = sichtbarer Bereich abzueglich Tab-Leiste (Kalender-Tab o. Ae.) - Spalte als
+   Flex-Kette statt fester 100dvh, sonst schiebt eine offene Tab-Leiste die Eingabe unter den Rand. */
+.zs-chat-page .app-main-col { display: flex; flex-direction: column; height: calc(var(--zc-vh, 100dvh) - var(--header-height, 0px)); }
+.zs-chat-page .app-main-col > * { flex: none; }
+.zs-chat-page .app-main-col > .app-content { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.zs-chat-page .zc { flex: 1 1 auto; height: auto; }
 @media (max-width: 47.99rem) {
-  /* Hoehe = sichtbarer Bereich abzueglich Tab-Leiste (Kalender-Tab o. Ae.): Spalte als Flex-Kette. */
-  .zs-chat-page .app-main-col { display: flex; flex-direction: column; height: var(--zc-vh, 100dvh); }
-  .zs-chat-page .app-main-col > * { flex: none; }
-  .zs-chat-page .app-main-col > .app-content { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-  .zc { flex: 1 1 auto; height: auto; min-height: 0; }
+  .zc { min-height: 0; }
   .zc-head { position: relative; }
   .zc-head { gap: 0.1rem; padding: max(0.4rem, env(safe-area-inset-top)) max(0.35rem, env(safe-area-inset-right)) 0.4rem max(0.35rem, env(safe-area-inset-left)); }
   .zc-model { flex: 0 1 auto; min-width: 0; }

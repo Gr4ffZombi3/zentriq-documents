@@ -21,7 +21,8 @@ RELEASE_NOTES = (
         "title": "Assistent auf dem Handy aufgeräumt",
         "text": "Auf dem Handy sitzt die Zeiterfassung jetzt oben in der Kopfzeile und verdeckt nicht mehr den "
         "Senden-Knopf. „Offene Rückrufe“ und „Nächste Termine“ stehen direkt über dem Eingabefeld; beim Tippen "
-        "bleibt nur das Eingabefeld sichtbar.",
+        "bleibt nur das Eingabefeld sichtbar. Auch am Computer bleibt das Eingabefeld bei geöffneten Tabs "
+        "vollständig sichtbar.",
         "audience": "alle",
     },
     {

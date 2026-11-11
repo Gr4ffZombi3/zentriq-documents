@@ -1,0 +1,17 @@
+{% extends "base_auth.html" %}
+{% block title %}Willkommen – Zentriq{% endblock %}
+{% block content %}
+{# Erster Desktop-Besuch der Startseite (app/services/welcome.py). Kein Formular, kein Cookie:
+   erst "Anmelden" bzw. eine Anmeldung markiert den Browser als bekannt. #}
+<div class="auth-card">
+  <h1 class="auth-simple-title">Herzlich willkommen bei ZentriqAI</h1>
+  <p class="auth-lead">Wie möchten Sie starten?</p>
+
+  <div class="auth-form">
+    <a class="btn btn-secondary auth-submit" href="{{ url_for('auth.access_request', kind='buero') }}">Neues Büro einrichten</a>
+    <a class="btn btn-secondary auth-submit" href="{{ url_for('auth.access_request', kind='demo') }}">Demo anfragen</a>
+    <a class="btn btn-primary auth-submit" href="{{ url_for('auth.login') }}">Bereits ein Konto? Anmelden</a>
+  </div>
+  <p class="auth-hint mt-4">Ihr Büro hat bereits ein Konto für Sie angelegt? Dann einfach anmelden.</p>
+</div>
+{% endblock %}

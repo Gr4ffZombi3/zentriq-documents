@@ -25,7 +25,7 @@ from app.auth.permissions import super_admin_required
 from app.blueprints.settings.forms import PlatformUserForm, TenantCreateForm, TenantForm
 from app.blueprints.settings.routes import user_form_data
 from app.extensions import db
-from app.models import Tenant, TenantStatus, User, UserRole
+from app.models import AccessRequest, Tenant, TenantStatus, User, UserRole
 from app.models.audit_log import SECURITY_EVENT_TYPES, AuditEventType, AuditLog
 from app.services import assistant, trusted_browsers, two_factor
 from app.services.audit import log_audit_event
@@ -483,6 +483,13 @@ def _platform_status() -> list[tuple[str, str, bool | None]]:
         users = User.query.filter(User.is_active.is_(True), User.deleted_at.is_(None)).count()
     status.append(("Aktive Benutzerkonten", str(users), None))
     return status
+
+
+@platform_bp.get("/anfragen")
+def access_requests():
+    """Anfragen von der Willkommensseite (neues Buero / Demo), neueste zuerst."""
+    items = AccessRequest.query.order_by(AccessRequest.created_at.desc(), AccessRequest.id.desc()).limit(200).all()
+    return render_template("platform/access_requests.html", items=items)
 
 
 @platform_bp.get("/sicherheit")

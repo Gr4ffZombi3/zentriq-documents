@@ -1,0 +1,41 @@
+{% extends "base_auth.html" %}
+{% from "ui/forms.html" import field_errors %}
+{% block title %}{{ title }} – Zentriq{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <h1 class="auth-simple-title">{{ title }}</h1>
+  {% if sent %}
+    <p class="auth-lead">Vielen Dank, Ihre Anfrage ist bei uns eingegangen. Wir melden uns per E-Mail bei Ihnen.</p>
+  {% else %}
+    <p class="auth-lead">
+      {% if kind == 'demo' %}Hinterlassen Sie Ihre Kontaktdaten – wir zeigen Ihnen ZentriqAI mit Beispieldaten.
+      {% else %}Hinterlassen Sie Ihre Kontaktdaten – wir richten Ihr Büro ein und melden uns mit den Zugangsdaten.{% endif %}
+    </p>
+    <form method="post" class="auth-form" novalidate>
+      {{ form.hidden_tag() }}
+      {% for field, autocomplete in [(form.office_name, 'organization'), (form.contact_name, 'name'), (form.email, 'email'), (form.phone, 'tel')] %}
+        <div class="auth-field">
+          <label for="{{ field.id }}" class="field-label">{{ field.label.text }}</label>
+          {{ field(class_='field-surface', autocomplete=autocomplete) }}
+          {{ field_errors(field) }}
+        </div>
+      {% endfor %}
+      <div class="auth-field">
+        <label for="{{ form.message.id }}" class="field-label">{{ form.message.label.text }}</label>
+        {{ form.message(class_='field-surface', rows='3') }}
+        {{ field_errors(form.message) }}
+      </div>
+      <div hidden aria-hidden="true">{{ form.website(tabindex='-1', autocomplete='off') }}</div>
+      <div>
+        <label class="flex items-start gap-3 text-sm leading-6">
+          {{ form.consent(class_='mt-1') }}
+          <span class="text-text-muted">{{ form.consent.label.text }}</span>
+        </label>
+        {{ field_errors(form.consent) }}
+      </div>
+      <button type="submit" class="btn btn-primary auth-submit">{{ form.submit.label.text }}</button>
+    </form>
+  {% endif %}
+</div>
+<p class="auth-footnote">Bereits ein Konto? <a href="{{ url_for('auth.login') }}">Anmelden</a></p>
+{% endblock %}

@@ -1,12 +1,12 @@
 """Startseite: "/" leitet rollenabhaengig weiter; /uebersicht ist die persoenliche Uebersicht
 fuer Buero-Rollen (SUPER_ADMIN erreicht sie nicht - Rollen-Hook in app/auth/permissions.py)."""
 
-from flask import Blueprint, abort, redirect, render_template, url_for
+from flask import Blueprint, abort, current_app, redirect, render_template, url_for
 from flask_login import current_user, login_required
 
 from app.models import CorrectionRequestStatus, TimeCorrectionRequest, User
 from app.navigation import home_endpoint_for
-from app.services import leipziger_todo
+from app.services import leipziger_todo, welcome
 from app.services.timetracking import service as time_service
 from app.services.timetracking.calc import week_bounds
 from app.services.timetracking.clock import local_today, to_local, utcnow_naive
@@ -17,9 +17,13 @@ portal_bp = Blueprint("portal", __name__)
 
 
 @portal_bp.route("/")
-@login_required
 def home():
-    return redirect(url_for(home_endpoint_for(current_user)))
+    if current_user.is_authenticated:
+        return redirect(url_for(home_endpoint_for(current_user)))
+    # Erster Desktop-Besuch: Willkommensseite; bekannter Browser und Handy: wie bisher Anmeldung.
+    if welcome.should_show_welcome():
+        return render_template("auth/welcome.html")
+    return current_app.login_manager.unauthorized()
 
 
 def _greeting(now) -> str:

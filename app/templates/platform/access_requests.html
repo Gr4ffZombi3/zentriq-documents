@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/portal.html" import panel %}
+{% block title %}Anfragen – Plattform – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell page-shell-wide">
+  {% call page_header('Anfragen', 'Anfragen von der Willkommensseite: neues Büro einrichten oder Demo. Bitte per E-Mail beantworten.') %}{% endcall %}
+
+  {% call panel('Eingegangene Anfragen', (items | length) ~ ' Einträge', flush=True) %}
+    {% if items %}
+      <div class="table-wrap">
+        <table class="data-table table-stack-md">
+          <thead><tr><th scope="col">Eingang</th><th scope="col">Art</th><th scope="col">Büro</th><th scope="col">Kontakt</th><th scope="col">Nachricht</th></tr></thead>
+          <tbody>
+            {% for item in items %}
+              <tr>
+                <td class="whitespace-nowrap">{{ item.created_at | local_dt }}</td>
+                <td>{{ item.kind_label }}</td>
+                <th scope="row" class="cell-strong">{{ item.office_name }}</th>
+                <td>{{ item.contact_name }}<br><a class="table-link" href="mailto:{{ item.email }}">{{ item.email }}</a>{% if item.phone %}<br>{{ item.phone }}{% endif %}</td>
+                <td>{{ item.message or '–' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="p-4 text-sm text-text-muted">Noch keine Anfragen eingegangen.</p>
+    {% endif %}
+  {% endcall %}
+</div>
+{% endblock %}

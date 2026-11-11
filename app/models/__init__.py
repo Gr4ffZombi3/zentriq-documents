@@ -1,3 +1,4 @@
+from app.models.access_request import AccessRequest
 from app.models.ai import (
     AiAction,
     AiAttachment,
@@ -111,6 +112,7 @@ __all__ = [
     "ListComparison",
     "ListComparisonEntry",
     "Recommendation",
+    "AccessRequest",
     "RequestReceipt",
     "RecommendationFeedback",
     "SystemErrorEvent",

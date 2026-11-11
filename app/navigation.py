@@ -93,6 +93,7 @@ PLATFORM_GROUPS = (
         (
             NavArea("platform_home", "Übersicht", "platform.index", ("platform.index",), admin_only=False, icon="layout-dashboard"),
             NavArea("platform_offices", "Büros", "platform.offices", ("platform.office",), admin_only=False, icon="building-2"),
+            NavArea("platform_requests", "Anfragen", "platform.access_requests", ("platform.access_requests",), admin_only=False, icon="mail"),
             NavArea("platform_users", "Benutzer", "platform.users", ("platform.user",), admin_only=False, icon="users"),
             NavArea("platform_system", "System", "platform.system", ("platform.system",), admin_only=False, icon="settings"),
             NavArea("platform_security", "Sicherheit", "platform.security", ("platform.security",), admin_only=False, icon="shield"),

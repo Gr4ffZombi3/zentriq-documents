@@ -18,11 +18,11 @@ from flask import (
 from flask_login import current_user, login_required, login_user, logout_user
 from flask_wtf.csrf import generate_csrf
 
-from app.auth.forms import ForgotPasswordForm, LoginForm, ResetPasswordForm, TwoFactorForm
+from app.auth.forms import AccessRequestForm, ForgotPasswordForm, LoginForm, ResetPasswordForm, TwoFactorForm
 from app.extensions import db
-from app.models import User
+from app.models import AccessRequest, User
 from app.models.audit_log import AuditEventType, AuditLog
-from app.services import idempotency, trusted_browsers, user_sessions, workspace
+from app.services import idempotency, trusted_browsers, user_sessions, welcome, workspace
 from app.services import two_factor as two_factor_service
 from app.services.account_state import account_login_block_reason
 from app.services.audit import log_audit_event
@@ -182,6 +182,56 @@ def two_factor():
         flash("Der Code ist ungültig.", "error")
 
     return render_template("auth/two_factor.html", form=form, trust_days=trusted_browsers.trust_days())
+
+
+@auth_bp.after_app_request
+def _mark_known_browser(response):
+    """Browser als bekannt markieren (nur fuer die Startseite, app/services/welcome.py): wer die
+    Anmeldung oeffnet oder angemeldet ist, landet beim naechsten Aufruf von "/" nicht mehr auf
+    der Willkommensseite."""
+    if request.endpoint == "auth.login" or (request.endpoint != "static" and current_user.is_authenticated):
+        welcome.mark_browser(response)
+    return response
+
+
+ACCESS_REQUEST_TITLES = {"buero": "Neues Büro einrichten", "demo": "Demo anfragen"}
+ACCESS_REQUESTS_PER_IP_PER_HOUR = 5
+
+
+@auth_bp.route("/anfrage/<any(buero, demo):kind>", methods=["GET", "POST"])
+def access_request(kind):
+    """Anfrage fuer ein neues Buero bzw. eine Demo. Es gibt keine Selbstregistrierung und keine
+    oeffentliche Demo; die Anfrage landet unter Plattform -> Anfragen (nur SUPER_ADMIN)."""
+    form = AccessRequestForm()
+    if form.validate_on_submit():
+        since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
+        recent = AccessRequest.query.filter(
+            AccessRequest.ip_address == request.remote_addr, AccessRequest.created_at >= since
+        ).count()
+        if recent >= ACCESS_REQUESTS_PER_IP_PER_HOUR:
+            flash("Es wurden bereits mehrere Anfragen gesendet. Bitte versuchen Sie es später erneut.", "error")
+            return render_template("auth/access_request.html", form=form, kind=kind, title=ACCESS_REQUEST_TITLES[kind]), 429
+        if not form.website.data:
+            db.session.add(
+                AccessRequest(
+                    kind=kind,
+                    office_name=form.office_name.data,
+                    contact_name=form.contact_name.data,
+                    email=form.email.data.lower(),
+                    phone=form.phone.data or None,
+                    message=form.message.data or None,
+                    ip_address=request.remote_addr,
+                )
+            )
+            db.session.commit()
+        return redirect(url_for("auth.access_request", kind=kind, gesendet=1))
+    return render_template(
+        "auth/access_request.html",
+        form=form,
+        kind=kind,
+        title=ACCESS_REQUEST_TITLES[kind],
+        sent=request.method == "GET" and request.args.get("gesendet") == "1",
+    )
 
 
 @auth_bp.app_context_processor

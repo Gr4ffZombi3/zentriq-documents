@@ -18,6 +18,14 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 11),
+        "title": "Willkommensseite für den ersten Besuch",
+        "text": "Wer ZentriqAI zum ersten Mal am Computer öffnet, sieht eine kurze Willkommensseite. Neue Kolleginnen "
+        "und Kollegen, für die Sie bereits ein Konto angelegt haben, gelangen dort über „Bereits ein Konto? Anmelden“ "
+        "direkt zur Anmeldung – ab dann öffnet sich in diesem Browser immer gleich die Anmeldung.",
+        "audience": "admin",
+    },
+    {
+        "date": date(2026, 11, 11),
         "title": "Sehen, wer gerade in der Kundenakte ist",
         "text": "In der Kundenakte und in der Kundenkarte im Assistenten sehen Sie, wer den Kunden gerade ebenfalls "
         "geöffnet hat und wer gerade die Kundendaten bearbeitet. Ändert jemand etwas, erscheint ein Hinweis mit "

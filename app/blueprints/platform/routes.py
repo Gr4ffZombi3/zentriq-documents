@@ -492,6 +492,15 @@ def access_requests():
     return render_template("platform/access_requests.html", items=items)
 
 
+@platform_bp.post("/anfragen/<int:request_id>/loeschen")
+def access_request_delete(request_id):
+    item = db.session.get(AccessRequest, request_id) or abort(404)
+    db.session.delete(item)
+    db.session.commit()
+    flash("Anfrage wurde gelöscht.", "success")
+    return redirect(url_for("platform.access_requests"))
+
+
 @platform_bp.get("/sicherheit")
 def security():
     tenants = {tenant.id: tenant for tenant in Tenant.query.all()}

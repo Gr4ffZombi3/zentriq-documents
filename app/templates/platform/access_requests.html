@@ -10,7 +10,7 @@
     {% if items %}
       <div class="table-wrap">
         <table class="data-table table-stack-md">
-          <thead><tr><th scope="col">Eingang</th><th scope="col">Art</th><th scope="col">Büro</th><th scope="col">Kontakt</th><th scope="col">Nachricht</th></tr></thead>
+          <thead><tr><th scope="col">Eingang</th><th scope="col">Art</th><th scope="col">Büro</th><th scope="col">Kontakt</th><th scope="col">Nachricht</th><th scope="col"><span class="sr-only">Aktionen</span></th></tr></thead>
           <tbody>
             {% for item in items %}
               <tr>
@@ -19,6 +19,13 @@
                 <th scope="row" class="cell-strong">{{ item.office_name }}</th>
                 <td>{{ item.contact_name }}<br><a class="table-link" href="mailto:{{ item.email }}">{{ item.email }}</a>{% if item.phone %}<br>{{ item.phone }}{% endif %}</td>
                 <td>{{ item.message or '–' }}</td>
+                <td class="text-right">
+                  <form method="post" action="{{ url_for('platform.access_request_delete', request_id=item.id) }}"
+                        onsubmit="return confirm('Diese Anfrage wirklich löschen?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-secondary h-9 px-3 text-sm">Löschen</button>
+                  </form>
+                </td>
               </tr>
             {% endfor %}
           </tbody>

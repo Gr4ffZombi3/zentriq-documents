@@ -78,3 +78,18 @@ def test_only_super_admin_sees_requests(app, db, world):  # noqa: F811
     db.session.commit()
     assert "Neues Büro" in _login(app, "plattform@example.com").get("/plattform/anfragen").get_data(as_text=True)
     assert _login(app, "admin-a@example.com").get("/plattform/anfragen").status_code == 403
+
+
+def test_super_admin_can_delete_request(app, db, world):  # noqa: F811
+    item = AccessRequest(kind="demo", office_name="Testbüro", contact_name="X", email="x@example.com")
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+    url = f"/plattform/anfragen/{item_id}/loeschen"
+    assert _login(app, "admin-a@example.com").post(url).status_code == 403
+    assert db.session.get(AccessRequest, item_id) is not None
+    resp = _login(app, "plattform@example.com").post(url)
+    assert resp.status_code == 302 and resp.headers["Location"].endswith("/plattform/anfragen")
+    db.session.expire_all()
+    assert db.session.get(AccessRequest, item_id) is None
+    assert _login(app, "plattform@example.com").post(url).status_code == 404

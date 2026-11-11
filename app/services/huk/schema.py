@@ -92,6 +92,9 @@ FIELDS: tuple[Field, ...] = (
     )),
     Field("alle_ueber_25", "Sind alle Fahrer mindestens 25 Jahre alt?", "Nutzung", "choice", (Option("ja", "Ja"), Option("nein", "Nein")),
           condition=_has_more_drivers),
+    # Seit 11.11.2026 fragt der Rechner bei weiteren Fahrern zusaetzlich nach Fahrern ab 70.
+    Field("fahrer_ueber_70", "Gibt es Fahrer, die 70 Jahre oder älter sind?", "Nutzung", "choice", (Option("ja", "Ja"), Option("nein", "Nein")),
+          condition=_has_more_drivers),
     # --- SF-Klassen
     Field("sf_haftpflicht", "Schadenfreiheitsklasse Haftpflicht (laut letzter Beitragsrechnung)", "SF-Klasse", "sf", SF_CLASSES),
     Field("vollkasko_bisher", "Bestand für das bisherige Fahrzeug eine Vollkasko?", "SF-Klasse", "choice", (Option("ja", "Ja"), Option("nein", "Nein"))),

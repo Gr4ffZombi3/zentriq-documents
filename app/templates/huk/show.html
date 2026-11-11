@@ -37,7 +37,7 @@
             <span>Ich habe die Angaben geprüft und möchte sie an huk.de übermitteln.</span>
           </label>
           <div class="form-actions">
-            <button type="submit" class="btn btn-primary" data-huk-start-button>Angebot auf huk.de berechnen</button>
+            <button type="submit" class="btn btn-primary" data-huk-start-button>{{ 'Bei HUK berechnen' if job.comparison else 'Angebot auf huk.de berechnen' }}</button>
           </div>
         </div>
       </form>
@@ -56,6 +56,7 @@
     </section>
 
   {% elif result %}
+    {% if comparison and comparison.offer %}{% include "huk/_comparison.html" %}{% endif %}
     <section class="panel huk-result" aria-labelledby="huk-ergebnis">
       <header class="panel-header">
         <h2 class="panel-title" id="huk-ergebnis">Ergebnis</h2>
@@ -97,19 +98,54 @@
     </details>
 
   {% else %}
+    {% if comparison and comparison.offer %}{% include "huk/_comparison.html" %}{% endif %}
     <section class="panel" aria-labelledby="huk-meldung">
       <div class="panel-body">
-        <h2 class="panel-title" id="huk-meldung">{{ status.label }}</h2>
-        <p>{{ job.message or 'Es liegt kein Ergebnis vor.' }}</p>
+        <h2 class="panel-title" id="huk-meldung">{{ status.label }}{% if job.comparison %}: kein automatischer HUK-Preis{% endif %}</h2>
+        <p class="huk-blocker"><strong>Grund:</strong> {{ job.message or 'Es liegt kein Ergebnis vor.' }}</p>
         <p class="form-hint">Es wurde kein Beitrag gespeichert.</p>
         <div class="form-actions">
           <a class="btn btn-primary" href="{{ url_for('huk.edit', job_id=job.id, pruefen=1) }}">Angaben prüfen und erneut berechnen</a>
-          {% if job.error_code == 'blocked' %}
+          {% if job.error_code == 'blocked' or job.comparison %}
             <a class="btn btn-secondary" href="https://www.huk.de/tarifrechner/pkw" target="_blank" rel="noopener noreferrer">Rechner auf huk.de selbst öffnen</a>
           {% endif %}
         </div>
       </div>
     </section>
+    {% if job.comparison and job.status in ('failed', 'needs_input', 'cancelled') %}
+      {% set manual = job.comparison.get('manual') or {} %}
+      <form method="post" action="{{ url_for('huk.manual_price', job_id=job.id) }}" class="panel huk-manual">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <header class="panel-header"><h2 class="panel-title">{{ 'HUK-Beitrag ändern' if manual else 'Manuell weiterrechnen und HUK-Beitrag eintragen' }}</h2></header>
+        <div class="panel-body huk-fields huk-fields-compact">
+          <p class="form-hint huk-span">Rechnen Sie auf huk.de mit den Angaben unten („Angaben“) selbst weiter und tragen Sie den angezeigten Beitrag hier ein. Er wird als manuell eingetragen gekennzeichnet.</p>
+          <div class="huk-field">
+            <label class="field-label" for="huk-manuell-betrag">HUK-Beitrag (€)</label>
+            <input class="field-surface" id="huk-manuell-betrag" name="betrag" inputmode="decimal" autocomplete="off" required value="{{ manual.get('betrag') or '' }}" placeholder="z. B. 438,93">
+          </div>
+          <div class="huk-field">
+            <label class="field-label" for="huk-manuell-zahlweise">Zahlweise</label>
+            <select class="field-surface" id="huk-manuell-zahlweise" name="zahlweise" required>
+              <option value="">Bitte auswählen</option>
+              {% for i in intervals %}<option value="{{ i }}" {% if manual.get('zahlweise') == i %}selected{% endif %}>{{ i }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="huk-field">
+            <label class="field-label" for="huk-manuell-tarif">Tarif (optional)</label>
+            <input class="field-surface" id="huk-manuell-tarif" name="tarif" maxlength="60" autocomplete="off" value="{{ manual.get('tarif') or '' }}" placeholder="z. B. Classic SELECT">
+          </div>
+          <fieldset class="huk-field">
+            <legend class="field-label">Tarif mit Werkstattbindung?</legend>
+            <div class="huk-options">
+              {% for v, t in (('ja', 'Ja'), ('nein', 'Nein'), ('', 'Nicht bekannt')) %}
+                <label class="huk-option"><input type="radio" name="werkstatt" value="{{ v }}" {% if (manual.get('werkstatt') or '') == v %}checked{% endif %}><span>{{ t }}</span></label>
+              {% endfor %}
+            </div>
+          </fieldset>
+          <div class="form-actions huk-span"><button type="submit" class="btn btn-primary">HUK-Beitrag übernehmen</button></div>
+        </div>
+      </form>
+    {% endif %}
     <details class="panel">
       <summary class="panel-header"><span class="panel-title">Angaben</span></summary>
       {% include "huk/_summary.html" %}

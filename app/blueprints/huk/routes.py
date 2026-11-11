@@ -1,6 +1,10 @@
 """Kfz-Angebot ueber den HUK-Webrechner: Angaben erfassen, Zusammenfassung bestaetigen,
 Hintergrundauftrag verfolgen, Ergebnis anzeigen.
 
+Kfz-Vergleich aus Versicherungsschein (/kfz-angebot/versicherungsschein): Foto/PDF auslesen
+(app/services/huk/policy.py), erkannte Angaben pruefen, "Bei HUK berechnen", bisherigen und
+HUK-Jahresbeitrag vergleichen. Blockiert der Rechner, kann der HUK-Beitrag manuell eingetragen werden.
+
 Zugriff: Buero-Admins und Mitarbeiter (SUPER_ADMIN nie); Auftraege anderer Bueros sind 404,
 Mitarbeiter sehen nur eigene Auftraege (app/services/huk/jobs.py)."""
 
@@ -22,7 +26,7 @@ from flask_login import current_user, login_required
 
 from app.services import workspace
 from app.services.calendar import member_name
-from app.services.huk import ai, jobs, schema
+from app.services.huk import ai, jobs, policy, schema
 from app.services.timetracking.clock import local_today
 
 huk_bp = Blueprint("huk", __name__, url_prefix="/kfz-angebot")
@@ -38,9 +42,19 @@ def _form_values() -> dict:
     return raw
 
 
-def _render_form(job, values, customer, missing=(), errors=None, suggested=(), ai_error=None, ai_text=""):
+def _render_form(job, values, customer, missing=(), errors=None, suggested=(), ai_error=None, ai_text="", previous=None):
+    comparison = job.comparison if job is not None else None
+    if comparison and not suggested:
+        # Aus dem Dokument uebernommene Angaben bleiben als "bitte pruefen" markiert, bis gerechnet wird.
+        suggested = [k for k in comparison.get("extracted") or [] if values.get(k)]
     return render_template(
         "huk/form.html",
+        comparison=comparison,
+        previous=previous if previous is not None else ((comparison or {}).get("previous") or {}),
+        flags=(comparison or {}).get("flags") or {},
+        intervals=policy.INTERVALS,
+        label_of=schema.label_of,
+        start_token=secrets.token_urlsafe(16),
         job=job,
         values=values,
         customer=customer,
@@ -84,6 +98,33 @@ def new():
     return _save(None, customer)
 
 
+@huk_bp.route("/versicherungsschein", methods=["GET", "POST"])
+@login_required
+def policy_upload():
+    """Versicherungsschein (und optional Beitragsrechnung) hochladen und auslesen."""
+    _member()
+    customer = jobs.customer_for(current_user, request.values.get("kunde"))
+    if request.method == "GET":
+        return render_template("huk/policy.html", customer=customer, enabled=jobs.is_enabled(),
+                               max_files=policy.MAX_FILES, max_pages=policy.MAX_PAGES)
+    uploads = [policy.Upload(f.filename or "Datei", f.read(), kind)
+               for kind, name in (("schein", "schein"), ("rechnung", "rechnung"))
+               for f in request.files.getlist(name) if f and f.filename]
+    try:
+        result = policy.analyse(current_user, uploads)
+    except policy.PolicyError as exc:
+        return render_template("huk/policy.html", customer=customer, enabled=jobs.is_enabled(), error=str(exc),
+                               max_files=policy.MAX_FILES, max_pages=policy.MAX_PAGES), 422
+    if not result["readable"]:
+        return render_template(
+            "huk/policy.html", customer=customer, enabled=jobs.is_enabled(), max_files=policy.MAX_FILES, max_pages=policy.MAX_PAGES,
+            error="Im Dokument wurden keine Tarifangaben erkannt. Bitte ein schärferes Foto (gerade, gut ausgeleuchtet) oder das PDF verwenden.",
+        ), 422
+    values = {**jobs.prefill_for(current_user, customer), **result["values"]}
+    job = jobs.create_comparison(current_user, values, policy.new_comparison(result), customer)
+    return redirect(url_for("huk.edit", job_id=job.id))
+
+
 @huk_bp.route("/<int:job_id>/angaben", methods=["GET", "POST"])
 @login_required
 def edit(job_id):
@@ -107,17 +148,34 @@ def _drop_form_drafts(job, was_new: bool) -> None:
         workspace.delete_draft(current_user, f"huk:{job.id}")
 
 
+def _previous_form() -> dict:
+    return {
+        "beitrag": request.form.get("bisher_beitrag", ""),
+        "zahlweise": request.form.get("bisher_zahlweise", ""),
+        "werkstatt": request.form.get("bisher_werkstatt", ""),
+    }
+
+
 def _save(job, customer):
     if request.form.get("aktion") == "ki":
         return _ai_suggest(job, customer)
     was_new = job is None
+    previous_errors = {}
+    if job is not None and job.comparison:
+        previous_errors = jobs.save_previous(job, _previous_form())
     try:
         job, missing, errors = jobs.save_draft(current_user, job, _form_values(), customer)
     except jobs.HukJobError as exc:
         abort(exc.status)
-    if missing or errors:
-        return _render_form(job, job.input_data, customer, missing, errors), 422
+    if missing or errors or previous_errors:
+        return _render_form(job, job.input_data, customer, missing, {**errors, **previous_errors}), 422
     _drop_form_drafts(job, was_new)
+    if request.form.get("aktion") == "berechnen" and job.comparison:
+        # "Bei HUK berechnen": die gepruefte Uebersicht ist die Bestaetigung (Hinweis steht am Knopf).
+        try:
+            job, _new = jobs.start(current_user, job, request.form.get("client_ref"))
+        except jobs.HukJobError as exc:
+            flash(exc.message, "error")
     return redirect(url_for("huk.show", job_id=job.id))
 
 
@@ -152,6 +210,8 @@ def show(job_id):
         summary=schema.summary(job.input_data or {}),
         status=jobs.status_payload(job),
         result=jobs.result_view(job),
+        comparison=policy.comparison_view(job),
+        intervals=policy.INTERVALS,
         incomplete=bool(missing or errors),
         start_token=secrets.token_urlsafe(16),
         enabled=jobs.is_enabled(),
@@ -168,6 +228,19 @@ def start(job_id):
         return redirect(url_for("huk.show", job_id=job.id))
     try:
         job, _new = jobs.start(current_user, job, request.form.get("client_ref"))
+    except jobs.HukJobError as exc:
+        flash(exc.message, "error")
+    return redirect(url_for("huk.show", job_id=job.id))
+
+
+@huk_bp.post("/<int:job_id>/huk-beitrag")
+@login_required
+def manual_price(job_id):
+    """HUK-Beitrag manuell eintragen, wenn der Rechner nicht automatisch bis zum Preis kam."""
+    _member()
+    job = jobs.get_job(current_user, job_id)
+    try:
+        jobs.save_manual_price(job, request.form)
     except jobs.HukJobError as exc:
         flash(exc.message, "error")
     return redirect(url_for("huk.show", job_id=job.id))

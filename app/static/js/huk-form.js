@@ -171,6 +171,36 @@
     }
   }
 
+  // Kfz-Vergleich: gewaehlte Dateien anzeigen, Versicherungsschein ist Pflicht, Auslesen dauert.
+  const policy = document.querySelector("[data-huk-policy]");
+  if (policy) {
+    policy.querySelectorAll("[data-huk-upload]").forEach((box) => {
+      const list = box.querySelector("[data-huk-file-list]");
+      const render = () => {
+        const files = [...box.querySelectorAll("[data-huk-file]")].flatMap((input) => [...input.files]);
+        list.replaceChildren(...files.map((f) => {
+          const li = document.createElement("li");
+          li.textContent = `${f.name} (${Math.max(1, Math.round(f.size / 1024))} KB)`;
+          return li;
+        }));
+      };
+      box.querySelectorAll("[data-huk-file]").forEach((input) => input.addEventListener("change", render));
+    });
+    const error = policy.querySelector("[data-huk-upload-error]");
+    policy.addEventListener("submit", (e) => {
+      const schein = [...policy.querySelectorAll('input[name="schein"]')].some((i) => i.files.length);
+      if (!schein) {
+        e.preventDefault();
+        error.hidden = false;
+        setTimeout(() => policy.querySelectorAll("button[type=submit]").forEach((b) => { b.disabled = false; }), 0);
+        return;
+      }
+      error.hidden = true;
+      const button = policy.querySelector("[data-huk-analyse]");
+      setTimeout(() => { button.textContent = "Wird ausgelesen … (bis zu einer Minute)"; }, 0);
+    });
+  }
+
   const start = document.querySelector("[data-huk-start]");
   if (start) {
     start.addEventListener("submit", (event) => {

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% from "ui/icons.html" import icon %}
+{% block title %}Kfz-Vergleich aus Versicherungsschein – Zentriq{% endblock %}
+{% block body_class %}huk-page{% endblock %}
+{% block content %}
+<span hidden data-zq-tab-kind="angebot" data-zq-tab-title="Kfz-Vergleich{{ ' · ' ~ customer.name if customer else '' }}"></span>
+<div class="page-shell page-shell-narrow">
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">Kfz-Vergleich aus Versicherungsschein</h1>
+      <p class="page-subtitle">Versicherungsschein fotografieren oder als PDF hochladen. Zentriq liest die Tarifangaben aus, Sie prüfen sie einmal und lassen den HUK-Beitrag berechnen.</p>
+    </div>
+    <a class="btn btn-secondary btn-sm" href="{{ url_for('huk.index') }}">Zur Übersicht</a>
+  </div>
+
+  {% if not enabled %}
+    <p class="flash flash-info">Die Kfz-Berechnung ist derzeit abgeschaltet. Auslesen und Prüfen ist trotzdem möglich.</p>
+  {% endif %}
+  {% if error %}<p class="flash flash-error" role="alert">{{ error }}</p>{% endif %}
+
+  <form method="post" enctype="multipart/form-data" class="huk-form huk-policy" data-huk-form data-huk-policy novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <section class="panel" aria-labelledby="huk-kunde">
+      <header class="panel-header"><h2 class="panel-title" id="huk-kunde">Kunde</h2></header>
+      <div class="panel-body huk-customer" data-huk-customer data-api="{{ url_for('calendar.api_customers') }}">
+        <input type="hidden" name="kunde" value="{{ customer.id if customer else '' }}" data-huk-customer-id>
+        <p class="huk-customer-current" data-huk-customer-current {% if not customer %}hidden{% endif %}>
+          Ergebnis wird gespeichert bei: <strong data-huk-customer-name>{{ customer.name if customer else '' }}</strong>
+          <button type="button" class="btn btn-secondary btn-sm" data-huk-customer-clear>Ändern</button>
+        </p>
+        <div data-huk-customer-search {% if customer %}hidden{% endif %}>
+          <label class="field-label" for="huk-kunde-suche">Kunde suchen (optional)</label>
+          <input class="field-surface" id="huk-kunde-suche" type="search" autocomplete="off" placeholder="Name oder VN-Nummer" data-huk-customer-input>
+          <ul class="huk-customer-results" data-huk-customer-results role="listbox" aria-label="Gefundene Kunden"></ul>
+        </div>
+      </div>
+    </section>
+
+    {% for kind, title, hint, required in (
+      ('schein', 'Versicherungsschein', 'Alle Seiten mit Fahrzeug, SF-Klassen, Kasko und Beitrag.', true),
+      ('rechnung', 'Aktuelle Beitragsrechnung (optional)', 'Ergänzt bzw. aktualisiert SF-Klassen und Beitrag.', false),
+    ) %}
+      <section class="panel" aria-labelledby="huk-{{ kind }}">
+        <header class="panel-header"><h2 class="panel-title" id="huk-{{ kind }}">{{ title }}</h2></header>
+        <div class="panel-body huk-upload" data-huk-upload>
+          <p class="form-hint">{{ hint }} Foto (JPEG, PNG, HEIC) oder PDF, bis zu {{ max_files }} Dateien.</p>
+          <div class="zq-inline-row">
+            <label class="btn btn-secondary huk-upload-btn">
+              {{ icon('camera', class='h-4 w-4') }}<span>Foto aufnehmen</span>
+              <input class="sr-only" type="file" name="{{ kind }}" accept="image/*" capture="environment" data-huk-file>
+            </label>
+            <label class="btn btn-secondary huk-upload-btn">
+              {{ icon('upload', class='h-4 w-4') }}<span>Foto oder PDF wählen</span>
+              <input class="sr-only" type="file" name="{{ kind }}" accept="image/*,application/pdf,.pdf,.heic,.heif" multiple data-huk-file {% if required %}data-huk-required{% endif %}>
+            </label>
+          </div>
+          <ul class="huk-upload-list" data-huk-file-list aria-live="polite"></ul>
+        </div>
+      </section>
+    {% endfor %}
+
+    <p class="form-hint">Die Dateien werden nur zum Auslesen verwendet und nicht gespeichert. Insgesamt höchstens {{ max_pages }} Seiten bzw. Fotos. Personenangaben (Name, Anschrift, Vertragsnummer, Kennzeichen) werden nicht an huk.de übermittelt.</p>
+    <p class="form-error" data-huk-upload-error hidden role="alert">Bitte zuerst den Versicherungsschein auswählen.</p>
+    <div class="huk-form-actions">
+      <button type="submit" class="btn btn-primary" data-huk-analyse>Angaben auslesen</button>
+    </div>
+  </form>
+</div>
+<script defer src="{{ url_for('static', filename='js/huk-form.js', v=static_rev('js/huk-form.js')) }}"></script>
+{% endblock %}

@@ -1002,3 +1002,62 @@ html.zs-collapsed .zs-kbd { display: none; }
 @media (max-width: 63.99rem) { .zq-calls { top: calc(3.75rem + env(safe-area-inset-top)); } }
 @media (max-width: 47.99rem) { .zq-calls { left: 0.6rem; right: 0.6rem; width: auto; } }
 @media (prefers-reduced-motion: reduce) { .zq-call { animation: none; } }
+
+/* Kfz-Vergleich aus Versicherungsschein (templates/huk/policy.html, _compare_form.html, _comparison.html) */
+.huk-upload { display: grid; gap: 0.6rem; }
+.huk-upload-btn { position: relative; cursor: pointer; }
+.huk-upload-btn:has(input:focus-visible) { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.huk-upload-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.2rem; font-size: 0.88rem; color: var(--color-text-muted); overflow-wrap: anywhere; }
+.huk-upload-list li::before { content: "✓ "; color: var(--color-success); font-weight: 700; }
+.huk-flag { margin: 0; padding: 0.35rem 0.55rem; border-radius: 0.45rem; background: color-mix(in oklab, var(--color-warning) 14%, var(--color-surface)); color: var(--color-warning-text, var(--color-text)); font-size: 0.84rem; }
+.huk-infos ul { margin: 0.25rem 0 0; padding-left: 1.1rem; list-style: disc; }
+.huk-infos p { margin: 0; }
+.huk-fields-compact { grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.9rem 1.1rem; align-items: start; }
+.huk-fields-compact .huk-options { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
+.huk-fields-compact .huk-field:has(.huk-options-long), .huk-span { grid-column: 1 / -1; }
+.huk-compare-actions { display: grid; gap: 0.5rem; }
+.huk-compare-actions .form-hint { margin: 0; }
+.huk-compare-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; margin-bottom: 1rem; }
+.huk-compare-cell { display: grid; gap: 0.2rem; align-content: start; padding: 0.85rem 1rem; border: 1px solid var(--color-border); border-radius: 0.75rem; background: var(--color-surface); min-width: 0; }
+.huk-compare-huk { border-color: var(--color-primary); background: var(--color-primary-soft); }
+.huk-compare-diff.is-cheaper { border-color: var(--color-success); background: color-mix(in oklab, var(--color-success) 10%, var(--color-surface)); }
+.huk-compare-diff.is-dearer { border-color: var(--color-error); background: color-mix(in oklab, var(--color-error) 8%, var(--color-surface)); }
+.huk-compare-label { font-size: 0.78rem; font-weight: 650; letter-spacing: 0.03em; text-transform: uppercase; color: var(--color-text-muted); overflow-wrap: anywhere; }
+.huk-compare-amount { font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.huk-compare-calc { font-size: 0.84rem; color: var(--color-text-muted); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.huk-deviations { margin-bottom: 1rem; }
+.huk-deviations-title { margin: 0 0 0.4rem; font-size: 0.95rem; font-weight: 650; }
+.huk-deviation-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-bottom: 0.5rem; }
+.huk-deviation-table th, .huk-deviation-table td { padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--color-border); text-align: left; vertical-align: top; overflow-wrap: normal; hyphens: auto; }
+.huk-deviation-table thead th { font-size: 0.78rem; font-weight: 650; color: var(--color-text-muted); }
+.huk-deviation-table tbody th { font-weight: 600; }
+.huk-deviation-table tr.is-relevant th { color: var(--color-warning-text, var(--color-warning)); }
+.huk-deviation-table tr.is-selected { background: var(--color-primary-soft); }
+.huk-tariff-compare td { font-variant-numeric: tabular-nums; }
+.huk-blocker { margin-top: 0; }
+@media (max-width: 47.99rem) {
+  .huk-compare-grid { grid-template-columns: 1fr; }
+  .huk-compare-actions .zq-inline-row .btn { width: 100%; justify-content: center; }
+}
+/* Kfz-Vergleich: kompakte Antworten (Chips) und eingeklappte erkannte Angaben */
+.huk-compare-form { display: grid; gap: 1rem; }
+.huk-compare-form .huk-options, .huk-compare-form .huk-options-long { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.huk-compare-form .huk-option { min-height: 2.5rem; padding: 0.4rem 0.75rem; border-radius: 9999px; width: auto; flex: 0 1 auto; }
+.huk-compare-form .huk-fields { gap: 0.9rem; }
+.huk-compare-form .huk-field .form-hint { margin: 0; }
+.huk-recognized:has(.huk-recognized-edit[open]) .huk-recognized-list { display: none; }
+.huk-recognized-edit > summary { margin: 0 1.15rem 1rem; list-style: none; width: fit-content; }
+.huk-recognized-edit > summary::-webkit-details-marker { display: none; }
+.huk-recognized-edit[open] > summary { margin-top: 0.75rem; }
+.huk-recognized-list { margin: 0; padding: 0.4rem 1.15rem 0.9rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.1rem 1.25rem; }
+.huk-recognized-list > div { display: flex; justify-content: space-between; gap: 0.75rem; padding: 0.35rem 0; border-bottom: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent); font-size: 0.88rem; }
+.huk-recognized-list dt { flex: 1 1 auto; color: var(--color-text-muted); min-width: 0; overflow-wrap: break-word; }
+.huk-recognized-list dd { flex: 0 0 auto; max-width: 58%; margin: 0; font-weight: 600; text-align: right; overflow-wrap: break-word; }
+@media (max-width: 30rem) {
+  .huk-recognized-list > div { display: grid; gap: 0.05rem; }
+  .huk-recognized-list dd { max-width: none; text-align: left; }
+}
+.huk-num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.huk-cheaper { color: var(--color-success); font-weight: 600; }
+.huk-dearer { color: var(--color-error); font-weight: 600; }
+@media (max-width: 30rem) { .huk-deviation-table { font-size: 0.84rem; } .huk-deviation-table th, .huk-deviation-table td { padding: 0.4rem 0.3rem; } }

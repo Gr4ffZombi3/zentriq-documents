@@ -1,0 +1,80 @@
+{# Vergleich bisheriger Beitrag / HUK-Beitrag (huk/show.html). comparison = policy.comparison_view(job). #}
+{% set c = comparison %}
+{% set fmt = c.fmt %}
+<section class="panel huk-compare" aria-labelledby="huk-vergleich">
+  <header class="panel-header">
+    <h2 class="panel-title" id="huk-vergleich">Vergleich pro Jahr</h2>
+  </header>
+  <div class="panel-body">
+    <div class="huk-compare-grid">
+      <div class="huk-compare-cell">
+        <span class="huk-compare-label">Bisher</span>
+        <strong class="huk-compare-amount">{{ fmt(c.before_annual) if not c.before_missing else 'nicht angegeben' }}</strong>
+        <span class="huk-compare-calc">{{ c.before_calc or 'Bisheriger Beitrag fehlt – Differenz offen.' }}</span>
+      </div>
+      <div class="huk-compare-cell huk-compare-huk">
+        <span class="huk-compare-label">HUK ({{ c.offer.selected.name }})</span>
+        <strong class="huk-compare-amount">{{ fmt(c.huk_annual) }}</strong>
+        <span class="huk-compare-calc">{{ c.huk_calc }}</span>
+      </div>
+      <div class="huk-compare-cell huk-compare-diff {{ 'is-cheaper' if c.diff is not none and c.diff < 0 else ('is-dearer' if c.diff is not none and c.diff > 0 else '') }}">
+        <span class="huk-compare-label">Differenz</span>
+        {% if c.diff is none %}
+          <strong class="huk-compare-amount">offen</strong>
+          <span class="huk-compare-calc">Ohne bisherigen Beitrag keine Differenz.</span>
+        {% elif c.diff < 0 %}
+          <strong class="huk-compare-amount">{{ fmt(-c.diff) }} günstiger</strong>
+          <span class="huk-compare-calc">pro Jahr bei HUK</span>
+        {% elif c.diff > 0 %}
+          <strong class="huk-compare-amount">{{ fmt(c.diff) }} teurer</strong>
+          <span class="huk-compare-calc">pro Jahr bei HUK</span>
+        {% else %}
+          <strong class="huk-compare-amount">gleich</strong>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if c.deviations %}
+      <div class="huk-deviations">
+        <h3 class="huk-deviations-title">Abweichungen zum bisherigen Vertrag</h3>
+        <table class="huk-deviation-table">
+          <thead><tr><th scope="col">Merkmal</th><th scope="col">Bisher</th><th scope="col">HUK-Berechnung</th></tr></thead>
+          <tbody>
+            {% for d in c.deviations %}
+              <tr class="{{ 'is-relevant' if d.relevant }}"><th scope="row">{{ d.label }}</th><td>{{ d.before }}</td><td>{{ d.after }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p class="form-hint">Abweichungen beeinflussen den Preis – der Vergleich ist nur bei gleichen Leistungen direkt aussagekräftig.</p>
+      </div>
+    {% else %}
+      <p class="form-hint">Fahrleistung, Fahrerkreis, Kasko und Selbstbeteiligung entsprechen dem bisherigen Vertrag (soweit im Dokument erkannt).</p>
+    {% endif %}
+
+    {% if c.tariffs | length > 1 %}
+      <table class="huk-deviation-table huk-tariff-compare">
+        <thead><tr><th scope="col">HUK-Tarif</th><th scope="col">pro Jahr</th><th scope="col">zu bisher</th><th scope="col">Werkstatt&shy;bindung</th></tr></thead>
+        <tbody>
+          {% for t in c.tariffs %}
+            <tr class="{{ 'is-selected' if t.selected }}">
+              <th scope="row">{{ t.name }}{% if t.selected %} <span class="huk-tag huk-tag-strong">gewählt</span>{% endif %}</th>
+              <td class="huk-num">{{ t.annual_text }}</td>
+              <td class="huk-num">{% if t.diff is none %}–{% elif t.diff < 0 %}<span class="huk-cheaper">−{{ fmt(-t.diff) }}</span>{% elif t.diff > 0 %}<span class="huk-dearer">+{{ fmt(t.diff) }}</span>{% else %}±0,00 €{% endif %}</td>
+              <td>{{ 'ja' if t.workshop else 'nein' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+
+    {% if c.tariffs | length > 1 and not c.before_missing %}<p class="form-hint">„zu bisher“: Minus heißt bei HUK günstiger.</p>{% endif %}
+    <p class="huk-kind">
+      {% if c.offer.source == 'manual' %}
+        <strong>Manuell eingetragener HUK-Beitrag</strong> – nicht automatisch ausgelesen. Ergebnis einer unverbindlichen Vergleichsberechnung, kein Angebot.
+      {% else %}
+        <strong>Ergebnis der Vergleichsberechnung</strong> auf huk.de (unverbindlich, kein Angebot, kein Antrag).
+      {% endif %}
+      Unterschiedliche Zahlweisen sind auf ein Jahr umgerechnet.
+    </p>
+  </div>
+</section>

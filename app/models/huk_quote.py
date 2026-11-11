@@ -43,6 +43,9 @@ class HukQuoteJob(TenantScopedMixin, db.Model):
     cancel_requested = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
     ai_calls = db.Column(db.Integer, nullable=False, default=0, server_default="0")
     ai_cost_usd = db.Column(db.Numeric(10, 4), nullable=False, default=0, server_default="0")
+    # Kfz-Vergleich aus Versicherungsschein (app/services/huk/policy.py): bisheriger Vertrag laut
+    # Dokument, Pruefhinweise, ggf. manuell eingetragener HUK-Beitrag. Geht nie an huk.de.
+    comparison = db.Column(db.JSON, nullable=True)
     # Beleg der Rechnerseite (Screenshot des Angebotsbereichs, ohne Namen/Adressen).
     evidence_path = db.Column(db.String(255), nullable=True)
     client_ref = db.Column(db.String(64), nullable=True)

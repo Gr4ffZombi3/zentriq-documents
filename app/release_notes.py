@@ -17,6 +17,15 @@ from datetime import date
 
 RELEASE_NOTES = (
     {
+        "date": date(2026, 11, 12),
+        "title": "Kfz-Vergleich aus dem Versicherungsschein",
+        "text": "Unter „Kfz-Angebot (HUK)“ können Sie den Versicherungsschein eines Kunden fotografieren oder als PDF hochladen. "
+        "Zentriq liest die Tarifangaben aus, fragt Fehlendes gesammelt ab und zeigt nach „Bei HUK berechnen“ den bisherigen "
+        "und den HUK-Jahresbeitrag nebeneinander – mit Differenz und wichtigen Abweichungen. Wenn mehrere Personen fahren, "
+        "fragt die Kfz-Berechnung jetzt zusätzlich, ob jemand 70 Jahre oder älter ist.",
+        "audience": "alle",
+    },
+    {
         "date": date(2026, 11, 11),
         "title": "Test: Anruferkennung am Telefon",
         "text": "Für eine erste Test-Durchwahl zeigt Zentriq beim Klingeln oben rechts, wer anruft – mit „Kundenakte öffnen“, "

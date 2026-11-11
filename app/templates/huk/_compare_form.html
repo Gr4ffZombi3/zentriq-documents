@@ -1,0 +1,101 @@
+{# Kompakte Pruefansicht fuer den Kfz-Vergleich aus Versicherungsschein (innerhalb von huk/form.html).
+   Oben alles, was noch fehlt oder unklar ist; darunter der bisherige Vertrag und die erkannten
+   Angaben - alles bearbeitbar. Nichts wird vorbelegt, was nicht im Dokument stand. #}
+{% set open_fields = [] %}
+{% set done_fields = [] %}
+{% for f in fields %}
+  {% if values.get(f.key) and f.key not in errors and f.key in active_keys %}
+    {% set _ = done_fields.append(f) %}
+  {% else %}
+    {% set _ = open_fields.append(f) %}
+  {% endif %}
+{% endfor %}
+{% set open_active = open_fields | selectattr('key', 'in', active_keys) | list %}
+
+<div class="huk-compare-form">
+{% for key, text in flags | dictsort if key.startswith('info_') %}
+  {% if loop.first %}<div class="flash flash-info huk-infos" role="status"><p><strong>Hinweise aus dem Dokument</strong></p><ul>{% endif %}
+  <li>{{ text }}</li>
+  {% if loop.last %}</ul></div>{% endif %}
+{% endfor %}
+
+<section class="panel huk-open" aria-labelledby="huk-offen">
+  <header class="panel-header">
+    <h2 class="panel-title" id="huk-offen">
+      {% if open_active %}Noch anzugeben ({{ open_active | length }}){% else %}Alle Pflichtangaben vorhanden{% endif %}
+    </h2>
+  </header>
+  <div class="panel-body huk-fields">
+    {% if open_active %}
+      <p class="form-hint">Diese Angaben stehen nicht (eindeutig) im Dokument. Bitte ergänzen – unklare oder widersprüchliche Werte sind markiert.</p>
+    {% else %}
+      <p class="form-hint">Bitte die erkannten Angaben unten kurz prüfen.</p>
+    {% endif %}
+    {% for f in open_fields %}
+      {% include "huk/_field.html" %}
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel" aria-labelledby="huk-bisher">
+  <header class="panel-header"><h2 class="panel-title" id="huk-bisher">Bisheriger Vertrag (laut Dokument)</h2></header>
+  <div class="panel-body huk-fields huk-fields-compact">
+    <div class="huk-field {{ 'huk-field-bad' if errors.get('bisher_beitrag') }}">
+      <label class="field-label" for="huk-bisher-beitrag">Bisheriger Beitrag je Zahlung (€)</label>
+      <input class="field-surface" id="huk-bisher-beitrag" name="bisher_beitrag" inputmode="decimal" autocomplete="off"
+             value="{{ previous.get('beitrag') or '' }}" placeholder="z. B. 44,22">
+      {% if errors.get('bisher_beitrag') %}<p class="form-error">{{ errors['bisher_beitrag'] }}</p>
+      {% elif flags.get('bisher_beitrag') and not previous.get('beitrag') %}<p class="huk-flag">{{ flags['bisher_beitrag'] }}</p>{% endif %}
+    </div>
+    <div class="huk-field {{ 'huk-field-bad' if errors.get('bisher_zahlweise') }}">
+      <label class="field-label" for="huk-bisher-zahlweise">Zahlweise des bisherigen Beitrags</label>
+      <select class="field-surface" id="huk-bisher-zahlweise" name="bisher_zahlweise">
+        <option value="">Bitte auswählen</option>
+        {% for i in intervals %}<option value="{{ i }}" {% if previous.get('zahlweise') == i %}selected{% endif %}>{{ i }}</option>{% endfor %}
+      </select>
+      {% if errors.get('bisher_zahlweise') %}<p class="form-error">{{ errors['bisher_zahlweise'] }}</p>
+      {% elif flags.get('bisher_zahlweise') and not previous.get('zahlweise') %}<p class="huk-flag">{{ flags['bisher_zahlweise'] }}</p>{% endif %}
+    </div>
+    <fieldset class="huk-field">
+      <legend class="field-label">Werkstattbindung bisher</legend>
+      <div class="huk-options">
+        {% for v, t in (('ja', 'Ja'), ('nein', 'Nein'), ('', 'Nicht bekannt')) %}
+          <label class="huk-option"><input type="radio" name="bisher_werkstatt" value="{{ v }}" {% if (previous.get('werkstatt') or '') == v %}checked{% endif %}><span>{{ t }}</span></label>
+        {% endfor %}
+      </div>
+      {% if flags.get('bisher_werkstatt') %}<p class="huk-flag">{{ flags['bisher_werkstatt'] }}</p>{% endif %}
+    </fieldset>
+    <p class="form-hint huk-span">Der bisherige Beitrag dient nur dem Vergleich in Zentriq und wird nicht an huk.de übermittelt. Ohne Beitrag zeigt Zentriq nur das HUK-Ergebnis.</p>
+  </div>
+</section>
+
+{% if done_fields %}
+  {% set reopen = errors | select('in', done_fields | map(attribute='key') | list) | list %}
+  <section class="panel huk-recognized" aria-labelledby="huk-erkannt">
+    <header class="panel-header"><h2 class="panel-title" id="huk-erkannt">Aus dem Dokument erkannt ({{ done_fields | length }})</h2></header>
+    <dl class="huk-recognized-list">
+      {% for f in done_fields %}
+        <div><dt>{{ f.question }}</dt><dd>{{ label_of(f.key, values.get(f.key)) }}</dd></div>
+      {% endfor %}
+    </dl>
+    <details class="huk-recognized-edit" {% if reopen %}open{% endif %}>
+      <summary class="btn btn-secondary btn-sm">Erkannte Angaben ändern</summary>
+      <div class="panel-body huk-fields huk-fields-compact">
+        {% for f in done_fields %}
+          {% include "huk/_field.html" %}
+        {% endfor %}
+        <p class="form-hint huk-span">Zusatzbausteine (Schutzbrief, Rabattschutz u. a.) werden nicht ausgewählt.</p>
+      </div>
+    </details>
+  </section>
+{% endif %}
+
+<div class="huk-form-actions huk-compare-actions">
+  <input type="hidden" name="client_ref" value="{{ start_token }}">
+  <p class="form-hint">Mit „Bei HUK berechnen“ gehen nur die Tarifangaben – ohne Namen, Anschrift, Kennzeichen oder Vertragsnummer – an den öffentlichen Rechner auf huk.de. Es wird nichts beantragt und kein Angebot verschickt.</p>
+  <div class="zq-inline-row">
+    <button type="submit" class="btn btn-primary" name="aktion" value="berechnen">Bei HUK berechnen</button>
+    <button type="submit" class="btn btn-secondary" name="aktion" value="speichern">Nur speichern</button>
+  </div>
+</div>
+</div>

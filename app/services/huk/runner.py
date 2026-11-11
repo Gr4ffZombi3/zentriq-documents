@@ -181,11 +181,37 @@ def _errors(page) -> list[str]:
     return [t.strip() for t in texts if t.strip()][:5]
 
 
+def _open_questions(page) -> list[str]:
+    """Sichtbare Fragen ohne gewaehlte Antwort (Grund fuer einen gesperrten Weiter-Knopf)."""
+    open_ = []
+    for g in page.locator("fieldset[role=group]").all():
+        if not g.is_visible():
+            continue
+        items = g.locator("[role=radio], [role=checkbox]")
+        if items.count() and not g.locator("[aria-checked=true]").count():
+            open_.append((g.get_attribute("aria-label") or "").strip()[:120])
+    return [q for q in open_ if q][:3]
+
+
 def _next(ctx: Context, expected_path: str) -> None:
     ctx.check()
     page = ctx.page
     before = page.url
-    page.locator("button:visible").filter(has_text=re.compile(r"^\s*Weiter\s*$")).last.click()
+    button = page.locator("button:visible").filter(has_text=re.compile(r"^\s*Weiter\s*$")).last
+    for _ in range(12):  # kurz warten, falls der Rechner noch prueft
+        if button.get_attribute("aria-disabled") != "true" and button.is_enabled():
+            break
+        page.wait_for_timeout(250)
+    else:
+        questions = _open_questions(page)
+        raise HukRunError(
+            "needs_input",
+            "Der Rechner stellt eine Pflichtfrage, die Zentriq noch nicht kennt: "
+            + ("; ".join(f"„{q}“" for q in questions) if questions else "unbekannte Frage")
+            + ". Bitte die Berechnung manuell auf huk.de fortsetzen.",
+            {"questions": questions, "step": before.rsplit("/", 1)[-1]},
+        )
+    button.click()
     for _ in range(40):
         page.wait_for_timeout(250)
         if page.url != before:
@@ -265,6 +291,8 @@ def _usage(ctx: Context, v: dict) -> None:
     _choose_multi(ctx, r"Wer fährt mit dem Fahrzeug", labels)
     if any(d != "vn" for d in v["fahrer"]):
         _choose(ctx, "alle_ueber_25", r"mindestens 25 Jahre", v["alle_ueber_25"])
+        if v.get("fahrer_ueber_70"):
+            _choose(ctx, "fahrer_ueber_70", r"70 Jahre oder älter", v["fahrer_ueber_70"])
 
 
 def _sf(ctx: Context, v: dict) -> None:

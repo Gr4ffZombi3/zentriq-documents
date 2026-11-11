@@ -181,7 +181,9 @@ def _execute(job, cfg, jobs, runner, db, utcnow_naive):
             job.message = "Der Rechner hat nicht reagiert – neuer Versuch …"
             db.session.commit()
         elif exc.code == "needs_input":
-            jobs._finish(job, "needs_input", exc.code, exc.message)
+            options = [o for o in (exc.details or {}).get("options") or [] if isinstance(o, str) and o.strip()]
+            message = exc.message + (" Angeboten: " + ", ".join(options[:12]) + "." if options else "")
+            jobs._finish(job, "needs_input", exc.code, message[:500])
         else:
             jobs._finish(job, "failed", exc.code, exc.message)
         return

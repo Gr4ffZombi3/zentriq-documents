@@ -118,6 +118,9 @@ def save_draft(user, job: HukQuoteJob | None, raw: dict, customer: Customer | No
     job.status = "draft"
     job.input_data = values
     job.customer_id = customer.id if customer is not None else None
+    if job.comparison and job.comparison.get("manual"):
+        # Neue Berechnung: ein frueher manuell eingetragener HUK-Beitrag gilt nicht mehr.
+        job.comparison = {k: v for k, v in job.comparison.items() if k != "manual"}
     job.result = None
     job.message = None
     job.error_code = None
@@ -126,6 +129,67 @@ def save_draft(user, job: HukQuoteJob | None, raw: dict, customer: Customer | No
     db.session.commit()
     missing, errors = schema.validate(values, local_today())
     return job, missing, errors
+
+
+def create_comparison(user, values: dict, comparison: dict, customer: Customer | None) -> HukQuoteJob:
+    """Entwurf aus einem ausgelesenen Versicherungsschein (nur gueltige Rechnerfelder)."""
+    job = HukQuoteJob(tenant_id=user.tenant_id, status="draft", created_by_user_id=user.id,
+                      customer_id=customer.id if customer is not None else None,
+                      input_data=schema.normalize(values), comparison=comparison)
+    db.session.add(job)
+    db.session.commit()
+    return job
+
+
+def save_previous(job: HukQuoteJob, form: dict) -> dict[str, str]:
+    """Bisheriger Vertrag (Beitrag, Zahlweise, Werkstattbindung) aus dem Formular. Gibt Fehler je Feld zurueck."""
+    from app.services.huk import policy
+
+    if job.status not in ("draft", "needs_input", "failed", "cancelled"):
+        raise HukJobError("Dieser Auftrag läuft bereits und kann nicht mehr geändert werden.", 409)
+    comparison = dict(job.comparison or {})
+    previous = dict(comparison.get("previous") or {})
+    errors = {}
+    raw = (form.get("beitrag") or "").strip()
+    amount = policy.parse_amount(raw)
+    if raw and amount is None:
+        errors["bisher_beitrag"] = "Bitte einen Betrag wie 44,22 eingeben."
+    interval = form.get("zahlweise") or None
+    if interval not in policy.INTERVALS:
+        interval = None
+    if amount and not interval:
+        errors["bisher_zahlweise"] = "Bitte angeben, für welchen Zeitraum der Beitrag gilt."
+    previous["beitrag"] = amount if raw else None
+    previous["zahlweise"] = interval
+    previous["werkstatt"] = form.get("werkstatt") if form.get("werkstatt") in policy.WORKSHOP else None
+    comparison["previous"] = previous
+    job.comparison = comparison
+    db.session.commit()
+    return errors
+
+
+def save_manual_price(job: HukQuoteJob, form) -> None:
+    """HUK-Beitrag von Hand (nach manueller Berechnung auf huk.de), nur wenn kein automatisches Ergebnis vorliegt."""
+    from app.services.huk import policy
+
+    if not job.comparison:
+        raise HukJobError("Für diese Berechnung gibt es keinen Vergleich.", 400)
+    if job.status not in ("failed", "needs_input", "cancelled"):
+        raise HukJobError("Ein HUK-Beitrag kann nur eingetragen werden, wenn die automatische Berechnung nicht fertig wurde.", 409)
+    amount = policy.parse_amount(form.get("betrag"))
+    interval = form.get("zahlweise")
+    if amount is None:
+        raise HukJobError("Bitte den HUK-Beitrag als Betrag eingeben, z. B. 438,93.", 400)
+    if interval not in policy.INTERVALS:
+        raise HukJobError("Bitte die Zahlweise des HUK-Beitrags angeben.", 400)
+    comparison = dict(job.comparison)
+    comparison["manual"] = {
+        "betrag": amount, "zahlweise": interval, "tarif": (form.get("tarif") or "").strip()[:60] or None,
+        "werkstatt": form.get("werkstatt") if form.get("werkstatt") in policy.WORKSHOP else None,
+        "at": utcnow_naive().isoformat(timespec="seconds") + "Z",
+    }
+    job.comparison = comparison
+    db.session.commit()
 
 
 def check_complete(job: HukQuoteJob) -> tuple[list, dict]:
@@ -214,6 +278,7 @@ def copy_as_draft(user, job: HukQuoteJob) -> HukQuoteJob:
     new = HukQuoteJob(
         tenant_id=user.tenant_id, status="draft", created_by_user_id=user.id,
         customer_id=job.customer_id, input_data=dict(job.input_data or {}),
+        comparison={k: v for k, v in (job.comparison or {}).items() if k != "manual"} or None,
     )
     db.session.add(new)
     db.session.commit()

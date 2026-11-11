@@ -11,7 +11,10 @@
       <p class="page-subtitle">Unverbindliche Beitragsberechnung über den öffentlichen Rechner auf huk.de, im Hintergrund. Es wird nichts beantragt.</p>
     </div>
     {% if enabled %}
-      <a class="btn btn-primary" href="{{ url_for('huk.new') }}">{{ icon('plus', class='h-4 w-4') }}<span>Neue Berechnung</span></a>
+      <div class="zq-inline-row">
+        <a class="btn btn-primary" href="{{ url_for('huk.policy_upload') }}">{{ icon('camera', class='h-4 w-4') }}<span>Vergleich aus Versicherungsschein</span></a>
+        <a class="btn btn-secondary" href="{{ url_for('huk.new') }}">{{ icon('plus', class='h-4 w-4') }}<span>Neue Berechnung</span></a>
+      </div>
     {% endif %}
   </div>
 
@@ -39,7 +42,9 @@
                 </span>
               </span>
               <span class="huk-list-side">
-                {% if job.status == 'done' and sel %}<span class="huk-list-price">{{ sel.price }}</span>{% endif %}
+                {% if job.status == 'done' and sel %}<span class="huk-list-price">{{ sel.price }}</span>
+                {% elif job.comparison and job.comparison.get('manual') %}<span class="huk-list-price">{{ job.comparison.manual.betrag }} € <small>(manuell)</small></span>{% endif %}
+                {% if job.comparison %}<span class="huk-tag">Vergleich</span>{% endif %}
                 {{ badge(labels.get(job.status, job.status), tones.get(job.status, 'muted')) }}
               </span>
             </a>

@@ -20,7 +20,7 @@ class Settlement(TenantScopedMixin, db.Model):
     __table_args__ = (db.UniqueConstraint("tenant_id", "file_sha256", name="uq_settlements_file"),)
 
     id = db.Column(db.Integer, primary_key=True)
-    # processing | done | needs_review | duplicate | failed
+    # processing | done | incomplete | duplicate | failed (needs_review: alte Auswertung mit Pruefliste)
     status = db.Column(db.String(20), nullable=False, default="processing", server_default="processing")
     original_filename = db.Column(db.String(255), nullable=False)
     stored_path = db.Column(db.String(255), nullable=False)
@@ -34,6 +34,8 @@ class Settlement(TenantScopedMixin, db.Model):
     text_method = db.Column(db.String(20), nullable=True)  # text | ocr | mixed
     page_count = db.Column(db.Integer, nullable=True)
     message = db.Column(db.String(500), nullable=True)
+    # Automatische Auswertung: {"version", "blocks": [{"vm", "name"}], "document_total", "incomplete": [...]}
+    details = db.Column(db.JSON, nullable=True)
     uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = db.Column(db.DateTime, nullable=False, default=_now)
     processed_at = db.Column(db.DateTime, nullable=True)
@@ -44,7 +46,7 @@ class Settlement(TenantScopedMixin, db.Model):
 
     @property
     def counts(self) -> bool:
-        return self.status in ("done", "needs_review")
+        return self.status in ("done", "incomplete") and bool(self.details)
 
 
 class SettlementLine(TenantScopedMixin, db.Model):

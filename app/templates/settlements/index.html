@@ -1,70 +1,101 @@
 {% extends "base.html" %}
+{% from "settlements/_money.html" import money %}
 {% block title %}Abrechnungen – Zentriq{% endblock %}
 {% block body_class %}huk-page{% endblock %}
-{% macro money(v) %}{{ "{:,.2f}".format(v).replace(",", "X").replace(".", ",").replace("X", ".") }} €{% endmacro %}
-{% macro drill(label, uid, art=None, sparte=None) -%}
-  {%- set params = {'monat': '%04d-%02d' % (year, month), 'mitarbeiter': uid} -%}
-  {%- if art %}{% set _ = params.update({'art': art}) %}{% endif -%}
-  {%- if sparte %}{% set _ = params.update({'sparte': sparte}) %}{% endif -%}
-  {%- if exclude_ten %}{% set _ = params.update({'ohne_zehn': '1'}) %}{% endif -%}
-  <a class="abr-drill" href="{{ url_for('settlements.bookings', **params) }}{% for s in excluded %}&ohne={{ s | urlencode }}{% endfor %}">{{ label }}</a>
-{%- endmacro %}
 {% block content %}
+{# Automatische Mitarbeiteruebersicht aus der HUK-Abrechnung (app/services/settlements.py):
+   je aktivem Buero-Mitglied, zugeordnet ueber die VM-Nummer der Tabellenbloecke. Keine Pruefliste. #}
 <div class="page-shell">
-  <div class="page-toolbar"><div><h1 class="page-toolbar-title">Abrechnungen</h1>
-    <p class="page-subtitle">Auswertung aus den eingereichten Belegen. Je Mitarbeiter (Vermittlernummer des Tabellenblocks) aus den Zeilen der Einzelübersicht, Spalte „Betrag in Euro“. Einzelbuchungen erst in den Details.</p></div></div>
-
-  <form method="get" class="panel abr-filter" aria-label="Zeitraum und Filter">
-    <div class="panel-body abr-filter-body">
-      <label class="field-label" for="abr-monat">Abrechnungszeitraum</label>
-      <select class="field-surface" id="abr-monat" name="monat">
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">Abrechnungen</h1>
+      <p class="page-subtitle">Mitarbeiterübersicht aus der HUK-Abrechnung – automatisch über die VM-Nummer der Tabellenblöcke, Beträge aus „Betrag in Euro“ der Einzelübersicht.</p>
+    </div>
+    <form method="get" class="abr-period" aria-label="Zeitraum">
+      <label class="sr-only" for="abr-monat">Abrechnungszeitraum</label>
+      <select class="field-surface" id="abr-monat" name="monat" onchange="this.form.submit()">
         {% for y, m in available or [(year, month)] %}<option value="{{ '%04d-%02d' % (y, m) }}" {% if (y, m) == (year, month) %}selected{% endif %}>{{ month_label(y, m) }}</option>{% endfor %}
       </select>
-      <label class="huk-option"><input type="checkbox" name="ohne_zehn" value="1" {% if exclude_ten %}checked{% endif %}><span>Ohne 10-€-Positionen</span></label>
-      {% for s in sparten %}<label class="huk-option"><input type="checkbox" name="ohne" value="{{ s }}" {% if s in excluded %}checked{% endif %}><span>Ohne {{ s }}</span></label>{% endfor %}
-      <div class="form-actions"><button type="submit" class="btn btn-primary">Anzeigen</button></div>
-    </div>
-  </form>
+      <noscript><button type="submit" class="btn btn-secondary btn-sm">Anzeigen</button></noscript>
+    </form>
+  </div>
 
-  {% if not rows %}
-    <p class="flash flash-info">Für {{ month_label(year, month) }} liegen keine ausgewerteten Abrechnungen vor.</p>
+  {% if processing %}<p class="flash flash-info" role="status">Ein Beleg wird gerade gelesen – bitte die Seite gleich neu laden.</p>{% endif %}
+  {% if view.incomplete %}
+    <div class="flash flash-error abr-incomplete" role="status" data-abr-incomplete>
+      <p><strong>Auswertung unvollständig.</strong> Ein Teil des Belegs konnte technisch nicht zuverlässig gelesen werden – die Zahlen können zu niedrig sein.</p>
+      <ul>{% for text in view.incomplete %}<li>{{ text }}</li>{% endfor %}</ul>
+    </div>
   {% endif %}
+  {% if not view.has_settlement %}
+    <p class="flash flash-info">Für {{ month_label(year, month) }} liegt noch keine ausgewertete HUK-Abrechnung vor.</p>
+  {% endif %}
+
   <div class="abr-grid">
-  {% for r in rows %}
-    {% set uid = r.user_id %}
-    {% set base = {'monat': '%04d-%02d' % (year, month), 'mitarbeiter': uid, 'teil': '1'} %}
-    <section class="panel abr-card" aria-labelledby="abr-m-{{ uid }}" data-abr-employee="{{ uid }}">
-      <header class="panel-header"><h2 class="panel-title" id="abr-m-{{ uid }}">{{ r.name }}</h2></header>
-      <dl class="fact-list abr-key">
-        <div><dt>Vergütung ohne 10-€-Positionen</dt><dd data-abr-regular><strong>{{ drill(money(r.regular), uid, 'regular') }}</strong></dd></div>
-        <div><dt>Abgerechnete Neuabschlüsse</dt><dd data-abr-orders>{% if r.orders is none %}–{% else %}{{ r.orders - r.orders_cancelled }}{% if r.orders_cancelled %} <small>(+ {{ r.orders_cancelled }} storniert)</small>{% endif %}{% endif %}</dd></div>
-        <div><dt>Anzahl je Sparte</dt><dd data-abr-sparten>{% if r.sales_by_sparte %}<ul class="abr-plain">{% for s, n in r.sales_by_sparte.items() %}<li>{{ drill(s ~ ': ' ~ n, uid, None, s) }}</li>{% endfor %}</ul>{% else %}–{% endif %}</dd></div>
+  {% for r in view.rows %}
+    {% set no_data = not r.has_data and (not view.has_settlement or view.incomplete) %}
+    <section class="panel abr-card {{ 'abr-card-unassigned' if r.unassigned }}" aria-labelledby="abr-m-{{ loop.index }}" data-abr-row="{{ r.vm or '' }}">
+      <header class="panel-header abr-card-head">
+        <h2 class="panel-title" id="abr-m-{{ loop.index }}">{{ r.name }}</h2>
+        <span class="abr-vm">{% if r.vm %}VM-Nr. {{ r.vm }}{% else %}keine VM-Nummer hinterlegt{% endif %}</span>
+      </header>
+      {% if r.unassigned %}<p class="abr-note">Keinem Büro-Mitglied zugeordnet – VM-Nummer im Benutzerkonto hinterlegen, dann erscheint der Block automatisch beim Mitarbeiter.</p>{% endif %}
+      <dl class="abr-key">
+        <div><dt>Neuabschlüsse</dt><dd data-abr-count>{{ '–' if no_data else r.count }}</dd></div>
+        <div><dt>Vergütung ohne 10-€-Positionen</dt><dd data-abr-regular>{{ '–' if no_data else money(r.regular) }}</dd></div>
+        <div class="abr-key-wide"><dt>Je Sparte</dt><dd data-abr-sparten>
+          {% if no_data %}–{% elif r.by_sparte %}{% for s, n in r.by_sparte.items() %}<span class="abr-chip">{{ s }}: {{ n }}</span>{% endfor %}{% else %}keine{% endif %}
+        </dd></div>
       </dl>
-      {% if not exclude_ten %}
-      <p class="abr-ten" data-abr-ten>10-€-Positionen (separat): {{ r.ten_pos_count }} × +10 €{% if r.ten_neg_count %}, {{ r.ten_neg_count }} × −10 €{% endif %} = {{ drill(money(r.ten_sum), uid, 'ten') }}</p>
+      <p class="abr-ten" data-abr-ten>10-€-Positionen (separat): {% if no_data %}–{% else %}{{ r.ten_count }} · {{ money(r.ten_sum) }}{% endif %}</p>
+      {% if no_data %}<p class="abr-note">{{ 'Keine vollständigen Daten – Auswertung unvollständig.' if view.has_settlement else 'Noch keine Abrechnung für diesen Zeitraum.' }}</p>{% endif %}
+      {% if r.closings or r.cancellations or r.ten_lines %}
+        <details class="abr-details">
+          <summary>Abschlüsse anzeigen ({{ r.count }})</summary>
+          {% if r.closings %}
+            <div class="table-wrap"><table class="data-table abr-table">
+              <thead><tr><th scope="col">Vertragsnummer</th><th scope="col">Sparte</th><th scope="col">Antragsdatum</th><th scope="col" class="num">Vergütung laut Beleg</th></tr></thead>
+              <tbody>{% for c in r.closings %}<tr><td class="tabular-nums">{{ c.ref }}</td><td>{{ c.sparte }}</td><td class="tabular-nums">{{ c.applied_on.strftime('%d.%m.%Y') if c.applied_on else '–' }}</td><td class="num tabular-nums">{{ money(c.amount) }}</td></tr>{% endfor %}</tbody>
+            </table></div>
+          {% endif %}
+          {% if r.cancellations %}
+            <p class="abr-sub">Stornos und Korrekturen (mindern die Vergütung, kein Neuabschluss)</p>
+            <div class="table-wrap"><table class="data-table abr-table">
+              <tbody>{% for c in r.cancellations %}<tr><td class="tabular-nums">{{ c.ref }}</td><td>{{ c.sparte }}</td><td class="tabular-nums">{{ c.applied_on.strftime('%d.%m.%Y') if c.applied_on else '–' }}</td><td class="num tabular-nums">{{ money(c.amount) }}</td></tr>{% endfor %}</tbody>
+            </table></div>
+          {% endif %}
+          {% if r.ten_lines %}
+            <p class="abr-sub">10-€-Positionen ({{ r.ten_count }} · {{ money(r.ten_sum) }})</p>
+            <div class="table-wrap"><table class="data-table abr-table">
+              <tbody>{% for line in r.ten_lines %}<tr><td class="tabular-nums">{{ line.contract_ref or '–' }}</td><td>{{ line.sparte or '–' }}</td><td class="tabular-nums">{{ line.booking_date.strftime('%d.%m.%Y') if line.booking_date else '–' }}</td><td class="num tabular-nums">{{ money(line.amount) }}</td></tr>{% endfor %}</tbody>
+            </table></div>
+          {% endif %}
+        </details>
       {% endif %}
-      {% if r.unclear %}<p class="flash flash-error abr-warn">{{ r.unclear }} unklare Zeile(n) noch nicht gezählt – bitte im Beleg prüfen.</p>{% endif %}
-      <details class="abr-details" data-lazy-src="{{ url_for('settlements.bookings', **base) }}{% if exclude_ten %}&ohne_zehn=1{% endif %}{% for s in excluded %}&ohne={{ s | urlencode }}{% endfor %}">
-        <summary>Details: Einzelbuchungen ({{ r.lines }}){% if r.storno_sum %} · Stornos {{ money(r.storno_sum) }}{% endif %} · Gesamt laut Abrechnung {{ money(r.total) }}</summary>
-        <div data-lazy-body></div></details>
-      {% if r.unclear %}<details class="abr-details" data-lazy-src="{{ url_for('settlements.bookings', art='unclear', **base) }}"><summary>Unklare Zeilen ({{ r.unclear }})</summary><div data-lazy-body></div></details>{% endif %}
     </section>
   {% endfor %}
   </div>
 
   <section class="panel" aria-labelledby="abr-belege">
     <header class="panel-header"><h2 class="panel-title" id="abr-belege">Eingereichte Belege</h2>
-      <div class="panel-actions"><a class="btn btn-secondary btn-sm" href="{{ url_for('settlements.export', monat='%04d-%02d' % (year, month)) }}">Export (CSV)</a></div></header>
+      {% if view.has_settlement %}<div class="panel-actions"><a class="btn btn-secondary btn-sm" href="{{ url_for('settlements.export', monat='%04d-%02d' % (year, month)) }}">Export (CSV)</a></div>{% endif %}</header>
     {% if documents %}
       <ul class="huk-list">{% for d in documents %}
-        <li><a class="huk-list-item" href="{{ url_for('settlements.detail', settlement_id=d.id) }}"><span class="huk-list-main">
-          <span class="huk-list-title">{{ d.original_filename }}</span>
-          <span class="huk-list-meta">{% if d.period_start %}{{ month_label(d.period_start.year, d.period_start.month) }} · {% endif %}{{ d.broker_number or 'Vermittler unbekannt' }} · eingereicht {{ d.created_at | local_dt }}{% if d.message %} · {{ d.message }}{% endif %}</span></span>
-          <span class="status-pill status-pill-{{ {'done': 'success', 'needs_review': 'warning', 'duplicate': 'muted', 'failed': 'danger'}.get(d.status, 'info') }}">{{ status_labels.get(d.status, d.status) }}</span></a></li>
+        <li class="abr-doc">
+          <a class="huk-list-item" href="{{ url_for('settlements.detail', settlement_id=d.id) }}"><span class="huk-list-main">
+            <span class="huk-list-title">{{ d.original_filename }}</span>
+            <span class="huk-list-meta">{% if d.period_start %}{{ month_label(d.period_start.year, d.period_start.month) }} · {% endif %}eingereicht {{ d.created_at | local_dt }}{% if d.message %} · {{ d.message }}{% endif %}</span></span>
+            <span class="status-pill status-pill-{{ {'done': 'success', 'incomplete': 'warning', 'needs_review': 'warning', 'duplicate': 'muted', 'failed': 'danger'}.get(d.status, 'info') }}">{{ status_labels.get(d.status, d.status) if is_current(d) or d.status in ('processing', 'failed') else status_labels['needs_review'] }}</span></a>
+          {% if not is_current(d) and d.status not in ('processing',) %}
+            <form method="post" action="{{ url_for('settlements.reevaluate', settlement_id=d.id) }}" class="abr-doc-action">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-primary btn-sm">Neu auswerten</button>
+            </form>
+          {% endif %}
+        </li>
       {% endfor %}</ul>
     {% else %}<div class="panel-body"><p class="form-hint">Noch keine Belege.</p></div>{% endif %}
   </section>
   {% include "settlements/_upload.html" %}
-  {% include "settlements/_lazy.html" %}
 </div>
 {% endblock %}

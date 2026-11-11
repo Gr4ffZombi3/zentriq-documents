@@ -18,6 +18,13 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 11),
+        "title": "Abrechnungen: automatische Mitarbeiterübersicht",
+        "text": "Nach dem Hochladen der HUK-Abrechnung erscheint sofort je Mitarbeiter die Zahl der Neuabschlüsse, die Anzahl je Sparte "
+        "und die Vergütung ohne 10-€-Positionen. Die Zuordnung erfolgt über die VM-Nummer – Zeilen müssen nicht mehr einzeln geprüft werden.",
+        "audience": "admin",
+    },
+    {
+        "date": date(2026, 11, 11),
         "title": "Assistent auf dem Handy aufgeräumt",
         "text": "Auf dem Handy sitzt die Zeiterfassung jetzt oben in der Kopfzeile und verdeckt nicht mehr den "
         "Senden-Knopf. „Offene Rückrufe“ und „Nächste Termine“ stehen direkt über dem Eingabefeld; beim Tippen "

@@ -1,6 +1,0 @@
-{% from "settlements/_money.html" import money %}
-<p class="form-hint">{{ lines | length }} Buchung(en), Summe <strong>{{ money(total) }}</strong>.</p>
-<ul class="abr-rows">{% for l in lines %}
-  <li class="abr-row"><div class="abr-row-main"><span class="abr-row-ref">{{ l.contract_ref or 'ohne Referenz' }} · {{ l.sparte or 'Sparte unklar' }}{% if l.booking_label %} ({{ l.booking_label }}){% endif %} · {{ type_labels.get(l.booking_type, '–') }}{% if l.is_ten %} · 10-€{% endif %}{% if l.broker_number %} · VM {{ l.broker_number }}{% endif %}</span><strong>{{ money(l.amount) }}</strong></div>
-    <p class="abr-raw"><a href="{{ url_for('settlements.original', settlement_id=l.settlement_id) }}#page={{ l.page }}" target="_blank" rel="noopener">{{ l.settlement.original_filename }}, Seite {{ l.page }}</a> · „{{ l.raw_text }}“</p></li>
-{% else %}<li class="abr-row"><p class="form-hint">Keine Buchungen.</p></li>{% endfor %}</ul>

@@ -53,7 +53,7 @@ def _audit(user: User, action: str, **details) -> None:
 
 def impact_of_vermittlernummer(user: User, new_value: str | None) -> list[str]:
     """Konkrete Auswirkungen einer geaenderten Vermittlernummer (leer = keine Aenderung)."""
-    from app.models import Customer, LeipzigerEntry, Settlement
+    from app.models import Customer, LeipzigerEntry
 
     old_key, new_key = vermittlernummer_key(user.vermittlernummer), vermittlernummer_key(new_value)
     if old_key == new_key:
@@ -70,19 +70,9 @@ def impact_of_vermittlernummer(user: User, new_value: str | None) -> list[str]:
         "Leipziger Liste: Ihr Zugriff bleibt unverändert (Büro-Admins sehen alle Vorgänge des Büros). "
         f"Als Ihre eigenen Vorgänge gelten künftig {new_n} statt bisher {old_n} (Vermittlernummer {new_label} statt {old_label})."
     )
-    mine = Settlement.query.filter(Settlement.employee_user_id == user.id).count()
-    others_new = 0
-    if new_key:
-        others_new = sum(
-            1 for s in Settlement.query.filter(Settlement.broker_number.isnot(None)).all()
-            if vermittlernummer_key(s.broker_number) == new_key and s.employee_user_id != user.id
-        )
-    line = (f"Abrechnungen: {mine} Ihnen bereits zugeordnete Beleg(e) bleiben bei Ihnen. Neu eingereichte Belege werden "
-            f"künftig über {new_label} zugeordnet" + (f", nicht mehr über {old_label}" if old_key else "") + ".")
-    if others_new:
-        line += (f" {others_new} bereits eingereichte(r) Beleg(e) mit {new_label} sind bisher nicht Ihnen zugeordnet und "
-                 "werden NICHT automatisch umgeordnet (Zuordnung im Beleg durch den Büro-Admin).")
-    hints.append(line)
+    if old_key or new_key:
+        hints.append(f"Abrechnungen: Die HUK-Mitarbeiterübersicht ordnet Abschlüsse automatisch über die VM-Nummer der "
+                     f"Tabellenblöcke zu – künftig über {new_label}" + (f" statt {old_label}" if old_key else "") + ".")
     without_owner = [c for c in Customer.query.filter(Customer.assigned_user_id.is_(None), Customer.broker_number.isnot(None)).all()]
     old_c = sum(1 for c in without_owner if old_key and vermittlernummer_key(c.broker_number) == old_key)
     new_c = sum(1 for c in without_owner if new_key and vermittlernummer_key(c.broker_number) == new_key)

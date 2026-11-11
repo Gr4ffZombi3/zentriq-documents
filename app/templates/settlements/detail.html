@@ -1,53 +1,37 @@
 {% extends "base.html" %}
+{% from "settlements/_money.html" import money %}
 {% block title %}Beleg – Abrechnungen – Zentriq{% endblock %}
 {% block body_class %}huk-page{% endblock %}
-{% macro money(v) %}{% if v is none %}–{% else %}{{ "{:,.2f}".format(v).replace(",", "X").replace(".", ",").replace("X", ".") }} €{% endif %}{% endmacro %}
 {% block content %}
-<div class="page-shell">
+<div class="page-shell page-shell-narrow">
   <div class="page-toolbar"><div><h1 class="page-toolbar-title">{{ record.original_filename }}</h1>
-    <p class="page-subtitle">{{ status_labels.get(record.status, record.status) }}{% if record.message %} · {{ record.message }}{% endif %}</p></div>
-    <a class="btn btn-secondary btn-sm" href="{{ url_for('settlements.index') }}">Zur Übersicht</a></div>
+    <p class="page-subtitle">{{ status_labels.get(record.status, record.status) if current or record.status in ('processing', 'failed') else status_labels['needs_review'] }}{% if record.message %} · {{ record.message }}{% endif %}</p></div>
+    <a class="btn btn-secondary btn-sm" href="{{ url_for('settlements.index', monat=record.period_start.strftime('%Y-%m') if record.period_start else none) }}">Zur Übersicht</a></div>
   <section class="panel">
     <dl class="fact-list">
       <div><dt>Zeitraum</dt><dd>{% if record.period_start %}{{ record.period_start.strftime('%d.%m.%Y') }} – {{ record.period_end.strftime('%d.%m.%Y') if record.period_end else '?' }}{% else %}nicht erkannt{% endif %}</dd></div>
-      <div><dt>Vermittlernummer</dt><dd>{{ record.broker_number or 'nicht erkannt' }}</dd></div>
-      <div><dt>Mitarbeiter</dt><dd>
-        <form method="post" action="{{ url_for('settlements.assign', settlement_id=record.id) }}" class="abr-inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <label class="sr-only" for="abr-ma">Mitarbeiter</label>
-          <select class="field-surface" id="abr-ma" name="mitarbeiter"><option value="">nicht zugeordnet</option>
-            {% for m in members %}<option value="{{ m.id }}" {% if m.id == record.employee_user_id %}selected{% endif %}>{{ m.email }}{% if m.vermittlernummer %} ({{ m.vermittlernummer }}){% endif %}</option>{% endfor %}</select>
-          <button class="btn btn-secondary btn-sm" type="submit">Speichern</button></form></dd></div>
-      <div><dt>Gelesen</dt><dd>{{ {'text': 'eingebetteter Text', 'ocr': 'Texterkennung (Scan) – bitte Beträge stichprobenartig prüfen', 'mixed': 'teils Texterkennung'}.get(record.text_method, '–') }}, {{ record.page_count or 0 }} Seite(n)</dd></div>
+      {% if details.document_total %}<div><dt>Gesamtbetrag laut Beleg</dt><dd>{{ money(details.document_total | float) }} („Ihre Werbegebühren“, nur zum Abgleich)</dd></div>{% endif %}
       <div><dt>Original</dt><dd><a href="{{ url_for('settlements.original', settlement_id=record.id) }}" target="_blank" rel="noopener">Ansehen</a> · <a href="{{ url_for('settlements.original', settlement_id=record.id, download=1) }}">Herunterladen</a></dd></div>
     </dl>
+    {% if record.status != 'processing' %}
+      <form method="post" action="{{ url_for('settlements.reevaluate', settlement_id=record.id) }}" class="panel-body">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn {{ 'btn-primary' if not current else 'btn-secondary' }} btn-sm" data-abr-reevaluate>Neu auswerten</button>
+        <p class="form-hint">Liest dieselbe PDF erneut. Das bisherige Ergebnis wird erst nach erfolgreichem Lesen ersetzt – im selben Beleg, ohne Dubletten.</p>
+      </form>
+    {% endif %}
   </section>
+  {% if details.incomplete %}
+    <div class="flash flash-error" role="status"><p><strong>Auswertung unvollständig:</strong> {{ details.incomplete | join('; ') }}</p></div>
+  {% endif %}
   {% if blocks %}
   <section class="panel" aria-labelledby="abr-vm" data-abr-blocks>
-    <header class="panel-header"><h2 class="panel-title" id="abr-vm">Vermittler-Blöcke</h2></header>
-    <div class="panel-body">
-      <p class="form-hint">Jede Buchung zählt für den Mitarbeiter ihres VM-Blocks. Automatisch über die Vermittlernummer im Mitarbeiterprofil; hier bei Bedarf festlegen (bleibt bei „Neu auswerten“ erhalten).</p>
-      <ul class="abr-rows">{% for b in blocks %}
-        <li class="abr-row"><form method="post" action="{{ url_for('settlements.assign_broker', settlement_id=record.id) }}" class="abr-inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="vm" value="{{ b.broker }}">
-          <span class="abr-row-ref">VM {{ b.broker }} · {{ b.count }} Buchungen · {{ "{:,.2f}".format(b.total).replace(",", "X").replace(".", ",").replace("X", ".") }} €</span>
-          <label class="sr-only" for="vm-{{ loop.index }}">Mitarbeiter</label>
-          <select class="field-surface" id="vm-{{ loop.index }}" name="mitarbeiter"><option value="">nicht zugeordnet</option>
-            {% for m in members %}<option value="{{ m.id }}" {% if m.id == b.user_id %}selected{% endif %}>{{ member_label(m) }}</option>{% endfor %}</select>
-          <button class="btn btn-secondary btn-sm" type="submit">Zuordnen</button></form></li>
-      {% endfor %}</ul>
-    </div>
+    <header class="panel-header"><h2 class="panel-title" id="abr-vm">Mitarbeiterblöcke im Beleg</h2></header>
+    <ul class="abr-blocks">{% for b in blocks %}
+      <li><strong>VM-Nr. {{ b.vm }}</strong>{% if b.name %}, {{ b.name }}{% endif %} · {{ b.lines }} Zeilen · {{ money(b.total) }} ·
+        {% if b.member %}zugeordnet: {{ b.member }}{% else %}<span class="abr-warn-text">keinem Büro-Mitglied zugeordnet</span>{% endif %}</li>
+    {% endfor %}</ul>
   </section>
   {% endif %}
-  <section class="panel" aria-labelledby="abr-zeilen">
-    <header class="panel-header"><h2 class="panel-title" id="abr-zeilen">Buchungen ({{ counts.all }})</h2>
-      {% if record.status in ('done', 'needs_review', 'duplicate') %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settlements.reevaluate', settlement_id=record.id) }}" data-abr-reevaluate>Neu auswerten (mit Vorschau)</a>{% endif %}</header>
-    {% set open_count = counts.open %}
-    <details class="abr-details" data-lazy-src="{{ url_for('settlements.detail_lines', settlement_id=record.id, nur='unklar') }}"{% if open_count %} open{% endif %}>
-      <summary>Unklare Zeilen ({{ open_count }})</summary><div data-lazy-body></div></details>
-    <details class="abr-details" data-lazy-src="{{ url_for('settlements.detail_lines', settlement_id=record.id) }}">
-      <summary>Alle Buchungen anzeigen ({{ counts.all }})</summary><div data-lazy-body></div></details>
-  </section>
 </div>
-{% include "settlements/_lazy.html" %}
 {% endblock %}

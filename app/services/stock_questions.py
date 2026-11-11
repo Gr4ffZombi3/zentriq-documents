@@ -127,7 +127,8 @@ def _settlement(user, text: str) -> dict:
         if len(found) == 1 and found[0] not in named:
             named.append(found[0])
     exclude_ten = bool(re.search(r"\bohne\s+10", text, re.I))
-    rows = settlements.summary(year, month, exclude_ten=exclude_ten)
+    view = settlements.overview(year, month)
+    rows = [r for r in view.rows if r.has_data]
     if named:
         rows = [r for r in rows if r.user_id in {u.id for u in named}]
     label = settlements.month_label(year, month)
@@ -140,13 +141,15 @@ def _settlement(user, text: str) -> dict:
 
     lines = []
     for r in rows:
-        orders = "Aufträge aus der Abrechnung nicht ermittelbar" if r.orders is None else f"{r.orders} Aufträge"
-        lines.append(f"{r.name}: {money(r.total)} gesamt (regulär {money(r.regular)}, 10-€-Positionen {money(r.ten_sum)}; "
-                     f"Stornos {money(r.storno_sum)}) · {orders}" + (f" · {r.unclear} unklare Zeile(n) offen" if r.unclear else ""))
-    total = sum((r.total for r in rows), start=0)
+        total = r.regular if exclude_ten else r.regular + r.ten_sum
+        lines.append(f"{r.name}: {money(total)} gesamt (ohne 10-€-Positionen {money(r.regular)}, 10-€-Positionen {money(r.ten_sum)}) · "
+                     f"{r.count} Neuabschlüsse")
+    total = sum(((r.regular if exclude_ten else r.regular + r.ten_sum) for r in rows), start=0)
     message = f"Verdient laut Abrechnung, {label}" + (" (ohne 10-€-Positionen)" if exclude_ten else "") + f": {money(total)}."
+    if view.incomplete:
+        message += " Achtung: Auswertung unvollständig."
     return {
-        "kind": "facts", "message": message, "rule": "Summe der gezählten Buchungen (unklare Zeilen erst nach Prüfung).",
+        "kind": "facts", "message": message, "rule": "Summe der Einzelübersicht (Betrag in Euro), automatisch je VM-Nummer zugeordnet.",
         "lines": lines, "link": {"url": url_for("settlements.index", monat=f"{year:04d}-{month:02d}"), "label": "Abrechnungen öffnen"},
         "count": len(rows),
     }

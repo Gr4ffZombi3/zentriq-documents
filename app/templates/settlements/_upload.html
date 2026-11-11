@@ -2,9 +2,9 @@
   <header class="panel-header"><h2 class="panel-title" id="abr-einreichen">Abrechnung einreichen</h2></header>
   <form method="post" action="{{ url_for('settlements.submit') }}" enctype="multipart/form-data" class="panel-body huk-fields" data-settle-form>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label class="field-label" for="abr-dateien">PDF-Abrechnung(en), auch gescannt</label>
+    <label class="field-label" for="abr-dateien">HUK-Abrechnung(en) als PDF</label>
     <input class="field-surface" id="abr-dateien" type="file" name="dateien" accept="application/pdf,.pdf" multiple required>
-    <p class="form-hint">Die Datei wird nur auf dem Zentriq-Server gelesen (keine KI, kein externer Dienst). Inhalte sieht ausschließlich der Büro-Admin. Ein erneut eingereichter Beleg wird nicht doppelt gezählt.</p>
+    <p class="form-hint">Die Datei wird nur auf dem Zentriq-Server gelesen (keine KI, kein externer Dienst). Inhalte sieht ausschließlich der Büro-Admin. Die Mitarbeiterübersicht entsteht automatisch über die VM-Nummern im Beleg. Ein erneut eingereichter Beleg wird nicht doppelt gezählt.</p>
     <div class="form-actions"><button type="submit" class="btn btn-primary">Einreichen</button></div>
   </form>
 </section>

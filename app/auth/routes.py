@@ -7,6 +7,7 @@ from flask import (
     abort,
     current_app,
     flash,
+    g,
     jsonify,
     make_response,
     redirect,
@@ -188,8 +189,13 @@ def two_factor():
 def _mark_known_browser(response):
     """Browser als bekannt markieren (nur fuer die Startseite, app/services/welcome.py): wer die
     Anmeldung oeffnet oder angemeldet ist, landet beim naechsten Aufruf von "/" nicht mehr auf
-    der Willkommensseite."""
-    if request.endpoint == "auth.login" or (request.endpoint != "static" and current_user.is_authenticated):
+    der Willkommensseite.
+
+    Nur den bereits geladenen Benutzer (g._login_user) ansehen, nie current_user: das wuerde hier
+    den User-Loader ausserhalb des Mandanten-Kontexts ausloesen (z. B. nach der 2FA-Anmeldung ->
+    MissingTenantContextError -> HTTP 500)."""
+    user = g.get("_login_user")
+    if request.endpoint in ("auth.login", "auth.two_factor") or (user is not None and user.is_authenticated):
         welcome.mark_browser(response)
     return response
 

@@ -101,9 +101,11 @@ def test_mixed_reply_for_selected_customer(app, karl, no_ai):
     assert "Kunde: Karl Schmidthofer" in reply["content"] and "Guten Tag Karl Schmidthofer" in reply["content"]
 
 
-def test_reply_without_customer_asks_back(app, karl, no_ai):
+def test_reply_without_customer_gives_neutral_draft(app, karl, no_ai):
+    # Freie Termine kommen aus dem Buerokalender - dafuer ist keine Kundenakte noetig (keine Rueckfrage).
     reply = _chat(login(app, "admin-a@example.com"), "Schreib dem Kunden eine freundliche Antwort mit drei freien Terminen")
-    assert reply["status"] == "done" and reply["content"].startswith("Für welchen Kunden")
+    assert reply["status"] == "done" and "```E-Mail-Entwurf" in reply["content"] and "Guten Tag," in reply["content"]
+    assert "Für welchen Kunden" not in reply["content"]
 
 
 def test_foreign_customer_context_is_ignored(app, karl, office, no_ai):
@@ -113,7 +115,7 @@ def test_foreign_customer_context_is_ignored(app, karl, office, no_ai):
         _db.session.commit()
         foreign_id = foreign.id
     reply = _chat(login(app, "admin-a@example.com"), "Schreib dem Kunden eine Antwort mit drei freien Terminen", customer_id=foreign_id)
-    assert "Fremd" not in reply["content"] and reply["content"].startswith("Für welchen Kunden")
+    assert "Fremd" not in reply["content"] and "Guten Tag," in reply["content"]
 
 
 def test_vague_writing_order_asks_which_result(app, karl, no_ai):

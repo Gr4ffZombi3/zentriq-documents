@@ -564,13 +564,14 @@ def process_pending(user, message_id: int, audio_jobs=None, context_customer_id=
     # 0-. Offener Auftrag bzw. Terminbestaetigung (auch wenn die Eingabe direkt an den Chat ging):
     #     Rueckfrage/Entwurf im Backend, ohne Modell (app/services/chat_task.py).
     if question is not None and not has_attachments:
+        mail_task = (chat_task.get(conversation) or {}).get("type") == "mail_draft"
         try:
             task_reply, _ended = chat_task.dispatch(user, conversation, question.content, selected_id=context_customer_id)
         except chat_task.TaskError as exc:
             task_reply = chat_task.Reply(text=str(exc))
         if task_reply is not None:
             _finish(pending, conversation, chat_task.render(task_reply), provider=orchestrator.DIRECT_PROVIDER,
-                    model=orchestrator.DIRECT_MODEL, tools_used=["Terminbestätigung"])
+                    model=orchestrator.DIRECT_MODEL, tools_used=["E-Mail-Antwort" if mail_task else "Terminbestätigung"])
             return
 
     # 0. Antwort auf eine Kunden-E-Mail: Kunde, Kalender und Entwurf deterministisch im Backend,

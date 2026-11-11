@@ -18,6 +18,14 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 11),
+        "title": "E-Mail-Entwürfe ohne Kundenakte",
+        "text": "„Schreib eine E-Mail-Antwort: …“ ergibt im Assistenten sofort einen kopierbaren Entwurf mit Betreff, "
+        "Anrede und Ihrer Bürosignatur – auch ohne Kundenakte. Ein genannter Name wird für die Anrede übernommen, "
+        "sonst beginnt die Mail mit „Guten Tag,“. Gesendet wird nichts.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 11),
         "title": "Weniger „Seite veraltet“, nichts geht doppelt",
         "text": "Seiten, die lange offen waren, speichern jetzt ohne die Meldung „Seite veraltet“. Bricht die Verbindung "
         "kurz ab, zeigt Zentriq „Verbindung wird wiederhergestellt“ – und erneutes Speichern legt nichts doppelt an. "

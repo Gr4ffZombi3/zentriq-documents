@@ -44,6 +44,7 @@ WAITING_BY_TYPE = {
     "edit_field": {"customer": "Kunde, dessen Angabe korrigiert werden soll"},
     "change_time": {"choose_event": "Auswahl des Termins, der geändert werden soll",
                     "confirm": "Bestätigung der Terminänderung"},
+    "mail_draft": {"details": "Inhalt oder Empfänger für den E-Mail-Entwurf"},
 }
 
 _WRITING = re.compile(r"\b(?:schreib\w*|formulier\w*|entw[iu]rf\w*|verfass\w*|e-?mail\w*|mail|nachricht|brief)\b", re.I)
@@ -120,7 +121,7 @@ def wants_short(text: str) -> bool:
 # Zustand je Chat in ai_conversations.pending_task (JSON):
 #   {"task": offene Rueckfrage | None, "draft": zuletzt angezeigter Entwurf, "event": zuletzt gebuchter/geaenderter Termin}
 # Aeltere Eintraege (nur der Auftrag auf oberster Ebene, Stand 2120f1c) werden als "task" gelesen.
-TASK_TYPES = (TASK_TYPE, "edit_field", "change_time")
+TASK_TYPES = (TASK_TYPE, "edit_field", "change_time", "mail_draft")
 
 
 def _state(conversation) -> dict:
@@ -492,6 +493,10 @@ def answer(user, conversation, task: dict, text: str) -> Reply | None:
     """Eingabe als Antwort auf die offene Rueckfrage. None: keine Antwort, sondern ein neuer Auftrag."""
     from app.services import chat_followup
 
+    if task.get("type") == "mail_draft":
+        from app.services import email_reply
+
+        return email_reply.answer_task(user, conversation, task, text)
     if task.get("type") not in (None, TASK_TYPE):
         return chat_followup.answer_task(user, conversation, task, text)
     step = task.get("step")

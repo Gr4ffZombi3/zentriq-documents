@@ -396,7 +396,8 @@ def api_customer_input():
             last_name=data.get("last_name") if isinstance(data.get("last_name"), str) else None,
             phone_kinds=data.get("phone_kinds") if isinstance(data.get("phone_kinds"), list) else None,
         )
-        if result.get("kind") == "chat" and not router.can_answer():
+        # Schreibauftraege ("Formuliere eine E-Mail: ...") erstellt der Chat auch ohne Modell (Vorlage).
+        if result.get("kind") == "chat" and not router.can_answer() and not email_reply.is_request(text):
             # Ohne KI-Modell nicht an den Chat weiterreichen (der koennte nur einen Fehler melden) -
             # ausser die Frage ist eine Standardabfrage, die der Chat direkt aus Zentriq beantwortet
             # (orchestrator.direct_answer, ohne Modell).
@@ -450,6 +451,7 @@ def _chat_task(data: dict, text: str):
         return (_followup(data, text, kind, None), False) if kind else (None, False)
     if conversation is None:
         conversation = chat.create_conversation(current_user)
+    mail_task = (chat_task.get(conversation) or {}).get("type") == "mail_draft"
     try:
         reply, ended = chat_task.dispatch(current_user, conversation, text, selected_id=data.get("selected_id"), choice=choice)
     except chat_task.TaskError as exc:
@@ -466,7 +468,7 @@ def _chat_task(data: dict, text: str):
             return None, ended
         return _followup(data, text, kind, conversation), ended
     shown = (data.get("choice_label") if choice is not None and isinstance(data.get("choice_label"), str) else None) or text
-    return _task_response(conversation, shown, reply), ended
+    return _task_response(conversation, shown, reply, "E-Mail-Antwort" if mail_task else "Terminbestätigung"), ended
 
 
 def _task_response(conversation, shown: str, reply, tool: str = "Terminbestätigung"):

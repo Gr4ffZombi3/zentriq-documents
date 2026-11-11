@@ -10,9 +10,9 @@ from flask_login import current_user, login_required
 
 from app.auth.permissions import admin_required
 from app.extensions import db
-from app.models import OfficeNews
+from app.models import Customer, OfficeNews
 from app.navigation import build_navigation
-from app.services import pending_cases, workspace
+from app.services import live, pending_cases, workspace
 from app.tenancy import get_or_404_scoped
 
 workspace_bp = Blueprint("workspace", __name__, url_prefix="/arbeitsplatz")
@@ -28,6 +28,34 @@ def _office_only():
 def _json_body() -> dict:
     data = request.get_json(silent=True)
     return data if isinstance(data, dict) else {}
+
+
+# --- Live-Zusammenarbeit (Dienst zentriq-live) -------------------------------------------------
+
+
+@workspace_bp.get("/live/kunde/<int:customer_id>/token")
+@login_required
+def live_token(customer_id):
+    """Token fuer die Live-Verbindung einer Kundenakte - nur fuer Akten des eigenen Bueros."""
+    _office_only()
+    if not live.enabled():
+        return jsonify({"enabled": False})
+    customer = get_or_404_scoped(Customer, customer_id)
+    response = jsonify({"enabled": True, "token": live.token_for(current_user, customer), "stream": "/live/stream", "me": current_user.id})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@workspace_bp.post("/live/kunde/<int:customer_id>/bearbeiten")
+@login_required
+def live_editing(customer_id):
+    """Meldet Kollegen in derselben Akte "bearbeitet gerade ..." (an/aus)."""
+    _office_only()
+    customer = get_or_404_scoped(Customer, customer_id)
+    data = _json_body()
+    part = data.get("part") if isinstance(data.get("part"), str) else ""
+    live.publish_editing(current_user, customer, bool(data.get("on")), part.strip() or "Stammdaten")
+    return jsonify({"ok": True})
 
 
 # --- Schnellsuche -----------------------------------------------------------------------------

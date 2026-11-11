@@ -312,6 +312,8 @@
   var panelBody = panel && panel.querySelector("[data-zq-panel-body]");
   var panelOpener = null, panelUrl = null, panelScroll = 0;
 
+  // Live-Hinweis "Aktualisieren" im Seitenfenster (js/live.js): Inhalt neu laden, Fenster bleibt offen.
+  document.addEventListener("zq:panel-reload", function () { if (panelUrl) openPanel(panelUrl, panelOpener); });
   function panelSrc(url) { return url + (url.indexOf("?") >= 0 ? "&" : "?") + "panel=1"; }
 
   function closePanel(fromHistory) {
@@ -463,8 +465,13 @@
     status.className = "zq-field-status";
     dd.insertBefore(form, status);
     form.querySelector("input").focus();
+    // Live-Zusammenarbeit (js/live.js): Kollegen in derselben Akte sehen "bearbeitet gerade".
+    box.dispatchEvent(new CustomEvent("zq:editing", { bubbles: true, detail: { on: true, part: "Stammdaten" } }));
 
-    function end() { form.remove(); shown.hidden = false; editBtn.hidden = false; editBtn.focus(); }
+    function end() {
+      form.remove(); shown.hidden = false; editBtn.hidden = false; editBtn.focus();
+      box.dispatchEvent(new CustomEvent("zq:editing", { bubbles: true, detail: { on: false, part: "Stammdaten" } }));
+    }
     cancel.addEventListener("click", end);
     form.addEventListener("keydown", function (ev) { if (ev.key === "Escape") { ev.stopPropagation(); end(); } });
     form.addEventListener("submit", function (ev) {
@@ -494,7 +501,7 @@
       }, function (err) {
         save.disabled = false;
         save.textContent = err.status === 0 || err.status >= 500 ? "Erneut versuchen" : "Speichern";
-        status.textContent = err.status === 409 ? err.message + " (Seite neu laden)" : err.message;
+        status.textContent = err.status === 409 ? "Inzwischen hat jemand anderes die Kundendaten geändert. Bitte die Akte aktualisieren – Ihre Eingabe steht noch im Feld." : err.message;
         status.className = "zq-field-status is-error";
         // Nur bei Eingabefehlern die Felder markieren - bei Verbindungsproblemen ist die Eingabe in Ordnung.
         if (err.status === 400 || err.status === 422) Object.keys(inputs).forEach(function (k) { inputs[k].setAttribute("aria-invalid", "true"); });

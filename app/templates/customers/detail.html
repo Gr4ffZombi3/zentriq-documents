@@ -16,6 +16,12 @@
 <div class="page-shell page-shell-wide">
   {# Tab-Kennung (js/workspace.js): Kundenakten lassen sich parallel als Tabs offen halten. #}
   <span hidden data-zq-tab-kind="kunde" data-zq-tab-title="{{ customer.name }}"></span>
+  {# Live-Zusammenarbeit (js/live.js): wer die Akte noch geoeffnet hat, wer gerade bearbeitet,
+     Hinweis bei Aenderungen durch Kollegen. Ohne Live-Dienst bleibt die Leiste unsichtbar. #}
+  {% if config.LIVE_ENABLED and (current_user.is_office_admin or current_user.is_employee) %}
+    <div class="zq-live" data-zq-live="{{ url_for('workspace.live_token', customer_id=customer.id) }}"
+         data-zq-live-editing="{{ url_for('workspace.live_editing', customer_id=customer.id) }}" hidden></div>
+  {% endif %}
   {% if panel %}
     <p class="zq-panel-kicker">Kundenakte</p>
   {% else %}

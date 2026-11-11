@@ -890,3 +890,32 @@ html.zs-collapsed .zs-kbd { display: none; }
 /* Reduzierte Bewegung gilt auch fuer die Handy-Regel oben (sonst ueberschreibt animation-name). */
 @media (prefers-reduced-motion: reduce) { .zq-greeting, .zs-chat-page .zq-greeting { animation: none; transition: none; } }
 .zq-greeting-more { margin: 0 0 0 0.3rem; }
+
+/* --- Live-Zusammenarbeit in Kundenakten (js/live.js) -------------------------------------
+   Schmale Leiste oben in der Akte: wer sie noch geoeffnet hat, wer gerade bearbeitet, Hinweis
+   bei Aenderungen durch Kollegen. Unsichtbar ohne Inhalt bzw. ohne Live-Dienst. */
+.zq-live { display: grid; gap: 0.35rem; margin: 0 0 0.75rem; font-size: 0.88rem; line-height: 1.35; }
+.zq-live[hidden] { display: none; }
+.zq-live--card { margin: 0.35rem 0 0.5rem; }
+.zq-live-who, .zq-live-editing { display: flex; align-items: center; gap: 0.45rem; margin: 0; color: var(--color-text-muted); }
+.zq-live-dot { width: 0.55rem; height: 0.55rem; flex: none; border-radius: 50%; background: var(--color-success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success) 20%, transparent); }
+.zq-live-editing { color: var(--color-text); font-weight: 600; }
+.zq-live-editing::before { content: ""; width: 0.55rem; height: 0.55rem; flex: none; border-radius: 50%; background: var(--color-warning); }
+.zq-live-changed {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.4rem 0.75rem;
+  padding: 0.5rem 0.75rem; border: 1px solid var(--color-border-strong); border-left: 3px solid var(--color-primary);
+  border-radius: 0.6rem; background: var(--color-surface); color: var(--color-text);
+}
+.zq-live-actions { display: inline-flex; gap: 0.4rem; }
+.zq-live-refresh, .zq-live-dismiss {
+  min-height: 2.25rem; padding: 0 0.85rem; border-radius: 999px; font: inherit; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--color-border-strong); background: var(--color-surface-muted); color: var(--color-text);
+}
+.zq-live-refresh { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+.zq-live-refresh:focus-visible, .zq-live-dismiss:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.zq-live-formwarn { flex-basis: 100%; margin: 0.4rem 0 0; padding: 0.4rem 0.6rem; border-radius: 0.5rem; background: var(--color-surface-muted); color: var(--color-text); font-size: 0.85rem; border-left: 3px solid var(--color-warning); }
+@media (max-width: 640px) {
+  .zq-live-changed { padding: 0.6rem; }
+  .zq-live-actions { width: 100%; }
+  .zq-live-refresh, .zq-live-dismiss { flex: 1; min-height: 2.75rem; }
+}

@@ -17,6 +17,11 @@ class BaseConfig:
     CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
     CELERY_TASK_ALWAYS_EAGER = False
 
+    # Live-Zusammenarbeit (Dienst zentriq-live, live_service/): Anwesenheit und Aenderungshinweise
+    # in Kundenakten. Ohne laufenden Dienst bleibt die Oberflaeche still (kein Fehler).
+    LIVE_ENABLED = os.environ.get("LIVE_ENABLED", "1").lower() not in ("0", "false", "no")
+    LIVE_REDIS_URL = os.environ.get("LIVE_REDIS_URL") or CELERY_BROKER_URL
+
     OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
     OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL")
     OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")

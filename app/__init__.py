@@ -30,6 +30,9 @@ def create_app(config_object=None):
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     db.init_app(app)
+    from app.services import live as live_service
+
+    live_service.install_hooks()
     migrate.init_app(app, db)
     make_celery(app)
 

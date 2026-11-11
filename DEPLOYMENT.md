@@ -99,12 +99,43 @@ Schlägt der Health-Check fehl, bricht das Skript mit Exit-Code ≠ 0 ab — sic
 systemctl status zentriq-api       # Gunicorn (Flask-App)
 systemctl status zentriq-worker    # Celery-Worker (OCR/KI-Verarbeitung)
 systemctl status zentriq-beat      # Celery Beat (derzeit ohne geplante Aufgaben)
+systemctl status zentriq-live      # Live-Zusammenarbeit (optional, siehe unten)
 journalctl -u zentriq-api -n 100 --no-pager
 journalctl -u zentriq-worker -n 100 --no-pager
 journalctl -u zentriq-beat -n 100 --no-pager
 ```
 
 Alle drei laufen aktuell unter `root` (bewusste Entscheidung, um die Server-Einrichtung so einfach wie möglich zu halten — siehe Abschlussbericht im Commit-Verlauf für die Sicherheitsabwägung). Eine spätere Umstellung auf einen dedizierten Service-User ist möglich, erfordert dann aber eine Migration der Datei-/Verzeichnisrechte (Uploads, venv, Logs).
+
+## Live-Zusammenarbeit (zentriq-live)
+
+Kleiner eigener Dienst für Kundenakten: wer eine Akte gerade geöffnet hat, wer sie bearbeitet und
+ein Hinweis „… hat diese Akte gerade geändert – Aktualisieren“. Technik: Server-Sent Events über
+`live_service/server.py` (asyncio, nur Standardbibliothek + `redis` + `itsdangerous`, keine neuen
+Pakete) auf `127.0.0.1:8001`, nginx-Location `/live/` ohne Pufferung, Nachrichten über das
+vorhandene Redis.
+
+- Flask meldet nach jedem erfolgreichen Commit, welche Kundenakten sich geändert haben
+  (`app/services/live.py`, nur Art der Änderung und Name – keine Kundendaten).
+- Zugang nur mit kurzlebigem, signiertem Token (`/arbeitsplatz/live/kunde/<id>/token`, gleiche
+  Prüfung wie die Akte, eigenes Büro). Der Dienst braucht dafür denselben `SECRET_KEY` (über
+  `EnvironmentFile=.env`).
+- Läuft der Dienst nicht, bleibt die Oberfläche still; Speichern und Konfliktprüfung (Version der
+  Stammdaten, HTTP 409) funktionieren unabhängig davon.
+
+Einmaliges Ausrollen (Unit installieren und starten, `/live/` in die bestehende nginx-Site
+einfügen – mit Sicherung, `nginx -t` und Rücksicherung):
+
+```bash
+./deploy/enable-live.sh            # wiederholbar
+./deploy/enable-live.sh --disable  # Rückbau: Dienst stoppen (nginx bleibt, /live/ -> 502)
+systemctl status zentriq-live
+journalctl -u zentriq-live -n 100 --no-pager
+curl -s http://127.0.0.1:8001/live/health
+```
+
+Danach startet `deploy/update.sh` den Dienst bei jedem Deploy mit neu (nur wenn installiert).
+Abschalten ohne Neustart der Oberfläche: `LIVE_ENABLED=0` in `.env` und `zentriq-api` neu starten.
 
 ## Memo (Sprachnachricht → Transkript)
 

@@ -53,6 +53,10 @@ echo "==> [5/6] Repariere nginx-Konfiguration..."
 echo "==> [6/6] Starte Dienste neu..."
 sudo systemctl restart zentriq-api
 sudo systemctl restart zentriq-worker
+# Live-Dienst nur, wenn er bereits ausgerollt ist (deploy/enable-live.sh).
+if systemctl list-unit-files zentriq-live.service 2>/dev/null | grep -q '^zentriq-live\.service'; then
+    sudo systemctl restart zentriq-live
+fi
 
 echo "==> Verifikation..."
 "$APP_DIR/deploy/post-deploy.sh"

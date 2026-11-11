@@ -108,10 +108,12 @@ sed -e "s#__APP_DIR__#${APP_DIR}#g" \
     "${APP_DIR}/deploy/systemd/zentriq-worker.service.template" > /etc/systemd/system/zentriq-worker.service
 sed -e "s#__APP_DIR__#${APP_DIR}#g" \
     "${APP_DIR}/deploy/systemd/zentriq-beat.service.template" > /etc/systemd/system/zentriq-beat.service
+sed -e "s#__APP_DIR__#${APP_DIR}#g" \
+    "${APP_DIR}/deploy/systemd/zentriq-live.service.template" > /etc/systemd/system/zentriq-live.service
 chmod +x "${APP_DIR}/deploy/pre-start.sh" "${APP_DIR}/deploy/post-deploy.sh" "${APP_DIR}/deploy/repair-nginx.sh" "${APP_DIR}/deploy/update.sh"
 systemctl daemon-reload
-systemctl enable zentriq-api zentriq-worker zentriq-beat
-systemctl restart zentriq-api zentriq-worker zentriq-beat
+systemctl enable zentriq-api zentriq-worker zentriq-beat zentriq-live
+systemctl restart zentriq-api zentriq-worker zentriq-beat zentriq-live
 
 echo "==> [8/10] nginx einrichten..."
 if [ ! -f /etc/nginx/sites-available/zentriq ]; then

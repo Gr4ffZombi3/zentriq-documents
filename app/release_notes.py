@@ -18,6 +18,14 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 11),
+        "title": "Sehen, wer gerade in der Kundenakte ist",
+        "text": "In der Kundenakte und in der Kundenkarte im Assistenten sehen Sie, wer den Kunden gerade ebenfalls "
+        "geöffnet hat und wer gerade die Kundendaten bearbeitet. Ändert jemand etwas, erscheint ein Hinweis mit "
+        "„Aktualisieren“ – so überschreibt niemand versehentlich die Eingabe eines Kollegen.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 11),
         "title": "Aufgeräumte Seitenleiste",
         "text": "Die linke Leiste klappt jetzt ohne Ruckeln ein und aus. „Werkzeuge“ und „Übersicht“ stehen nicht mehr "
         "in der Leiste – Kfz-Angebot, Anonymisieren & Co. finden Sie weiter über die Schnellsuche (Strg+K).",

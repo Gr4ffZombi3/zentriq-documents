@@ -109,4 +109,7 @@ die Webex-Entwickler-APIs freischaltet, muss Placetel/der Webex-Admin bestätige
 - Die Rückrufnotiz wird über `/arbeitsplatz/telefon/anrufe/<id>/rueckrufnotiz` geöffnet – die
   Nummer steht nicht in der URL (nicht im nginx-Access-Log).
 - Gespeichert wird je Anruf: Durchwahl, Benutzer, Anrufernummer, Zeitpunkt, Status
-  (Tabelle `telephony_calls`). Eine Aufbewahrungsfrist ist noch festzulegen.
+  (Tabelle `telephony_calls`). Aufbewahrung: **7 Tage** (`TELEPHONY_CALL_RETENTION_DAYS`, 0 = nie).
+  Ältere Anrufe löscht Zentriq bei jedem neuen Anruf automatisch; zusätzlich von Hand:
+  `.venv/bin/flask telefonie aufraeumen` (optional `--tage N`). Rückrufnotizen in der Kundenakte
+  bleiben davon unberührt.

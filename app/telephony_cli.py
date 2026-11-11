@@ -4,6 +4,7 @@
   flask telefonie liste
   flask telefonie abschalten --email laura@example.com
   flask telefonie testanruf --email laura@example.com --nummer "0228 1234567" [--unterdrueckt] [--ende-nach 10]
+  flask telefonie aufraeumen [--tage 7]
 
 Der Testanruf laeuft durch denselben Webhook wie Webex (signiert mit WEBEX_WEBHOOK_SECRET) und
 zeigt den Hinweis im geoeffneten Browser-Tab des Benutzers. Ausgegeben werden keine Secrets."""
@@ -73,6 +74,16 @@ def disable_command(email):
         line.active = False
         db.session.commit()
     click.echo("Anruf-Hinweise fuer diesen Benutzer abgeschaltet (Zuordnung bleibt gespeichert).")
+
+
+@telephony_cli.command("aufraeumen")
+@click.option("--tage", type=int, default=None, help="Abweichende Frist in Tagen (Standard: TELEPHONY_CALL_RETENTION_DAYS).")
+def purge_command(tage):
+    days = tage if tage is not None else int(current_app.config.get("TELEPHONY_CALL_RETENTION_DAYS") or 0)
+    if days <= 0:
+        click.echo("Aufbewahrung unbegrenzt (0 Tage) - nichts geloescht.")
+        return
+    click.echo(f"{telephony.purge_old_calls(days)} Anrufe geloescht (aelter als {days} Tage).")
 
 
 def _person_id(line: TelephonyLine) -> str:

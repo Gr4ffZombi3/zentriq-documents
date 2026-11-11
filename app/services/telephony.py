@@ -13,6 +13,8 @@ Ablauf (Cisco-Doku: developer.webex.com/docs/call-control#webhook-payload-schema
    Meldungen loesen keinen zweiten Hinweis aus. Danach geht ueber den Live-Dienst nur die
    Anruf-ID an den Benutzerkanal; der Browser holt die Treffer selbst (angemeldet, eigenes Buero).
 5. Angenommen/aufgelegt (state connected/disconnected oder event deleted): Hinweis ausblenden.
+6. Aufbewahrung: Anrufe aelter als TELEPHONY_CALL_RETENTION_DAYS (Standard 7) werden bei jedem neuen
+   Anruf geloescht (zusaetzlich flask telefonie aufraeumen).
 
 Logs enthalten nie Rufnummern, Namen, Secrets oder Signaturen - nur gekuerzte Hash-Kennungen."""
 
@@ -249,6 +251,11 @@ def _ringing(line: TelephonyLine, key: str, data: dict) -> Outcome:
         return Outcome(200, "duplicate")
     _publish(call, "call")
     log.info("telefonie.webhook ringing call=%s line=%s", _ref(key), line.id)
+    try:
+        purge_old_calls()
+    except Exception as exc:  # Aufraeumen darf den Anruf-Hinweis nie verhindern.
+        db.session.rollback()
+        log.warning("telefonie.purge failed: %s", type(exc).__name__)
     return Outcome(200, "ringing")
 
 
@@ -264,6 +271,21 @@ def _finished(key: str, status: str) -> Outcome:
     _publish(call, "call_end")
     log.info("telefonie.webhook %s call=%s", status, _ref(key))
     return Outcome(200, status)
+
+
+def purge_old_calls(days: int | None = None) -> int:
+    """Loescht Anrufe aller Bueros, die aelter als die Aufbewahrungsfrist sind. 0 Tage = nie."""
+    if days is None:
+        days = int(current_app.config.get("TELEPHONY_CALL_RETENTION_DAYS") or 0)
+    if days <= 0:
+        return 0
+    cutoff = _naive_utc(datetime.now(timezone.utc) - timedelta(days=days))
+    with bypass_tenant_scope():
+        removed = TelephonyCall.query.filter(TelephonyCall.created_at < cutoff).delete(synchronize_session=False)
+    db.session.commit()
+    if removed:
+        log.info("telefonie.purge removed=%s days=%s", removed, days)
+    return removed
 
 
 # --- Browser: Anruf anzeigen -----------------------------------------------------------------------

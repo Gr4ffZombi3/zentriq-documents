@@ -384,3 +384,64 @@ def test_live_service_forwards_call_events_without_presence():
     assert broker.published == [] and broker.hashes == {}
     assert b'event: call\ndata: {"id":5}' in writer.data
     assert b"event: call_end" in writer.data
+
+
+# --- Aufbewahrung ------------------------------------------------------------------------------
+
+
+def _age(call_id_key, days):
+    from datetime import datetime, timedelta, timezone
+
+    from app.extensions import db
+
+    with bypass_tenant_scope():
+        call = TelephonyCall.query.filter_by(call_key=telephony.call_key(call_id_key)).one()
+        call.created_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
+        db.session.commit()
+
+
+def test_new_call_purges_calls_older_than_retention(app, client, office):
+    assert app.config["TELEPHONY_CALL_RETENTION_DAYS"] == 7
+    _post(client, _ring(call_id="old"))
+    _post(client, _ring(call_id="recent"))
+    _age("old", 8)
+    _age("recent", 6)
+    assert _post(client, _ring(call_id="new")).get_json()["result"] == "ringing"
+    remaining = {c.call_key for c in TelephonyCall.query.all()}
+    assert remaining == {telephony.call_key("recent"), telephony.call_key("new")}
+
+
+def test_retention_zero_keeps_everything(app, client, office):
+    app.config["TELEPHONY_CALL_RETENTION_DAYS"] = 0
+    _post(client, _ring(call_id="old"))
+    _age("old", 400)
+    _post(client, _ring(call_id="new"))
+    assert TelephonyCall.query.count() == 2
+    assert telephony.purge_old_calls() == 0
+
+
+def test_purge_failure_does_not_block_hint(app, client, office, monkeypatch):
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("db weg")
+
+    monkeypatch.setattr(telephony, "purge_old_calls", boom)
+    assert _post(client, _ring(call_id="call-x")).get_json()["result"] == "ringing"
+    assert TelephonyCall.query.count() == 1
+
+
+def test_purge_command_covers_all_offices(app, client, db, office):
+    other = Tenant(name="Anderes Buero", slug="anderes-buero-telefonie")
+    db.session.add(other)
+    db.session.commit()
+    paula = _user(db, other, "paula@example.com")
+    other_uuid = "11111111-2222-4333-8444-555555555555"
+    telephony.assign_line(paula, other_uuid, None)
+    set_current_tenant_id(office["tenant"].id)
+    _post(client, _ring(call_id="mine"))
+    _post(client, _ring(call_id="theirs", person=other_uuid))
+    _age("mine", 10)
+    _age("theirs", 10)
+    result = app.test_cli_runner().invoke(args=["telefonie", "aufraeumen"])
+    assert result.exit_code == 0 and "2 Anrufe geloescht (aelter als 7 Tage)" in result.output
+    with bypass_tenant_scope():
+        assert TelephonyCall.query.count() == 0

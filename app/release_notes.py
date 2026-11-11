@@ -21,7 +21,7 @@ RELEASE_NOTES = (
         "title": "Test: Anruferkennung am Telefon",
         "text": "Für eine erste Test-Durchwahl zeigt Zentriq beim Klingeln oben rechts, wer anruft – mit „Kundenakte öffnen“, "
         "einer Auswahl bei mehreren Treffern oder „Rückrufnotiz anlegen“, wenn die Nummer noch keiner Akte zugeordnet ist. "
-        "Die gerade geöffnete Akte bleibt dabei offen.",
+        "Die gerade geöffnete Akte bleibt dabei offen. Die Anrufliste wird nach 7 Tagen automatisch gelöscht.",
         "audience": "admin",
     },
     {

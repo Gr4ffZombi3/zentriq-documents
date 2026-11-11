@@ -25,6 +25,9 @@ class BaseConfig:
     # Ohne Secret nimmt der Webhook nichts an (503). Optional: nur Meldungen dieser Webex-Org-ID.
     WEBEX_WEBHOOK_SECRET = os.environ.get("WEBEX_WEBHOOK_SECRET", "")
     WEBEX_ORG_ID = os.environ.get("WEBEX_ORG_ID", "")
+    # Aufbewahrung der Anrufe (telephony_calls): aeltere werden bei jedem neuen Anruf und per
+    # flask telefonie aufraeumen geloescht. 0 = nie.
+    TELEPHONY_CALL_RETENTION_DAYS = int(os.environ.get("TELEPHONY_CALL_RETENTION_DAYS", "7"))
 
     OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
     OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL")

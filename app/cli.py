@@ -439,6 +439,9 @@ def customer_notes_check_command(apply: bool):
 
 
 def register_cli(app) -> None:
+    from app.telephony_cli import telephony_cli
+
+    app.cli.add_command(telephony_cli)
     app.cli.add_command(create_user_command)
     app.cli.add_command(set_admin_command)
     app.cli.add_command(align_tenant_command)

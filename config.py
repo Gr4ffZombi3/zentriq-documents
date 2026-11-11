@@ -21,6 +21,10 @@ class BaseConfig:
     # in Kundenakten. Ohne laufenden Dienst bleibt die Oberflaeche still (kein Fehler).
     LIVE_ENABLED = os.environ.get("LIVE_ENABLED", "1").lower() not in ("0", "false", "no")
     LIVE_REDIS_URL = os.environ.get("LIVE_REDIS_URL") or CELERY_BROKER_URL
+    # Anruferkennung ueber Webex Calling (app/services/telephony.py): Secret der Webhook-Registrierung.
+    # Ohne Secret nimmt der Webhook nichts an (503). Optional: nur Meldungen dieser Webex-Org-ID.
+    WEBEX_WEBHOOK_SECRET = os.environ.get("WEBEX_WEBHOOK_SECRET", "")
+    WEBEX_ORG_ID = os.environ.get("WEBEX_ORG_ID", "")
 
     OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
     OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL")

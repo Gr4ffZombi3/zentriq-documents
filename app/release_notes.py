@@ -18,6 +18,14 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 11),
+        "title": "Test: Anruferkennung am Telefon",
+        "text": "Für eine erste Test-Durchwahl zeigt Zentriq beim Klingeln oben rechts, wer anruft – mit „Kundenakte öffnen“, "
+        "einer Auswahl bei mehreren Treffern oder „Rückrufnotiz anlegen“, wenn die Nummer noch keiner Akte zugeordnet ist. "
+        "Die gerade geöffnete Akte bleibt dabei offen.",
+        "audience": "admin",
+    },
+    {
+        "date": date(2026, 11, 11),
         "title": "Abrechnungen: automatische Mitarbeiterübersicht",
         "text": "Nach dem Hochladen der HUK-Abrechnung erscheint sofort je Mitarbeiter die Zahl der Neuabschlüsse, die Anzahl je Sparte "
         "und die Vergütung ohne 10-€-Positionen. Die Zuordnung erfolgt über die VM-Nummer – Zeilen müssen nicht mehr einzeln geprüft werden.",

@@ -14,7 +14,12 @@ SALT = "zentriq-live-v1"
 # Nur zum Aufbau der Verbindung - die Verbindung selbst endet spaetestens nach MAX_STREAM_SECONDS
 # (server.py) und holt sich dann ueber Flask ein neues Token (Abmeldung wirkt so zeitnah).
 TOKEN_MAX_AGE = 120
-CHANNEL = re.compile(r"^customer:[1-9][0-9]{0,11}$")
+# customer:<id> = eine Kundenakte; user:<id> = persoenlicher Kanal (Anruf-Hinweise, nur fuer sich selbst).
+CHANNEL = re.compile(r"^(?:customer|user):[1-9][0-9]{0,11}$")
+
+
+def is_personal(channel: str) -> bool:
+    return channel.startswith("user:")
 
 
 def _serializer(secret: str) -> URLSafeTimedSerializer:

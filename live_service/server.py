@@ -32,7 +32,7 @@ MAX_STREAM_SECONDS = 30 * 60  # danach neues Token ueber Flask (Abmeldung/Rechte
 MAX_CONNECTIONS_PER_USER = 12
 MAX_HEADER_BYTES = 8192
 QUEUE_SIZE = 100
-FORWARD_TYPES = {"changed", "editing"}
+FORWARD_TYPES = {"changed", "editing", "call", "call_end"}
 
 
 # --- Broker: Redis im Betrieb, Speicher in Tests ------------------------------------------------
@@ -187,6 +187,8 @@ class Hub:
                     conn.queue = None  # type: ignore[assignment]
 
     async def _presence_entry(self, conn: Connection) -> None:
+        if tokens.is_personal(conn.channel):
+            return  # persoenlicher Kanal: keine Anwesenheit
         value = json.dumps({"u": conn.user_id, "n": conn.name, "ts": int(self.clock())})
         await self.broker.hset(conn.presence_key, conn.id, value)
         await self.broker.expire(conn.presence_key, self.stale * 3)
@@ -210,6 +212,8 @@ class Hub:
         return sorted(({"u": u, "n": n} for u, n in seen.items()), key=lambda v: (v["n"].lower(), v["u"]))
 
     async def _announce(self, conn: Connection) -> None:
+        if tokens.is_personal(conn.channel):
+            return
         await self.broker.publish(conn.redis_channel, json.dumps({"type": "presence"}))
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:

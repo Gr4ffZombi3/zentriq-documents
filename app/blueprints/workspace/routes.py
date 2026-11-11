@@ -5,14 +5,14 @@ und "Was ist neu?".
 Jede Route arbeitet ausschliesslich mit den Daten des angemeldeten Benutzers (user_id) im
 eigenen Buero; SUPER_ADMIN erreicht den Blueprint nicht (app/auth/permissions.py)."""
 
-from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, jsonify, make_response, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.auth.permissions import admin_required
 from app.extensions import db
 from app.models import Customer, OfficeNews
 from app.navigation import build_navigation
-from app.services import live, pending_cases, workspace
+from app.services import live, pending_cases, telephony, workspace
 from app.tenancy import get_or_404_scoped
 
 workspace_bp = Blueprint("workspace", __name__, url_prefix="/arbeitsplatz")
@@ -56,6 +56,55 @@ def live_editing(customer_id):
     part = data.get("part") if isinstance(data.get("part"), str) else ""
     live.publish_editing(current_user, customer, bool(data.get("on")), part.strip() or "Stammdaten")
     return jsonify({"ok": True})
+
+
+# --- Anruferkennung (Webex Calling, app/services/telephony.py) ----------------------------------
+
+
+def _no_store(response):
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@workspace_bp.get("/telefon/token")
+@login_required
+def call_token():
+    """Live-Verbindung fuer Anruf-Hinweise - nur der eigene Kanal und nur mit zugeordneter Durchwahl."""
+    _office_only()
+    if not live.enabled() or telephony.line_for(current_user) is None:
+        return _no_store(jsonify({"enabled": False}))
+    return _no_store(jsonify({"enabled": True, "token": telephony.token_for(current_user), "stream": "/live/stream"}))
+
+
+@workspace_bp.get("/telefon/anrufe/aktuell")
+@login_required
+def call_current():
+    """Klingelt es gerade? (Seite wurde waehrend des Klingelns neu geladen.)"""
+    _office_only()
+    call = telephony.current_call(current_user)
+    return _no_store(jsonify({"call": telephony.describe(current_user, call) if call else None}))
+
+
+@workspace_bp.get("/telefon/anrufe/<int:call_id>")
+@login_required
+def call_detail(call_id):
+    _office_only()
+    call = telephony.own_call(current_user, call_id)
+    if call is None:
+        abort(404)
+    return _no_store(jsonify({"call": telephony.describe(current_user, call)}))
+
+
+@workspace_bp.get("/telefon/anrufe/<int:call_id>/rueckrufnotiz")
+@login_required
+def call_callback_note(call_id):
+    """Vorgang ohne Kundenakte mit vorausgefuellter Rueckrufnotiz (Nummer nicht in der URL/Logs)."""
+    _office_only()
+    call = telephony.own_call(current_user, call_id)
+    if call is None:
+        abort(404)
+    form = {"notiz": telephony.callback_note_text(call)}
+    return _no_store(make_response(render_template("workspace/pending_new.html", form=form, error=None, **_pending_form_context())))
 
 
 # --- Schnellsuche -----------------------------------------------------------------------------

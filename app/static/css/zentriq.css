@@ -982,3 +982,23 @@ html.zs-collapsed .zs-kbd { display: none; }
 .abr-blocks li { padding: 0.35rem 0; border-bottom: 1px solid var(--color-border); }
 .abr-warn-text { color: var(--color-warning-text, var(--color-warning)); }
 @media (max-width: 30rem) { .abr-key { grid-template-columns: 1fr; } }
+
+/* Anruferkennung (js/call-alert.js): Hinweis oben rechts, ueber Seite und Seitenfenster - nicht modal */
+.zq-calls { position: fixed; z-index: 96; right: 1rem; top: 1rem; display: flex; flex-direction: column; gap: 0.5rem; width: min(23rem, calc(100vw - 2rem)); pointer-events: none; }
+.zq-call { pointer-events: auto; position: relative; background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border-strong); border-left: 4px solid var(--color-primary); border-radius: 0.9rem; padding: 0.8rem 1rem 0.7rem; box-shadow: 0 14px 36px rgba(16, 24, 40, 0.22); animation: zq-greet-right 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.zq-call.is-ended { opacity: 0.75; border-left-color: var(--color-border-strong); }
+.zq-call-label { margin: 0 2rem 0.15rem 0; font-size: 0.78rem; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.zq-call-title { margin: 0 2rem 0.25rem 0; font-size: 1.05rem; font-weight: 650; overflow-wrap: anywhere; }
+.zq-call-number { margin: 0 0 0.4rem; font-size: 0.92rem; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.zq-call-list { margin: 0.2rem 0 0.4rem; padding: 0; list-style: none; max-height: 14rem; overflow-y: auto; }
+.zq-call-list li + li { border-top: 1px solid var(--color-border); }
+.zq-call-pick { display: block; padding: 0.45rem 0.2rem; color: var(--color-text); text-decoration: none; border-radius: 0.4rem; }
+.zq-call-pick:hover, .zq-call-pick:focus-visible { background: var(--color-surface-muted); }
+.zq-call-pick strong { display: block; font-weight: 600; }
+.zq-call-pick span { font-size: 0.84rem; color: var(--color-text-muted); }
+.zq-call-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.35rem 0 0; }
+.zq-call-close { position: absolute; top: 0.3rem; right: 0.35rem; width: 2.25rem; height: 2.25rem; border: 0; border-radius: 0.5rem; background: none; font-size: 1.25rem; color: var(--color-text-muted); cursor: pointer; }
+.zq-call-close:hover { background: var(--color-surface-muted); }
+@media (max-width: 63.99rem) { .zq-calls { top: calc(3.75rem + env(safe-area-inset-top)); } }
+@media (max-width: 47.99rem) { .zq-calls { left: 0.6rem; right: 0.6rem; width: auto; } }
+@media (prefers-reduced-motion: reduce) { .zq-call { animation: none; } }

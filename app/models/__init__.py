@@ -59,6 +59,7 @@ from app.models.request_receipt import RequestReceipt
 from app.models.settlement import Settlement, SettlementLine
 from app.models.system_error import SystemErrorEvent
 from app.models.task import Task
+from app.models.telephony import TelephonyCall, TelephonyLine
 from app.models.tenant import Tenant
 from app.models.timetracking import (
     EmployeeProfile,
@@ -146,6 +147,8 @@ __all__ = [
     "RecommendationType",
     "RecommendationStatus",
     "TaskStatus",
+    "TelephonyCall",
+    "TelephonyLine",
     "TaskType",
     "TenantStatus",
     "TimelineEventType",

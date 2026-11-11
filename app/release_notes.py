@@ -18,6 +18,13 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 11),
+        "title": "Aufgeräumte Seitenleiste",
+        "text": "Die linke Leiste klappt jetzt ohne Ruckeln ein und aus. „Werkzeuge“ und „Übersicht“ stehen nicht mehr "
+        "in der Leiste – Kfz-Angebot, Anonymisieren & Co. finden Sie weiter über die Schnellsuche (Strg+K).",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 11),
         "title": "E-Mail-Entwürfe ohne Kundenakte",
         "text": "„Schreib eine E-Mail-Antwort: …“ ergibt im Assistenten sofort einen kopierbaren Entwurf mit Betreff, "
         "Anrede und Ihrer Bürosignatur – auch ohne Kundenakte. Ein genannter Name wird für die Anrede übernommen, "

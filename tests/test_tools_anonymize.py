@@ -203,8 +203,11 @@ def _sidebar(html):
 
 def test_employee_navigation_groups(app, world):
     nav = _sidebar(login(app, "dennis@example.com").get("/uebersicht").get_data(as_text=True))
-    for label in ("Assistent", "Kunden", "Leipziger Liste", "Memo", "Zeiterfassung", "Übersicht", "Werkzeuge", "Anonymisieren", "Mein Konto", "Abmelden"):
+    for label in ("Assistent", "Kunden", "Leipziger Liste", "Memo", "Zeiterfassung", "Mein Konto", "Abmelden"):
         assert label in nav, label
+    # Werkzeuge und Uebersicht stehen nicht mehr in der Leiste (nur noch Schnellsuche).
+    for gone in (">Werkzeuge<", ">Übersicht<", ">Anonymisieren<", 'href="/werkzeuge', 'href="/uebersicht"'):
+        assert gone not in nav, gone
     # Mitarbeiter: "Kunden" fuehrt zur Kundensuche, nicht zum Kundenstamm. In der Verwaltung nur
     # "Abrechnungen" (einreichen); alle anderen Verwaltungsseiten bleiben verborgen.
     assert 'href="/search" class="zs-item' in nav
@@ -215,7 +218,7 @@ def test_employee_navigation_groups(app, world):
 
 def test_office_admin_navigation_groups(app, world):
     nav = _sidebar(login(app, "admin-a@example.com").get("/uebersicht").get_data(as_text=True))
-    for label in ("Assistent", "Kunden", "Zeiterfassung", "Werkzeuge", "Universal-Upload", "Verwaltung", "Mitarbeiter", "Benutzerverwaltung", "Aktivitäten"):
+    for label in ("Assistent", "Kunden", "Zeiterfassung", "Verwaltung", "Mitarbeiter", "Benutzerverwaltung", "Aktivitäten"):
         assert label in nav, label
     assert 'href="/customers" class="zs-item' in nav
     assert 'href="/search" class="zs-item' not in nav  # Admin: Kunden = Kundenstamm, keine Doppelung

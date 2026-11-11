@@ -102,7 +102,8 @@
 @media (min-width: 64rem) {
   .zs-close { display: none; }
   .zs-collapse { display: inline-grid; }
-  .app-shell.has-sidebar { transition: grid-template-columns 150ms ease; }
+  /* Bewusst ohne Breiten-Animation: eine animierte Rasterspalte bricht die ganze Seite in
+     jedem Bild neu um, und die Beschriftungen springen dabei - das wirkte ruckelig. */
 
   /* Eingeklappt: schmale Symbolleiste. Beschriftungen bleiben fuer Screenreader erhalten
      (nur optisch ausgeblendet), Tooltips per title. */

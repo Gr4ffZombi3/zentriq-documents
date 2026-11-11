@@ -1,8 +1,9 @@
 {% from "ui/icons.html" import icon %}
 {# Seitenleiste: oben der Assistent (ZentriqAI-Chat, zentraler KI-Einstieg) und die Suche, darunter
-   die Hauptbereiche, aufklappbar "Werkzeuge" und der Chatverlauf (js/shell.js), unten die
+   die Hauptbereiche und der Chatverlauf (js/shell.js), unten die
    Verwaltung (nur Admins) und das Profil. Gruppen und Rollen kommen aus app/navigation.py;
-   abgesichert wird serverseitig (app/auth/permissions.py).
+   abgesichert wird serverseitig (app/auth/permissions.py). "Werkzeuge" und "Übersicht" stehen
+   nicht mehr in der Leiste, bleiben aber ueber die Schnellsuche (Strg+K) erreichbar.
    Ab 64rem fest links und zur Symbolleiste einklappbar (html.zs-collapsed, gesetzt schon im
    <head>, damit nichts springt); darunter per Menue von links einblendbar. Nur EIN
    Scrollbereich (die Mitte), Profil und Verwaltung bleiben unten sichtbar. #}
@@ -71,12 +72,8 @@
     {% for group in nav_groups if group.placement == 'main' %}
       <div class="zs-section">
         {% if group.label %}<p class="zs-section-title">{{ group.label }}</p>{% endif %}
-        {% for entry in group.entries %}{{ nav_link(entry) }}{% endfor %}
+        {% for entry in group.entries if entry.in_sidebar %}{{ nav_link(entry) }}{% endfor %}
       </div>
-    {% endfor %}
-
-    {% for group in nav_groups if group.placement == 'tools' %}
-      <div class="zs-section">{{ nav_group(group, 'wrench') }}</div>
     {% endfor %}
 
     <details class="zs-group zs-chats" data-zs-group="chats" data-zs-chats open>

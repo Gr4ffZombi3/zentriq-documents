@@ -123,7 +123,9 @@ def test_super_admin_has_no_automatic_access(app, world, enabled):
 def test_menu_entry_does_not_depend_on_api_key(app, world):
     app.config["ANTHROPIC_API_KEY"] = None
     client = login(app, "dennis@example.com")
-    assert '<a href="/assistent"' in client.get("/", follow_redirects=True).get_data(as_text=True)
+    # Nicht mehr in der Seitenleiste, aber auf der Werkzeuge-Seite und in der Schnellsuche.
+    assert 'href="/assistent"' in client.get("/werkzeuge").get_data(as_text=True)
+    assert any(hit["url"] == "/assistent" for hit in client.get("/arbeitsplatz/suche?q=texte").get_json().get("pages", []))
 
 
 def test_platform_toggle_controls_office_access(app, world, db, enabled):

@@ -522,7 +522,7 @@ def test_navigation_is_responsive_and_marks_active_area(app, world):
     assert 'id="hauptnavigation"' in html
     active = html.split('aria-current="page"')[0].rsplit("<a", 1)[1]
     assert "/leipziger-liste" in active
-    for label in ("Start", "Leipziger Liste", "Memo", "Zeiterfassung", "Werkzeuge", "Mein Konto", "Abmelden"):
+    for label in ("Start", "Leipziger Liste", "Memo", "Zeiterfassung", "Mein Konto", "Abmelden"):
         assert label in html
 
 

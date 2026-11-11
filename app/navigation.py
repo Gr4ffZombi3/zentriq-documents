@@ -4,9 +4,9 @@ Ebenen: Gruppe -> Bereich; Unterseiten eines Bereichs erscheinen als Reiter daru
 Seitenleiste fuer Buero-Rollen (components/app_sidebar.html):
 - oben: Assistent (ZentriqAI-Chat, zentraler KI-Einstieg) und Suche
 - Hauptbereiche ohne Ueberschrift: Kunden, Kalender, Leipziger Liste (offene Vorgaenge), Memo,
-  Zeiterfassung, Uebersicht. Kunden fuehrt OFFICE_ADMIN zum Kundenstamm, Mitarbeiter zur
+  Zeiterfassung (Uebersicht nur noch ueber die Schnellsuche). Kunden fuehrt OFFICE_ADMIN zum Kundenstamm, Mitarbeiter zur
   Kundensuche (sie sehen wie bisher keine Kundenstammdaten-Liste).
-- "Werkzeuge" (aufklappbar): Kfz-Angebot (HUK-Webrechner), Texte formulieren (Textassistent, nur freigegebene Bueros),
+- "Werkzeuge" (nicht mehr in der Seitenleiste, nur Schnellsuche/Seite /werkzeuge): Kfz-Angebot (HUK-Webrechner), Texte formulieren (Textassistent, nur freigegebene Bueros),
   Dokument anonymisieren, Universal-Upload*
 - unten "Verwaltung"* (aufklappbar): Mitarbeiter, Benutzerverwaltung, Aktivitaeten
 - ganz unten: Profil mit Mein Konto (inkl. Darstellung) und Abmelden.
@@ -47,6 +47,8 @@ class NavArea:
     # Nur fuer Rollen ohne Admin-Rechte (Gegenstueck zu einem admin_only-Bereich).
     staff_only: bool = False
     icon: str = "file-text"
+    # False: nicht in der Seitenleiste, aber weiter ueber die Schnellsuche erreichbar.
+    in_sidebar: bool = True
 
 
 @dataclass(frozen=True)
@@ -124,7 +126,7 @@ OFFICE_GROUPS = (
             ),
             NavArea("voice", "Memo", "dashboard.index", ("dashboard.",), admin_only=False, icon="mic"),
             NavArea("time", "Zeiterfassung", "timetracking.index", ("timetracking.",), admin_only=False, items=TIME_ITEMS, icon="clock"),
-            NavArea("overview", "Übersicht", "portal.overview", ("portal.overview",), admin_only=False, icon="layout-dashboard"),
+            NavArea("overview", "Übersicht", "portal.overview", ("portal.overview",), admin_only=False, icon="layout-dashboard", in_sidebar=False),
         ),
     ),
     NavGroup(
@@ -196,7 +198,7 @@ def build_navigation() -> dict:
             if from_staff and area.key in ("staff", "office_settings"):
                 active = area.key == "staff"
             entries.append(
-                {"label": area.label, "url": url_for(area.endpoint), "active": active, "key": area.key, "kind": area.kind, "icon": area.icon}
+                {"label": area.label, "url": url_for(area.endpoint), "active": active, "key": area.key, "kind": area.kind, "icon": area.icon, "in_sidebar": area.in_sidebar}
             )
             if active:
                 active_area = area

@@ -7,7 +7,7 @@ Das bestehende Telefonrouting wird **nicht** verändert – Webex meldet Zentriq
 ## Ablauf
 
 ```
-Webex Calling ──POST (signiert)──▶ https://zentriqai.de/telefonie/webex/webhook
+Webex Calling ──POST (signiert)──▶ https://www.zentriqai.de/telefonie/webex/webhook
                                      │ Signatur prüfen, actorId → Durchwahl → Benutzer
                                      │ callId einmal speichern (Dubletten ignorieren)
                                      ▼
@@ -66,13 +66,16 @@ die Webex-Entwickler-APIs freischaltet, muss Placetel/der Webex-Admin bestätige
 
 ### 2. Webex (Variante A, ohne Adminrechte)
 
+Wichtig: Als `targetUrl` immer `https://www.zentriqai.de/...` eintragen (mit `www`). Die Adresse ohne
+`www` leitet mit 301 um, und Webex folgt Umleitungen bei Webhooks nicht zuverlässig.
+
 1. Als Benutzer der Test-Durchwahl auf developer.webex.com anmelden.
 2. *API Reference → People → Get My Own Details* → „Run“ → Feld `id` = Person-ID (für Schritt 1.2).
 3. *API Reference → Webhooks → Create a Webhook* mit:
    ```json
    {
      "name": "Zentriq Anruferkennung",
-     "targetUrl": "https://zentriqai.de/telefonie/webex/webhook",
+     "targetUrl": "https://www.zentriqai.de/telefonie/webex/webhook",
      "resource": "telephony_calls",
      "event": "all",
      "secret": "<derselbe Wert wie WEBEX_WEBHOOK_SECRET>"
@@ -92,7 +95,7 @@ die Webex-Entwickler-APIs freischaltet, muss Placetel/der Webex-Admin bestätige
    ```json
    {
      "name": "Zentriq Anruferkennung",
-     "targetUrl": "https://zentriqai.de/telefonie/webex/webhook",
+     "targetUrl": "https://www.zentriqai.de/telefonie/webex/webhook",
      "resource": "telephony_calls",
      "event": "all",
      "ownedBy": "org",

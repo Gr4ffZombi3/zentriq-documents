@@ -174,7 +174,9 @@ def available_models(*, customer_data: bool = False, complex_task: bool = False)
 def resolve_choice(choice: str | None, *, customer_data: bool, complex_task: bool = False) -> tuple[list[AiModel], AiModel | None]:
     """Kandidatenliste fuer eine Anfrage und ggf. das ausdruecklich gewaehlte Modell."""
     candidates = available_models(customer_data=customer_data, complex_task=complex_task)
-    if not choice or choice == AUTO:
+    # "local" (eigener Rechner) wird vor dem Router abgezweigt (app/services/local_ai.py); kommt die
+    # Auswahl doch hier an (Hilfsaufgaben ohne Dokument), gilt die automatische Auswahl.
+    if not choice or choice in (AUTO, "local"):
         return candidates, None
     chosen = next((m for m in candidates if m.ref == choice), None)
     if chosen is None:

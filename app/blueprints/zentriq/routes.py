@@ -73,6 +73,12 @@ def _model_options() -> list[dict]:
                 "paused": bool(state.cooldown_info(model.provider, model.model_id)),
             }
         )
+    from app.services import local_ai
+
+    if local_ai.has_worker():
+        status = local_ai.office_status()
+        options.append({"ref": local_ai.LOCAL_CHOICE, "label": "Auf meinem Rechner bearbeiten", "provider": "Eigener Rechner",
+                        "free": True, "customer_data": True, "paused": False, "local": True, "online": status["online"]})
     return options
 
 

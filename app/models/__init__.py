@@ -46,6 +46,7 @@ from app.models.feedback import RecommendationFeedback
 from app.models.huk_quote import HukQuoteJob
 from app.models.leipziger_entry import LeipzigerEntry
 from app.models.list_comparison import ListComparison, ListComparisonEntry
+from app.models.local_ai import LocalAiJob, LocalWorker
 from app.models.mailbox_case import (
     MailboxCallbackAttempt,
     MailboxCase,
@@ -149,6 +150,8 @@ __all__ = [
     "TaskStatus",
     "TelephonyCall",
     "TelephonyLine",
+    "LocalAiJob",
+    "LocalWorker",
     "TaskType",
     "TenantStatus",
     "TimelineEventType",

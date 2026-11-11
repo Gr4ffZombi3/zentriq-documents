@@ -60,6 +60,18 @@
       </section>
     {% endfor %}
 
+    {% if local_available %}
+      <section class="panel" aria-labelledby="huk-rechner">
+        <div class="panel-body">
+          <input type="hidden" name="rechner_auswahl" value="1">
+          <label class="huk-confirm" id="huk-rechner">
+            <input type="checkbox" name="auf_rechner" value="ja" checked>
+            <span>Auf meinem Rechner auslesen (lokales KI-Modell) – Rechner ist {{ 'erreichbar' if local_status.online else 'gerade nicht erreichbar, der Auftrag wartet' }}.</span>
+          </label>
+          <p class="form-hint">Die Seitenbilder warten in Zentriq auf Ihren Rechner (Abruf per HTTPS) und werden nach der Bearbeitung gelöscht, spätestens nach 7 Tagen. Sie gehen nicht an Cloud-Modelle. Ohne Haken liest nur Zentriq selbst.</p>
+        </div>
+      </section>
+    {% endif %}
     <p class="form-hint">Die Dateien werden nur zum Auslesen verwendet und nicht gespeichert. Insgesamt höchstens {{ max_pages }} Seiten bzw. Fotos. Personenangaben (Name, Anschrift, Vertragsnummer, Kennzeichen) werden nicht an huk.de übermittelt.</p>
     <p class="form-error" data-huk-upload-error hidden role="alert">Bitte zuerst den Versicherungsschein auswählen.</p>
     <div class="huk-form-actions">

@@ -19,6 +19,7 @@ gesammelten Vergleichsdaten (bisheriger Beitrag usw.) verlassen Zentriq nie."""
 
 from __future__ import annotations
 
+import io
 import json
 import logging
 import re
@@ -75,7 +76,25 @@ def _ocr(image) -> str:
     return tesseract_ocr.ocr_image_lines(image.convert("L"))
 
 
-def _pdf_pages(filename: str, data: bytes, budget: int) -> list[str]:
+LOCAL_IMAGE_SIDE = 1600  # Seitenbilder fuer das lokale Modell (JPEG)
+
+
+def _jpeg_b64(image) -> str:
+    import base64
+
+    from PIL import Image
+
+    image = image.convert("RGB")
+    longest = max(image.width, image.height)
+    if longest > LOCAL_IMAGE_SIDE:
+        factor = LOCAL_IMAGE_SIDE / longest
+        image = image.resize((int(image.width * factor), int(image.height * factor)), Image.LANCZOS)
+    buf = io.BytesIO()
+    image.save(buf, format="JPEG", quality=82)
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def _pdf_pages(filename: str, data: bytes, budget: int, images: list | None = None) -> list[str]:
     import fitz
     from PIL import Image
 
@@ -93,20 +112,29 @@ def _pdf_pages(filename: str, data: bytes, budget: int) -> list[str]:
         pages = []
         for page in doc:
             text = page.get_text("text")
+            rendered = None
             if len(text.strip()) < MIN_NATIVE_CHARS:  # Scan: Seite rendern und lokal erkennen
                 pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-                text = _ocr(Image.frombytes("RGB", (pix.width, pix.height), pix.samples))
+                rendered = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+                text = _ocr(rendered)
+            if images is not None:
+                if rendered is None:
+                    pix = page.get_pixmap(matrix=fitz.Matrix(1.6, 1.6))
+                    rendered = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+                images.append(_jpeg_b64(rendered))
             pages.append(text)
         return pages
     finally:
         doc.close()
 
 
-def read_documents(uploads: list[Upload]) -> dict[str, str]:
-    """{"schein": text, "rechnung": text} - nur lokal, Dateien werden nicht gespeichert."""
+def read_documents(uploads: list[Upload], with_images: bool = False) -> dict:
+    """{"schein": text, "rechnung": text[, "images": {"schein": [...], "rechnung": [...]}]} - nur lokal,
+    Dateien werden nicht gespeichert. with_images: Seitenbilder (JPEG/Base64) fuer den eigenen Rechner."""
     from app.services import image_appointments
 
     texts: dict[str, list[str]] = {"schein": [], "rechnung": []}
+    images: dict[str, list[str]] = {"schein": [], "rechnung": []}
     pages = 0
     for kind in ("schein", "rechnung"):
         files = [u for u in uploads if u.kind == kind and u.data]
@@ -115,7 +143,7 @@ def read_documents(uploads: list[Upload]) -> dict[str, str]:
         for upload in files:
             name = upload.filename or "Datei"
             if name.lower().endswith(".pdf") or upload.data[:5] == b"%PDF-":
-                found = _pdf_pages(name, upload.data, MAX_PAGES - pages)
+                found = _pdf_pages(name, upload.data, MAX_PAGES - pages, images[kind] if with_images else None)
             else:
                 if pages >= MAX_PAGES:
                     raise PolicyError(f"Bitte insgesamt höchstens {MAX_PAGES} Seiten bzw. Fotos hochladen.")
@@ -124,11 +152,16 @@ def read_documents(uploads: list[Upload]) -> dict[str, str]:
                 except image_appointments.ImageError as exc:
                     raise PolicyError(str(exc).replace("Foto oder einen Screenshot", "Foto oder PDF")) from exc
                 found = [_ocr(image)]
+                if with_images:
+                    images[kind].append(_jpeg_b64(image))
             pages += len(found)
             texts[kind].extend(found)
     if not texts["schein"]:
         raise PolicyError("Bitte den Versicherungsschein als Foto oder PDF auswählen.")
-    return {kind: "\n".join(t) for kind, t in texts.items()}
+    out: dict = {kind: "\n".join(t) for kind, t in texts.items()}
+    if with_images:
+        out["images"] = images
+    return out
 
 
 # --- 2. Lokale Erkennung -------------------------------------------------------------------------
@@ -286,7 +319,7 @@ def local_extract(text: str) -> Found:
     for m in re.finditer(rf"(?:Jahresbeitrag|Jahresprämie|Beitrag\s+(?:pro|je)\s+Jahr|jährliche[rn]?\s+(?:Gesamt)?beitrag)[^\n\d]{{0,40}}?{_AMOUNT}{_EURO}?", text, re.I):
         found.add("jahresbeitrag", m.group(1))
     for m in re.finditer(rf"(?:Monatsbeitrag|monatliche[rn]?\s+Beitrag|Beitrag\s+(?:pro|je)\s+Monat)[^\n\d]{{0,40}}?{_AMOUNT}{_EURO}?", text, re.I):
-        found.add("ratenbeitrag", ("monatlich", m.group(1)))
+        found.add("ratenbeitrag", ["monatlich", m.group(1)])
     for m in re.finditer(rf"(?:Beitrag\s+je\s+Zahlungsabschnitt|zu\s+zahlender\s+Beitrag|Zahlbetrag|Gesamtbeitrag|Gesamtbetrag|Beitrag\s+gesamt)[^\n\d]{{0,40}}?{_AMOUNT}{_EURO}?", text, re.I):
         found.add("beitrag", m.group(1))
     return found
@@ -347,13 +380,25 @@ def model_extract(user, text: str) -> Found:
     except router.AiError as exc:
         log.info("huk.policy.model_unavailable type=%s", exc.error_type)
         return found
-    raw = completion.text or ""
-    raw = raw[raw.find("{"): raw.rfind("}") + 1] if "{" in raw else "{}"
+    data = parse_json_object(completion.text or "")
+    if data is None:
+        log.info("huk.policy.model_invalid_json")
+        return found
+    return found_from_model(data)
+
+
+def parse_json_object(raw: str) -> dict | None:
+    raw = raw[raw.find("{"): raw.rfind("}") + 1] if "{" in raw else ""
     try:
         data = json.loads(raw)
     except ValueError:
-        log.info("huk.policy.model_invalid_json")
-        return found
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def found_from_model(data: dict) -> Found:
+    """Modellantwort (Schluessel aus MODEL_KEYS) -> gepruefte Kandidaten. Ungueltiges wird verworfen."""
+    found = Found()
     if not isinstance(data, dict):
         return found
     text_of = {k: str(data.get(k) or "").strip() for k in MODEL_KEYS if k != "fahrerkreis"}
@@ -578,11 +623,69 @@ def schema_today():
     return local_today()
 
 
-def analyse(user, uploads: list[Upload]) -> dict:
-    """Komplette Auswertung. Rueckgabe ohne Dokumenttext (der wird nicht aufbewahrt)."""
-    texts = read_documents(uploads)
+# --- Eigener Rechner (Hybridbetrieb, app/services/local_ai.py) --------------------------------------
+
+LOCAL_SYSTEM = "Du liest deutsche Kfz-Versicherungsdokumente aus. Antworte ausschließlich mit einem JSON-Objekt."
+
+
+def local_payload(texts: dict) -> dict:
+    """Eingabe fuer das lokale Modell: Seitenbilder + Texterkennung als Hilfe. Bleibt im Buero (eigener Rechner)."""
+    images = texts.get("images") or {"schein": [], "rechnung": []}
+    keys = "\n".join(f'  "{k}": {v}' for k, v in MODEL_KEYS.items())
+    n_schein, n_rechnung = len(images["schein"]), len(images["rechnung"])
+    parts = [f"Bild 1 bis {n_schein}: Versicherungsschein." if n_schein else ""]
+    if n_rechnung:
+        parts.append(f"Bild {n_schein + 1} bis {n_schein + n_rechnung}: aktuelle Beitragsrechnung.")
+    prompt = (
+        " ".join(p for p in parts if p) + "\n"
+        "Lies die Angaben für einen Kfz-Tarifvergleich aus. Antworte mit JSON in der Form "
+        '{"versicherungsschein": {...}, "beitragsrechnung": {...}} - je Dokument diese Schlüssel:\n' + keys + "\n"
+        "Übernimm nur, was ausdrücklich im Dokument steht. Erfinde, schätze oder rechne nichts: fehlt eine Angabe "
+        'oder ist sie unklar, gib "" (beim Fahrerkreis []) zurück. Ohne Beitragsrechnung: "beitragsrechnung": {}.\n\n'
+        "Texterkennung zur Hilfe (kann Lesefehler enthalten):\n<<<VERSICHERUNGSSCHEIN\n" + texts["schein"][:6000] + "\n>>>"
+        + ("\n<<<BEITRAGSRECHNUNG\n" + texts["rechnung"][:4000] + "\n>>>" if texts.get("rechnung") else "")
+    )
+    return {"system": LOCAL_SYSTEM, "prompt": prompt, "images": images["schein"] + images["rechnung"], "format": "json",
+            "max_tokens": 1200}
+
+
+def found_to_json(found: Found) -> dict:
+    return {"values": found.values, "notes": found.notes}
+
+
+def found_from_json(data: dict | None) -> Found:
+    data = data or {}
+    return Found(values={k: list(v) for k, v in (data.get("values") or {}).items()}, notes=dict(data.get("notes") or {}))
+
+
+def apply_local_result(local_found: dict, text: str) -> dict | None:
+    """Antwort des eigenen Rechners mit der Zentriq-Erkennung zusammenfuehren (Widerspruch -> Pruefhinweis).
+    None, wenn die Antwort kein JSON-Objekt ist."""
+    data = parse_json_object(text or "")
+    if data is None:
+        return None
+    schein_data = data.get("versicherungsschein") if isinstance(data.get("versicherungsschein"), dict) else data
+    invoice_data = data.get("beitragsrechnung") if isinstance(data.get("beitragsrechnung"), dict) else {}
+    schein_model, invoice_model = found_from_model(schein_data), found_from_model(invoice_data)
+    found, notes = merge(found_from_json(local_found.get("schein")), schein_model,
+                         found_from_json(local_found.get("rechnung")), invoice_model)
+    values, previous, flags = build(found, notes)
+    return {"values": values, "previous": previous, "flags": flags, "model": bool(schein_model.values or invoice_model.values)}
+
+
+def analyse(user, uploads: list[Upload], local: bool = False) -> dict:
+    """Komplette Auswertung. Rueckgabe ohne Dokumenttext (der wird nicht aufbewahrt).
+    local=True: kein Cloud-Modell; zusaetzlich Eingabe fuer den eigenen Rechner (local_payload)."""
+    texts = read_documents(uploads, with_images=local)
     schein_local = local_extract(texts["schein"])
     invoice_local = local_extract(texts["rechnung"]) if texts["rechnung"] else Found()
+    if local:
+        found, notes = merge(schein_local, Found(), invoice_local, Found())
+        values, previous, flags = build(found, notes)
+        log.info("huk.policy.analysed_local fields=%s flags=%s invoice=%s", len(values), len(flags), bool(texts["rechnung"]))
+        return {"values": values, "previous": previous, "flags": flags, "model": False, "readable": True,
+                "local_payload": local_payload(texts),
+                "local_found": {"schein": found_to_json(schein_local), "rechnung": found_to_json(invoice_local)}}
     schein_model = model_extract(user, texts["schein"])
     invoice_model = model_extract(user, texts["rechnung"]) if texts["rechnung"] else Found()
     found, notes = merge(schein_local, schein_model, invoice_local, invoice_model)

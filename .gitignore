@@ -44,3 +44,6 @@ storage/backups/
 storage/models/
 storage/tmp/
 logs/*.log.*
+
+# Zentriq-Rechner: lokale Konfiguration mit Zugangsschluessel
+rechner-worker/zentriq-rechner.ini

@@ -24,7 +24,8 @@ from flask import (
 )
 from flask_login import current_user, login_required
 
-from app.services import workspace
+from app.extensions import db
+from app.services import local_ai, workspace
 from app.services.calendar import member_name
 from app.services.huk import ai, jobs, policy, schema
 from app.services.timetracking.clock import local_today
@@ -104,24 +105,49 @@ def policy_upload():
     """Versicherungsschein (und optional Beitragsrechnung) hochladen und auslesen."""
     _member()
     customer = jobs.customer_for(current_user, request.values.get("kunde"))
+    local_available = local_ai.documents_go_local()
+    page = {"customer": customer, "enabled": jobs.is_enabled(), "max_files": policy.MAX_FILES, "max_pages": policy.MAX_PAGES,
+            "local_available": local_available, "local_status": local_ai.office_status() if local_available else None}
     if request.method == "GET":
-        return render_template("huk/policy.html", customer=customer, enabled=jobs.is_enabled(),
-                               max_files=policy.MAX_FILES, max_pages=policy.MAX_PAGES)
+        return render_template("huk/policy.html", **page)
     uploads = [policy.Upload(f.filename or "Datei", f.read(), kind)
                for kind, name in (("schein", "schein"), ("rechnung", "rechnung"))
                for f in request.files.getlist(name) if f and f.filename]
+    # Fotos/Dokumente gehen an den eigenen Rechner, sobald einer eingerichtet ist (abwaehlbar).
+    use_local = local_available and (request.form.get("auf_rechner") == "ja" or "rechner_auswahl" not in request.form)
     try:
-        result = policy.analyse(current_user, uploads)
+        result = policy.analyse(current_user, uploads, local=use_local)
     except policy.PolicyError as exc:
-        return render_template("huk/policy.html", customer=customer, enabled=jobs.is_enabled(), error=str(exc),
-                               max_files=policy.MAX_FILES, max_pages=policy.MAX_PAGES), 422
+        return render_template("huk/policy.html", error=str(exc), **page), 422
     if not result["readable"]:
         return render_template(
-            "huk/policy.html", customer=customer, enabled=jobs.is_enabled(), max_files=policy.MAX_FILES, max_pages=policy.MAX_PAGES,
+            "huk/policy.html", **page,
             error="Im Dokument wurden keine Tarifangaben erkannt. Bitte ein schärferes Foto (gerade, gut ausgeleuchtet) oder das PDF verwenden.",
         ), 422
     values = {**jobs.prefill_for(current_user, customer), **result["values"]}
-    job = jobs.create_comparison(current_user, values, policy.new_comparison(result), customer)
+    comparison = policy.new_comparison(result)
+    job = jobs.create_comparison(current_user, values, comparison, customer)
+    if use_local:
+        local_job = local_ai.enqueue(current_user, "kfz_policy_extract", result["local_payload"], "huk_quote_job", job.id)
+        job.comparison = {**comparison, "local": {"job_id": local_job.id, "state": "pending", "found": result["local_found"]}}
+        db.session.commit()
+    return redirect(url_for("huk.edit", job_id=job.id))
+
+
+@huk_bp.post("/<int:job_id>/ohne-rechner")
+@login_required
+def skip_local(job_id):
+    """Nicht auf den eigenen Rechner warten: es gelten die von Zentriq erkannten Werte."""
+    _member()
+    job = jobs.get_job(current_user, job_id)
+    local = (job.comparison or {}).get("local") or {}
+    if local.get("state") == "pending":
+        local_job = local_ai.get_job(current_user, local.get("job_id") or 0)
+        if local_job is None or not local_ai.cancel_and_notify(local_job, "Ohne eigenen Rechner fortgefahren."):
+            comparison = dict(job.comparison)
+            comparison["local"] = {**local, "state": "skipped", "found": None}
+            job.comparison = comparison
+            db.session.commit()
     return redirect(url_for("huk.edit", job_id=job.id))
 
 
@@ -133,6 +159,11 @@ def edit(job_id):
     if request.method == "GET":
         if job.is_active or job.status == "done":
             return redirect(url_for("huk.show", job_id=job.id))
+        local = (job.comparison or {}).get("local") or {}
+        if local.get("state") == "pending":
+            local_job = local_ai.get_job(current_user, local.get("job_id") or 0)
+            return render_template("huk/policy_wait.html", job=job, local_job=local_job,
+                                   local=local_ai.describe(local_job) if local_job else None, status=local_ai.office_status())
         missing, errors = jobs.check_complete(job)
         return _render_form(job, job.input_data or {}, job.customer, missing if request.args.get("pruefen") else (), errors)
     # Das Formular sendet "kunde" immer mit (leer = keine Zuordnung).

@@ -25,6 +25,14 @@ class BaseConfig:
     # Ohne Secret nimmt der Webhook nichts an (503). Optional: nur Meldungen dieser Webex-Org-ID.
     WEBEX_WEBHOOK_SECRET = os.environ.get("WEBEX_WEBHOOK_SECRET", "")
     WEBEX_ORG_ID = os.environ.get("WEBEX_ORG_ID", "")
+    # Hybridbetrieb KI (app/services/local_ai.py): eigener Rechner mit lokalem Modell holt Auftraege ab.
+    LOCAL_AI_ENABLED = os.environ.get("LOCAL_AI_ENABLED", "true").lower() == "true"
+    LOCAL_AI_LEASE_SECONDS = int(os.environ.get("LOCAL_AI_LEASE_SECONDS", "300"))
+    LOCAL_AI_ONLINE_SECONDS = int(os.environ.get("LOCAL_AI_ONLINE_SECONDS", "90"))
+    LOCAL_AI_MAX_ATTEMPTS = int(os.environ.get("LOCAL_AI_MAX_ATTEMPTS", "3"))
+    LOCAL_AI_QUEUE_DAYS = int(os.environ.get("LOCAL_AI_QUEUE_DAYS", "7"))
+    LOCAL_AI_AUTO_MIN_CHARS = int(os.environ.get("LOCAL_AI_AUTO_MIN_CHARS", "1500"))
+    LOCAL_AI_POLL_SECONDS = int(os.environ.get("LOCAL_AI_POLL_SECONDS", "5"))
     # Aufbewahrung der Anrufe (telephony_calls): aeltere werden bei jedem neuen Anruf und per
     # flask telefonie aufraeumen geloescht. 0 = nie.
     TELEPHONY_CALL_RETENTION_DAYS = int(os.environ.get("TELEPHONY_CALL_RETENTION_DAYS", "7"))

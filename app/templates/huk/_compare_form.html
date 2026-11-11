@@ -13,6 +13,14 @@
 {% set open_active = open_fields | selectattr('key', 'in', active_keys) | list %}
 
 <div class="huk-compare-form">
+{% set local = comparison.get('local') or {} %}
+{% if local.get('state') == 'done' %}
+  <p class="flash flash-info" role="status">Von Ihrem Rechner ausgelesen{% if local.get('model') %} ({{ local.model }}){% endif %} und mit der Zentriq-Erkennung abgeglichen. Abweichungen sind markiert.</p>
+{% elif local.get('state') == 'failed' %}
+  <p class="flash flash-error" role="alert">Ihr Rechner konnte das Dokument nicht auslesen ({{ local.get('message') or 'unbekannter Fehler' }}). Angezeigt werden die von Zentriq selbst erkannten Werte. <a href="{{ url_for('rechner.index') }}">Auftrag erneut versuchen</a></p>
+{% elif local.get('state') == 'skipped' %}
+  <p class="flash flash-info" role="status">Ohne eigenen Rechner fortgefahren – angezeigt werden die von Zentriq selbst erkannten Werte.</p>
+{% endif %}
 {% for key, text in flags | dictsort if key.startswith('info_') %}
   {% if loop.first %}<div class="flash flash-info huk-infos" role="status"><p><strong>Hinweise aus dem Dokument</strong></p><ul>{% endif %}
   <li>{{ text }}</li>

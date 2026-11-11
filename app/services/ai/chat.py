@@ -329,7 +329,13 @@ def submit_message(
         raise ChatError("ZentriqAI beantwortet noch die vorherige Nachricht.", 409, "busy")
 
     prepared, has_audio = _prepare_files(files, detailed=conversation.customer_data)
-    if not conversation.customer_data:
+    from app.services import local_ai
+
+    effective_choice = (str(model_choice)[:200] if model_choice is not None else conversation.model_choice) or router.AUTO
+    goes_local = local_ai.chat_route(effective_choice, bool(prepared), content) == "local"
+    if effective_choice == local_ai.LOCAL_CHOICE and not local_ai.has_worker():
+        raise ChatError("Es ist noch kein eigener Rechner eingerichtet (Verwaltung › Mein Rechner).", 409, "no_local_worker")
+    if not conversation.customer_data and not goes_local:
         # Freitext wird vor einer Modellanfrage pseudonymisiert; abgelehnt wird nur, was der
         # Anonymisierer nicht sicher ersetzen kann.
         from app.services.anonymize import office_known_names
@@ -450,9 +456,14 @@ def latest_image_attachments(conversation: AiConversation) -> tuple[list[AiAttac
 
 
 def _pending_in(conversation: AiConversation) -> bool:
+    from app.services import local_ai
+
     pending = AiMessage.query.filter(AiMessage.conversation_id == conversation.id, AiMessage.status == "pending").all()
+    waiting_local = local_ai.open_origin_ids("ai_message", [m.id for m in pending])
     busy = False
     for message in pending:
+        if message.id in waiting_local:
+            continue  # wartet auf den eigenen Rechner (kann dauern, Laptop evtl. aus)
         if _now() - message.created_at > PENDING_TIMEOUT:
             _fail(message, "Die Antwort hat zu lange gedauert. Bitte erneut senden.")
         else:
@@ -546,9 +557,10 @@ def process_pending(user, message_id: int, audio_jobs=None, context_customer_id=
     # 0a. Bilder: Terminbefehl bzw. kein Modell -> lokal antworten (Text wurde schon per OCR gelesen).
     images = [a for a in (question.attachments or []) if a.kind == "image"] if question is not None else []
     if images:
-        from app.services import image_appointments
+        from app.services import image_appointments, local_ai
 
-        if image_appointments.is_request(question.content) or not router.can_answer():
+        to_local = local_ai.chat_route(conversation.model_choice, True, question.content) == "local"
+        if image_appointments.is_request(question.content) or (not router.can_answer() and not to_local):
             from app.services.timetracking.clock import local_today
 
             result = image_appointments.analyse_texts(user, [(a.filename, a.text or "") for a in images], local_today())
@@ -576,7 +588,8 @@ def process_pending(user, message_id: int, audio_jobs=None, context_customer_id=
 
     # 0. Antwort auf eine Kunden-E-Mail: Kunde, Kalender und Entwurf deterministisch im Backend,
     #    das Modell nur fuer den Mitteltext (app/services/email_reply.py).
-    if question is not None and (email_reply.is_request(question.content) or (
+    forced_local = conversation.model_choice == "local"
+    if question is not None and not forced_local and (email_reply.is_request(question.content) or (
             email_reply.is_reply_instruction(question.content) and email_reply.find_email(conversation, question))):
         _set_progress(pending, "Erstelle Antwortentwurf")
         reply = email_reply.handle(user, conversation, question, customer_id=context_customer_id)
@@ -602,7 +615,7 @@ def process_pending(user, message_id: int, audio_jobs=None, context_customer_id=
 
     # 0c. Fachfrage mit externem Informationsbedarf: echte Websuche (www.huk.de zuerst), geoeffnete
     #     Quellen werden verlinkt; an die Suche geht nur eine allgemeine Anfrage (app/services/web_research.py).
-    if question is not None and not has_attachments:
+    if question is not None and not has_attachments and not forced_local:
         from app.services import web_research
 
         if web_research.is_question(question.content):
@@ -626,6 +639,22 @@ def process_pending(user, message_id: int, audio_jobs=None, context_customer_id=
     if question is not None and not router.can_answer() and email_reply.looks_like_pasted_mail(question):
         _finish(pending, conversation, email_reply.mail_received_text(user, question), provider=orchestrator.DIRECT_PROVIDER,
                 model=orchestrator.DIRECT_MODEL, tools_used=["E-Mail erkannt"])
+        return
+
+    # 1c. Eigener Rechner (Hybridbetrieb): Anhaenge/lange Eingaben im Modus "Automatisch" bzw.
+    #     ausdruecklich "Auf meinem Rechner bearbeiten". Kein Rueckfall auf Cloud-Modelle.
+    from app.services import local_ai
+
+    if question is not None and local_ai.chat_route(conversation.model_choice, has_attachments, question.content) == "local":
+        if not local_ai.has_worker():
+            _fail(pending, "Es ist kein eigener Rechner eingerichtet (Verwaltung › Mein Rechner).")
+            return
+        from app.services.ai import chat_local
+
+        system, messages = build_context(conversation, upto_id=pending.id)
+        system += "\n\n" + _context_line(user) + "\n" + chat_local.LOCAL_PROMPT
+        local_ai.enqueue(user, "assistant_chat", chat_local.build_payload(system, messages), "ai_message", pending.id)
+        _set_progress(pending, "Wartet auf deinen Rechner")
         return
 
     # 2. Modell mit berechtigten Werkzeugen.
@@ -861,6 +890,19 @@ def serialize_message(message: AiMessage, labels: dict | None = None, message_ac
         model_label = orchestrator.DIRECT_LABEL
     else:
         model_label = (labels or {}).get((message.provider, message.model), message.model)
+    if message.provider == "local":
+        model_label = f"Eigener Rechner ({message.model})" if message.model else "Eigener Rechner"
+    progress = message.progress if message.status == "pending" else None
+    local_wait = None
+    if message.status == "pending" and message.role == "assistant":
+        from app.services import local_ai
+
+        job = local_ai.job_for("ai_message", message.id)
+        if job is not None and job.is_open:
+            online = local_ai.office_status()["online"]
+            local_wait = {"status": job.status, "online": online}
+            progress = ("Wird auf deinem Rechner bearbeitet" if job.status == "running"
+                        else "Wartet auf deinen Rechner" + ("" if online else " – Rechner nicht erreichbar, läuft automatisch weiter"))
     return {
         "id": message.id,
         "role": message.role,
@@ -869,7 +911,8 @@ def serialize_message(message: AiMessage, labels: dict | None = None, message_ac
         "error": message.error,
         "provider": message.provider,
         "model": model_label,
-        "progress": message.progress if message.status == "pending" else None,
+        "progress": progress,
+        "local": local_wait,
         "actions": [actions.serialize(a) for a in (message_actions or [])],
         "input_tokens": message.input_tokens,
         "output_tokens": message.output_tokens,

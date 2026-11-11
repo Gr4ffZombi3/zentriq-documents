@@ -111,9 +111,12 @@ def create_app(config_object=None):
 
     app.register_blueprint(public_booking_bp)
 
+    from app.blueprints.rechner.routes import rechner_api_bp, rechner_bp
     from app.blueprints.telephony.routes import telephony_bp
 
     app.register_blueprint(telephony_bp)
+    app.register_blueprint(rechner_api_bp)
+    app.register_blueprint(rechner_bp)
     app.register_blueprint(zentriq_admin_bp)
 
     from app.cli import register_cli

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import badge %}
+{% block title %}Kfz-Vergleich: Auslesen auf meinem Rechner – Zentriq{% endblock %}
+{% block body_class %}huk-page{% endblock %}
+{% block content %}
+<span hidden data-zq-tab-kind="angebot" data-zq-tab-title="Kfz-Vergleich · {{ job.customer.name if job.customer else 'ohne Kunde' }}"></span>
+<div class="page-shell page-shell-narrow" data-local-wait
+     data-status-url="{{ url_for('rechner.status', auftrag=local_job.id if local_job else 0) }}">
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">Kfz-Vergleich: Dokument wird gelesen</h1>
+      <p class="page-subtitle">Ihr eigener Rechner liest den Versicherungsschein mit dem lokalen KI-Modell aus. Danach prüfen Sie die Werte wie gewohnt.</p>
+    </div>
+    <a class="btn btn-secondary btn-sm" href="{{ url_for('huk.index') }}">Zur Übersicht</a>
+  </div>
+
+  <section class="panel huk-progress" aria-labelledby="lokal-status">
+    <div class="panel-body">
+      <h2 class="panel-title" id="lokal-status">
+        {% if local and local.status == 'running' %}<span class="huk-spinner" aria-hidden="true"></span>{% endif %}
+        <span data-local-label>{{ local.label if local else 'Unbekannt' }}</span>
+      </h2>
+      <p aria-live="polite" data-local-text>
+        {% if local and local.status == 'running' %}Ihr Rechner bearbeitet das Dokument gerade.
+        {% elif status.online %}Ihr Rechner ist erreichbar und holt den Auftrag gleich ab.
+        {% else %}Ihr Rechner ist gerade nicht erreichbar. Der Auftrag wartet und läuft automatisch weiter, sobald er eingeschaltet ist – das Dokument wird nicht an ein Cloud-Modell gegeben.{% endif %}
+      </p>
+      <p class="form-hint">Rechner: {{ badge('erreichbar', 'success') if status.online else badge('nicht erreichbar', 'warning') }}{% if status.model %} · {{ status.model }}{% endif %}</p>
+      <form method="post" action="{{ url_for('huk.skip_local', job_id=job.id) }}" class="form-actions">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-secondary">Ohne meinen Rechner fortfahren</button>
+      </form>
+      <p class="form-hint">Dann gelten nur die Werte, die Zentriq selbst im Dokument erkannt hat ({{ (job.input_data or {}) | length }} Angaben).</p>
+    </div>
+  </section>
+</div>
+<script defer src="{{ url_for('static', filename='js/huk-form.js', v=static_rev('js/huk-form.js')) }}"></script>
+{% endblock %}

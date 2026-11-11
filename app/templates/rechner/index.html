@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import badge %}
+{% block title %}Mein Rechner (KI) – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell page-shell-narrow" data-rechner data-status-url="{{ url_for('rechner.status') }}">
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">Mein Rechner (KI)</h1>
+      <p class="page-subtitle">Bilder, Scans, Dokumente und lange Anfragen bearbeitet ein KI-Modell auf Ihrem eigenen Rechner. Kurze Fragen beantwortet weiterhin das eingestellte Cloud-Modell, eindeutige Abläufe erledigt Zentriq ohne KI.</p>
+    </div>
+  </div>
+
+  {% if not enabled %}<p class="flash flash-info">Der Hybridbetrieb ist auf diesem Server abgeschaltet.</p>{% endif %}
+
+  <section class="panel" aria-labelledby="rechner-status">
+    <header class="panel-header"><h2 class="panel-title" id="rechner-status">Status</h2></header>
+    <div class="panel-body rechner-status">
+      <p class="rechner-online" data-rechner-online>
+        {% if not status.configured %}
+          {{ badge('Kein Rechner eingerichtet', 'muted') }}
+        {% elif status.online %}
+          {{ badge('Erreichbar', 'success') }}{% if status.model %} <span class="form-hint">Modell: {{ status.model }}</span>{% endif %}
+        {% else %}
+          {{ badge('Nicht erreichbar', 'warning') }} <span class="form-hint">{% if status.last_seen %}zuletzt gemeldet {{ status.last_seen | local_dt }}{% else %}noch nie gemeldet{% endif %}</span>
+        {% endif %}
+      </p>
+      <p class="form-hint" data-rechner-queue>Wartend: <strong>{{ status.waiting }}</strong> · in Bearbeitung: <strong>{{ status.running }}</strong></p>
+      {% if status.configured and not status.online and status.waiting %}
+        <p class="form-hint">Wartende Aufträge laufen automatisch weiter, sobald der Rechner wieder eingeschaltet ist. Sie werden nicht an Cloud-Modelle weitergegeben.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if new_token %}
+    <section class="panel rechner-token" aria-labelledby="rechner-neu" role="status">
+      <header class="panel-header"><h2 class="panel-title" id="rechner-neu">Zugang „{{ new_worker.name }}“ angelegt</h2></header>
+      <div class="panel-body">
+        <p><strong>Der Zugangsschlüssel wird nur jetzt angezeigt.</strong> Tragen Sie ihn auf dem Rechner in <code>zentriq-rechner.ini</code> ein. Bei Verlust: Zugang widerrufen und neu anlegen.</p>
+        <pre class="rechner-config">[zentriq]
+adresse = {{ base_url }}
+zugang = {{ new_token }}</pre>
+      </div>
+    </section>
+  {% endif %}
+
+  {% if current_user.is_office_admin %}
+    <section class="panel" aria-labelledby="rechner-zugaenge">
+      <header class="panel-header"><h2 class="panel-title" id="rechner-zugaenge">Zugänge</h2></header>
+      {% if workers %}
+        <ul class="huk-list">
+          {% for w in workers %}
+            <li><div class="huk-list-item rechner-worker">
+              <span class="huk-list-main">
+                <span class="huk-list-title">{{ w.name }}</span>
+                <span class="huk-list-meta">Schlüssel {{ w.token_prefix }}… · angelegt {{ w.created_at | local_dt }}{% if w.last_seen_at %} · zuletzt {{ w.last_seen_at | local_dt }}{% endif %}{% if w.model_name %} · {{ w.model_name }}{% endif %}</span>
+              </span>
+              <span class="huk-list-side">
+                {% if not w.is_active %}<span class="form-hint">widerrufen {{ w.revoked_at | local_dt }}</span>
+                {% else %}
+                  {{ badge('Erreichbar', 'success') if is_online(w) else badge('Nicht erreichbar', 'warning') }}
+                  <form method="post" action="{{ url_for('rechner.revoke_access', worker_id=w.id) }}" onsubmit="return confirm('Zugang wirklich widerrufen?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-secondary btn-sm">Widerrufen</button>
+                  </form>
+                {% endif %}
+              </span>
+            </div></li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+      <form method="post" action="{{ url_for('rechner.create_access') }}" class="panel-body rechner-new">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="field-label" for="rechner-name">Neuer Zugang für einen Rechner</label>
+        <div class="zq-inline-row">
+          <input class="field-surface" id="rechner-name" name="name" maxlength="80" placeholder="z. B. Laptop zu Hause" autocomplete="off">
+          <button type="submit" class="btn btn-primary">Zugang anlegen</button>
+        </div>
+        <p class="form-hint">Der Rechner kann damit nur Aufträge dieses Büros abholen – ausschließlich „Kfz-Versicherungsschein auslesen“ und Assistent-Anfragen.</p>
+      </form>
+    </section>
+  {% endif %}
+
+  <section class="panel" aria-labelledby="rechner-auftraege">
+    <header class="panel-header"><h2 class="panel-title" id="rechner-auftraege">{{ 'Aufträge des Büros' if current_user.is_office_admin else 'Meine Aufträge' }}</h2></header>
+    {% if jobs %}
+      <ul class="huk-list">
+        {% for job, d in jobs %}
+          <li><div class="huk-list-item rechner-job">
+            <span class="huk-list-main">
+              <span class="huk-list-title">{{ d.kind_label }}</span>
+              <span class="huk-list-meta">{{ job.created_at | local_dt }}{% if job.attempts > 1 %} · Versuch {{ job.attempts }}{% endif %}{% if d.message %} · {{ d.message }}{% endif %}</span>
+            </span>
+            <span class="huk-list-side">
+              {{ badge(d.label, d.tone) }}
+              {% if job.status in ('queued', 'running') %}
+                <form method="post" action="{{ url_for('rechner.job_action', job_id=job.id, aktion='abbrechen') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-secondary btn-sm">Abbrechen</button>
+                </form>
+              {% elif job.status == 'failed' and job.payload %}
+                <form method="post" action="{{ url_for('rechner.job_action', job_id=job.id, aktion='wiederholen') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-secondary btn-sm">Erneut versuchen</button>
+                </form>
+              {% endif %}
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="panel-body"><p class="form-hint">Noch keine Aufträge für den Rechner.</p></div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

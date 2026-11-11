@@ -422,7 +422,10 @@
     }
     modelOptions.appendChild(option("auto", "Automatisch", "Wählt ein verfügbares Modell – kostenlose zuerst, Ausweichen bei Ausfällen"));
     models.forEach(function (m) {
-      modelOptions.appendChild(option(m.ref, m.label, m.provider + (m.free ? " · kostenlos" : "") + (m.customer_data ? " · für Kundendaten freigegeben" : "") + (m.paused ? " · gerade pausiert" : "")));
+      var detail = m.local
+        ? "Lokales Modell auf Ihrem Rechner · " + (m.online ? "erreichbar" : "nicht erreichbar – Anfrage wartet, bis er eingeschaltet ist")
+        : m.provider + (m.free ? " · kostenlos" : "") + (m.customer_data ? " · für Kundendaten freigegeben" : "") + (m.paused ? " · gerade pausiert" : "");
+      modelOptions.appendChild(option(m.ref, m.label, detail));
     });
     setModel(modelChoice);
   }
@@ -524,9 +527,10 @@
       if (token !== pollToken) { setBusy(false); return; }
       request("GET", "/conversations/" + conversationId + "/messages/" + messageId).then(function (d) {
         if (token !== pollToken) return;
-        if (d.message.status === "pending" && Date.now() - started < 6 * 60000) {
+        // Auftraege fuer den eigenen Rechner koennen lange warten (Laptop aus): seltener, aber ohne Frist abfragen.
+        if (d.message.status === "pending" && (d.message.local || Date.now() - started < 6 * 60000)) {
           fillAssistant(el, d.message);
-          delay = Math.min(delay + 400, 3000);
+          delay = d.message.local ? 10000 : Math.min(delay + 400, 3000);
           setTimeout(tick, delay);
           return;
         }

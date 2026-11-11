@@ -1,0 +1,33 @@
+; Zentriq-Rechner - Konfiguration. Kopieren nach "zentriq-rechner.ini" (gleicher Ordner) und anpassen.
+; Die Datei enthaelt den Zugangsschluessel: nicht weitergeben, nicht in Cloud-Ordner legen.
+
+[zentriq]
+; Adresse von Zentriq (mit https://)
+adresse = https://www.zentriqai.de
+; Zugangsschluessel aus Zentriq > Verwaltung > Mein Rechner (beginnt mit zqw_).
+; Alternativ leer lassen und die Umgebungsvariable ZENTRIQ_RECHNER_ZUGANG setzen.
+zugang =
+
+[modell]
+; ollama  = Ollama (https://ollama.com), Standardadresse http://127.0.0.1:11434
+; openai  = OpenAI-kompatible lokale Schnittstelle, z. B. LM Studio (http://127.0.0.1:1234)
+; test    = Test-Worker ohne Modell (prueft nur den Ablauf mit Zentriq)
+schnittstelle = ollama
+adresse = http://127.0.0.1:11434
+; Modell mit Bildverstaendnis fuer Fotos/Scans (Name wie in "ollama list").
+; Wird festgelegt, wenn RAM, GPU und GPU-Speicher des Laptops bekannt sind.
+modell =
+; Optional ein anderes (schnelleres) Modell fuer reine Textanfragen; leer = gleiches Modell.
+textmodell =
+; Hoechstdauer einer Modellanfrage in Sekunden (auf CPU ohne GPU dauern Bilder lange).
+zeitlimit_sekunden = 900
+kontext_tokens = 8192
+; Bilder an das Modell geben (nein = nur Texterkennung, fuer Modelle ohne Bildverstaendnis)
+bilder = ja
+
+[betrieb]
+abfrage_sekunden = 5
+; Erlaubte Auftragsarten (kommagetrennt)
+arten = kfz_policy_extract, assistant_chat
+; Optional Protokolldatei (enthaelt keine Dokumentinhalte), z. B. C:\Zentriq\rechner.log
+protokoll =

@@ -201,6 +201,31 @@
     });
   }
 
+  // Kfz-Vergleich: Warten auf den eigenen Rechner - Status abfragen, bei Abschluss neu laden.
+  const wait = document.querySelector("[data-local-wait]");
+  if (wait) {
+    const label = wait.querySelector("[data-local-label]");
+    const text = wait.querySelector("[data-local-text]");
+    const tick = async () => {
+      try {
+        const res = await fetch(wait.dataset.statusUrl, { headers: { Accept: "application/json" } });
+        if (res.ok) {
+          const data = await res.json();
+          const job = data.auftrag;
+          if (!job || !["queued", "running"].includes(job.status)) { window.location.reload(); return; }
+          if (label) label.textContent = job.label;
+          if (text) {
+            text.textContent = job.status === "running" ? "Ihr Rechner bearbeitet das Dokument gerade."
+              : data.online ? "Ihr Rechner ist erreichbar und holt den Auftrag gleich ab."
+              : "Ihr Rechner ist gerade nicht erreichbar. Der Auftrag wartet und läuft automatisch weiter, sobald er eingeschaltet ist.";
+          }
+        }
+      } catch (_e) { /* naechster Versuch */ }
+      setTimeout(tick, 5000);
+    };
+    setTimeout(tick, 3000);
+  }
+
   const start = document.querySelector("[data-huk-start]");
   if (start) {
     start.addEventListener("submit", (event) => {

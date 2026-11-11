@@ -18,6 +18,15 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 12),
+        "title": "KI auf dem eigenen Rechner",
+        "text": "Fotos, Scans, Dokumente und lange Anfragen kann jetzt ein KI-Modell auf Ihrem eigenen Rechner bearbeiten – "
+        "kurze Fragen beantwortet weiterhin das eingestellte Modell. Unter „Verwaltung › Mein Rechner“ sehen Sie, ob Ihr "
+        "Rechner erreichbar ist und welche Aufträge warten. Im Assistenten erzwingt „Auf meinem Rechner bearbeiten“ die "
+        "lokale Bearbeitung. Ist der Rechner aus, warten die Aufträge und laufen später automatisch weiter.",
+        "audience": "admin",
+    },
+    {
+        "date": date(2026, 11, 12),
         "title": "Kfz-Vergleich aus dem Versicherungsschein",
         "text": "Unter „Kfz-Angebot (HUK)“ können Sie den Versicherungsschein eines Kunden fotografieren oder als PDF hochladen. "
         "Zentriq liest die Tarifangaben aus, fragt Fehlendes gesammelt ab und zeigt nach „Bei HUK berechnen“ den bisherigen "

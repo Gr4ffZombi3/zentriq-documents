@@ -156,6 +156,7 @@ OFFICE_GROUPS = (
             NavArea("activity", "Aktivitäten", "office.activities", ("office.activities",), admin_only=True, icon="history"),
             # Einreichen fuer alle Buero-Mitglieder; Inhalte sieht nur der Buero-Admin (Blueprint prueft).
             NavArea("settlements", "Abrechnungen", "settlements.index", ("settlements.",), admin_only=False, icon="file-text"),
+            NavArea("rechner", "Mein Rechner (KI)", "rechner.index", ("rechner.",), admin_only=False, icon="monitor"),
         ),
         admin_only=False,
         placement="admin",

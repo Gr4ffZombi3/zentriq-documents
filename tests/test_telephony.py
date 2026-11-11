@@ -321,11 +321,11 @@ def test_current_call_after_page_reload(app, client, office):
     assert laura.get("/arbeitsplatz/telefon/anrufe/aktuell").get_json() == {"call": None}
 
 
-def test_page_includes_call_alert_only_with_line(app, office):
+def test_page_includes_call_alert_only_when_configured(app, office):
     laura = _login(app, office["laura"])
     assert "js/call-alert.js" in laura.get("/arbeitsplatz/neuigkeiten").get_data(as_text=True)
-    mia = _login(app, office["mia"])
-    assert "js/call-alert.js" not in mia.get("/arbeitsplatz/neuigkeiten").get_data(as_text=True)
+    app.config["WEBEX_WEBHOOK_SECRET"] = ""
+    assert "js/call-alert.js" not in laura.get("/arbeitsplatz/neuigkeiten").get_data(as_text=True)
 
 
 # --- Persoenlicher Live-Kanal -------------------------------------------------------------------------

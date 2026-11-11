@@ -14,8 +14,19 @@
   var RING_MAX = 120000; // ohne Ende-Meldung nach 2 Minuten ausblenden
   var END_HIDE = 6000;
   var shown = {}; // id -> Element
-  var es = null, failures = 0, timer = null;
+  var es = null, failures = 0, timer = null, first = true;
   var baseTitle = document.title, titleTimer = null;
+  var OFF_KEY = "zq-calls-off", OFF_TTL = 600000; // keine Durchwahl: 10 Minuten nicht erneut fragen
+
+  function offSince() {
+    try { return parseInt(window.sessionStorage.getItem(OFF_KEY) || "0", 10) || 0; } catch (e) { return 0; }
+  }
+  function markOff(on) {
+    try {
+      if (on) window.sessionStorage.setItem(OFF_KEY, String(Date.now()));
+      else window.sessionStorage.removeItem(OFF_KEY);
+    } catch (e) { /* Speicher gesperrt: dann eben bei jeder Seite fragen */ }
+  }
 
   function el(tag, cls, text) {
     var n = document.createElement(tag);
@@ -135,7 +146,13 @@
   function connect() {
     if (es) { es.close(); es = null; }
     getJSON(box.getAttribute("data-token-url")).then(function (d) {
-      if (!d.enabled) return; // keine Durchwahl / Live-Dienst aus: still beenden
+      if (!d.enabled) { markOff(true); return; } // keine Durchwahl / Live-Dienst aus: still beenden
+      markOff(false);
+      if (first) {
+        first = false;
+        // Seite waehrend des Klingelns neu geladen: laufenden Anruf gleich anzeigen.
+        getJSON(box.getAttribute("data-current-url")).then(function (c) { if (c.call) render(c.call); }).catch(function () {});
+      }
       es = new EventSource(d.stream + "?token=" + encodeURIComponent(d.token));
       es.addEventListener("hello", function () { failures = 0; });
       es.addEventListener("call", function (ev) {
@@ -149,8 +166,7 @@
     }).catch(retry);
   }
 
-  // Seite waehrend des Klingelns neu geladen: laufenden Anruf gleich anzeigen.
-  getJSON(box.getAttribute("data-current-url")).then(function (d) { if (d.call) render(d.call); }).catch(function () {});
+  if (Date.now() - offSince() < OFF_TTL) return;
   connect();
   window.addEventListener("pagehide", function () { if (es) es.close(); });
 })();

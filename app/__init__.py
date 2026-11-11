@@ -160,18 +160,7 @@ def create_app(config_object=None):
 
         return workspace.pop_farewell()
 
-    def telephony_line_active():
-        """Anruf-Hinweise im Browser nur fuer Benutzer mit zugeordneter Durchwahl."""
-        from flask_login import current_user
-
-        from app.services import telephony
-
-        if request.args.get("panel") or request.headers.get("HX-Request"):
-            return False
-        return telephony.line_for(current_user) is not None
-
     app.jinja_env.globals["daily_greeting"] = daily_greeting
-    app.jinja_env.globals["telephony_line_active"] = telephony_line_active
     app.jinja_env.globals["pop_farewell"] = pop_farewell
     app.jinja_env.globals["feature_news"] = feature_news
     app.jinja_env.globals["list_density"] = list_density

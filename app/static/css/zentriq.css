@@ -557,6 +557,38 @@
   .zn-bar .zn-callbacks-summary::after { display: none; }
 }
 
+/* Handy-Chat (bis 47.99rem): Zeiterfassung kompakt in der Kopfzeile (js/zentriq-ai.js verschiebt
+   sie in [data-zc-clock-slot]); "Offene Rueckrufe"/"Naechste Termine" direkt ueber der Eingabe,
+   umbrechend; bei geoeffneter Tastatur (Fokus im Eingabefeld bzw. .zc-kbd) nur Eingabe und Senden.
+   Leerer Chat: Begruessung direkt ueber der Eingabe. Keine Mindesthoehe, sonst rutscht die Eingabe
+   bei kleinem sichtbarem Bereich (Tastatur, Adressleiste) aus dem Bild. */
+.zc-clock-slot { display: none; }
+@media (max-width: 47.99rem) {
+  /* Hoehe = sichtbarer Bereich abzueglich Tab-Leiste (Kalender-Tab o. Ae.): Spalte als Flex-Kette. */
+  .zs-chat-page .app-main-col { display: flex; flex-direction: column; height: var(--zc-vh, 100dvh); }
+  .zs-chat-page .app-main-col > * { flex: none; }
+  .zs-chat-page .app-main-col > .app-content { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .zc { flex: 1 1 auto; height: auto; min-height: 0; }
+  .zc-head { position: relative; }
+  .zc-head { gap: 0.1rem; padding: max(0.4rem, env(safe-area-inset-top)) max(0.35rem, env(safe-area-inset-right)) 0.4rem max(0.35rem, env(safe-area-inset-left)); }
+  .zc-model { flex: 0 1 auto; min-width: 0; }
+  .zc-model-button { max-width: 100%; padding-inline: 0.4rem; }
+  .zc-model-name { white-space: nowrap; }
+  .zc-model-current { min-width: 0; max-width: 6.5rem; }
+  .zc-clock-slot { display: flex; flex: none; }
+  .zs-chat-page .zc-clock-slot .zs-clock { position: static; z-index: 46; }
+  .zs-chat-page .zc-clock-slot .zs-clock-pill { height: 2.75rem; padding: 0 0.5rem; gap: 0.35rem; border-color: transparent; background: transparent; box-shadow: none; }
+  .zs-chat-page .zc-clock-slot .zs-clock-panel { position: absolute; z-index: 46; top: calc(100% + 0.1rem); right: max(0.5rem, env(safe-area-inset-right)); width: min(17rem, calc(100vw - 1rem)); }
+  .zc-composer { display: flex; flex-direction: column; }
+  .zc-composer > .zc-composer-inner { width: 100%; }
+  .zc-composer .zc-alert { order: -2; }
+  .zc-composer .zn-bar { order: -1; width: 100%; margin: 0 0 0.4rem; padding-right: 0; flex-wrap: wrap; }
+  .zc.zc-kbd .zn-bar { display: none; }
+  .zc.is-empty .zc-scroll { align-items: flex-end; }
+  .zc.is-empty .zc-thread { padding-bottom: 1.25rem; }
+}
+@media (max-width: 22.5rem) { .zc-model-current { display: none; } }
+
 /* ===================== Arbeitsplatz (js/workspace.js) ===================== */
 /* Tabs: Kundenakten, Kalender, Kfz-Angebote */
 .zq-tabs { display: flex; gap: 0.35rem; padding: 0.4rem 1rem 0; overflow-x: auto; scrollbar-width: thin; border-bottom: 1px solid var(--color-border); background: var(--color-bg); }

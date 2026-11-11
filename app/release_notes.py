@@ -18,6 +18,14 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 11),
+        "title": "Assistent auf dem Handy aufgeräumt",
+        "text": "Auf dem Handy sitzt die Zeiterfassung jetzt oben in der Kopfzeile und verdeckt nicht mehr den "
+        "Senden-Knopf. „Offene Rückrufe“ und „Nächste Termine“ stehen direkt über dem Eingabefeld; beim Tippen "
+        "bleibt nur das Eingabefeld sichtbar.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 11),
         "title": "Willkommensseite für den ersten Besuch",
         "text": "Wer ZentriqAI zum ersten Mal am Computer öffnet, sieht eine kurze Willkommensseite. Neue Kolleginnen "
         "und Kollegen, für die Sie bereits ein Konto angelegt haben, gelangen dort über „Bereits ein Konto? Anmelden“ "

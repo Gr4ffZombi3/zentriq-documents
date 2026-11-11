@@ -861,9 +861,17 @@
   // unten war, bleibt unten (wer aeltere Nachrichten liest, springt nicht).
   (function () {
     var vv = window.visualViewport;
+    var fullW = window.innerWidth, fullH = window.innerHeight;
     function fit() {
       var wasBottom = stickToBottom;
-      if (vv && vv.height < window.innerHeight - 1) {
+      // Tastatur offen: iPhone verkleinert nur visualViewport; Android (resizes-content) das
+      // ganze Fenster - dort am deutlich kleineren Fenster bei Fokus im Eingabefeld erkennen.
+      if (window.innerWidth !== fullW) { fullW = window.innerWidth; fullH = 0; }
+      fullH = Math.max(fullH, window.innerHeight);
+      var keyboard = (!!vv && vv.height < window.innerHeight - 1) ||
+        (document.activeElement === input && window.innerHeight < fullH * 0.8);
+      root.classList.toggle("zc-kbd", keyboard);
+      if (keyboard) {
         document.documentElement.style.setProperty("--zc-vh", Math.round(vv.height) + "px");
         if (window.scrollY) window.scrollTo(0, 0);
       } else {
@@ -874,6 +882,22 @@
     }
     if (vv) { vv.addEventListener("resize", fit); vv.addEventListener("scroll", fit); }
     window.addEventListener("resize", fit);
+    input.addEventListener("blur", function () { setTimeout(fit, 50); });
+  })();
+  // Handy: Zeiterfassung in die Kopfzeile statt schwebend ueber Eingabe und Senden; die Logik
+  // (js/shell.js) haengt am Element und laeuft unveraendert weiter.
+  (function () {
+    var slot = root.querySelector("[data-zc-clock-slot]");
+    var clock = document.querySelector("[data-zs-clock]");
+    if (!slot || !clock || !window.matchMedia) return;
+    var home = clock.parentNode, next = clock.nextSibling;
+    var mq = window.matchMedia("(max-width: 47.99rem)");
+    function place() {
+      if (mq.matches) { if (clock.parentNode !== slot) slot.appendChild(clock); }
+      else if (clock.parentNode === slot) home.insertBefore(clock, next && next.parentNode === home ? next : null);
+    }
+    place();
+    if (mq.addEventListener) mq.addEventListener("change", place); else if (mq.addListener) mq.addListener(place);
   })();
   form.addEventListener("submit", function (e) {
     e.preventDefault();

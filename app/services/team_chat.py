@@ -127,11 +127,17 @@ def serialize_chat(chat: TeamChat, user, names: dict | None = None) -> dict:
             "last_at": chat.last_message_at.isoformat() if chat.last_message_at else None}
 
 
+def chats_query(user):
+    """Unterhaltungen des Benutzers, zuletzt aktive zuerst, ohne Nachricht ans Ende. Kein "NULLS LAST" -
+    MariaDB kennt es nicht (tests/test_team_chat.py prueft das SQL im MySQL-Dialekt)."""
+    return TeamChat.query.filter(
+        TeamChat.tenant_id == user.tenant_id, or_(TeamChat.user_low_id == user.id, TeamChat.user_high_id == user.id)
+    ).order_by(TeamChat.last_message_at.is_(None), TeamChat.last_message_at.desc(), TeamChat.id.desc())
+
+
 def chats_for(user) -> list[dict]:
     names = {c.id: member_name(c) for c in colleagues(user)}
-    chats = TeamChat.query.filter(
-        TeamChat.tenant_id == user.tenant_id, or_(TeamChat.user_low_id == user.id, TeamChat.user_high_id == user.id)
-    ).order_by(TeamChat.last_message_at.desc().nullslast(), TeamChat.id.desc()).all()
+    chats = chats_query(user).all()
     return [serialize_chat(c, user, names) for c in chats if partner_id(c, user) in names]
 
 

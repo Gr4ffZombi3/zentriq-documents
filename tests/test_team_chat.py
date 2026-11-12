@@ -100,3 +100,24 @@ def test_validation(app, world):
 def test_dock_is_on_office_pages_next_to_time_clock(app, world):
     html = login(app, "dennis@example.com").get("/kalender").get_data(as_text=True)
     assert "data-zq-tc" in html and "js/team-chat.js" in html and "data-zs-clock" in html
+
+
+def test_overview_query_is_valid_for_mariadb(app, world):
+    """Produktion laeuft auf MariaDB: kein NULLS LAST (SQLite in den Tests kennt es, MariaDB nicht)."""
+    from sqlalchemy.dialects import mysql
+
+    from app.services import team_chat
+    from app.tenancy import use_tenant_id
+
+    with use_tenant_id(world.tenant_a.id):
+        sql = str(team_chat.chats_query(world.dennis).statement.compile(dialect=mysql.dialect()))
+    assert "NULLS" not in sql.upper() and "ORDER BY" in sql
+
+
+def test_overview_orders_recent_chats_first(app, world):
+    dennis = login(app, "dennis@example.com")
+    first = _open(dennis, world.laura.id)
+    second = _open(dennis, world.admin_a.id)
+    _send(dennis, first["id"], "Neueste Nachricht")
+    ids = [c["id"] for c in dennis.get(BASE).get_json()["chats"]]
+    assert ids == [first["id"], second["id"]]

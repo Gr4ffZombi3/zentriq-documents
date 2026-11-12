@@ -32,7 +32,7 @@ MAX_STREAM_SECONDS = 30 * 60  # danach neues Token ueber Flask (Abmeldung/Rechte
 MAX_CONNECTIONS_PER_USER = 12
 MAX_HEADER_BYTES = 8192
 QUEUE_SIZE = 100
-FORWARD_TYPES = {"changed", "editing", "call", "call_end"}
+FORWARD_TYPES = {"changed", "editing", "call", "call_end", "chat", "chat_read"}
 
 
 # --- Broker: Redis im Betrieb, Speicher in Tests ------------------------------------------------

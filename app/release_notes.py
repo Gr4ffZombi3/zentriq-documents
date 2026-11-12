@@ -18,6 +18,15 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 12),
+        "title": "Teamchat im Büro",
+        "text": "Unten rechts neben der Zeiterfassung gibt es jetzt den Teamchat: Über „Teamchat“ wählen Sie einen Kollegen "
+        "aus Ihrem Büro und schreiben direkt im Browser – auch während Sie im Kalender, in einer Kundenakte oder im "
+        "Assistenten arbeiten. Neue Nachrichten erscheinen unten mit dem Namen und einem Zähler. Ein Klick klappt den "
+        "Chat auf; er lässt sich vergrößern und wieder minimieren und bleibt beim Seitenwechsel so, wie Sie ihn verlassen haben.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 12),
         "title": "Anruferkennung mit Placetel",
         "text": "Zentriq kann Anrufe jetzt auch direkt von Placetel gemeldet bekommen. Klingelt eine zugeordnete Nummer, "
         "zeigt Zentriq oben rechts, wer anruft – das Sprachmenü und die Rufweiterleitung bleiben dabei unverändert.",

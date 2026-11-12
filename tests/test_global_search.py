@@ -3,6 +3,8 @@
 Buero A: Buero-Admin, Mitarbeiter Dennis (08/4205-M) und Laura (08/0950-T), Plattformbetreiber
 (SUPER_ADMIN). Buero B: eigener Buero-Admin. Beide Bueros haben Kunden und eine Liste."""
 
+import gc
+
 import pytest
 from sqlalchemy import event
 
@@ -182,7 +184,19 @@ def test_short_query_runs_no_search(app, world):
 
 
 def test_search_uses_constant_number_of_queries(app, db, world, tenant):
-    """Keine N+1-Abfragen: die Zahl der Queries haengt nicht von der Trefferzahl ab."""
+    """Keine N+1-Abfragen: die Zahl der Queries haengt nicht von der Trefferzahl ab.
+
+    Die Garbage Collection ist waehrend der Messung aus: die Session haelt geladene Objekte nur schwach;
+    raeumt die GC zufaellig den angemeldeten Benutzer weg, laedt der naechste Request ihn neu - zwei
+    Abfragen, die nichts mit der Trefferzahl zu tun haben (Messfehler, kein N+1)."""
+    gc.disable()
+    try:
+        _measure_constant_queries(app, db, tenant)
+    finally:
+        gc.enable()
+
+
+def _measure_constant_queries(app, db, tenant):
     client = _login(app, "admin-a@example.com")
     client.get("/search?q=Müller")  # Aufwaermen (Sitzung, Navigation)
 

@@ -66,6 +66,83 @@ def _no_store(response):
     return response
 
 
+# --- Teamchat (1:1 im eigenen Buero, app/services/team_chat.py) ---------------------------------
+
+
+def _chat_error(exc):
+    return _no_store(jsonify({"error": str(exc)})), exc.status
+
+
+@workspace_bp.get("/teamchat")
+@login_required
+def teamchat_overview():
+    """Unterhaltungen mit Ungelesen-Zaehler, Kollegen zur Auswahl, Live-Zugang (persoenlicher Kanal)."""
+    from app.services import team_chat
+    from app.services.calendar import member_name
+
+    return _no_store(jsonify({
+        "chats": team_chat.chats_for(current_user),
+        "colleagues": [{"id": c.id, "name": member_name(c)} for c in team_chat.colleagues(current_user)],
+        "live": team_chat.live_access(current_user),
+    }))
+
+
+@workspace_bp.post("/teamchat/mit/<int:user_id>")
+@login_required
+def teamchat_open(user_id):
+    from app.services import team_chat
+
+    try:
+        chat = team_chat.open_chat(current_user, user_id)
+    except team_chat.ChatError as exc:
+        return _chat_error(exc)
+    return _no_store(jsonify({"chat": team_chat.serialize_chat(chat, current_user)}))
+
+
+@workspace_bp.get("/teamchat/<int:chat_id>/nachrichten")
+@login_required
+def teamchat_messages(chat_id):
+    from app.services import team_chat
+
+    try:
+        chat = team_chat.get_chat(current_user, chat_id)
+        after = request.args.get("nach", type=int)
+        before = request.args.get("vor", type=int)
+        items = team_chat.messages(current_user, chat, after=after, before=before)
+    except team_chat.ChatError as exc:
+        return _chat_error(exc)
+    return _no_store(jsonify({"chat": team_chat.serialize_chat(chat, current_user), "messages": items}))
+
+
+@workspace_bp.post("/teamchat/<int:chat_id>/nachrichten")
+@login_required
+def teamchat_send(chat_id):
+    from app.services import team_chat
+
+    data = _json_body()
+    try:
+        chat = team_chat.get_chat(current_user, chat_id)
+        message = team_chat.send(current_user, chat, data.get("text") if isinstance(data.get("text"), str) else "",
+                                 client_ref=data.get("client_ref") if isinstance(data.get("client_ref"), str) else None)
+    except team_chat.ChatError as exc:
+        db.session.rollback()
+        return _chat_error(exc)
+    return _no_store(jsonify({"message": message})), 201
+
+
+@workspace_bp.post("/teamchat/<int:chat_id>/gelesen")
+@login_required
+def teamchat_read(chat_id):
+    from app.services import team_chat
+
+    try:
+        chat = team_chat.get_chat(current_user, chat_id)
+        unread = team_chat.mark_read(current_user, chat, _json_body().get("last_id"))
+    except team_chat.ChatError as exc:
+        return _chat_error(exc)
+    return _no_store(jsonify({"unread": unread}))
+
+
 @workspace_bp.get("/telefon/token")
 @login_required
 def call_token():

@@ -1,0 +1,12 @@
+{# Interner 1:1-Teamchat unten rechts (js/team-chat.js): minimierte Chats links neben der
+   Zeiterfassung, aufgeklappte Fenster darueber. Daten nur ueber /arbeitsplatz/teamchat (eigenes Buero). #}
+<div class="zq-tc" data-zq-tc data-user="{{ current_user.id }}" data-base="{{ url_for('workspace.teamchat_overview') }}" hidden>
+  <div class="zq-tc-windows" data-zq-tc-windows></div>
+  <div class="zq-tc-bar" data-zq-tc-bar role="toolbar" aria-label="Teamchat">
+    <div class="zq-tc-picker">
+      <button type="button" class="zq-tc-pill zq-tc-new" data-zq-tc-new aria-expanded="false" aria-haspopup="menu">Teamchat</button>
+      <div class="zq-tc-menu" data-zq-tc-menu role="menu" hidden></div>
+    </div>
+  </div>
+</div>
+<script defer src="{{ url_for('static', filename='js/team-chat.js', v=static_rev('js/team-chat.js')) }}"></script>

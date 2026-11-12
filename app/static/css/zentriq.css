@@ -1093,3 +1093,57 @@ html.zs-collapsed .zs-kbd { display: none; }
 .rechner-new { display: grid; gap: 0.4rem; }
 .rechner-new .zq-inline-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .rechner-new .field-surface { flex: 1 1 14rem; }
+
+/* ==========================================================================================
+   Teamchat (components/teamchat.html, js/team-chat.js): minimierte Chats als schmale Pillen links
+   neben "Ausgestempelt" (auf schmalen Bildschirmen darueber), Fenster klappen nach oben auf.
+   Position setzt team-chat.js an der Zeiterfassung aus (fester Abstand, auch bei Zoom); die
+   Zeiterfassung liegt immer darueber (z-index 45 > 44) und bleibt anklickbar.
+   ========================================================================================== */
+.zq-tc { position: fixed; right: 1rem; bottom: 1rem; z-index: 44; display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; pointer-events: none; max-width: calc(100vw - 1rem); }
+.zq-tc[hidden] { display: none; }
+.zq-tc > * { pointer-events: auto; }
+.zq-tc-bar { display: flex; flex-wrap: wrap-reverse; justify-content: flex-end; align-items: center; gap: 0.5rem; max-width: 100%; }
+.zq-tc-pill {
+  display: inline-flex; align-items: center; gap: 0.45rem; height: 2.3rem; max-width: 14rem; padding: 0 0.85rem;
+  border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface);
+  box-shadow: 0 2px 10px var(--color-shadow); font: inherit; font-size: 0.85rem; color: var(--color-text); cursor: pointer;
+}
+.zq-tc-pill:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.zq-tc-pill.is-open { border-color: var(--color-primary); }
+.zq-tc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.zq-tc-count { flex: none; min-width: 1.2rem; height: 1.2rem; padding: 0 0.3rem; border-radius: 999px; background: var(--color-primary); color: var(--color-on-primary, #fff); font-size: 0.72rem; font-weight: 700; display: inline-grid; place-items: center; }
+.zq-tc-count[hidden] { display: none; }
+.zq-tc-new { color: var(--color-text-muted); }
+.zq-tc-picker { position: relative; }
+.zq-tc-menu { position: absolute; right: 0; bottom: calc(100% + 0.4rem); min-width: 13rem; max-height: 50vh; overflow-y: auto; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 0.9rem; box-shadow: 0 10px 30px var(--color-shadow-strong, rgba(0,0,0,.15)); padding: 0.35rem; display: flex; flex-direction: column; }
+.zq-tc-menu[hidden] { display: none; }
+.zq-tc-menu button { text-align: left; background: none; border: 0; padding: 0.55rem 0.65rem; border-radius: 0.55rem; font: inherit; font-size: 0.9rem; color: var(--color-text); cursor: pointer; }
+.zq-tc-menu button:hover, .zq-tc-menu button:focus-visible { background: var(--color-surface-muted); }
+.zq-tc-menu p { margin: 0; padding: 0.55rem 0.65rem; font-size: 0.85rem; color: var(--color-text-muted); }
+.zq-tc-windows { display: flex; flex-direction: row-reverse; align-items: flex-end; gap: 0.5rem; max-width: 100%; }
+.zq-tc-win { width: min(20rem, calc(100vw - 1rem)); height: min(26rem, var(--zq-tc-max-h, 60vh)); display: flex; flex-direction: column; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 0.9rem; box-shadow: 0 10px 30px var(--color-shadow-strong, rgba(0,0,0,.15)); overflow: hidden; }
+.zq-tc-win.is-max { width: min(34rem, var(--zq-tc-max-w, calc(100vw - 1rem))); height: var(--zq-tc-max-h, 70vh); }
+.zq-tc-head { display: flex; align-items: center; gap: 0.25rem; padding: 0.35rem 0.4rem 0.35rem 0.8rem; border-bottom: 1px solid var(--color-border); }
+.zq-tc-title { flex: 1; min-width: 0; margin: 0; font-size: 0.92rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zq-tc-head button { flex: none; display: inline-grid; place-items: center; width: 2.25rem; height: 2.25rem; border: 0; border-radius: var(--radius-sm, 0.5rem); background: transparent; color: var(--color-text-muted); font: inherit; font-size: 1rem; cursor: pointer; }
+.zq-tc-head button:hover, .zq-tc-head button:focus-visible { background: var(--color-surface-strong); color: var(--color-text); }
+.zq-tc-list { flex: 1; overflow-y: auto; list-style: none; margin: 0; padding: 0.6rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.zq-tc-msg { max-width: 85%; align-self: flex-start; padding: 0.4rem 0.6rem; border-radius: 0.8rem; background: var(--color-surface-muted); font-size: 0.9rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.zq-tc-msg.is-mine { align-self: flex-end; background: color-mix(in oklab, var(--color-primary) 14%, var(--color-surface)); }
+.zq-tc-msg time { display: block; margin-top: 0.15rem; font-size: 0.7rem; color: var(--color-text-soft); }
+.zq-tc-empty { margin: auto; font-size: 0.85rem; color: var(--color-text-muted); text-align: center; }
+.zq-tc-form { display: flex; align-items: flex-end; gap: 0.4rem; padding: 0.5rem; border-top: 1px solid var(--color-border); }
+.zq-tc-form textarea { flex: 1; min-width: 0; resize: none; max-height: 7rem; font: inherit; font-size: 0.9rem; padding: 0.45rem 0.6rem; border: 1px solid var(--color-border); border-radius: 0.7rem; background: var(--color-surface); color: var(--color-text); }
+.zq-tc-error { margin: 0; padding: 0 0.6rem 0.4rem; font-size: 0.8rem; color: var(--color-error-text, var(--color-error)); }
+.zq-tc-error[hidden] { display: none; }
+@media (max-width: 47.99rem) {
+  .zq-tc-pill { height: 2.1rem; padding: 0 0.7rem; max-width: 11rem; }
+  .zq-tc-win, .zq-tc-win.is-max { width: calc(100vw - 1rem); }
+  .zq-tc-form textarea { font-size: 16px; } /* iOS: kein Zoom beim Fokus */
+}
+@media (max-width: 48rem), (pointer: coarse) {
+  .zq-tc-pill { height: 2.75rem; }
+  .zq-tc-head button { width: 2.75rem; height: 2.75rem; }
+}
+@media print { .zq-tc { display: none; } }

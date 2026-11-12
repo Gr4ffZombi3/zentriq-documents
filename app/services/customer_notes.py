@@ -47,6 +47,7 @@ from app.extensions import db
 from app.models import Customer, CustomerContact, CustomerNote, Document, LeipzigerEntry, User
 from app.models.enums import DocStatus, DocType
 from app.services import customer_create, customer_sources
+from app.services.anonymize_names import FIRST_NAMES
 from app.services.customer_lock import CustomerLockTimeout, customer_creation_lock, fresh_transaction
 from app.services.memo_customer_match import (
     _PHONE_PATTERN,
@@ -1215,6 +1216,11 @@ def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | Non
                                      explicit=mode == "create", create_new=create_new)
 
     if basis is None:
+        # Nur ein Name ("schmidthofer", "Max Mustermann"): direkt die Kundensuche, auch ohne
+        # Treffer und bei ausgewaehlter Karte - nie das KI-Modell, nie eine stille Notiz.
+        name_query = None if question or chat_request else name_search_text(text)
+        if name_query is not None:
+            return _name_search(user, name_query, selected)
         if question:
             # "Suche Mustermann", "Was wurde bei Mustermann notiert?": Teilname des Kunden.
             subject = search_subject(text)
@@ -1286,6 +1292,8 @@ def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | Non
 
     if len(candidates) > 1:
         pending = None if question else (text if _strip_identifiers(text, parsed, None).strip() else None)
+        if basis == "name" and name_search_text(text):
+            pending = None  # nur der Name ("Peter Krause"): Suche, keine Notiz
         reason = {"vn": "Mehrere Kunden gehören zu dieser Nummer", "phone": "Mehrere Kunden haben diese Telefonnummer",
                   "customer_number": "Mehrere Kunden haben diese Kundennummer", "number": "Mehrere Kunden passen zu dieser Nummer",
                   "name": "Mehrere Kunden heißen so"}[basis]
@@ -1670,6 +1678,62 @@ def without_ai(user, raw_text: str) -> dict:
         "message": "Für diese Anfrage wird ein KI-Modell benötigt, derzeit ist keins verfügbar. Kundennotizen, Suche "
         "und Rückrufe funktionieren weiterhin, z. B. „808/123456-E Max Mustermann HUK24 Wechsel“.",
     }
+
+
+_SALUTATION = re.compile(r"^(?:herrn?|frau|hr\.|fr\.)\s+", re.I)
+# Einzelne Woerter, die im Hauptchat keine Kundensuche sind (Gruss, Dank, Bedienung, Fachbegriffe).
+_CHAT_WORDS = frozenset(
+    {
+        "hallo", "hi", "hey", "moin", "servus", "morgen", "guten", "tag", "abend", "danke", "dankeschön", "dankeschoen",
+        "merci", "hilfe", "help", "test", "testen", "super", "prima", "gut", "toll", "cool", "tschüss", "tschuess",
+        "ciao", "bye", "doch", "genau", "stimmt", "richtig", "falsch", "weiter", "mehr", "abbrechen", "stopp", "stop",
+        "teilkasko", "vollkasko", "kasko", "kfz", "kfz-versicherung", "wetter", "kalender", "termine", "aufgaben",
+        "notizen", "rückrufe", "rueckrufe", "übersicht", "uebersicht", "tagesüberblick", "tagesueberblick",
+        "statistik", "auswertung", "zusammenfassung", "kunden", "kundenliste", "liste", "leipziger", "zeiterfassung",
+    }
+)
+
+
+def name_search_text(text: str) -> str | None:
+    """Eingabe, die nur aus einem Kundennamen besteht ("schmidthofer", "Max Mustermann",
+    "Frau Krause") -> Suchtext, sonst None. Solche Eingaben sucht Zentriq direkt in der
+    Kundensuche - auch ohne Treffer nie ueber das KI-Modell. Mehrere Woerter klein geschrieben
+    gelten nur mit erkennbarem Vornamen als Name ("max mustermann", nicht "erklaere mir kasko")."""
+    t = _SALUTATION.sub("", " ".join((text or "").split()).strip(" .,;:!"))
+    words = t.split()
+    if not 1 <= len(words) <= 3 or "?" in (text or "") or re.search(r"\d", t):
+        return None
+    if any(len(w.strip(",.")) < 2 for w in words) or max(len(w) for w in words) < 3:
+        return None
+    if not _looks_like_name(t, cased=False):
+        return None
+    lowered = [w.strip(",.").lower() for w in words]
+    if any(w in _CHAT_WORDS for w in lowered):
+        return None
+    if len(words) > 1:
+        cased = all(w[:1].isupper() or w.lower() in _NAME_PARTICLES for w in words)
+        if not cased and not any(w in FIRST_NAMES for w in lowered):
+            return None
+    return t
+
+
+def _name_search(user, query: str, selected: Customer | None) -> dict:
+    """Reine Namenssuche (name_search_text) - Ergebnis immer ohne KI-Modell: Karte, Auswahl,
+    Tippfehler-Vorschlag oder "kein Kunde". Gesucht wird nur im eigenen Buero (Tenant-Filter).
+    Ist eine Karte ausgewaehlt, wird ein unbekannter Name nicht stillschweigend als Notiz
+    gespeichert, sondern nachgefragt."""
+    found = search_by_name_fragment(query)
+    if len(found) == 1:
+        return _card_result(user, found[0], found[0].name)
+    if found:
+        return _choice("Mehrere Kunden passen – bitte auswählen:", found)
+    similar = similar_customers(query)
+    if similar:
+        return _choice(f"Kein Kunde „{query}“. Meinten Sie:", similar, ask_ai=True)
+    if selected is not None:
+        return {"kind": "clarify", "message": f"Kein Kunde „{query}“ in Ihrem Büro gefunden. Als Notiz für {selected.name} speichern?",
+                "customer": serialize_candidate(selected), "options": ["note", "chat"]}
+    return {"kind": "not_found", "search": True, "ask_ai": True, "message": f"Kein Kunde „{query}“ in Ihrem Büro gefunden."}
 
 
 def _looks_like_name(text: str, cased: bool) -> bool:

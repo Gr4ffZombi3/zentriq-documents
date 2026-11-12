@@ -331,6 +331,17 @@ def api_customer_input():
 
     if mode is None and image_appointments.is_chat_request(text):
         return jsonify({"kind": "appointments_from_chat"})
+    # Offene Rueckfrage "Fuer welchen Kunden ist der Termin?": der genannte Name setzt diesen
+    # Termin fort (ohne KI-Modell); andere Eingaben laufen normal weiter.
+    if mode is None and not data.get("customer_id") and isinstance(data.get("calendar_pending"), dict):
+        try:
+            pending_result = calendar_intent.continue_with_customer(current_user, data["calendar_pending"], text, client_ref=_client_ref(data))
+        except Exception:  # noqa: BLE001
+            current_app.logger.exception("calendar_intent.continue_failed user=%s", current_user.id)
+            db.session.rollback()
+            return _error("Technischer Fehler beim Termin. Er wurde nicht gespeichert – bitte erneut versuchen.", 500, "technical")
+        if pending_result is not None:
+            return jsonify(pending_result)
     # Offener Auftrag des Chats ("Fuer welchen Kunden?" -> nur der Name) bzw. neuer Auftrag
     # "Termin bestaetigen": im Backend, ohne Modell (app/services/chat_task.py). Ohne offenen
     # Auftrag bleibt alles wie bisher (ein allein eingegebener Name ist die direkte Kundensuche).

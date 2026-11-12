@@ -397,8 +397,11 @@ def handle(user, raw_text: str, choice: dict | None = None, client_ref: str | No
     elif selected_customer_id not in (None, ""):
         customer = Customer.query.filter(Customer.id == int(selected_customer_id)).first()
     elif short and not choice.get("no_customer"):
-        return _question(p, f"Für welchen Kunden ist der Termin{_when_text(p)}? Bitte den Namen ergänzen, z. B. „09.11.26 Mustermann Termin um 16.30“.",
-                         [{"label": "Ohne Kunde buchen", "choice": {**choice, "no_customer": True}}])
+        question = _question(p, f"Für welchen Kunden ist der Termin{_when_text(p)}? Bitte den Namen ergänzen, z. B. „09.11.26 Mustermann Termin um 16.30“.",
+                             [{"label": "Ohne Kunde buchen", "choice": {**choice, "no_customer": True}}])
+        # Der Chat wartet auf den Kundennamen: die naechste Eingabe setzt diesen Termin fort.
+        question["await_customer"] = {"text": text, "choice": _pending_choice(choice)}
+        return question
 
     # Zustaendig: ausdruecklich genannt, sonst laut Kundendaten (Betreuer/Vermittlernummer). Beim
     # kurzen Buchungsauftrag wird ohne hinterlegte Zustaendigkeit gezielt nachgefragt; sonst wie
@@ -527,6 +530,46 @@ def _book(user, p: Parsed, assignee, customer, title, start_iso, end_iso, start_
         message += " Angenommen: " + ", ".join(defaults) + "."
     return {"kind": "calendar_saved", "duplicate": False, "message": message, "event": cal.serialize(event, user),
             "calendar_url": url_for("calendar.index"), "tone": "ok"}
+
+
+_PENDING_KEYS = ("start", "minutes", "assignee_id", "book")
+
+
+def _pending_choice(choice: dict) -> dict:
+    return {k: choice[k] for k in _PENDING_KEYS if k in choice}
+
+
+def continue_with_customer(user, pending, answer: str, client_ref: str | None = None) -> dict | None:
+    """Antwort auf "Fuer welchen Kunden ist der Termin?" (pending = await_customer der Rueckfrage,
+    vom Browser zurueckgegeben). Ein Treffer setzt genau diesen Termin fort; mehrere bzw.
+    Tippfehler -> Auswahl. Ohne KI-Modell. None: keine Namensantwort -> normale Verarbeitung."""
+    from app.services import chat_followup, chat_task
+
+    if not isinstance(pending, dict) or not isinstance(pending.get("text"), str) or not isinstance(pending.get("choice"), dict):
+        return None
+    if not chat_task._looks_like_name_answer(answer) or chat_followup.detect(answer) or is_calendar_request(answer):
+        return None
+    text = " ".join(pending["text"].split())[:300]
+    if not is_booking_command(text):
+        return None
+    choice = _pending_choice(pending["choice"])
+    found = chat_task._find_customers(answer, answer=True)  # Tenant-Filter: nur das eigene Buero
+    if len(found) == 1:
+        return handle(user, text, choice={**choice, "customer_id": found[0].id}, client_ref=client_ref)
+    p = parse(text, local_today())
+    name = chat_task._clean_answer(answer)
+    message = f"Mehrere Kunden passen zu „{name}“{_when_text(p)}. Welcher ist gemeint?"
+    if not found:
+        found = _similar_customers(name)
+        message = f"Kein Kunde „{name}“{_when_text(p)}. Meinten Sie:"
+    if not found:
+        question = _question(p, f"Kein Kunde „{name}“ in Ihrem Büro gefunden. Bitte Namen oder VN-Nummer prüfen.",
+                             [{"label": "Ohne Kunde buchen", "choice": {**choice, "no_customer": True}}])
+        question["await_customer"] = {"text": text, "choice": choice}
+        return question
+    options = [{"label": c.name + (f" · {c.city}" if c.city else ""), "choice": {**choice, "customer_id": c.id}} for c in found[:6]]
+    options.append({"label": "Ohne Kundenverknüpfung", "choice": {**choice, "no_customer": True}})
+    return _question(p, message, options)
 
 
 def _when_text(p: Parsed) -> str:

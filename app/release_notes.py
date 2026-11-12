@@ -18,6 +18,15 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 12),
+        "title": "Kundensuche im Assistenten sofort",
+        "text": "Ein Name, eine Telefonnummer oder eine VN-Nummer im Assistenten zeigt jetzt sofort die Kundenkarte – auch "
+        "wenn kein Kunde gefunden wird, kommt die Antwort direkt statt nach langem Warten auf die KI. Bei Tippfehlern "
+        "schlägt Zentriq passende Kunden vor. Ist gerade eine Kundenkarte geöffnet, wird ein anderer Name gesucht und "
+        "nicht mehr als Notiz gespeichert. Fragt Zentriq bei einem Termin nach dem Kunden, genügt jetzt der Name.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 12),
         "title": "KI auf dem eigenen Rechner",
         "text": "Fotos, Scans, Dokumente und lange Anfragen kann jetzt ein KI-Modell auf Ihrem eigenen Rechner bearbeiten – "
         "kurze Fragen beantwortet weiterhin das eingestellte Modell. Unter „Verwaltung › Mein Rechner“ sehen Sie, ob Ihr "

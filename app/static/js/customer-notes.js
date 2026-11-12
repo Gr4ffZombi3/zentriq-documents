@@ -625,9 +625,17 @@
     if (r.more) nodes.push(el("p", "zn-meta", "Weitere Treffer – bitte genauer suchen (z. B. mit VN-Nummer)."));
     var row = el("div", "zn-actions");
     if (r.create_option) row.appendChild(createButton(reply, r.create, note || text));
+    if (r.ask_ai) row.appendChild(askAiButton(reply, text));
     row.appendChild(cancel(reply));
     nodes.push(row);
     fill(reply, nodes);
+  }
+
+  // Namenssuche ohne Treffer: Zentriq fragt die KI nicht von selbst - nur auf Klick.
+  function askAiButton(reply, text) {
+    return button("Stattdessen ZentriqAI fragen", "zn-link", function () {
+      if (window.ZentriqChat) window.ZentriqChat.sendInto(text, reply);
+    });
   }
 
   // Ausdruecklich "Neuen Kunden anlegen" (nach Rueckfrage). Den Kunden legt nur der Server an,
@@ -711,6 +719,7 @@
     var a = el("a", "zn-link", label || "Im Kalender öffnen"); a.href = url; return a;
   }
   function calendarChoice(reply, text, choice) {
+    pendingCalendar = null;
     act(reply, request("POST", "/kunden/eingabe", { text: text, calendar: choice, client_ref: newRef() }), "Wird gespeichert", function (res) { show(reply, res, text); });
   }
   function calendarUndo(reply, ev) {
@@ -729,6 +738,7 @@
   }
 
   function show(reply, r, text) {
+    if (r.kind !== "calendar_question") pendingCalendar = null; // Termin erledigt bzw. andere Antwort
     switch (r.kind) {
       case "chat":
         return false;
@@ -758,6 +768,7 @@
         return true;
       }
       case "calendar_question": {
+        pendingCalendar = r.await_customer ? { data: r.await_customer, at: Date.now() } : null; // naechster Name setzt diesen Termin fort
         var opts = el("div", "zn-actions");
         (r.options || []).forEach(function (o) { opts.appendChild(button(o.label, "btn btn-secondary btn-sm", function () { calendarChoice(reply, text, o.choice); })); });
         opts.appendChild(calendarLink(r.form_url, "Im Kalender vervollständigen"));
@@ -843,9 +854,10 @@
         // Suche ohne Treffer: die bisher ausgewaehlte Karte ist nicht das Ergebnis -> Auswahl aufheben.
         if (r.search) select(null);
         var nodes = [message(r.message, "warn")];
-        if (r.create) {
+        if (r.create || r.ask_ai) {
           var actions = el("div", "zn-actions");
-          actions.appendChild(createButton(reply, r.create, text));
+          if (r.create) actions.appendChild(createButton(reply, r.create, text));
+          if (r.ask_ai) actions.appendChild(askAiButton(reply, text));
           nodes.push(actions);
         }
         fill(reply, nodes);
@@ -857,6 +869,8 @@
 
   // Aufruf aus js/zentriq-ai.js: true = erledigt, false = an das KI-Modell weitergeben.
   // Technischer Fehler: Meldung in der Blase, Promise wird abgelehnt (Eingabe bleibt erhalten).
+  var READ_ONLY = { card: true, choose: true, not_found: true, clarify: true, facts: true, need_name: true, need_vn: true,
+    create_name: true, create_phone: true, confirm_create: true, no_ai: true, calendar_question: true, calendar_list: true, form_time: true };
   function intercept(text, reply) {
     var body = { text: text, client_ref: newRef() };
     if (selected) body.selected_id = selected.id;
@@ -865,6 +879,8 @@
     // Kontext fuer kurze Folgeeingaben: zuletzt gebuchter Termin, offenes Terminformular.
     if (lastEventId) body.last_event_id = lastEventId;
     if (document.querySelector("[data-zn-book-form]")) body.form_open = true;
+    if (pendingCalendar && Date.now() - pendingCalendar.at < 15 * 60000) body.calendar_pending = pendingCalendar.data;
+    pendingCalendar = null;
     showPending(reply, "Wird geprüft");
     chatCustomer = null;
     return request("POST", "/kunden/eingabe", body).then(function (r) {
@@ -872,7 +888,8 @@
       if (r.kind === "chat" && r.customer_id) chatCustomer = r.customer_id;
       if (r.task_ended && window.ZentriqChat) window.ZentriqChat.setTask(null);
       var handled = show(reply, r, text);
-      if (handled) loadCallbacks();
+      // Offene Rueckrufe aendern sich nur durch Speichern - eine reine Suche laedt sie nicht neu.
+      if (handled && (!READ_ONLY[r.kind] || r.created)) loadCallbacks();
       return handled;
     }, function (err) {
       fill(reply, [message(err.message, err.technical ? "error" : "warn")]);
@@ -955,6 +972,7 @@
   }
 
   var chatCustomer = null;
+  var pendingCalendar = null;
   window.ZentriqNotes = {
     intercept: intercept,
     clear: function () { select(null); },

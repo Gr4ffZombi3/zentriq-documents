@@ -105,13 +105,21 @@ def test_repeat_and_double_submit_create_no_duplicate(app, fresh_office):
     assert len(_by_name(fresh_office.tenant_a.id, "Justin Heller")) == 1
 
 
-def test_existing_customer_is_shown_not_overwritten(app, office):
-    """Bestand: Justin Heller mit 0171 1234567. Gleicher Name, gleiche Nummer -> vorhandene Karte;
-    zusaetzliche Adresse wird nicht ungefragt eingetragen."""
+def test_existing_customer_is_asked_not_overwritten(app, office):
+    """Bestand: Justin Heller mit 0171 1234567 (aelterer Datensatz). Gleicher Name, gleiche Nummer ->
+    konkreter Dublettenverdacht: nachfragen (oeffnen oder trotzdem neu anlegen) statt still die Karte
+    zu zeigen; zusaetzliche Adresse wird nicht ungefragt eingetragen."""
+    from datetime import timedelta
+
+    with bypass_tenant_scope():
+        customer = Customer.query.get(office.ids["Justin Heller"])
+        customer.created_at = customer.created_at - timedelta(days=30)
+        from app.extensions import db as _db
+        _db.session.commit()
     laura = login(app, "laura@example.com")
     data = _input(laura, "neuer kunde justin heller privat 0171 1234567 wilhelmstrasse 7 53809")
-    assert data["kind"] == "card" and data["card"]["id"] == office.ids["Justin Heller"] and data.get("existing")
-    assert "Nicht übernommen (Adresse, PLZ)" in data["notice"]
+    assert data["kind"] == "choose" and "bereits angelegt" in data["message"] and data["create_option"] is True
+    assert [c["id"] for c in data["candidates"]] == [office.ids["Justin Heller"]]
     with bypass_tenant_scope():
         customer = Customer.query.get(office.ids["Justin Heller"])
         assert customer.address is None and customer.postal_code is None

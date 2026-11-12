@@ -35,7 +35,8 @@ _ORDER = re.compile(
 )
 # "diesen Kunden", "fuer ihn": gemeint ist der sichtbar ausgewaehlte Kunde - kein Name.
 _SELF_REF = re.compile(
-    r"\b(?:(?:für|fuer|mit|bei)\s+)?(?:diese[nmrs]?|den|dem|der|die|unsere[nmr]?)\s+(?:kunden|kundin|kunde)\b"
+    r"\b(?:(?:für|fuer|mit|bei)\s+)?(?:diese[nmrs]?|den|dem|der|die|unsere[nmr]?)\s+"
+    r"(?:(?:ausgewählte|ausgewaehlte|aktuelle|markierte|geöffnete|geoeffnete|gewählte|gewaehlte)[nmr]?\s+)?(?:kunden|kundin|kunde)\b"
     r"|\b(?:für|fuer|mit)\s+(?:ihn|sie|ihm|ihr)\b(?!\s+[A-ZÄÖÜ])",
     re.I,
 )

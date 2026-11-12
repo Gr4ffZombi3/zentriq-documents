@@ -82,7 +82,12 @@ def test_name_without_match_is_answered_directly(app, office, no_model, text, la
     client = login(app, "laura@example.com")
     r = _say(client, text)
     assert r["kind"] == "not_found" and r["search"] is True and r["ask_ai"] is True, r
-    assert r["message"] == f"Kein Kunde „{label}“ in Ihrem Büro gefunden."
+    # Vollstaendiger Name: Suche oder Anlage? -> kurze Rueckfrage mit Anlage-Knopf (nichts angelegt)
+    expected = f"Kein Kunde „{label}“ in Ihrem Büro gefunden."
+    if len(label.split()) >= 2:
+        expected += " Kunden suchen oder neu anlegen?"
+        assert r["create"]["last_name"] == "Zuckerberg"
+    assert r["message"] == expected
     assert _no_chat_traffic() and _notes() == 0
 
 

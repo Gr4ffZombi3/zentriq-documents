@@ -115,7 +115,7 @@ _OUTCOME_PATTERNS = (
 )
 # Fragen bzw. Suchauftraege.
 _QUESTION_START = re.compile(
-    r"^\s*(?:warum|wieso|weshalb|worum|was|wer|wann|wo|wie|welche[rsmn]?|gibt\s+es|hat|haben|ist|sind|zeig\w*|such\w*|finde?)\b", re.I
+    r"^\s*(?:warum|wieso|weshalb|worum|was|wer|wann|wo|wie|welche[rsmn]?|gibt\s+es|hat|haben|ist|sind|zeig\w*|such\w*|finde?|(?:ö|oe)ffne\w*)\b", re.I
 )
 # Arbeitsauftraege an die KI (Text schreiben, erklaeren ...) - nie als Notiz speichern.
 _CHAT_REQUEST = re.compile(
@@ -124,6 +124,9 @@ _CHAT_REQUEST = re.compile(
 )
 _OPEN_QUESTION = re.compile(r"\boffen\w*|\bausstehend\w*|\bnoch\s+zu\s+tun\b|\br(?:ü|ue)ckruf\w*", re.I)
 # Frage nach gespeicherten Vorgaengen eines Kunden (nicht nach Allgemeinwissen).
+# Ausdrueckliche Suche ("Such Max Mustermann", "Zeig mir die Akte von ...", "Oeffne ..."): nur suchen -
+# ohne Treffer klare Meldung, nie KI-Chat und nie eine Neuanlage.
+_SEARCH_REQUEST = re.compile(r"^\s*(?:bitte\s+)?(?:such\w*|find\w*|zeig\w*|(?:ö|oe)ffne\w*|hol\w*)\b|\b(?:akte|kundenakte|kundenkarte)\b", re.I)
 _RECORD_QUESTION = re.compile(
     r"\b(?:notiert|notiz\w*|dokumentiert|vermerkt|gespeichert|besprochen|gesagt|sagte|gemeint|meinte|ge(?:ä|ae)u(?:ss|ß)ert|"
     r"mitgeteilt|erz(?:ä|ae)hlt|aussage|offen\w*|r(?:ü|ue)ckruf\w*|anlass|angerufen|anruf)\b",
@@ -329,7 +332,7 @@ def search_by_name_fragment(text: str) -> list[Customer]:
 # Woerter einer Such- bzw. Frageformulierung, die nicht zum gesuchten Namen gehoeren.
 _SEARCH_WORDS = frozenset(
     {
-        "suche", "such", "suchen", "finde", "finden", "find", "zeig", "zeige", "zeigen", "nach", "mir", "uns", "mal",
+        "suche", "such", "suchen", "öffne", "oeffne", "öffnen", "oeffnen", "finde", "finden", "find", "zeig", "zeige", "zeigen", "nach", "mir", "uns", "mal",
         "was", "wer", "wie", "wo", "wann", "warum", "wieso", "weshalb", "worum", "welche", "welcher", "welches", "gibt",
         "es", "wurde", "wurden", "ist", "sind", "hat", "haben", "steht", "stand", "notiert", "dokumentiert", "vermerkt",
         "gesagt", "gemeint", "gewollt", "kunde", "kunden", "kundin", "akte", "kundenakte", "karte", "notizen", "zu", "zum",
@@ -1246,16 +1249,19 @@ def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | Non
         # Lange Texte sind keine Kurznotizen - unveraendert an den Chat.
         return {"kind": "chat"}
 
-    # Ausdruecklicher Anlagebefehl ("Lege Kunden ... an", "Neuer Kunde ...") vor jeder Suche:
-    # lokale Zerlegung, keine VN-Nummer noetig, keine Notiz (app/services/customer_create.py).
-    if customer_id in (None, "") and customer_create.is_command(text):
+    # Kundenanlage vor jeder Suche - jede Formulierung ("Lege Kunde ... an", "Neuer Kunde ...", "Nimm ...
+    # als Kunden auf", "Max Mustermann neu anlegen", Tippfehler): gemeinsame Erkennung
+    # customer_create.creation_route. Klare Faelle lokal (kein Modell), frei formulierte mit genau einem
+    # kurzen Modellaufruf. Nie eine Suche oder Notiz an ihrer Stelle.
+    route = customer_create.creation_route(text) if customer_id in (None, "") else None
+    if route is not None:
         try:
-            return customer_create.handle(user, text, first_name=first_name, last_name=last_name, create_new=create_new,
-                                          phone_kinds=phone_kinds)
-        except customer_create.CreateError as exc:
-            raise NoteError(str(exc), exc.status) from None
-    if customer_id in (None, "") and selected_id in (None, "") and customer_create.looks_like_create(text):
-        try:
+            if route[0] == "command" or first_name is not None or last_name is not None:
+                return customer_create.handle(user, text, first_name=first_name, last_name=last_name, create_new=create_new,
+                                              phone_kinds=phone_kinds)
+            if route[0] == "local":
+                return customer_create.handle(user, f"Lege Kunden {route[1]} {route[2]} an", first_name=route[1],
+                                              last_name=route[2], create_new=create_new, phone_kinds=phone_kinds)
             return customer_create.handle_with_model(user, text)
         except customer_create.CreateError as exc:
             raise NoteError(str(exc), exc.status) from None
@@ -1322,7 +1328,7 @@ def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | Non
             similar = similar_customers(subject) if subject else []
             if similar:
                 return _choice(f"Kein Kunde „{subject}“. Meinten Sie:", similar)
-            if subject and _RECORD_QUESTION.search(text) and _looks_like_name(subject, cased=any(ch.isupper() for ch in subject)):
+            if subject and (_RECORD_QUESTION.search(text) or _SEARCH_REQUEST.search(text)) and _looks_like_name(subject, cased=any(ch.isupper() for ch in subject)):
                 # "Was wurde bei Erika Musterfrau notiert?" ohne Treffer: klare Meldung statt KI-Antwort;
                 # ein ausgewaehlter anderer Kunde ist nicht das Ergebnis.
                 return {"kind": "not_found", "search": True, "message": f"Kein Kunde „{subject}“ in Ihrem Büro gefunden."}
@@ -1830,11 +1836,26 @@ def _name_search(user, query: str, selected: Customer | None) -> dict:
         return _choice("Mehrere Kunden passen – bitte auswählen:", found)
     similar = similar_customers(query)
     if similar:
-        return _choice(f"Kein Kunde „{query}“. Meinten Sie:", similar, ask_ai=True)
+        return _choice(f"Kein Kunde „{query}“. Meinten Sie:", similar, ask_ai=True, **_create_offer(query))
     if selected is not None:
         return {"kind": "clarify", "message": f"Kein Kunde „{query}“ in Ihrem Büro gefunden. Als Notiz für {selected.name} speichern?",
                 "customer": serialize_candidate(selected), "options": ["note", "chat"]}
+    offer = _create_offer(query)
+    if offer:
+        # Suche oder Anlage? Nichts wird angelegt, bevor der Nutzer es waehlt.
+        return {"kind": "not_found", "search": True, "ask_ai": True, "create": offer["create"],
+                "message": f"Kein Kunde „{query}“ in Ihrem Büro gefunden. Kunden suchen oder neu anlegen?"}
     return {"kind": "not_found", "search": True, "ask_ai": True, "message": f"Kein Kunde „{query}“ in Ihrem Büro gefunden."}
+
+
+def _create_offer(query: str) -> dict:
+    """Vollstaendiger Name ohne Treffer: Neuanlage als Knopf anbieten (create_option/create)."""
+    words = query.split()
+    if len(words) < 2:
+        return {}
+    first, last = customer_create._cap(" ".join(words[:-1])), customer_create._cap(words[-1])
+    return {"create_option": True, "create": {"name": f"{first} {last}", "text": f"Lege Kunden {first} {last} an",
+                                              "first_name": first, "last_name": last}}
 
 
 def _looks_like_name(text: str, cased: bool) -> bool:

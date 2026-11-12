@@ -111,6 +111,74 @@ def is_command(text: str) -> bool:
     return any(rx.search(text or "") for rx in _COMMANDS)
 
 
+# --- Absicht "Kunde anlegen" (gemeinsame Erkennung fuer alle Formulierungen) --------------------
+# Ein Satz mit "Termin" ist nie eine Kundenanlage (Terminablauf, app/services/calendar_intent.py).
+# Klare Faelle laufen lokal (kein Modell); frei formuliert mit "Kunde" -> genau ein kurzer Modellaufruf.
+_INTENT_KUNDE = ("kunde", "kunden", "kundin", "kundinnen", "neukunde", "neukundin", "neukunden")
+_INTENT_VERBS = ("anlegen", "anleg", "aufnehmen", "erfassen", "eintragen", "registrieren", "hinzufügen", "hinzufuegen")
+_SPLIT_VERBS = {"leg": "an", "lege": "an", "nimm": "auf", "nehme": "auf", "nehmen": "auf", "trag": "ein", "trage": "ein",
+                "füg": "hinzu", "füge": "hinzu", "fueg": "hinzu", "fuege": "hinzu"}
+_INTENT_NEW = {"neu", "neuer", "neue", "neuen", "neues"}
+_INTENT_FILLER = {
+    "bitte", "mal", "kannst", "könntest", "koenntest", "würdest", "wuerdest", "du", "sie", "ihr", "als", "einen", "eine", "ein",
+    "den", "die", "der", "dem", "an", "auf", "hinzu", "bei", "uns", "im", "system", "in", "zentriq", "ich", "möchte", "moechte",
+    "will", "gern", "gerne", "doch", "noch", "schnell", "jetzt", "sofort", "herrn", "herr", "frau", "namens", "mit", "namen",
+    "und", "zu", "für", "fuer", "hier", "dann", "kurz",
+} | _INTENT_NEW
+_NAME_RE = re.compile(r"[A-Za-zÄÖÜäöüßÉéÈèÁáÓóÚúÇç][A-Za-zÄÖÜäöüßÉéÈèÁáÓóÚúÇç'’-]*")
+_QUESTION_START = {"wie", "wo", "warum", "weshalb", "wieso", "was", "welche", "welcher", "welches", "wann", "wer"}
+
+
+def _near(word: str, targets) -> bool:
+    """Wortgleich oder harmloser Tippfehler (ab 4 Zeichen eine Abweichung, "lge" -> "leg")."""
+    from app.services.customer_notes import _edit_distance
+
+    if word in targets:
+        return True
+    return len(word) >= 3 and any(abs(len(word) - len(t)) <= 1 and _edit_distance(word, t, 1) <= 1 for t in targets if len(t) >= 3)
+
+
+def creation_route(text: str):
+    """("command",) | ("local", vorname, nachname) | ("model",) | None.
+
+    - "command": feste Regel (is_command) - lokale Zerlegung mit allen Angaben (Telefon, Adresse ...).
+    - "local": frei formuliert, aber der Name ist eindeutig herausloesbar ("Nimm Max Mustermann als
+      Kunden auf", "Leg mal Max Mustermann an", "Max Mustermann neu anlegen", Tippfehler im Verb).
+    - "model": Anlage gewollt ("Kunde" + Anlageverb), Angaben aber frei formuliert -> ein Modellaufruf.
+    - None: keine Kundenanlage (Suche, Termin, Frage "Wie lege ich einen Kunden an?" ...)."""
+    t = " ".join((text or "").split())
+    if not t or len(t) > 300 or re.search(r"\btermin", t, re.I):
+        return None
+    if is_command(t):
+        return ("command",)
+    raw = re.findall(r"[A-Za-zÄÖÜäöüßÉéÈèÁáÓóÚúÇç'’-]+|\S", t)
+    words = [w.lower() for w in raw]
+    if not words or words[0] in _QUESTION_START:
+        return None
+    has_kunde = any(_near(w, _INTENT_KUNDE) for w in words)
+    verb_at = [i for i, w in enumerate(words) if _near(w, _INTENT_VERBS)]
+    split_at = []
+    for i, w in enumerate(words):
+        verb = w if w in _SPLIT_VERBS else next((v for v in _SPLIT_VERBS if _near(w, (v,))), None)
+        if verb and _SPLIT_VERBS[verb] in words[i + 1:]:
+            split_at.append(i)
+    new_word = any(w in _INTENT_NEW for w in words)
+    if not (verb_at or split_at or (has_kunde and new_word)):
+        return None
+    drop = set(verb_at) | set(split_at)
+    names = [w for i, w in enumerate(raw) if i not in drop and words[i] not in _INTENT_FILLER and not _near(words[i], _INTENT_KUNDE)
+             and words[i] not in {"?", "!", ".", ",", ":"}]
+    from app.services.customer_notes import _NOT_NAME
+
+    # Notizvokabular ("Vertrag", "Angebot" ...) ist nie Namensbestandteil: "Max Mustermann Vertrag anlegen"
+    # ist keine Kundenanlage.
+    clean = (2 <= len(names) <= 3 and all(_NAME_RE.fullmatch(w) and w.lower() not in _NOT_NAME for w in names)
+             and not re.search(r"[\d@]", t))
+    if clean:
+        return ("local", " ".join(_cap(w) for w in names[:-1]), _cap(names[-1]))
+    return ("model",) if has_kunde else None
+
+
 def looks_like_create(text: str) -> bool:
     return bool(_CREATE_HINT.search(text or "")) and not is_command(text) and len(text or "") <= 300
 
@@ -476,6 +544,8 @@ def handle(user, text: str, *, first_name=None, last_name=None, create_new: bool
         return {
             "kind": "create_name",
             "message": message,
+            # Der Chat wartet auf den Namen: die naechste Eingabe setzt genau diese Anlage fort.
+            "await_create": {"text": text},
             "options": [{"first_name": f, "last_name": last, "label": f"Vorname „{f}“, Nachname „{last}“"} for f, last in draft.name_options],
             "suggestion": {
                 "first_name": _cap(draft.name_tokens[0]) if len(draft.name_tokens) > 1 else "",
@@ -489,10 +559,16 @@ def handle(user, text: str, *, first_name=None, last_name=None, create_new: bool
 
     if not create_new:
         fitting, conflicting = _existing(draft)
-        if len(fitting) == 1:
+        if len(fitting) == 1 and _recent(fitting[0]):
+            # Gerade eben angelegt (Doppelklick, erneutes Absenden): dieselbe Anlage, kein Verdacht.
             return _existing_result(user, fitting[0], draft)
         if fitting or conflicting:
-            reason = "Mehrere Kunden passen" if len(fitting) > 1 else f"Es gibt bereits „{draft.name}“ mit anderen Angaben"
+            # Konkreter Dublettenverdacht: ausdruecklich fragen - nie still die vorhandene Karte zeigen
+            # (das saehe aus wie eine Suche und die gewuenschte Anlage waere verloren).
+            if len(fitting) == 1:
+                reason = f"„{draft.name}“ ist bereits angelegt"
+            else:
+                reason = "Mehrere Kunden passen" if len(fitting) > 1 else f"Es gibt bereits „{draft.name}“ mit anderen Angaben"
             return _choice(
                 f"{reason} – vorhandenen Kunden öffnen oder neu anlegen?",
                 (fitting or conflicting)[:5],

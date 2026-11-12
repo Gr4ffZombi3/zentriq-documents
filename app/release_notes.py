@@ -18,6 +18,15 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 12),
+        "title": "Kunden anlegen ohne feste Formulierung",
+        "text": "„Lege Kunde Max Mustermann an“, „Neuer Kunde Max Mustermann“, „Nimm Max Mustermann als Kunden auf“ oder "
+        "„Max Mustermann neu anlegen“ – der Assistent legt den Kunden jetzt sofort an, auch bei kleinen Tippfehlern. "
+        "Gibt es den Namen schon, fragt er, ob Sie die vorhandene Akte öffnen oder trotzdem neu anlegen möchten. "
+        "Ein reiner Name ohne Treffer bietet „neu anlegen“ an, ein Terminwunsch legt nie einen Kunden an.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 12),
         "title": "Teamchat im Büro",
         "text": "Unten rechts neben der Zeiterfassung gibt es jetzt den Teamchat: Über „Teamchat“ wählen Sie einen Kollegen "
         "aus Ihrem Büro und schreiben direkt im Browser – auch während Sie im Kalender, in einer Kundenakte oder im "

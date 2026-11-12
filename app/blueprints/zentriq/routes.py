@@ -350,6 +350,17 @@ def api_customer_input():
             return _error("Technischer Fehler beim Termin. Er wurde nicht gespeichert – bitte erneut versuchen.", 500, "technical")
         if pending_result is not None:
             return jsonify(pending_result)
+    # Begonnene Kundenanlage wartet auf den Namen ("Wie heisst der neue Kunde?"): ein getippter Name
+    # setzt genau diese Anlage fort (statt einer Suche).
+    if mode is None and not data.get("customer_id") and isinstance(data.get("create_pending"), dict):
+        name = customer_notes.name_search_text(text)
+        pending_text = data["create_pending"].get("text")
+        if name and len(name.split()) >= 2 and isinstance(pending_text, str) and pending_text.strip():
+            words = name.split()
+            try:
+                return jsonify(customer_create.handle(current_user, pending_text[:300], first_name=" ".join(words[:-1]), last_name=words[-1]))
+            except customer_create.CreateError as exc:
+                return _error(str(exc), exc.status, "customer")
     # Offener Auftrag des Chats ("Fuer welchen Kunden?" -> nur der Name) bzw. neuer Auftrag
     # "Termin bestaetigen": im Backend, ohne Modell (app/services/chat_task.py). Ohne offenen
     # Auftrag bleibt alles wie bisher (ein allein eingegebener Name ist die direkte Kundensuche).
@@ -377,10 +388,13 @@ def api_customer_input():
         if chosen is not None:
             return jsonify({"kind": "clarify", "message": f"Termin für {chosen.name} eintragen oder als Notiz speichern?",
                             "customer": customer_notes.serialize_candidate(chosen), "options": ["calendar", "note"]})
+    # Kundenanlage (jede Formulierung, customer_create.creation_route) geht direkt zur Anlage - keine
+    # andere Weiche (Webrecherche bei "Kannst du ... anlegen?", Bestandsfragen, Chat) darf sie abfangen.
+    creating = mode is None and picked is None and not data.get("customer_id") and customer_create.creation_route(text) is not None
     # "Schreibe eine Antwort, um einen Termin zu machen": Auftrag zu einer E-Mail im Gespraech ->
     # Chat (dort app/services/email_reply.py, funktioniert auch ohne KI-Modell). Kein Termin,
     # keine Notiz.
-    if mode is None and not data.get("customer_id") and email_reply.is_reply_instruction(text) and not customer_create.is_command(text):
+    if mode is None and not creating and not data.get("customer_id") and email_reply.is_reply_instruction(text):
         # Ausgewaehlter bzw. im Auftrag eindeutig genannter Kunde geht mit (Entwurf mit freien Terminen).
         customer = None
         if str(data.get("selected_id") or "").isdigit():
@@ -389,30 +403,30 @@ def api_customer_input():
         return jsonify({"kind": "chat", **({"customer_id": customer.id, "customer_name": customer.name} if customer else {})})
     # Eingefuegte E-Mail: gehoert ins Gespraech (Kontext fuer "Antwort schreiben"), ist keine
     # Kurznotiz - auch wenn sie Nummern oder Namen enthaelt.
-    if mode is None and not data.get("customer_id") and email_context.looks_like_email(text):
+    if mode is None and not creating and not data.get("customer_id") and email_context.looks_like_email(text):
         return jsonify({"kind": "chat"})
     # Kurzer Buchungsauftrag ("09.11.26 Schmidthofer Termin um 16.30") und reine Verfuegbarkeits-
     # fragen ("Ist am 09.11. um 16:30 noch frei?") gehen direkt an den Kalender - lokal erkannt,
     # ohne KI-Modell und vor allen anderen Weichen.
     selected = data.get("selected_id") not in (None, "")
-    direct_calendar = mode is None and not data.get("customer_id") and (
+    direct_calendar = mode is None and not creating and not data.get("customer_id") and (
         calendar_intent.is_availability_question(text)
         or (calendar_intent.is_booking_command(text) and calendar_intent.is_calendar_request(text, customer_selected=selected))
     )
     # Bestandsfragen ("Wie viele Kunden sind laut Leipziger Liste noch zurueckzurufen?"): direkt
     # aus der Datenbank, unabhaengig von einem KI-Modell (app/services/stock_questions.py).
-    if mode is None and not data.get("customer_id") and not direct_calendar:
+    if mode is None and not creating and not data.get("customer_id") and not direct_calendar:
         facts = stock_questions.answer(current_user, text, selected_id=data.get("selected_id"))
         if facts is not None:
             return jsonify(facts)
     # Fachfrage mit Internetbedarf -> Chat (Webrecherche, funktioniert auch ohne KI-Modell).
-    if mode is None and not data.get("customer_id") and not data.get("selected_id") and not direct_calendar:
+    if mode is None and not creating and not data.get("customer_id") and not data.get("selected_id") and not direct_calendar:
         from app.services import web_research
 
         if web_research.is_question(text) and not customer_notes._by_name(text):
             return jsonify({"kind": "chat"})
     # Termine ("Termin mit ... Donnerstag um 14 Uhr bei Laura") gehen an den Kalender.
-    if isinstance(data.get("calendar"), dict) or direct_calendar or (mode is None and calendar_intent.is_calendar_request(text, customer_selected=selected)):
+    if isinstance(data.get("calendar"), dict) or direct_calendar or (mode is None and not creating and calendar_intent.is_calendar_request(text, customer_selected=selected)):
         return _calendar_reply(text, data.get("calendar") if isinstance(data.get("calendar"), dict) else None, data)
     try:
         result = customer_notes.handle_input(

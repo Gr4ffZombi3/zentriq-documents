@@ -898,6 +898,7 @@
 
   function show(reply, r, text) {
     if (r.kind !== "calendar_question") pendingCalendar = null; // Termin erledigt bzw. andere Antwort
+    if (r.kind !== "create_name") pendingCreate = null;
     switch (r.kind) {
       case "chat":
         return false;
@@ -996,6 +997,7 @@
       }
       case "create_name":
         select(null);
+        pendingCreate = r.await_create ? { data: r.await_create, at: Date.now() } : null; // getippter Name setzt fort
         renderCreateName(reply, r);
         return true;
       case "create_phone":
@@ -1043,6 +1045,8 @@
     if (document.querySelector("[data-zn-book-form]")) body.form_open = true;
     if (pendingCalendar && Date.now() - pendingCalendar.at < 15 * 60000) body.calendar_pending = pendingCalendar.data;
     pendingCalendar = null;
+    if (pendingCreate && Date.now() - pendingCreate.at < 15 * 60000) body.create_pending = pendingCreate.data;
+    pendingCreate = null;
     showPending(reply, "Wird geprüft");
     chatCustomer = null;
     return request("POST", "/kunden/eingabe", body).then(function (r) {
@@ -1135,6 +1139,7 @@
 
   var chatCustomer = null;
   var pendingCalendar = null;
+  var pendingCreate = null;
   window.ZentriqNotes = {
     intercept: intercept,
     clear: function () { select(null); },

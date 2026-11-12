@@ -49,8 +49,10 @@ class CustomerContact(TenantScopedMixin, db.Model):
 class CustomerNote(TenantScopedMixin, db.Model):
     """Gemeinsame Kundennotiz des Bueros (ZentriqAI-Eingabefeld bzw. Schnellaktion der Kundenkarte).
 
-    Notizen werden nie geaendert oder geloescht; Statusaenderungen eines Kontaktvorgangs werden
-    ebenfalls als Notiz (event) mit Verfasser und Zeitpunkt festgehalten."""
+    Notizen werden nie geaendert. Loeschen nur einzeln ueber die Notiz-ID (Kundenkarte, Drei-Punkte-
+    Menue; app/services/customer_notes.delete_note) - Buero-Admin jede, Mitarbeiter nur eigene;
+    protokolliert ohne Text. Statusaenderungen eines Kontaktvorgangs werden ebenfalls als Notiz
+    (event) mit Verfasser und Zeitpunkt festgehalten."""
 
     __tablename__ = "customer_notes"
     __table_args__ = (

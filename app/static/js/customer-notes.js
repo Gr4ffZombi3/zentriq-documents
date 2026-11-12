@@ -152,18 +152,29 @@
   }
 
   // quiet: "Keine Notizen vorhanden" entfaellt, wenn die Antwort darueber das schon sagt.
-  function renderCard(card, reply, quiet) {
+  // state.notesOpen: Notizliste aufgeklappt lassen (nach dem Loeschen neu gezeichnet).
+  // Aufbau: Name, direkt darunter die Aktionen; offene Rueckrufe, Termine; Abschnitt "Notizen (n)";
+  // eingeklappt "Kundendetails" (Leipziger Liste, Kundenakte).
+  function renderCard(card, reply, quiet, state) {
+    state = state || {};
     var box = el("article", "zn-card");
     var head = el("header", "zn-card-head");
     head.appendChild(el("h3", "zn-card-title", card.name));
-    var facts = [card.vn, card.phone, card.address, card.place].filter(Boolean).join(" · ");
-    if (facts) head.appendChild(el("p", "zn-meta", facts));
     if (card.can_edit && card.edit) {
       head.appendChild(button("Bearbeiten", "zn-link zn-card-edit", function () { renderEdit(box, card, reply); }));
     }
     box.appendChild(head);
 
-    // Arbeitsflaeche: offene Rueckrufe, letzte Notiz, naechste Termine - mit passenden Aktionen.
+    var tools = el("div", "zn-actions zn-card-tools");
+    tools.appendChild(button("Notiz erfassen", "btn btn-secondary btn-sm", function () { renderNoteForm(box, card, reply); }));
+    if (card.book) tools.appendChild(button("Termin buchen", "btn btn-secondary btn-sm", function () { renderBookForm(box, card, reply); }));
+    if (card.booking_link_url) { var bl = el("a", "btn btn-secondary btn-sm", "Buchungslink erstellen"); bl.href = card.booking_link_url; bl.setAttribute("data-kk-booking-link", ""); tools.appendChild(bl); }
+    box.appendChild(tools);
+
+    var facts = [card.vn, card.phone, card.address, card.place].filter(Boolean).join(" · ");
+    if (facts) box.appendChild(el("p", "zn-meta zn-card-facts", facts));
+
+    // Arbeitsflaeche: offene Rueckrufe und naechste Termine - mit passenden Aktionen.
     var open = card.open_contacts || [];
     open.forEach(function (c) {
       var row = el("div", "zn-contact");
@@ -182,25 +193,6 @@
       row.appendChild(actions);
       box.appendChild(row);
     });
-    var latest = card.latest;
-    var noteRow = el("div", "zn-contact");
-    var line = el("p", "zn-line");
-    if (latest) {
-      line.appendChild(el("span", "zn-label", "Letzte Notiz: "));
-      line.appendChild(document.createTextNode(latest.text));
-      line.appendChild(el("span", "zn-meta", " · " + latest.author + ", " + latest.when));
-    } else if (!quiet && !open.length) {
-      line.appendChild(el("span", "zn-muted-inline", "Keine Notizen vorhanden."));
-    }
-    if (line.childNodes.length) noteRow.appendChild(line);
-    if (latest && !open.length) {
-      var noteActions = el("div", "zn-actions");
-      noteActions.appendChild(button("Nicht erreicht", null, function () {
-        act(reply, request("POST", "/kunden/" + card.id + "/nicht-erreicht", { note_id: latest.id, client_ref: newRef() }), "Wird gespeichert", function (r) { saved(reply, r); });
-      }));
-      noteRow.appendChild(noteActions);
-    }
-    if (noteRow.childNodes.length) box.appendChild(noteRow);
 
     var events = card.next_events || [];
     if (events.length) {
@@ -218,23 +210,16 @@
       box.appendChild(list);
     }
 
-    var tools = el("div", "zn-actions zn-card-tools");
-    tools.appendChild(button("Notiz erfassen", "btn btn-secondary btn-sm", function () { renderNoteForm(box, card, reply); }));
-    if (card.book) tools.appendChild(button("Termin buchen", "btn btn-secondary btn-sm", function () { renderBookForm(box, card, reply); }));
-    if (card.booking_link_url) { var bl = el("a", "btn btn-secondary btn-sm", "Buchungslink erstellen"); bl.href = card.booking_link_url; bl.setAttribute("data-kk-booking-link", ""); tools.appendChild(bl); }
-    box.appendChild(tools);
+    var redraw = function (next, keepOpen) {
+      if (!document.contains(box)) return;
+      select(next);
+      box.replaceWith(renderCard(next, reply, quiet, { notesOpen: keepOpen }));
+    };
+    box.appendChild(renderNotes(card, reply, quiet, state, redraw, !open.length));
 
-    var details = el("details", "zn-more");
-    var notes = card.notes || [];
-    details.appendChild(el("summary", null, "Details" + (notes.length ? " · " + notes.length + (card.more_notes ? "+" : "") + (notes.length === 1 ? " Notiz" : " Notizen") : "")));
+    var details = el("details", "zn-more zn-card-details");
+    details.appendChild(el("summary", null, "Kundendetails"));
     details.appendChild(renderLeipziger(card.leipziger || {}));
-    if (notes.length) {
-      var ul = el("ul", "zn-sources");
-      notes.forEach(function (n) {
-        ul.appendChild(source({ text: n.text, author: n.author, when: n.when, source: n.event_label || "Notiz" }));
-      });
-      details.appendChild(ul);
-    }
     if (card.customer_url) {
       var link = el("a", "zn-link", "Kundenakte öffnen");
       link.href = card.customer_url;
@@ -250,6 +235,161 @@
     });
     return box;
   }
+
+  // --- Notizen der Karte: neueste sichtbar, "Alle Notizen anzeigen", Drei-Punkte-Menue ----------
+  var LONG_NOTE = 220;
+
+  function renderNotes(card, reply, quiet, state, redraw, quickAction) {
+    var notes = card.notes || [];
+    var count = typeof card.note_count === "number" ? card.note_count : notes.length;
+    var sec = el("section", "zn-notes");
+    sec.setAttribute("aria-label", "Notizen");
+    sec.appendChild(el("h4", "zn-notes-title", "Notizen (" + count + ")"));
+    if (!notes.length) {
+      if (!quiet) sec.appendChild(el("p", "zn-muted-inline", "Keine Notizen vorhanden."));
+      return sec;
+    }
+    var ctx = { card: card, redraw: redraw, isOpen: function () { return !all.hidden; } };
+    var preview = el("ul", "zn-note-list");
+    preview.appendChild(noteItem(notes[0], ctx));
+    var all = el("ul", "zn-note-list");
+    all.hidden = true;
+    sec.appendChild(preview);
+    sec.appendChild(all);
+
+    // "Nicht erreicht" zur zuletzt erfassten Notiz (ohne offenen Rueckruf) wie bisher - direkt
+    // unter der Vorschau; in der aufgeklappten Liste ausgeblendet (dort waere unklar, wozu).
+    var latest = card.latest;
+    var noteActions = null;
+    if (latest && quickAction) {
+      noteActions = el("div", "zn-actions");
+      noteActions.appendChild(button("Nicht erreicht", null, function () {
+        act(reply, request("POST", "/kunden/" + card.id + "/nicht-erreicht", { note_id: latest.id, client_ref: newRef() }), "Wird gespeichert", function (r) { saved(reply, r); });
+      }));
+      sec.insertBefore(noteActions, all);
+    }
+
+    if (count > 1) {
+      var toggle = button("Alle Notizen anzeigen", "zn-link zn-notes-toggle", function () { setOpen(all.hidden); });
+      toggle.setAttribute("aria-expanded", "false");
+      sec.appendChild(toggle);
+      var setOpen = function (on) {
+        if (on && !all.childNodes.length) {
+          // Jede Notiz genau einmal: die Vorschau wird ausgeblendet, die Liste enthaelt auch die neueste.
+          notes.forEach(function (n) { all.appendChild(noteItem(n, ctx)); });
+          if (card.more_notes) {
+            var hint = el("li", "zn-meta", "Weitere Notizen werden geladen …");
+            all.appendChild(hint);
+            request("GET", "/kunden/" + card.id + "/notizen").then(function (r) {
+              all.textContent = "";
+              (r.notes || []).forEach(function (n) { all.appendChild(noteItem(n, ctx)); });
+            }, function (err) { hint.textContent = err.message; });
+          }
+        }
+        all.hidden = !on;
+        preview.hidden = on;
+        if (noteActions) noteActions.hidden = on;
+        toggle.textContent = on ? "Weniger anzeigen" : "Alle Notizen anzeigen";
+        toggle.setAttribute("aria-expanded", on ? "true" : "false");
+      };
+      if (state.notesOpen) setOpen(true);
+    }
+    return sec;
+  }
+
+  function noteItem(n, ctx) {
+    var li = el("li", "zn-note");
+    li.setAttribute("data-zn-note", String(n.id));
+    var body = el("div", "zn-note-body");
+    var text = el("p", "zn-note-text", n.text);
+    body.appendChild(text);
+    if ((n.text || "").length > LONG_NOTE || (n.text || "").split("\n").length > 4) {
+      text.classList.add("is-clamped");
+      var more = button("Ganze Notiz anzeigen", "zn-link zn-note-more", function () {
+        var clamped = text.classList.toggle("is-clamped");
+        more.textContent = clamped ? "Ganze Notiz anzeigen" : "Weniger anzeigen";
+      });
+      body.appendChild(more);
+    }
+    body.appendChild(el("p", "zn-meta zn-note-meta", [n.event_label, n.author, n.when].filter(Boolean).join(" · ")));
+    li.appendChild(body);
+    if (n.can_delete) li.appendChild(noteMenu(n, li, ctx));
+    return li;
+  }
+
+  // Drei-Punkte-Menue (vorhandene zc-menu-Komponente): per Tippen/Klick, ohne Hover.
+  function noteMenu(n, li, ctx) {
+    var menu = el("details", "zc-menu zn-note-menu");
+    menu.setAttribute("data-zn-note-menu", "");
+    var summary = el("summary", "zs-icon-btn zn-note-menu-btn", "⋯");
+    summary.setAttribute("aria-label", "Aktionen zur Notiz");
+    summary.setAttribute("title", "Aktionen zur Notiz");
+    menu.appendChild(summary);
+    var pop = el("div", "zc-popover zc-menu-list");
+    pop.setAttribute("role", "menu");
+    var del = button("Löschen", "is-danger", function () {
+      menu.open = false;
+      confirmDelete(n, li, ctx);
+    });
+    del.setAttribute("role", "menuitem");
+    pop.appendChild(del);
+    menu.appendChild(pop);
+    return menu;
+  }
+
+  function excerpt(text) {
+    var t = (text || "").replace(/\s+/g, " ").trim();
+    return t.length > 80 ? t.slice(0, 77).trim() + " …" : t;
+  }
+
+  function confirmDelete(n, li, ctx) {
+    var old = li.querySelector(".zn-note-confirm");
+    if (old) { old.querySelector("button").focus(); return; }
+    var box = el("div", "zn-note-confirm");
+    box.setAttribute("role", "alertdialog");
+    box.setAttribute("aria-label", "Notiz löschen");
+    box.appendChild(el("p", "zn-line", "Diese Notiz löschen?"));
+    box.appendChild(el("p", "zn-note-quote", "„" + excerpt(n.text) + "“"));
+    var status = el("p", "zn-msg");
+    status.hidden = true;
+    var row = el("div", "zn-actions");
+    var yes = button("Löschen", "btn btn-danger btn-sm", function () {
+      yes.disabled = no.disabled = true;
+      status.hidden = true;
+      request("DELETE", "/notizen/" + n.id, { customer_id: ctx.card.id }).then(function (r) {
+        ctx.redraw(r.card, ctx.isOpen());
+      }, function (err) {
+        // Fehler: Notiz bleibt sichtbar, verstaendliche Meldung direkt an der Notiz.
+        yes.disabled = no.disabled = false;
+        status.className = "zn-msg " + (err.technical ? "is-error" : "is-warn");
+        status.textContent = err.message;
+        status.setAttribute("role", "alert");
+        status.hidden = false;
+        if (err.status === 404) {
+          yes.hidden = true;
+          request("GET", "/kunden/" + ctx.card.id).then(function (r) { if (r.card) setTimeout(function () { ctx.redraw(r.card, ctx.isOpen()); }, 2500); });
+        }
+      });
+    });
+    var no = button("Abbrechen", "zn-link", function () { box.remove(); });
+    row.appendChild(yes);
+    row.appendChild(no);
+    box.appendChild(row);
+    box.appendChild(status);
+    li.appendChild(box);
+    yes.focus();
+  }
+
+  // Offenes Drei-Punkte-Menue schliesst beim Tippen daneben bzw. mit Escape.
+  document.addEventListener("click", function (e) {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-zn-note-menu][open]"), function (m) {
+      if (!m.contains(e.target)) m.open = false;
+    });
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    Array.prototype.forEach.call(document.querySelectorAll("[data-zn-note-menu][open]"), function (m) { m.open = false; });
+  });
 
   // Live-Zusammenarbeit (js/live.js): nur die zuletzt gezeigte Karte eines Kunden ist "live" -
   // aeltere Karten im Verlauf geben ihre Verbindung ab.
@@ -272,6 +412,12 @@
   function closeForms(box) {
     box.querySelectorAll(".zn-card-form").forEach(function (f) { f.remove(); });
   }
+  // Formulare ("Notiz erfassen", "Termin buchen") erscheinen direkt unter den Aktionen.
+  function placeForm(box, form) {
+    var tools = box.querySelector(".zn-card-tools");
+    if (tools && tools.parentNode === box) box.insertBefore(form, tools.nextSibling);
+    else box.appendChild(form);
+  }
 
   // Notiz direkt zu diesem Kunden (ID der Karte), Doppeltipp: dieselbe client_ref -> eine Notiz.
   function renderNoteForm(box, card, reply) {
@@ -291,7 +437,7 @@
     }));
     actions.appendChild(button("Abbrechen", "zn-link", function () { form.remove(); }));
     form.appendChild(actions);
-    box.appendChild(form);
+    placeForm(box, form);
     input.focus();
   }
 
@@ -353,7 +499,7 @@
     actions.appendChild(save);
     actions.appendChild(button("Abbrechen", "zn-link", function () { form.remove(); }));
     form.appendChild(actions);
-    box.appendChild(form);
+    placeForm(box, form);
     time.focus();
   }
 

@@ -43,6 +43,8 @@ class AuditEventType(enum.Enum):
     AI_CONVERSATION_DELETED = "ai_conversation_deleted"
     # Von ZentriqAI vorbereitete Aktion nach Bestaetigung ausgefuehrt (nur IDs und Status).
     AI_ACTION_EXECUTED = "ai_action_executed"
+    # Kundennotiz im Assistenten geloescht (nur IDs, nie der Notiztext).
+    CUSTOMER_NOTE_DELETED = "customer_note_deleted"
 
 
 # Sicherheitsrelevante Ereignisse ohne fachlichen Inhalt - nur diese sind fuer den
@@ -90,6 +92,7 @@ OFFICE_ACTIVITY_EVENT_TYPES = (
     AuditEventType.CUSTOMER_CREATED,
     AuditEventType.ASSISTANT_USED,
     AuditEventType.AI_ACTION_EXECUTED,
+    AuditEventType.CUSTOMER_NOTE_DELETED,
 )
 
 

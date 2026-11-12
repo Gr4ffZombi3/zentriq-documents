@@ -34,6 +34,7 @@ _TEXTS = {
     AuditEventType.MEMO_ASSIGNED: "Memo einem Kunden zugeordnet",
     AuditEventType.CUSTOMER_CREATED: "Kunde aus Memo angelegt",
     AuditEventType.ASSISTANT_USED: "KI-Assistent verwendet",
+    AuditEventType.CUSTOMER_NOTE_DELETED: "Kundennotiz gelöscht",
 }
 
 

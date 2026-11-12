@@ -353,7 +353,27 @@
 .zn-events { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
 .zn-event { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.3rem 0.6rem; padding-top: 0.4rem; border-top: 1px solid var(--color-border); }
 .zn-event .zn-line { flex: 1 1 14rem; }
-.zn-card-tools { padding-top: 0.4rem; border-top: 1px solid var(--color-border); }
+.zn-card-tools { padding-top: 0.1rem; }
+.zn-card-facts { margin: 0; }
+/* Notizen der Kundenkarte: neueste sichtbar, Liste aufklappbar, Drei-Punkte-Menue je Notiz */
+.zn-notes { display: flex; flex-direction: column; gap: 0.4rem; padding-top: 0.5rem; border-top: 1px solid var(--color-border); }
+.zn-notes-title { margin: 0; font-size: 0.86rem; font-weight: 600; color: var(--color-text-muted); }
+.zn-note-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
+.zn-note-list[hidden] { display: none; }
+.zn-note { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 0.35rem; align-items: start; padding-left: 0.7rem; border-left: 2px solid var(--color-border); }
+.zn-note-body { min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+.zn-note-text { margin: 0; font-size: 0.92rem; white-space: pre-line; overflow-wrap: anywhere; }
+.zn-note-text.is-clamped { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.zn-note-meta { margin: 0; font-size: 0.76rem; }
+.zn-note-more, .zn-notes-toggle { width: fit-content; font-size: 0.82rem; }
+.zn-note-menu { justify-self: end; }
+.zn-note-menu-btn { font-size: 1.2rem; line-height: 1; }
+.zn-note-menu .zc-menu-list { right: 0; top: calc(100% + 0.2rem); min-width: 9rem; }
+.zn-note-confirm { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.35rem; padding: 0.55rem 0.65rem; border-radius: 0.6rem; background: color-mix(in oklab, var(--color-error) 7%, transparent); }
+.zn-note-confirm .zn-line { margin: 0; font-weight: 600; font-size: 0.88rem; }
+.zn-note-quote { margin: 0; font-size: 0.86rem; color: var(--color-text-muted); overflow-wrap: anywhere; }
+.zn-note-confirm .zn-msg[hidden] { display: none; }
+.zn-notes .zn-actions[hidden] { display: none; }
 .zn-card-form { display: grid; gap: 0.5rem; padding: 0.6rem; border-radius: 0.6rem; background: var(--color-surface-muted, color-mix(in oklab, var(--color-primary) 5%, transparent)); }
 .zn-card-form.zn-edit { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
 .zn-book-note:empty { display: none; }
@@ -361,6 +381,7 @@
 @media (max-width: 40rem) {
   .zn-card .btn-sm, .zn-card .zn-link { min-height: 44px; }
   .zn-card-tools .btn-sm { flex: 1 1 auto; }
+  .zn-note-menu-btn { width: 44px; height: 44px; }
   .zn-event { align-items: flex-end; }
   .zn-event .btn-sm { margin-left: auto; padding-inline: 0.8rem; }
   .zn-card-form textarea, .zn-card-form input, .zn-card-form select { font-size: 16px; } /* iOS: kein Zoom beim Fokus */

@@ -331,6 +331,11 @@ def api_customer_input():
 
     if mode is None and image_appointments.is_chat_request(text):
         return jsonify({"kind": "appointments_from_chat"})
+    # "Letzte Notiz loeschen" im allgemeinen Feld: nie raten, welche Notiz gemeint ist, und nie als
+    # Notiz speichern - Hinweis auf das Drei-Punkte-Menue (ohne KI). Im Formular "Notiz erfassen"
+    # (mode "note" mit Kunde) bleibt Freitext unveraendert eine Notiz.
+    if mode is None and not data.get("customer_id") and customer_notes.is_delete_note_request(text):
+        return jsonify({"kind": "facts", "message": customer_notes.NOTE_DELETE_HINT, "lines": []})
     # Offene Rueckfrage "Fuer welchen Kunden ist der Termin?": der genannte Name setzt diesen
     # Termin fort (ohne KI-Modell); andere Eingaben laufen normal weiter.
     if mode is None and not data.get("customer_id") and isinstance(data.get("calendar_pending"), dict):
@@ -628,6 +633,33 @@ def api_customer_card(customer_id):
         return denied
     customer = get_or_404_scoped(Customer, customer_id)
     return jsonify({"card": customer_notes.customer_card(current_user, customer)})
+
+
+@zentriq_bp.get("/api/kunden/<int:customer_id>/notizen")
+@login_required
+def api_customer_notes(customer_id):
+    """Alle Notizen eines Kunden ("Alle Notizen anzeigen", wenn die Karte nicht alle enthaelt)."""
+    if (denied := _office_user_required()) is not None:
+        return denied
+    customer = get_or_404_scoped(Customer, customer_id)
+    return jsonify({"notes": customer_notes.all_notes(current_user, customer), "note_count": customer_notes.note_count(customer)})
+
+
+@zentriq_bp.delete("/api/notizen/<int:note_id>")
+@login_required
+def api_note_delete(note_id):
+    """Genau diese Notiz loeschen (Drei-Punkte-Menue). customer_id: Karte, aus der geloescht wird."""
+    if (denied := _office_user_required()) is not None:
+        return denied
+    try:
+        return jsonify(customer_notes.delete_note(current_user, note_id, customer_id=_payload().get("customer_id")))
+    except customer_notes.NoteError as exc:
+        db.session.rollback()
+        return _error(str(exc), exc.status, "note")
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("customer_notes.delete_failed user=%s note=%s", current_user.id, note_id)
+        db.session.rollback()
+        return _error("Technischer Fehler – die Notiz wurde nicht gelöscht. Bitte erneut versuchen.", 500, "technical")
 
 
 @zentriq_bp.post("/api/kunden/<int:customer_id>/nicht-erreicht")

@@ -18,6 +18,15 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 12),
+        "title": "Kundenkarte aufgeräumt, Notizen löschen",
+        "text": "Die Kundenkarte im Assistenten zeigt die Aktionen jetzt direkt unter dem Namen. Die Notizen haben einen eigenen "
+        "Bereich: Die neueste ist sofort sichtbar, alle weiteren öffnen Sie mit „Alle Notizen anzeigen“. Die Leipziger Liste "
+        "finden Sie unter „Kundendetails“. Über das Drei-Punkte-Menü an einer Notiz können Sie diese nach einer Rückfrage "
+        "löschen – Büro-Admins jede Notiz, Mitarbeiter ihre eigenen.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 12),
         "title": "Kundensuche im Assistenten sofort",
         "text": "Ein Name, eine Telefonnummer oder eine VN-Nummer im Assistenten zeigt jetzt sofort die Kundenkarte – auch "
         "wenn kein Kunde gefunden wird, kommt die Antwort direkt statt nach langem Warten auf die KI. Bei Tippfehlern "

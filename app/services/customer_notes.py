@@ -656,12 +656,14 @@ def customer_card(user, customer: Customer) -> dict:
         .all()
     )
     latest = next((n for n in notes if n.event is None), notes[0] if notes else None)
+    count = len(notes) if len(notes) <= HISTORY_LIMIT else note_count(customer)
     card = {
         **serialize_candidate(customer),
         "latest": serialize_note(latest) if latest else None,
         "open_contacts": [serialize_contact(c) for c in contacts],
-        "notes": [serialize_note(n) for n in notes[:HISTORY_LIMIT]],
+        "notes": [_note_for(user, n) for n in notes[:HISTORY_LIMIT]],
         "more_notes": len(notes) > HISTORY_LIMIT,
+        "note_count": count,
         "leipziger": leipziger_summary(user, customer),
         "customer_url": url_for("customers.detail", customer_id=customer.id) if user.is_office_admin else None,
         "can_edit": customer_create.can_edit(user, customer),
@@ -674,6 +676,79 @@ def customer_card(user, customer: Customer) -> dict:
     # Buchungslink fuer diesen Kunden (Buero-Admin oder Mitarbeiter mit Freigabe)
     card["booking_link_url"] = f"/kalender/buchungslinks?kunde={customer.id}" if getattr(user, "may_send_booking_links", False) else None
     return card
+
+
+def note_count(customer: Customer) -> int:
+    return db.session.execute(select(db.func.count(CustomerNote.id)).where(CustomerNote.customer_id == customer.id)).scalar() or 0
+
+
+def _note_for(user, note: CustomerNote) -> dict:
+    return {**serialize_note(note), "can_delete": can_delete_note(user, note)}
+
+
+def all_notes(user, customer: Customer, limit: int = 500) -> list[dict]:
+    """Alle Notizen eines Kunden (neueste zuerst) fuer "Alle Notizen anzeigen" ueber HISTORY_LIMIT hinaus."""
+    notes = (
+        CustomerNote.query.filter(CustomerNote.customer_id == customer.id)
+        .order_by(CustomerNote.created_at.desc(), CustomerNote.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return [_note_for(user, n) for n in notes]
+
+
+# --- Notiz loeschen ------------------------------------------------------------------------------
+# Nur einzeln ueber die konkrete Notiz-ID (Drei-Punkte-Menue der Kundenkarte). Buero-Admins duerfen
+# jede Notiz ihres Bueros loeschen, Mitarbeiter nur ihre eigenen (wie beim Bearbeiten: Admin alles,
+# Mitarbeiter Eigenes). Das Buero prueft der Tenant-Filter; ein offener Rueckruf bleibt bestehen.
+# Protokolliert wird nur, wer welche Notiz-ID geloescht hat - nie der Text.
+
+NOTE_DELETE_HINT = "Wähle die gewünschte Notiz über das Drei-Punkte-Menü aus."
+_DELETE_NOTE_REQUEST = re.compile(
+    r"^(?:bitte\s+)?(?:l(?:ö|oe)sch\w*|entfern\w*)\s+(?:bitte\s+)?(?:(?:die|meine|diese|eine|alle|den)\s+)?"
+    r"(?:(?:letzte|neueste|vorige|letzten|neuesten)\w*\s+)?(?:notiz|vermerk)\w*\b.{0,60}$"
+    r"|^(?:(?:die|meine|diese|alle)\s+)?(?:(?:letzte|neueste|vorige)\w*\s+)?(?:notiz|vermerk)\w*\b.{0,60}?\s"
+    r"(?:l(?:ö|oe)schen|entfernen)(?:\s+bitte)?$",
+    re.I,
+)
+
+
+def is_delete_note_request(text: str) -> bool:
+    """"Letzte Notiz loeschen", "Loesche die Notiz bei Mustermann": klarer Loeschwunsch im Assistentenfeld.
+    Geloescht wird darueber nie - nur ueber das Drei-Punkte-Menue der konkreten Notiz."""
+    t = " ".join((text or "").split()).strip(" .!")
+    return 0 < len(t) <= 100 and ":" not in t and bool(_DELETE_NOTE_REQUEST.match(t))
+
+
+def can_delete_note(user, note: CustomerNote) -> bool:
+    if not getattr(user, "is_active", False):
+        return False
+    return bool(user.is_office_admin or (user.is_employee and note.created_by_user_id == user.id))
+
+
+def delete_note(user, note_id, customer_id=None) -> dict:
+    """Loescht genau diese Notiz. customer_id (Karte, aus der geloescht wird) muss passen."""
+    from app.models.audit_log import AuditEventType
+    from app.models.pending_case import PendingCaseNote
+    from app.services.audit import log_audit_event
+
+    note = CustomerNote.query.filter(CustomerNote.id == _int(note_id)).first()  # Tenant-Filter: eigenes Buero
+    if note is None:
+        raise NoteError("Diese Notiz gibt es nicht mehr – sie wurde vermutlich schon gelöscht.", 404)
+    if customer_id not in (None, "") and _int(customer_id) != note.customer_id:
+        raise NoteError("Die Notiz gehört nicht zu diesem Kunden. Es wurde nichts gelöscht.", 409)
+    if not can_delete_note(user, note):
+        raise NoteError("Diese Notiz kann nur ihr Verfasser oder ein Büro-Admin löschen. Es wurde nichts gelöscht.", 403)
+    customer = note.customer
+    details = {"note_id": note.id, "customer_id": note.customer_id, "author_id": note.created_by_user_id}
+    PendingCaseNote.query.filter(PendingCaseNote.customer_note_id == note.id).update(
+        {PendingCaseNote.customer_note_id: None}, synchronize_session=False
+    )
+    db.session.delete(note)
+    db.session.flush()
+    # Ein Commit fuer Loeschung und Protokoll (log_audit_event committet).
+    log_audit_event(AuditEventType.CUSTOMER_NOTE_DELETED, user=user, details=details)
+    return {"kind": "deleted", "message": "Notiz gelöscht.", "card": customer_card(user, customer)}
 
 
 def _calendar_part(user, customer: Customer) -> dict:

@@ -326,12 +326,8 @@ def find_customers(number: str | None) -> list[Customer]:
 
 
 def _customer_link(user, customer: Customer) -> dict:
-    # Wie die Schnellsuche: Buero-Admins oeffnen die Akte (im Seitenfenster - die geoeffnete Akte
-    # bleibt), Mitarbeiter die Kundenkarte im Assistenten (sie haben keine Kundenakte).
-    if user.is_office_admin:
-        url, panel = url_for("customers.detail", customer_id=customer.id), True
-    else:
-        url, panel = url_for("zentriq.index", kunde=customer.id), False
+    # Wie die Schnellsuche: Akte im Seitenfenster (die geoeffnete Akte bleibt) - Mitarbeiter lesend.
+    url, panel = url_for("customers.detail", customer_id=customer.id), True
     detail = " · ".join(v for v in (customer.customer_number, " ".join(p for p in (customer.postal_code, customer.city) if p)) if v)
     return {"id": customer.id, "name": customer.name, "detail": detail, "url": url, "panel": panel}
 

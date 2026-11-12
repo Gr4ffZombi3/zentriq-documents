@@ -18,6 +18,22 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 12),
+        "title": "Termine und Notizen sauber getrennt",
+        "text": "„Mach für diesen Kunden Donnerstag um 15 Uhr einen Termin“ trägt jetzt nur den Termin ein – ohne zusätzliche "
+        "Notiz, auch wenn eine Angabe fehlt oder die Zeit belegt ist; Zentriq fragt dann gezielt nach. Eine Notiz entsteht, "
+        "wenn Sie sie ausdrücklich verlangen, z. B. „Notiere: …“. Nennen Sie einen anderen Kunden als den ausgewählten, "
+        "fragt Zentriq vor dem Speichern nach.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 12),
+        "title": "Kundenakten für Mitarbeiter",
+        "text": "Mitarbeiter können die Kundenakten ihres Büros jetzt aus der Kundensuche und aus dem Assistenten öffnen und "
+        "lesen – mit Notizen und Memos. Bearbeiten und Löschen bleiben wie bisher geregelt.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 12),
         "title": "Kundenkarte aufgeräumt, Notizen löschen",
         "text": "Die Kundenkarte im Assistenten zeigt die Aktionen jetzt direkt unter dem Namen. Die Notizen haben einen eigenen "
         "Bereich: Die neueste ist sofort sichtbar, alle weiteren öffnen Sie mit „Alle Notizen anzeigen“. Die Leipziger Liste "

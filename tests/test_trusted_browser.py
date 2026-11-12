@@ -295,5 +295,5 @@ def test_trusted_login_keeps_roles(app, db, tenant, secured):
     _logout(browser)
     _password(browser, employee)
     assert browser.get("/settings/profile").status_code == 200
-    assert browser.get("/customers").status_code == 403
+    assert browser.get("/customers").status_code == 200  # Kundenliste lesend
     assert browser.get("/settings/users").status_code == 403

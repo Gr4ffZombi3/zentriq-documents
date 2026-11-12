@@ -325,11 +325,16 @@ def test_super_admin_cannot_use_memo_customer_endpoints(app, world, db):
         assert client.post(path, json={"transcript": "x", "token": "x"}).status_code == 403
 
 
-def test_employee_has_no_customer_directory(app, world, db):
+def test_employee_reads_own_office_customers_only(app, world, db):
+    """Mitarbeiter lesen Liste und Akte ihres Bueros; fremdes Buero 404, Dubletten nur Admin."""
     customer_id = _customer(db, world.tenant_a, "Max Mustermann")
+    foreign_id = _customer(db, world.tenant_b, "Fremder Kunde")
     client = login(app, "dennis@example.com")
-    assert client.get("/customers").status_code == 403
-    assert client.get(f"/customers/{customer_id}").status_code == 403
+    assert client.get("/customers").status_code == 200
+    page = client.get(f"/customers/{customer_id}")
+    assert page.status_code == 200 and "Max Mustermann" in page.get_data(as_text=True)
+    assert client.get(f"/customers/{foreign_id}").status_code == 404
+    assert client.get(f"/customers/{foreign_id}?panel=1").status_code == 404
 
 
 # --- Kundenansicht und globale Suche --------------------------------------------------------

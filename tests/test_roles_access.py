@@ -16,8 +16,6 @@ ADMIN_ONLY_URLS = [
     "/documents/live",
     "/potenziale",
     "/potenziale/vergleich",
-    "/customers",
-    "/customers/1",
     "/bestand",
     "/cockpit",
     "/tasks",

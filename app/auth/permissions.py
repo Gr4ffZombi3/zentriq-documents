@@ -69,6 +69,10 @@ EMPLOYEE_ALLOWED_ENDPOINTS = frozenset(
         # Globale Suche: Mitarbeiter finden nur Vorgaenge ihrer eigenen Vermittlernummer
         # (app/services/global_search.py).
         "search.search",
+        # Kundenakten des eigenen Bueros LESEN (Liste und Akte; Tenant-Filter -> fremdes Buero 404).
+        # Bearbeiten bleibt bei customer_create.can_edit, Dubletten/Zusammenfuehren bei @admin_required.
+        "customers.list_customers",
+        "customers.detail",
     }
 )
 

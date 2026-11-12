@@ -296,7 +296,7 @@ def test_only_own_calls_are_visible(app, client, office):
     assert mia.get("/arbeitsplatz/telefon/token").get_json() == {"enabled": False}
 
 
-def test_employee_link_goes_to_assistant_card(app, client, db, office):
+def test_employee_link_opens_customer_file(app, client, db, office):
     telephony.assign_line(office["mia"], str(uuid.uuid4()), "Durchwahl 22")
     set_current_tenant_id(office["tenant"].id)
     with bypass_tenant_scope():
@@ -305,8 +305,8 @@ def test_employee_link_goes_to_assistant_card(app, client, db, office):
     _post(client, _ring(person=mia_person))
     call = TelephonyCall.query.filter_by(user_id=office["mia"].id).one()
     data = _detail(app, office["mia"], call.id)
-    assert data["customers"][0]["url"] == f"/zentriq?kunde={office['max'].id}"
-    assert data["customers"][0]["panel"] is False
+    assert data["customers"][0]["url"] == f"/customers/{office['max'].id}"
+    assert data["customers"][0]["panel"] is True
 
 
 def test_current_call_after_page_reload(app, client, office):

@@ -339,8 +339,11 @@ def api_customer_input():
     # Offene Rueckfrage "Fuer welchen Kunden ist der Termin?": der genannte Name setzt diesen
     # Termin fort (ohne KI-Modell); andere Eingaben laufen normal weiter.
     if mode is None and not data.get("customer_id") and isinstance(data.get("calendar_pending"), dict):
+        pending = data["calendar_pending"]
+        go_on = calendar_intent.continue_with_when if pending.get("need") == "when" else calendar_intent.continue_with_customer
         try:
-            pending_result = calendar_intent.continue_with_customer(current_user, data["calendar_pending"], text, client_ref=_client_ref(data))
+            pending_result = go_on(current_user, pending, text, client_ref=_client_ref(data))
+            pending_result = _calendar_note(pending_result, (pending.get("choice") or {}).get("note"), data)
         except Exception:  # noqa: BLE001
             current_app.logger.exception("calendar_intent.continue_failed user=%s", current_user.id)
             db.session.rollback()
@@ -355,6 +358,25 @@ def api_customer_input():
         if task_result is not None:
             return task_result
         g.task_ended = task_ended
+    # Ausdruecklicher Doppelauftrag "<Termin> und notiere: <Notiz>": erst der Termin, die Notiz nur
+    # nach erfolgreicher Buchung (beim Kunden des Termins). Nie eine Notiz aus einem Terminversuch.
+    selected_id = data.get("selected_id") if str(data.get("selected_id") or "").isdigit() else None
+    picked = data.get("calendar") if isinstance(data.get("calendar"), dict) else None  # Klick auf eine Termin-Auswahl
+    if mode is None and not data.get("customer_id") and (combined := calendar_intent.split_combined(text)):
+        if picked is not None:
+            return _calendar_reply(combined[0], picked, data)  # Notiz steckt in der Auswahl (choice["note"])
+        return _calendar_reply(combined[0], {"note": combined[1][:2000]}, data)
+    # Ausdrueckliche Notiz ("Notiere: Kunde moechte vor dem Termin angerufen werden"): nur die Notiz,
+    # nie ein Termin - auch wenn der Text "Termin" und eine Uhrzeit enthaelt.
+    if mode is None and picked is None and not data.get("customer_id") and (note_body := customer_notes.explicit_note(text)) is not None:
+        text, mode = note_body, "note"
+    # Bei ausgewaehltem Kunden: "Termin Donnerstag 15 Uhr" (ohne Auftragsverb) - weder sicher Termin
+    # noch sicher Notiz: nachfragen statt zu speichern.
+    if mode is None and picked is None and not data.get("customer_id") and selected_id and calendar_intent.is_unclear_with_selected(text):
+        chosen = Customer.query.filter(Customer.id == int(selected_id)).first()
+        if chosen is not None:
+            return jsonify({"kind": "clarify", "message": f"Termin für {chosen.name} eintragen oder als Notiz speichern?",
+                            "customer": customer_notes.serialize_candidate(chosen), "options": ["calendar", "note"]})
     # "Schreibe eine Antwort, um einen Termin zu machen": Auftrag zu einer E-Mail im Gespraech ->
     # Chat (dort app/services/email_reply.py, funktioniert auch ohne KI-Modell). Kein Termin,
     # keine Notiz.
@@ -391,17 +413,7 @@ def api_customer_input():
             return jsonify({"kind": "chat"})
     # Termine ("Termin mit ... Donnerstag um 14 Uhr bei Laura") gehen an den Kalender.
     if isinstance(data.get("calendar"), dict) or direct_calendar or (mode is None and calendar_intent.is_calendar_request(text, customer_selected=selected)):
-        try:
-            return jsonify(
-                calendar_intent.handle(
-                    current_user, text, choice=data.get("calendar"), client_ref=_client_ref(data),
-                    selected_customer_id=data.get("selected_id"),
-                )
-            )
-        except Exception:  # noqa: BLE001
-            current_app.logger.exception("calendar_intent.failed user=%s", current_user.id)
-            db.session.rollback()
-            return _error("Technischer Fehler beim Termin. Er wurde nicht gespeichert – bitte erneut versuchen.", 500, "technical")
+        return _calendar_reply(text, data.get("calendar") if isinstance(data.get("calendar"), dict) else None, data)
     try:
         result = customer_notes.handle_input(
             current_user,
@@ -438,6 +450,41 @@ def api_customer_input():
             "technical",
         )
     return jsonify(result)
+
+
+def _calendar_reply(text: str, choice: dict | None, data: dict):
+    """Termin ueber den Kalender (calendar_intent) - erzeugt nie eine Kundennotiz, ausser der Auftrag
+    verlangt sie ausdruecklich (choice["note"], "... und notiere: ...")."""
+    try:
+        result = calendar_intent.handle(current_user, text, choice=choice, client_ref=_client_ref(data),
+                                        selected_customer_id=data.get("selected_id"))
+        return jsonify(_calendar_note(result, (choice or {}).get("note"), data))
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("calendar_intent.failed user=%s", current_user.id)
+        db.session.rollback()
+        return _error("Technischer Fehler beim Termin. Er wurde nicht gespeichert – bitte erneut versuchen.", 500, "technical")
+
+
+def _calendar_note(result, note, data: dict):
+    """Ausdruecklich mitbestellte Notiz: nur nach neu gespeichertem Termin, beim Kunden des Termins."""
+    if result is None or not isinstance(note, str) or not note.strip():
+        return result
+    if result.get("kind") != "calendar_saved":
+        if result.get("kind") == "calendar_question":
+            result["message"] += " Die Notiz wird erst mit dem Termin gespeichert."
+        return result
+    if result.get("duplicate"):
+        return result
+    customer_ref = (result.get("event") or {}).get("customer")
+    customer = Customer.query.filter(Customer.id == customer_ref["id"]).first() if customer_ref else None
+    if customer is None:
+        result["message"] += " Die Notiz wurde nicht gespeichert – der Termin hat keinen Kunden."
+        return result
+    ref = _client_ref(data)
+    saved = customer_notes.save_note(current_user, customer, note.strip(), client_ref=f"{ref[:56]}-notiz" if ref else None)
+    result["message"] += f" Notiz bei {customer.name} gespeichert: {note.strip()[:120]}"
+    result["card"] = saved.get("card")
+    return result
 
 
 @zentriq_bp.after_request

@@ -141,11 +141,11 @@ def test_start_view_choice(app, db, laura, mitarbeiter):
     response = client.post("/arbeitsplatz/startansicht", data={"start_view": "calendar.index"})
     assert response.status_code == 302
     assert _login(app, laura).get("/").headers["Location"].endswith("/kalender")
-    # Mitarbeiter: Kundenstamm nicht waehlbar
+    # Mitarbeiter: Kundenliste (lesend) waehlbar, Verwaltungsseiten nicht
     staff = _login(app, mitarbeiter)
     staff.post("/arbeitsplatz/startansicht", data={"start_view": "customers.list_customers"})
-    assert UserPreference.query.filter_by(user_id=mitarbeiter.id).one().start_view is None
-    assert "customers.list_customers" not in dict(workspace.start_view_choices(mitarbeiter))
+    assert UserPreference.query.filter_by(user_id=mitarbeiter.id).one().start_view == "customers.list_customers"
+    assert "customers.list_customers" in dict(workspace.start_view_choices(mitarbeiter))
 
 
 # --- Was ist neu? ----------------------------------------------------------------------------
@@ -213,9 +213,9 @@ def test_saved_views_per_user_and_sanitized(app, db, laura, mitarbeiter):
     assert staff.get(f"/arbeitsplatz/ansichten/{view.id}").status_code == 404
     assert staff.post(f"/arbeitsplatz/ansichten/{view.id}/loeschen").status_code == 404
     assert "ohne Datum · ohne Storno" not in staff.get("/leipziger-liste").get_data(as_text=True)
-    # Kundenstamm ist fuer Mitarbeiter gesperrt - auch keine Ansicht dafuer
+    # Kundenliste ist fuer Mitarbeiter lesbar - eigene Ansicht dafuer erlaubt
     staff.post("/arbeitsplatz/ansichten", data={"page": "kunden", "name": "Alle Kunden"})
-    assert SavedView.query.filter_by(user_id=mitarbeiter.id).count() == 0
+    assert SavedView.query.filter_by(user_id=mitarbeiter.id).count() == 1
 
 
 # --- Formularentwuerfe -----------------------------------------------------------------------
@@ -294,9 +294,7 @@ def test_quick_search_pages_and_customers(app, db, laura, mitarbeiter, super_adm
 
     staff = _login(app, mitarbeiter)
     staff_hits = staff.get("/arbeitsplatz/suche?q=Mustermann").get_json()["customers"]
-    assert "/customers/" not in staff_hits[0]["url"]  # Mitarbeiter: keine Kundenakte
-    staff_pages = [p["url"] for p in staff.get("/arbeitsplatz/suche?q=kunden").get_json()["pages"]]
-    assert "/customers" not in staff_pages
+    assert staff_hits[0]["url"] == f"/customers/{customer.id}"  # Mitarbeiter: Kundenakte lesend
     assert _login(app, super_admin).get("/arbeitsplatz/suche?q=Kalender").status_code == 403
 
 
@@ -321,8 +319,11 @@ def test_customer_panel_and_inline_edit(app, db, laura, mitarbeiter):
     assert ok.status_code == 200
     assert ok.get_json()["card"]["edit"]["values"]["phone_landline"]
 
+    # Mitarbeiter: Akte lesen ja, Felder bearbeiten nein (nicht der Betreuer)
     staff = _login(app, mitarbeiter)
-    assert staff.get(f"/customers/{customer.id}?panel=1").status_code == 403
+    staff_panel = staff.get(f"/customers/{customer.id}?panel=1")
+    assert staff_panel.status_code == 200 and "data-zq-inline" not in staff_panel.get_data(as_text=True)
+    assert staff.patch(f"/zentriq/api/kunden/{customer.id}", json={"version": version, "email": "a@b.de"}).status_code == 403
 
 
 # --- Leipziger Liste: Storno-Filter und Kundenlink -------------------------------------------
@@ -403,7 +404,7 @@ def test_pages_render_workspace_elements(app, db, laura, mitarbeiter):
     assert "Ansicht speichern" in customers
     assert "Was ist neu?" in customers
     staff_profile = _login(app, mitarbeiter).get("/settings/profile").get_data(as_text=True)
-    assert 'value="customers.list_customers"' not in staff_profile
+    assert 'value="customers.list_customers"' in staff_profile  # Kundenliste lesend als Startansicht
 
 
 def test_workspace_requires_login_redirect(client):

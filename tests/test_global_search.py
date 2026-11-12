@@ -142,7 +142,7 @@ def test_employee_sees_office_customers_but_only_own_entries(app, world):
     # Kunden des eigenen Bueros wie im ZentriqAI-Feld - geoeffnet wird die Kundenkarte dort,
     # nicht die Kundenakte der Verwaltung; Zaehler ueber alle Vorgaenge bleiben verborgen.
     assert 'id="treffer-kunden"' in html and "Müller Hans" in html
-    assert "/zentriq?kunde=" in html and "/customers/" not in html
+    assert "/customers/" in html and "/zentriq?kunde=" not in html  # Kundenakte lesend
     assert 'data-label="Leipziger"' not in html
 
 

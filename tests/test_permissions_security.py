@@ -171,7 +171,6 @@ def test_employee_cannot_load_foreign_tenant_list_by_document_id(app, world):
         "/documents/{doc_a_id}/file",
         "/documents/{doc_a_id}/row?index=0",
         "/potenziale",
-        "/customers",
         "/zeiterfassung/team",
         "/zeiterfassung/team/{laura_id}",
         "/zeiterfassung/buchungen/{session_laura_id}/bearbeiten",

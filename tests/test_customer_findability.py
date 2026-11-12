@@ -107,13 +107,13 @@ def test_employee_header_search_finds_note_customer_and_opens_card(app, created)
     dennis = login(app, "dennis@example.com")
     for query in ["808/765432-e", "808765432E", "Max Mustermann"]:
         html = dennis.get("/search", query_string={"q": query}).get_data(as_text=True)
-        assert f"/zentriq?kunde={created.customer.id}\"" in html, query
+        assert f"/customers/{created.customer.id}?von=" in html, query
     assert dennis.get(f"/zentriq?kunde={created.customer.id}").status_code == 200
-    assert dennis.get(f"/customers/{created.customer.id}").status_code in (302, 403, 404)
+    assert dennis.get(f"/customers/{created.customer.id}").status_code == 200  # Akte lesend
     assert dennis.get(f"{API}/kunden/{created.customer.id}").get_json()["card"]["notes"][0]["author"] == "Laura"
     # Anderes Buero: kein Treffer in der Kopfzeilensuche.
     html = login(app, "bob@example.com").get("/search", query_string={"q": "808/765432-e"}).get_data(as_text=True)
-    assert f"kunde={created.customer.id}\"" not in html and "Max Mustermann" not in html.split("</form>", 1)[1]
+    assert f"/customers/{created.customer.id}" not in html and "Max Mustermann" not in html.split("</form>", 1)[1]
 
 
 def test_other_office_has_no_access(app, created):

@@ -607,8 +607,8 @@ def search_pages(nav_groups: list[dict], query: str) -> list[dict]:
 
 
 def search_customer_hits(user, query: str) -> list[dict]:
-    """Dieselbe Kundensuche wie Kopfzeile und Kalender (eigenes Buero). Buero-Admins oeffnen die
-    Kundenakte, Mitarbeiter die Kundenkarte im Assistenten (sie haben keine Kundenakte)."""
+    """Dieselbe Kundensuche wie Kopfzeile und Kalender (eigenes Buero). Buero-Admins und Mitarbeiter
+    oeffnen die Kundenakte (Mitarbeiter lesend)."""
     from app.services.global_search import MIN_QUERY_LENGTH, normalize_query, search_customers
 
     query = normalize_query(query)
@@ -617,10 +617,7 @@ def search_customer_hits(user, query: str) -> list[dict]:
     rows, _more = search_customers(query)
     hits = []
     for row in rows[:8]:
-        if user.is_office_admin:
-            url = url_for("customers.detail", customer_id=row["id"])
-        else:
-            url = url_for("zentriq.index", kunde=row["id"])
+        url = url_for("customers.detail", customer_id=row["id"])
         detail = " · ".join(str(v) for v in (row.get("customer_number"), row.get("city")) if v)
         hits.append({"label": row["name"], "detail": detail, "url": url})
     return hits

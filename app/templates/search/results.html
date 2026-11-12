@@ -45,8 +45,8 @@
               </thead>
               <tbody>
                 {% for customer in results.customers %}
-                  {# Mitarbeiter: Kundenkarte im ZentriqAI-Bereich (Notizen, Rueckrufe) statt Kundenakte der Verwaltung. #}
-                  {% set customer_href = url_for('customers.detail', customer_id=customer.id, von=request.full_path.rstrip('?')) if is_admin else url_for('zentriq.index', kunde=customer.id) %}
+                  {# Kundenakte des eigenen Bueros - Mitarbeiter lesend (Bearbeiten nur mit Recht). #}
+                  {% set customer_href = url_for('customers.detail', customer_id=customer.id, von=request.full_path.rstrip('?')) %}
                   <tr>
                     <th scope="row" class="cell-strong stack-full"><a class="table-link" href="{{ customer_href }}">{{ customer.name }}</a></th>
                     <td class="tabular-nums" data-label="Kundennummer">{{ customer.customer_number or '–' }}</td>

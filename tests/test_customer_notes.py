@@ -266,7 +266,11 @@ def test_pure_search_and_general_chat_save_nothing(app, office, ai_available):
 def test_follow_up_note_goes_only_to_visibly_selected_customer(app, office, ai_available):
     client = login(app, "laura@example.com")
     heller, schulz = office.ids["Justin Heller"], office.ids["Maria Schulz"]
+    # "Termin Donnerstag 14 Uhr" ohne Auftragsverb: Termin oder Notiz? -> Rueckfrage, nichts gespeichert.
     data = _input(client, "Termin Donnerstag 14 Uhr", selected_id=heller)
+    assert data["kind"] == "clarify" and data["options"] == ["calendar", "note"] and _notes() == []
+    # "Als Notiz speichern" (ausdruecklich) -> Notiz beim sichtbar ausgewaehlten Kunden.
+    data = _input(client, "Termin Donnerstag 14 Uhr", customer_id=heller, mode="note")
     assert data["kind"] == "saved" and data["message"] == "Bei Justin Heller gespeichert: Termin Donnerstag 14 Uhr"
     # Ohne Auswahl: kein unsichtbarer Kontext -> keine Kundennotiz. (Die Eingabe ist ein
     # Terminwunsch und geht an den Buerokalender - ohne Kundenverknuepfung.)
@@ -274,8 +278,11 @@ def test_follow_up_note_goes_only_to_visibly_selected_customer(app, office, ai_a
     data = _input(client, "Termin Freitag 9 Uhr")
     assert data["kind"] != "saved" and len(_notes()) == notes_before
     assert (data.get("event") or {}).get("customer") is None
-    # Neue Kennung ersetzt die Auswahl.
+    # Andere Kennung als die Auswahl: erst nachfragen, dann beim gewaehlten Kunden speichern.
     data = _input(client, "808/111111-b Angebot zugeschickt", selected_id=heller)
+    assert data["kind"] == "conflict" and [c["id"] for c in data["candidates"]] == [schulz, heller]
+    assert len(_notes()) == 1
+    data = _input(client, data["pending_note"], customer_id=schulz)
     assert data["card"]["id"] == schulz
     assert [n.text for n in _notes(heller)] == ["Termin Donnerstag 14 Uhr"]
     assert [n.text for n in _notes(schulz)] == ["Angebot zugeschickt"]

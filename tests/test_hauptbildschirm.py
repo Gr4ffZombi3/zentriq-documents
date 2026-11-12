@@ -35,8 +35,12 @@ def test_search_questions_with_selected_customer_save_nothing(app, office, ai_av
         r = _input(laura, text, selected_id=heller)
         assert r["kind"] in ("card", "chat"), (text, r)
     assert _notes() == [] and _contacts() == []
-    # Ausdruecklich genannter anderer Kunde hat Vorrang vor der Auswahl.
+    # Ausdruecklich genannter anderer Kunde als die Auswahl: erst nachfragen, nichts gespeichert;
+    # nach der Wahl wird beim gewaehlten Kunden gespeichert.
     r = _input(laura, "808/111111-B ruft morgen zurück", selected_id=heller)
+    assert r["kind"] == "conflict" and [c["id"] for c in r["candidates"]] == [schulz, heller]
+    assert _notes() == []
+    r = _input(laura, r["pending_note"], customer_id=schulz)
     assert r["kind"] == "saved" and r["card"]["id"] == schulz
 
 

@@ -665,7 +665,7 @@ def customer_card(user, customer: Customer) -> dict:
         "more_notes": len(notes) > HISTORY_LIMIT,
         "note_count": count,
         "leipziger": leipziger_summary(user, customer),
-        "customer_url": url_for("customers.detail", customer_id=customer.id) if user.is_office_admin else None,
+        "customer_url": url_for("customers.detail", customer_id=customer.id) if (user.is_office_admin or user.is_employee) else None,
         "can_edit": customer_create.can_edit(user, customer),
     }
     if card["can_edit"]:
@@ -695,6 +695,21 @@ def all_notes(user, customer: Customer, limit: int = 500) -> list[dict]:
         .all()
     )
     return [_note_for(user, n) for n in notes]
+
+
+# --- Ausdrueckliche Notiz ---------------------------------------------------------------------
+_EXPLICIT_NOTE = re.compile(
+    r"^\s*(?:bitte\s+)?(?:notiere|notier|notieren|notiz|vermerke|vermerk|halte\s+fest)(?:\s+bitte)?\s*[:\-–]\s*(?P<body>.+)$",
+    re.I | re.S,
+)
+
+
+def explicit_note(text: str) -> str | None:
+    """"Notiere: Kunde moechte vor dem Termin angerufen werden" -> Notiztext ohne Befehlswort.
+    Ausdruecklich verlangt: wird nur als Notiz gespeichert, nie als Termin."""
+    m = _EXPLICIT_NOTE.match(text or "")
+    body = m.group("body").strip() if m else ""
+    return body or None
 
 
 # --- Notiz loeschen ------------------------------------------------------------------------------
@@ -1375,6 +1390,17 @@ def handle_input(user, raw_text: str, *, selected_id=None, client_ref: str | Non
         return _choice(f"{reason} – bitte auswählen:", candidates, pending_note=pending)
 
     customer = candidates[0]
+    if selected is not None and customer.id != selected.id and not question and not chat_request and mode != "search":
+        # Ausgewaehlt ist ein anderer Kunde als genannt und es soll etwas gespeichert werden:
+        # nachfragen statt beim falschen Kunden zu speichern (reine Suche zeigt einfach die Karte).
+        remainder = normalize_note(_strip_identifiers(text, parsed, customer))
+        if re.search(r"[A-Za-zÄÖÜäöüß]", remainder):
+            return {
+                "kind": "conflict",
+                "message": f"Genannt ist {customer.name}, ausgewählt ist {selected.name}. Bei wem soll die Notiz gespeichert werden?",
+                "candidates": [serialize_candidate(c) for c in [customer, selected]],
+                "pending_note": text,
+            }
     if basis != "name":
         # Widerspruch: neben der Nummer wird ein anderer vorhandener Kunde mit vollem Namen genannt.
         others = [c for c in _by_name(_remove_spans(text, parsed.vn_spans)) if c.id != customer.id]

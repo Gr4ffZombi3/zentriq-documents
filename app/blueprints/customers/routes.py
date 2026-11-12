@@ -23,6 +23,7 @@ from app.services.customers import (
 )
 from app.services.huk import jobs as huk_jobs
 from app.tenancy import get_or_404_scoped
+from app.utils.vermittlernummer import vermittlernummer_key
 
 MEMO_BASIS_LABELS = {
     "customer_number": "über die Kundennummer erkannt",
@@ -51,10 +52,20 @@ def list_customers():
 @customers_bp.route("/<int:customer_id>")
 @login_required
 def detail(customer_id):
+    # Buero-Admin und Mitarbeiter (lesend) - nur Kunden des eigenen Bueros (sonst 404).
     customer = get_or_404_scoped(Customer, customer_id)
+    is_admin = current_user.is_office_admin
 
     timeline_events = sorted(customer.timeline_events, key=lambda e: e.occurred_at)
     customer_view = build_customer_detail_context(customer)
+    leipziger = customer_entries(customer)
+    if not is_admin:
+        # Mitarbeiter sehen wie in der Leipziger Liste nur Vorgaenge ihrer eigenen Vermittlernummer;
+        # Dubletten vergleichen/zusammenfuehren bleibt Buero-Admins vorbehalten.
+        own = vermittlernummer_key(current_user.vermittlernummer)
+        leipziger = [i for i in leipziger if own and i["entry"].broker_key == own]
+        customer_view["case_rows"] = [r for r in customer_view["case_rows"] if own and vermittlernummer_key(r.get("broker_number")) == own]
+        customer_view["possible_duplicates"] = []
 
     document_customers = (
         DocumentCustomer.query.join(DocumentCustomer.document)
@@ -79,7 +90,7 @@ def detail(customer_id):
         possible_duplicates=customer_view["possible_duplicates"],
         document_customers=document_customers,
         open_tasks=open_tasks,
-        leipziger_entries=customer_entries(customer),
+        leipziger_entries=leipziger,
         memos=customer_memos(customer),
         memo_basis=MEMO_BASIS_LABELS,
         source_labels=customer_sources.LABELS,

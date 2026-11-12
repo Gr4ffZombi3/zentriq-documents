@@ -847,15 +847,28 @@
     fill(reply, nodes);
   }
 
+  // Rueckfrage mit den angebotenen Wegen (options): "calendar" = Termin eintragen (nur Kalender),
+  // "note" = als Notiz speichern, "chat" = an die KI. Gespeichert wird erst nach dem Klick.
   function renderClarify(reply, r, text) {
     var row = el("div", "zn-actions");
-    row.appendChild(button("Als Notiz speichern", "btn btn-primary btn-sm", function () {
-      act(reply, request("POST", "/kunden/eingabe", { text: text, customer_id: r.customer.id, mode: "note", client_ref: newRef() }),
-        "Wird gespeichert", function (res) { show(reply, res, text); });
-    }));
-    row.appendChild(button("An die KI senden", null, function () {
-      if (window.ZentriqChat) window.ZentriqChat.sendInto(text, reply);
-    }));
+    var options = r.options || ["note", "chat"];
+    if (options.indexOf("calendar") >= 0) {
+      row.appendChild(button("Termin eintragen", "btn btn-primary btn-sm", function () {
+        act(reply, request("POST", "/kunden/eingabe", { text: text, calendar: { book: true }, selected_id: r.customer.id, client_ref: newRef() }),
+          "Wird geprüft", function (res) { show(reply, res, text); });
+      }));
+    }
+    if (options.indexOf("note") >= 0) {
+      row.appendChild(button("Als Notiz speichern", options.indexOf("calendar") >= 0 ? "btn btn-secondary btn-sm" : "btn btn-primary btn-sm", function () {
+        act(reply, request("POST", "/kunden/eingabe", { text: text, customer_id: r.customer.id, mode: "note", client_ref: newRef() }),
+          "Wird gespeichert", function (res) { show(reply, res, text); });
+      }));
+    }
+    if (options.indexOf("chat") >= 0) {
+      row.appendChild(button("An die KI senden", null, function () {
+        if (window.ZentriqChat) window.ZentriqChat.sendInto(text, reply);
+      }));
+    }
     fill(reply, [message(r.message), row]);
   }
 
@@ -914,7 +927,10 @@
         return true;
       }
       case "calendar_question": {
-        pendingCalendar = r.await_customer ? { data: r.await_customer, at: Date.now() } : null; // naechster Name setzt diesen Termin fort
+        // Offene Rueckfrage: der naechste Name (await_customer) bzw. die naechste Zeitangabe
+        // (await_when) setzt genau diesen Termin fort.
+        pendingCalendar = r.await_customer ? { data: Object.assign({ need: "customer" }, r.await_customer), at: Date.now() }
+          : r.await_when ? { data: Object.assign({ need: "when" }, r.await_when), at: Date.now() } : null;
         var opts = el("div", "zn-actions");
         (r.options || []).forEach(function (o) { opts.appendChild(button(o.label, "btn btn-secondary btn-sm", function () { calendarChoice(reply, text, o.choice); })); });
         opts.appendChild(calendarLink(r.form_url, "Im Kalender vervollständigen"));

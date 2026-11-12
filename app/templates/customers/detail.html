@@ -216,7 +216,7 @@
                 <td data-label="Art">{{ entry.product_line or '–' }}</td>
                 <td class="whitespace-nowrap tabular-nums" data-label="Beginn">{{ entry.start_date | iso_date_de if entry.start_date else '–' }}</td>
                 <td class="whitespace-nowrap tabular-nums" data-label="Vermittler">{{ entry.broker_number or '–' }}</td>
-                <td data-label="Liste"><a class="table-link" href="{{ url_for('documents.detail', document_id=entry.document_id) }}">{{ item.document_name }}</a>{% if item.uploaded_at %} <span class="text-text-soft">· {{ item.uploaded_at | local_dt('%d.%m.%Y') }}</span>{% endif %}</td>
+                <td data-label="Liste">{% if current_user.is_office_admin %}<a class="table-link" href="{{ url_for('documents.detail', document_id=entry.document_id) }}">{{ item.document_name }}</a>{% else %}{{ item.document_name }}{% endif %}{% if item.uploaded_at %} <span class="text-text-soft">· {{ item.uploaded_at | local_dt('%d.%m.%Y') }}</span>{% endif %}</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -249,9 +249,11 @@
               <tr>
                 <td class="text-text-muted">{{ row.document_uploaded_at.strftime('%d.%m.%Y') if row.document_uploaded_at else '-' }}</td>
                 <td>
+                  {% if current_user.is_office_admin %}
                   <a href="{{ url_for('documents.detail', document_id=row.document_id) }}" class="ops-table-link">
                     {{ row.document_name }}
                   </a>
+                  {% else %}{{ row.document_name }}{% endif %}
                 </td>
                 <td>{{ badge(row.status_label, variant=row.status_variant) }}</td>
                 <td class="text-text-muted">{{ row.contract_number }}</td>
@@ -369,13 +371,14 @@
           {% for doc_customer in doc_links %}
             {% if doc_customer.document_id not in seen_ids.values %}
               {% set seen_ids.values = seen_ids.values + [doc_customer.document_id] %}
-              <a href="{{ url_for('documents.detail', document_id=doc_customer.document_id) }}" class="ops-inline-link-row">
+              {% set doc_tag = 'a' if current_user.is_office_admin else 'div' %}
+              <{{ doc_tag }} {% if current_user.is_office_admin %}href="{{ url_for('documents.detail', document_id=doc_customer.document_id) }}" {% endif %}class="ops-inline-link-row">
                 <div class="min-w-0">
                   <p class="truncate text-sm font-semibold text-text">{{ doc_customer.document.original_filename }}</p>
                   <p class="mt-1 text-xs text-text-soft">{{ doc_customer.document.uploaded_at | local_dt('%d.%m.%Y %H:%M', '-') }}</p>
                 </div>
-                <span class="text-xs text-primary">Öffnen</span>
-              </a>
+                {% if current_user.is_office_admin %}<span class="text-xs text-primary">Öffnen</span>{% endif %}
+              </{{ doc_tag }}>
             {% endif %}
           {% endfor %}
         </div>

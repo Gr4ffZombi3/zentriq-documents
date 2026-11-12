@@ -1,6 +1,7 @@
-"""Anruferkennung ueber Webex Calling (erster Test: eine Durchwahl je Zentriq-Benutzer).
+"""Anruferkennung ueber Webex Calling bzw. Placetel Notify (Test: eine Zuordnung je Zentriq-Benutzer).
 
-- TelephonyLine: ordnet einen Webex-Calling-Benutzer (Person-ID aus dem Webhook-Feld actorId) genau
+- TelephonyLine: ordnet einen Webex-Calling-Benutzer (Person-ID aus dem Webhook-Feld actorId) bzw.
+  bei Placetel die angerufene Rufnummer ("to") und/oder den annehmenden SIP-Benutzer ("peer") genau
   einem Zentriq-Benutzer zu. Das Buero ergibt sich aus dem Zentriq-Benutzer.
 - TelephonyCall: ein eingehender Anruf auf einer zugeordneten Durchwahl. call_key (SHA-256 der
   Webex-callId) ist eindeutig - doppelt zugestellte Meldungen loesen den Hinweis nur einmal aus.
@@ -23,7 +24,11 @@ class TelephonyLine(TenantScopedMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
     # UUID der Webex-Person (aus der Base64-Person-ID dekodiert, Kleinbuchstaben).
-    webex_person_uuid = db.Column(db.String(64), nullable=False, unique=True)
+    webex_person_uuid = db.Column(db.String(64), nullable=True, unique=True)
+    # Placetel Notify: angerufene Nummer (normalize_phone, "+49...") - mehrere Benutzer je Nummer
+    # moeglich (Sammelnummer); SIP-Benutzer, der den Anruf annimmt (z. B. "777abc@fpbx.de").
+    placetel_number_key = db.Column(db.String(20), nullable=True, index=True)
+    placetel_peer = db.Column(db.String(120), nullable=True, index=True)
     # Anzeige fuer die Verwaltung, z. B. "Durchwahl 21".
     label = db.Column(db.String(60), nullable=True)
     active = db.Column(db.Boolean, nullable=False, default=True, server_default=db.true())
@@ -41,6 +46,8 @@ class TelephonyCall(TenantScopedMixin, db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     call_key = db.Column(db.String(64), nullable=False, unique=True)
+    # Placetel: SHA-256 der call_id - alle Hinweise eines Anrufs (mehrere Benutzer je Nummer).
+    external_ref = db.Column(db.String(64), nullable=True, index=True)
     line_id = db.Column(db.Integer, db.ForeignKey("telephony_lines.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     # Rufnummer wie von Webex geliefert (gekuerzt); leer bei unterdrueckter Nummer.

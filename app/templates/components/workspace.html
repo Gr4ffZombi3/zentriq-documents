@@ -51,7 +51,7 @@
 {# Anruferkennung (Webex Calling): Hinweis beim Klingeln, die geoeffnete Seite/Akte bleibt unveraendert.
    Ob der Benutzer eine Durchwahl hat, klaert js/call-alert.js ueber die Token-Route (keine Abfrage
    beim Seitenaufbau). #}
-{% if config.LIVE_ENABLED and config.WEBEX_WEBHOOK_SECRET %}
+{% if config.LIVE_ENABLED and (config.WEBEX_WEBHOOK_SECRET or config.PLACETEL_NOTIFY_SECRET) %}
   <div class="zq-calls" data-zq-calls data-token-url="{{ url_for('workspace.call_token') }}"
        data-current-url="{{ url_for('workspace.call_current') }}" data-call-url="{{ url_for('workspace.call_detail', call_id=0) }}"
        aria-live="assertive"></div>

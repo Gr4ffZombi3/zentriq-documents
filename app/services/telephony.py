@@ -16,6 +16,15 @@ Ablauf (Cisco-Doku: developer.webex.com/docs/call-control#webhook-payload-schema
 6. Aufbewahrung: Anrufe aelter als TELEPHONY_CALL_RETENTION_DAYS (Standard 7) werden bei jedem neuen
    Anruf geloescht (zusaetzlich flask telefonie aufraeumen).
 
+Placetel Notify (github.com/Placetel/call-control-notify-api, "Anruf an externe API melden" im Reiter
+"Sonstiges" der Rufnummer): POST application/x-www-form-urlencoded an /telefonie/placetel/notify mit
+event (IncomingCall | OutgoingCall | CallAccepted | HungUp), from, to, call_id, direction, peer.
+Signatur: X-PLACETEL-SIGNATURE = HMAC-SHA256 (hex) ueber den Rohtext mit dem Secret aus
+Einstellungen > Externe APIs. Reine Benachrichtigung - die Antwort wird ignoriert, das Routing
+(Sprachmenue) bleibt unveraendert. Zugeordnet wird ueber die angerufene Nummer ("to") und/oder den
+annehmenden SIP-Benutzer ("peer"); welche Durchwahl hinter einem Sprachmenue klingelt, meldet
+Placetel nicht.
+
 Logs enthalten nie Rufnummern, Namen, Secrets oder Signaturen - nur gekuerzte Hash-Kennungen."""
 
 from __future__ import annotations
@@ -231,14 +240,21 @@ def _ringing(line: TelephonyLine, key: str, data: dict) -> Outcome:
         return Outcome(200, "ignored:stale")
     party = data.get("remoteParty") if isinstance(data.get("remoteParty"), dict) else {}
     number = None if party.get("privacyEnabled") else clean_number(party.get("number"))
+    return _store_ringing(line, key, number=number, privacy=bool(party.get("privacyEnabled")) or number is None,
+                          call_type=str(party.get("callType") or "")[:20] or None)
+
+
+def _store_ringing(line, key: str, *, number: str | None, privacy: bool, call_type: str | None,
+                   external_ref: str | None = None) -> Outcome:
     call = TelephonyCall(
         tenant_id=line.tenant_id,
         call_key=key,
+        external_ref=external_ref,
         line_id=line.id,
         user_id=line.user_id,
         remote_number=number,
-        privacy=bool(party.get("privacyEnabled")) or number is None,
-        call_type=str(party.get("callType") or "")[:20] or None,
+        privacy=privacy,
+        call_type=call_type,
         status="ringing",
     )
     db.session.add(call)
@@ -271,6 +287,137 @@ def _finished(key: str, status: str) -> Outcome:
     _publish(call, "call_end")
     log.info("telefonie.webhook %s call=%s", status, _ref(key))
     return Outcome(200, status)
+
+
+# --- Placetel Notify ----------------------------------------------------------------------------
+
+PLACETEL_EVENTS = {"IncomingCall", "OutgoingCall", "CallAccepted", "HungUp"}
+
+
+def verify_placetel_signature(secret: str, body: bytes, headers) -> bool:
+    """X-PLACETEL-SIGNATURE: HMAC-SHA256 (hex) des unveraenderten Rohtexts mit dem Secret."""
+    signature = (headers.get("X-PLACETEL-SIGNATURE") or "").strip().lower()
+    if not secret or not signature:
+        return False
+    expected = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+def placetel_peer(value: str | None) -> str | None:
+    """SIP-Benutzer wie von Placetel geliefert ("7777abcdefg@fpbx.de"), klein geschrieben."""
+    text = (value or "").strip().lower()
+    if text.startswith("sip:"):
+        text = text[4:]
+    return text[:120] or None
+
+
+@dataclass(frozen=True)
+class _LineRef:
+    """Feste Werte einer Zuordnung - ein Commit (Hinweis fuer den ersten Benutzer) laesst ORM-Objekte
+    ablaufen, ein Nachladen ohne Mandantenkontext waere nicht erlaubt."""
+
+    id: int
+    tenant_id: int
+    user_id: int
+
+
+def _active_lines(**filters) -> list[_LineRef]:
+    """Aktive Zuordnungen aller Bueros (Placetel meldet ohne Mandant) - nur aktive Benutzer."""
+    with bypass_tenant_scope():
+        lines = TelephonyLine.query.filter_by(active=True, **filters).order_by(TelephonyLine.id).all()
+        result = []
+        for line in lines:
+            user = db.session.get(User, line.user_id)
+            if user is not None and user.is_active and not user.is_deleted:
+                result.append(_LineRef(line.id, line.tenant_id, line.user_id))
+    return result
+
+
+def handle_placetel(form) -> Outcome:
+    """Verarbeitet eine (bereits signaturgepruefte) Placetel-Meldung. Wiederholbar ohne Doppelwirkung.
+
+    IncomingCall -> Hinweis fuer alle Benutzer, denen die angerufene Nummer zugeordnet ist.
+    CallAccepted -> Hinweis bleibt beim annehmenden SIP-Benutzer (bzw. erscheint dort, falls nur der
+                    SIP-Benutzer zugeordnet ist); bei den uebrigen "Anruf beendet".
+    HungUp       -> alle Hinweise dieses Anrufs ausblenden."""
+    event = (form.get("event") or "").strip()
+    call_id = (form.get("call_id") or "").strip()
+    if event not in PLACETEL_EVENTS or not call_id or len(call_id) > 128:
+        return Outcome(400, "invalid")
+    if event == "OutgoingCall" or (form.get("direction") or "in") != "in":
+        return Outcome(200, "ignored:outgoing")
+    ref = call_key(f"placetel:{call_id}")
+    raw_from = (form.get("from") or "").strip()
+    number = None if raw_from.lower() in ("", "anonymous") else clean_number(raw_from)
+    privacy = number is None
+    if event == "IncomingCall":
+        to_keys = number_keys(form.get("to"))
+        lines = _active_lines(placetel_number_key=to_keys[0]) if to_keys else []
+        if not lines:
+            return Outcome(200, "ignored:line")
+        results = []
+        for line in lines:
+            with use_tenant_id(line.tenant_id):
+                results.append(_store_ringing(line, call_key(f"placetel:{call_id}:{line.id}"), number=number, privacy=privacy,
+                                              call_type="placetel", external_ref=ref).result)
+        return Outcome(200, "ringing" if "ringing" in results else results[0])
+    if event == "CallAccepted":
+        peer = placetel_peer(form.get("peer"))
+        answering = {line.id: line for line in _active_lines(placetel_peer=peer)} if peer else {}
+        outcome = _placetel_finish(ref, "answered", keep_lines=set(answering))
+        for line in answering.values():
+            key = call_key(f"placetel:{call_id}:{line.id}")
+            with use_tenant_id(line.tenant_id):
+                if TelephonyCall.query.filter_by(call_key=key).first() is None:
+                    # Nur der SIP-Benutzer ist zugeordnet (Sprachmenue davor): Hinweis bei Annahme.
+                    _store_ringing(line, key, number=number, privacy=privacy, call_type="placetel", external_ref=ref)
+        return Outcome(200, "accepted" if answering else outcome.result)
+    return _placetel_finish(ref, "ended")
+
+
+def _placetel_finish(ref: str, status: str, keep_lines: set | None = None) -> Outcome:
+    with bypass_tenant_scope():
+        calls = TelephonyCall.query.filter_by(external_ref=ref, status="ringing").all()
+        if not calls:
+            return Outcome(200, "ignored:unknown_call")
+        changed = []
+        for call in calls:
+            if keep_lines and call.line_id in keep_lines:
+                continue  # der annehmende Benutzer behaelt den Hinweis bis zum Auflegen
+            call.status = status
+            call.ended_at = _naive_utc(datetime.now(timezone.utc))
+            changed.append(call)
+        db.session.commit()
+        for call in changed:
+            _publish(call, "call_end")
+    log.info("telefonie.placetel %s call=%s count=%s", status, _ref(ref), len(changed))
+    return Outcome(200, status if changed else "duplicate")
+
+
+def assign_placetel(user: User, *, number: str | None, peer: str | None, label: str | None) -> TelephonyLine:
+    """Placetel-Zuordnung fuer den Benutzer: angerufene Nummer und/oder SIP-Benutzer."""
+    number_key = normalize_phone(number) if number else None
+    peer_value = placetel_peer(peer)
+    if number and not number_key:
+        raise LineError("Rufnummer nicht erkannt (z. B. 0228 1234567 oder +49 228 1234567).")
+    if not number_key and not peer_value:
+        raise LineError("Bitte die angerufene Rufnummer und/oder den SIP-Benutzer angeben.")
+    with bypass_tenant_scope():
+        if peer_value:
+            taken = TelephonyLine.query.filter_by(placetel_peer=peer_value).first()
+            if taken is not None and taken.user_id != user.id:
+                raise LineError("Dieser SIP-Benutzer ist bereits einem anderen Benutzer zugeordnet.")
+        line = TelephonyLine.query.filter_by(user_id=user.id).first()
+        if line is None:
+            line = TelephonyLine(tenant_id=user.tenant_id, user_id=user.id)
+            db.session.add(line)
+        line.tenant_id = user.tenant_id
+        line.placetel_number_key = number_key
+        line.placetel_peer = peer_value
+        line.label = (label or "").strip()[:60] or line.label
+        line.active = True
+        db.session.commit()
+    return line
 
 
 def purge_old_calls(days: int | None = None) -> int:

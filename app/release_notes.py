@@ -18,6 +18,13 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 12),
+        "title": "Anruferkennung mit Placetel",
+        "text": "Zentriq kann Anrufe jetzt auch direkt von Placetel gemeldet bekommen. Klingelt eine zugeordnete Nummer, "
+        "zeigt Zentriq oben rechts, wer anruft – das Sprachmenü und die Rufweiterleitung bleiben dabei unverändert.",
+        "audience": "admin",
+    },
+    {
+        "date": date(2026, 11, 12),
         "title": "Termine und Notizen sauber getrennt",
         "text": "„Mach für diesen Kunden Donnerstag um 15 Uhr einen Termin“ trägt jetzt nur den Termin ein – ohne zusätzliche "
         "Notiz, auch wenn eine Angabe fehlt oder die Zeit belegt ist; Zentriq fragt dann gezielt nach. Eine Notiz entsteht, "

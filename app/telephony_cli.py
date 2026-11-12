@@ -6,6 +6,10 @@
   flask telefonie testanruf --email laura@example.com --nummer "0228 1234567" [--unterdrueckt] [--ende-nach 10]
   flask telefonie aufraeumen [--tage 7]
 
+Placetel Notify ("Anruf an externe API melden"):
+  flask telefonie zuordnen-placetel --email laura@example.com --nummer "0228 1234567" [--sip 777abc@fpbx.de]
+  flask telefonie testanruf-placetel --nummer-angerufen "0228 1234567" --anrufer "0221 555666" [--sip ...] [--ende-nach 10]
+
 Der Testanruf laeuft durch denselben Webhook wie Webex (signiert mit WEBEX_WEBHOOK_SECRET) und
 zeigt den Hinweis im geoeffneten Browser-Tab des Benutzers. Ausgegeben werden keine Secrets."""
 
@@ -60,7 +64,9 @@ def list_command():
     with bypass_tenant_scope():
         for line in TelephonyLine.query.order_by(TelephonyLine.id).all():
             state = "aktiv" if line.active else "aus"
-            click.echo(f"Leitung {line.id}: Benutzer {line.user_id} (Buero {line.tenant_id}) · {line.label or '-'} · {state}")
+            kind = ", ".join(k for k, v in (("Webex", line.webex_person_uuid), ("Placetel-Nummer", line.placetel_number_key),
+                                            ("Placetel-SIP", line.placetel_peer)) if v) or "ohne Kennung"
+            click.echo(f"Leitung {line.id}: Benutzer {line.user_id} (Buero {line.tenant_id}) · {line.label or '-'} · {kind} · {state}")
 
 
 @telephony_cli.command("abschalten")
@@ -157,3 +163,67 @@ def test_call_command(email, nummer, unterdrueckt, ende_nach):
         time.sleep(ende_nach)
         status, result = _send(client, secret, fake_payload(person_id, call_id, state="disconnected", number=nummer, privacy=unterdrueckt, event="deleted"))
         click.echo(f"Aufgelegt gemeldet: HTTP {status} {result}")
+
+
+# --- Placetel Notify ---------------------------------------------------------------------------
+
+
+@telephony_cli.command("zuordnen-placetel")
+@click.option("--email", required=True, help="Zentriq-Benutzer, der den Hinweis sieht.")
+@click.option("--nummer", default="", help="Angerufene Rufnummer (Placetel-Feld 'to'), z. B. 0228 1234567.")
+@click.option("--sip", default="", help="SIP-Benutzer, der annimmt (Placetel-Feld 'peer'), z. B. 777abc@fpbx.de.")
+@click.option("--label", default="", help='Anzeige, z. B. "Durchwahl 21".')
+def assign_placetel_command(email, nummer, sip, label):
+    user = _user(email)
+    try:
+        line = telephony.assign_placetel(user, number=nummer or None, peer=sip or None, label=label)
+    except telephony.LineError as exc:
+        raise click.ClickException(str(exc)) from None
+    click.echo(f"Zugeordnet: Leitung {line.id} -> Benutzer {user.id} (Placetel, {line.label or 'ohne Bezeichnung'}).")
+
+
+def placetel_form(event: str, call_id: str, *, to: str, caller: str | None, peer: str | None = None, hangup: str | None = None) -> dict:
+    """Meldung im Format der Placetel-Doku (Notify-API, application/x-www-form-urlencoded)."""
+    form = {"event": event, "from": caller or "anonymous", "to": to, "call_id": call_id, "direction": "in"}
+    if peer:
+        form["peer"] = peer
+    if event == "HungUp":
+        form.update({"type": hangup or "accepted", "duration": "42" if (hangup or "accepted") == "accepted" else "0"})
+    return form
+
+
+def send_placetel(client, secret: str, form: dict) -> tuple[int, str]:
+    from urllib.parse import urlencode
+
+    body = urlencode(form).encode()
+    signature = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    response = client.post("/telefonie/placetel/notify", data=body, content_type="application/x-www-form-urlencoded",
+                           headers={"X-PLACETEL-SIGNATURE": signature})
+    return response.status_code, response.get_data(as_text=True)
+
+
+@telephony_cli.command("testanruf-placetel")
+@click.option("--nummer-angerufen", "to", required=True, help="Angerufene Nummer (wie in zuordnen-placetel).")
+@click.option("--anrufer", default="", help="Fiktive Anrufernummer; leer = unterdrueckt ('anonymous').")
+@click.option("--sip", default="", help="SIP-Benutzer, der annimmt (sendet CallAccepted).")
+@click.option("--ende-nach", type=int, default=0, help="Nach so vielen Sekunden HungUp senden (0 = nicht).")
+def test_placetel_command(to, anrufer, sip, ende_nach):
+    secret = current_app.config.get("PLACETEL_NOTIFY_SECRET") or ""
+    if not secret:
+        raise click.ClickException("PLACETEL_NOTIFY_SECRET ist nicht gesetzt.")
+    call_id = hashlib.sha256(uuid.uuid4().bytes).hexdigest()
+    client = current_app.test_client()
+    caller = anrufer.strip() or None
+    status, text = send_placetel(client, secret, placetel_form("IncomingCall", call_id, to=to, caller=caller))
+    click.echo(f"IncomingCall: HTTP {status} {text}")
+    status, text = send_placetel(client, secret, placetel_form("IncomingCall", call_id, to=to, caller=caller))
+    click.echo(f"Wiederholung derselben Meldung: HTTP {status} {text}")
+    if sip:
+        time.sleep(3)
+        status, text = send_placetel(client, secret, placetel_form("CallAccepted", call_id, to=to, caller=caller, peer=sip))
+        click.echo(f"CallAccepted: HTTP {status} {text}")
+    if ende_nach > 0:
+        time.sleep(ende_nach)
+        status, text = send_placetel(client, secret, placetel_form("HungUp", call_id, to=to, caller=caller,
+                                                                 hangup="accepted" if sip else "missed"))
+        click.echo(f"HungUp: HTTP {status} {text}")

@@ -25,6 +25,8 @@ class BaseConfig:
     # Ohne Secret nimmt der Webhook nichts an (503). Optional: nur Meldungen dieser Webex-Org-ID.
     WEBEX_WEBHOOK_SECRET = os.environ.get("WEBEX_WEBHOOK_SECRET", "")
     WEBEX_ORG_ID = os.environ.get("WEBEX_ORG_ID", "")
+    # Placetel Notify ("Anruf an externe API melden"): gemeinsames Secret aus Einstellungen > Externe APIs.
+    PLACETEL_NOTIFY_SECRET = os.environ.get("PLACETEL_NOTIFY_SECRET", "")
     # Hybridbetrieb KI (app/services/local_ai.py): eigener Rechner mit lokalem Modell holt Auftraege ab.
     LOCAL_AI_ENABLED = os.environ.get("LOCAL_AI_ENABLED", "true").lower() == "true"
     LOCAL_AI_LEASE_SECONDS = int(os.environ.get("LOCAL_AI_LEASE_SECONDS", "300"))

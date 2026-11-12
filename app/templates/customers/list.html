@@ -14,7 +14,10 @@
       <h1 class="page-toolbar-title">Kunden</h1>
       <p class="page-subtitle">Zentriq-Kundenstamm aus Leipziger Liste und Memos – zum Wiedererkennen, kein Ersatz für das HUK-System.</p>
     </div>
-    <a class="btn btn-secondary btn-sm" href="{{ url_for('workspace.pending_list') }}">Vorgänge ohne Kundenakte</a>
+    <div class="page-toolbar-actions">
+      <a class="btn btn-primary btn-sm" href="{{ url_for('customers.new') }}">Kunde anlegen</a>
+      <a class="btn btn-secondary btn-sm" href="{{ url_for('workspace.pending_list') }}">Vorgänge ohne Kundenakte</a>
+    </div>
   </div>
 
   <form method="get" action="{{ url_for('customers.list_customers') }}" class="customer-search" role="search">

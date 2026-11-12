@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Kunde anlegen – Zentriq{% endblock %}
+{% block content %}
+{% set v = values or {} %}
+<div class="page-shell">
+  <div class="page-toolbar">
+    <div>
+      <h1 class="page-toolbar-title">Kunde anlegen</h1>
+      <p class="page-subtitle">Adressblock oder E-Mail-Abschnitt einfügen – erkannte Angaben landen in der Maske und bleiben vor dem Speichern änderbar.</p>
+    </div>
+    <a class="btn btn-secondary btn-sm" href="{{ url_for('customers.list_customers') }}">Zur Kundenliste</a>
+  </div>
+
+  {# Kundendaten einfuegen (js/customer-new.js): Erkennung lokal auf dem Server (keine KI), fuellt nur
+     leere bzw. noch nicht von Hand geaenderte Felder - das Einfuegen speichert nichts. #}
+  <form class="panel ci-form" method="post" action="{{ url_for('customers.new') }}" data-ci
+        data-detect-url="{{ url_for('customers.new_detect') }}" data-check-url="{{ url_for('customers.new_check') }}" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="panel-body ci-grid">
+      <div class="ci-paste">
+        <label class="field-label" for="ci-text">Kundendaten einfügen</label>
+        <textarea class="field-surface" id="ci-text" rows="9" data-ci-text maxlength="5000"
+                  placeholder="z. B. E-Mail-Signatur oder Adressblock hier hineinkopieren">{{ pasted or '' }}</textarea>
+        <p class="panel-note" data-ci-status aria-live="polite">Erkannt werden Name, Straße, Hausnummer, PLZ, Ort, Telefon und E-Mail. Unklares bleibt leer.</p>
+      </div>
+      <div class="ci-fields">
+        {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+        <div class="form-grid form-grid-2">
+          {% for key, label, attrs in [
+            ("first_name", "Vorname *", 'autocomplete="off" required'),
+            ("last_name", "Nachname *", 'autocomplete="off" required'),
+            ("street", "Straße", 'autocomplete="off"'),
+            ("house_number", "Hausnr.", 'autocomplete="off"'),
+            ("postal_code", "PLZ", 'inputmode="numeric" autocomplete="off"'),
+            ("city", "Ort", 'autocomplete="off"'),
+            ("phone_landline", "Festnetz", 'type="tel" inputmode="tel" autocomplete="off"'),
+            ("phone_private", "Privattelefon", 'type="tel" inputmode="tel" autocomplete="off"'),
+            ("email", "E-Mail", 'type="email" inputmode="email" autocomplete="off"'),
+            ("customer_number", "VN-Nummer", 'autocomplete="off"'),
+          ] %}
+          <div class="ci-field">
+            <label class="field-label" for="ci-{{ key }}">{{ label }}</label>
+            <input class="field-surface" id="ci-{{ key }}" name="{{ key }}" value="{{ v.get(key, '') }}" data-ci-field="{{ key }}" {{ attrs | safe }}>
+          </div>
+          {% endfor %}
+        </div>
+
+        <div class="ci-dupes" data-ci-dupes {% if not duplicates %}hidden{% endif %} role="status">
+          <p class="ci-dupes-title">Möglicherweise schon vorhanden:</p>
+          <ul data-ci-dupes-list>
+            {% for d in duplicates or [] %}
+              <li><strong>{{ d.name }}</strong> <span class="ci-meta">{{ d.reason }}{% if d.detail %} · {{ d.detail }}{% endif %}</span>
+                <a class="btn btn-secondary btn-sm" href="{{ d.url }}">Akte öffnen</a></li>
+            {% endfor %}
+          </ul>
+          <label class="ci-confirm"><input type="checkbox" name="trotzdem" value="1" data-ci-confirm> Trotzdem als neuen Kunden anlegen</label>
+        </div>
+
+        <div class="ci-actions">
+          <button type="submit" class="btn btn-primary">Speichern</button>
+          <a class="btn btn-ghost" href="{{ url_for('customers.list_customers') }}">Abbrechen</a>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+<script defer src="{{ url_for('static', filename='js/customer-new.js', v=static_rev('js/customer-new.js')) }}"></script>
+{% endblock %}

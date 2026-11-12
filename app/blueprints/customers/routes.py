@@ -1,4 +1,4 @@
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.auth.permissions import admin_required
@@ -10,8 +10,8 @@ from app.services.customer_duplicates import (
     REASON_LABELS,
     MergeError,
     compare_rows,
-    duplicate_reason,
     link_counts,
+    match_reason,
     merge_customers,
 )
 from app.services.customer_overview import customer_entries, customer_memos
@@ -47,6 +47,64 @@ def list_customers():
         customers=[item["customer"] for item in directory["items"]],
         max_per_page=MAX_CUSTOMER_PAGE_SIZE,
     )
+
+
+# --- Kunde anlegen (Maske mit "Kundendaten einfuegen", app/services/customer_intake.py) -------------
+
+
+@customers_bp.route("/neu", methods=["GET", "POST"])
+@login_required
+def new():
+    """Kunde anlegen. Pflicht: Vor- und Nachname. Kein Dublettenverdacht -> ein Klick auf Speichern;
+    sonst passende Akten mit "Akte öffnen" und nur mit "Trotzdem anlegen"."""
+    from app.services import customer_intake
+    from app.services.customer_create import CreateError
+
+    if request.method == "GET":
+        return render_template("customers/new.html", values={}, duplicates=[])
+    form = {key: request.form.get(key, "") for key in customer_intake.FIELDS}
+    try:
+        values = customer_intake.clean_values(form)
+        customer, found = customer_intake.create(current_user, values, allow_duplicate=request.form.get("trotzdem") == "1")
+    except CreateError as exc:
+        return render_template("customers/new.html", values=form, duplicates=[], error=str(exc)), exc.status if exc.status != 400 else 422
+    if customer is None:
+        return render_template(
+            "customers/new.html", values=form, duplicates=[customer_intake.serialize_duplicate(c, r) for c, r in found],
+            error="Es gibt bereits eine passende Akte. Bitte prüfen – oder „Trotzdem als neuen Kunden anlegen“ wählen.",
+        ), 409
+    flash(f"{customer.name} wurde angelegt.", "success")
+    return redirect(url_for("customers.detail", customer_id=customer.id))
+
+
+@customers_bp.post("/neu/erkennen")
+@login_required
+def new_detect():
+    """Eingefuegten Text erkennen - speichert nichts."""
+    from app.services import customer_intake
+
+    data = request.get_json(silent=True) or {}
+    text = data.get("text") if isinstance(data.get("text"), str) else ""
+    return jsonify({"fields": customer_intake.parse_block(text)})
+
+
+@customers_bp.post("/neu/pruefen")
+@login_required
+def new_check():
+    """Dublettenverdacht zu den aktuellen Angaben (eigenes Buero) - speichert nichts."""
+    from app.services import customer_intake
+    from app.services.customer_create import CreateError
+
+    data = request.get_json(silent=True) or {}
+    form = {key: data.get(key) if isinstance(data.get(key), str) else "" for key in customer_intake.FIELDS}
+    try:
+        values = customer_intake.clean_values(form)
+    except CreateError:
+        values = {k: v for k, v in form.items() if v}
+        if form.get("first_name") and form.get("last_name"):
+            values["name"] = f"{form['first_name'].strip()} {form['last_name'].strip()}"
+    found = customer_intake.duplicates(values) if values else []
+    return jsonify({"duplicates": [customer_intake.serialize_duplicate(c, r) for c, r in found]})
 
 
 @customers_bp.route("/<int:customer_id>")
@@ -113,7 +171,7 @@ def _duplicate_pair(customer_id: int, other_id: int):
     """Beide Datensaetze aus dem eigenen Buero (sonst 404) und als Dublette erkannt."""
     customer = get_or_404_scoped(Customer, customer_id)
     other = get_or_404_scoped(Customer, other_id)
-    reason = duplicate_reason(customer, other)
+    reason = match_reason(customer, other)
     if reason is None:
         abort(404)
     return customer, other, reason

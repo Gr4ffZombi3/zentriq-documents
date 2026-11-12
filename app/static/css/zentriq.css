@@ -1147,3 +1147,19 @@ html.zs-collapsed .zs-kbd { display: none; }
   .zq-tc-head button { width: 2.75rem; height: 2.75rem; }
 }
 @media print { .zq-tc { display: none; } }
+
+/* Kunde anlegen (customers/new.html, js/customer-new.js) */
+.ci-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 1.25rem; align-items: start; }
+.ci-paste textarea { width: 100%; min-height: 12rem; resize: vertical; font: inherit; }
+.ci-fields { display: flex; flex-direction: column; gap: 0.9rem; }
+.ci-field { display: grid; gap: 0.25rem; min-width: 0; }
+.ci-field input.ci-filled { background: color-mix(in oklab, var(--color-primary) 6%, var(--color-surface)); }
+.ci-dupes { padding: 0.75rem 0.9rem; border: 1px solid var(--color-warning, #b7791f); border-radius: 0.75rem; background: color-mix(in oklab, var(--color-warning, #b7791f) 9%, transparent); }
+.ci-dupes[hidden] { display: none; }
+.ci-dupes-title { margin: 0 0 0.4rem; font-weight: 600; }
+.ci-dupes ul { list-style: none; margin: 0 0 0.5rem; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.ci-dupes li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.6rem; }
+.ci-meta { font-size: 0.85rem; color: var(--color-text-muted); }
+.ci-confirm { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
+.ci-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+@media (max-width: 47.99rem) { .ci-grid { grid-template-columns: 1fr; } }

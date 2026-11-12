@@ -18,6 +18,22 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 12),
+        "title": "Kunde anlegen mit eingefügten Kundendaten",
+        "text": "Unter „Kunden › Kunde anlegen“ können Sie einen Adressblock oder einen Abschnitt aus einer E-Mail einfügen. "
+        "Zentriq trägt Name, Adresse, Telefon und E-Mail sofort in die Maske ein – alles bleibt vor dem Speichern änderbar. "
+        "Gibt es den Kunden vermutlich schon, sehen Sie die passende Akte mit „Akte öffnen“.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 12),
+        "title": "Leipziger Liste erkennt bestehende Kunden",
+        "text": "Beim Import der Leipziger Liste ordnet Zentriq Verträge zuerst über die Vertragsnummer der vorhandenen Kundenakte zu. "
+        "Von Hand erfasste Telefonnummern, Notizen und offene Rückrufe bleiben dabei erhalten. Unklare Fälle erscheinen in der "
+        "Akte unter „Mögliche Dublette“ zur manuellen Zuordnung.",
+        "audience": "admin",
+    },
+    {
+        "date": date(2026, 11, 12),
         "title": "Kunden anlegen ohne feste Formulierung",
         "text": "„Lege Kunde Max Mustermann an“, „Neuer Kunde Max Mustermann“, „Nimm Max Mustermann als Kunden auf“ oder "
         "„Max Mustermann neu anlegen“ – der Assistent legt den Kunden jetzt sofort an, auch bei kleinen Tippfehlern. "

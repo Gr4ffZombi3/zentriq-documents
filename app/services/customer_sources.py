@@ -25,11 +25,16 @@ def _empty(value) -> bool:
     return value is None or (isinstance(value, str) and not value.strip())
 
 
-def apply_customer_values(customer, values: dict, source: str, *, overwrite: bool = False) -> list[str]:
+# Von Menschen gepflegte Herkunft: eine importierte Liste ueberschreibt diese Felder nie.
+MANUAL_SOURCES = frozenset({MANUELL, EINGABE, NOTIZ, MEMO, E_MAIL})
+
+
+def apply_customer_values(customer, values: dict, source: str, *, overwrite: bool = False, protect=frozenset()) -> list[str]:
     """Uebernimmt `values` in den Kunden und vermerkt die Herkunft je Feld.
 
     Leere Werte ueberschreiben nie vorhandene Daten. Gefuellte Felder werden nur mit
-    `overwrite=True` ersetzt (Leipziger Liste: die neueste Liste ist der aktuelle Stand).
+    `overwrite=True` ersetzt (Leipziger Liste: die neueste Liste ist der aktuelle Stand) - ausser
+    ihre Herkunft steht in `protect` (z. B. von Hand erfasste Telefonnummer).
     Liefert die geaenderten Felder."""
     changed = []
     sources = dict(customer.field_sources or {})
@@ -38,6 +43,8 @@ def apply_customer_values(customer, values: dict, source: str, *, overwrite: boo
             continue
         current = getattr(customer, field)
         if current == value or (not _empty(current) and not overwrite):
+            continue
+        if not _empty(current) and sources.get(field) in protect:
             continue
         setattr(customer, field, value)
         sources[field] = source

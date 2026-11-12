@@ -56,7 +56,13 @@ def normalize_postal_code(value: str | None) -> str:
 class CustomerMatcher:
     """Ordnet extrahierte Kundendaten (Leipziger Liste) dem Kundenstamm des eigenen Bueros zu.
 
-    Abgleich ueber die indizierten Schluessel (app/utils/customer_keys.py) in dieser Reihenfolge:
+    0. Vorgangs-/Vertragsnummer zuerst: gehoert sie im eigenen Buero eindeutig zu einer Akte (bereits
+    verknuepfter Vertrag einer frueheren Liste oder VN-Nummer als Kundennummer), wird diese Akte
+    genommen - sofern nichts widerspricht (andere Kundennummer, anderes Geburtsdatum). Kommen
+    mehrere Akten infrage oder widersprechen sich die Angaben, wird NICHT automatisch zugeordnet:
+    es entsteht ein eigener Datensatz, der als "gleiche Vertragsnummer - bitte zuordnen" im
+    Dublettenvergleich zur manuellen Zuordnung erscheint (app/services/customer_duplicates.py).
+    Danach wie bisher, in dieser Reihenfolge:
     1. Kundennummer (auch die VN-Nummer am Anfang der Vorgangsnummer), 2. Telefonnummer, 3. dieselbe Vorgangsnummer aus einer frueheren Liste bei
     gleichem Namen (ohne abweichende PLZ), 4. Name + Geburtsdatum, 5. Name + PLZ (nur ohne
     abweichendes Geburtsdatum). Ein gleicher Name allein fuehrt nie zu einer Zuordnung, und
@@ -102,6 +108,16 @@ class CustomerMatcher:
             if value and customer not in self._by_key[column][value]:
                 self._by_key[column][value].append(customer)
 
+    def contract_candidates(self, contract_number: str | None) -> list[Customer]:
+        """Akten, zu denen diese Vertragsnummer im eigenen Buero gehoert: frueher verknuepfter Vertrag
+        (normalisierte Vorgangsnummer) oder VN-Nummer der Vorgangsnummer als Kundennummer."""
+        ids = set(self._contract_owners(contract_number))
+        vn = vn_key(contract_number)
+        found = {c.id: c for c in self.customers if c.id in ids}
+        for customer in self._by_key["customer_number_key"].get(vn, []) if vn else []:
+            found[customer.id] = customer
+        return list(found.values())
+
     def find(self, data: ExtractedCustomer, contract_number: str | None = None) -> Customer | None:
         keys = customer_keys(data.name, data.phone, data.customer_number)
         number = keys["customer_number_key"]
@@ -109,6 +125,29 @@ class CustomerMatcher:
         def number_conflict(customer: Customer) -> bool:
             other = customer_keys(None, None, customer.customer_number)["customer_number_key"]
             return bool(number and other and other != number)
+
+        def contradicts(customer: Customer) -> bool:
+            """Andere Kundennummer widerspricht immer. Ein anderes Geburtsdatum nur, wenn es an der Akte von
+            Hand gepflegt ist oder zusaetzlich Name bzw. PLZ abweichen - sonst ist es der typische
+            OCR-Lesefehler einer Liste (die neueste Liste ist dann der aktuelle Stand)."""
+            if number_conflict(customer):
+                return True
+            if not (data.date_of_birth and customer.date_of_birth and customer.date_of_birth != data.date_of_birth):
+                return False
+            manual = (customer.field_sources or {}).get("date_of_birth") in customer_sources.MANUAL_SOURCES
+            other_name = keys["name_key"] and customer.name_key and keys["name_key"] != customer.name_key
+            postal = normalize_postal_code(data.postal_code)
+            other_postal = postal and customer.postal_code and normalize_postal_code(customer.postal_code) != postal
+            return bool(manual or other_name or other_postal)
+
+        # 0. Vertragsnummer zuerst (eindeutig und ohne Widerspruch -> diese Akte, sonst manuell).
+        by_contract = self.contract_candidates(contract_number)
+        if len(by_contract) == 1 and not contradicts(by_contract[0]):
+            return by_contract[0]
+        if by_contract:
+            # Mehrere Akten bzw. Widerspruch: nur eine eindeutige Kundennummer entscheidet, nie der Name.
+            exact = [c for c in by_contract if number and customer_keys(None, None, c.customer_number)["customer_number_key"] == number]
+            return exact[0] if len(exact) == 1 else None
 
         if number and (candidates := self._by_key["customer_number_key"].get(number)):
             return candidates[0]
@@ -188,6 +227,8 @@ class CustomerMatcher:
             },
             self.source,
             overwrite=True,
+            # Von Hand gepflegte Werte (Telefon, Adresse ...) bleiben an der Akte.
+            protect=customer_sources.MANUAL_SOURCES,
         )
         self._index(customer, customer_keys(customer.name, customer.phone, customer.customer_number))
         return customer

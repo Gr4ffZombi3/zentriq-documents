@@ -73,6 +73,10 @@ EMPLOYEE_ALLOWED_ENDPOINTS = frozenset(
         # Bearbeiten bleibt bei customer_create.can_edit, Dubletten/Zusammenfuehren bei @admin_required.
         "customers.list_customers",
         "customers.detail",
+        # Kunde anlegen (Maske) - wie im Assistenten fuer alle Buero-Mitglieder.
+        "customers.new",
+        "customers.new_detect",
+        "customers.new_check",
     }
 )
 

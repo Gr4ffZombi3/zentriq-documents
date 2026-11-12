@@ -43,6 +43,9 @@ REASON_LABELS = {
     "phone": "gleiche Telefonnummer",
     "name": "gleicher Name",
     "name_postal": "gleicher Name und PLZ, abweichendes Geburtsdatum – bitte prüfen",
+    # Leipziger Liste: dieselbe Vertragsnummer an zwei Akten (mehrdeutig oder widerspruechlich beim
+    # Import) - nie automatisch zugeordnet, hier manuell zuordnen (zusammenfuehren).
+    "contract": "gleiche Vertragsnummer – bitte zuordnen",
 }
 
 # Felder, die beim Zusammenfuehren uebernommen werden (Feld -> Bezeichnung).
@@ -119,15 +122,52 @@ def _candidates_query(customers: list[Customer]):
     return Customer.query.filter(Customer.tenant_id.in_(tenant_ids), or_(*conditions))
 
 
+def _contract_keys(customer_id: int) -> set[str]:
+    return set(
+        db.session.execute(
+            db.select(LeipzigerEntry.contract_key).where(
+                LeipzigerEntry.customer_id == customer_id, LeipzigerEntry.contract_key.is_not(None), LeipzigerEntry.contract_key != ""
+            )
+        ).scalars()
+    )
+
+
+def shares_contract(customer: Customer, other: Customer) -> bool:
+    """Beide Akten tragen dieselbe (normalisierte) Vertragsnummer aus der Leipziger Liste."""
+    if customer.id == other.id or customer.tenant_id != other.tenant_id:
+        return False
+    return bool(_contract_keys(customer.id) & _contract_keys(other.id))
+
+
+def match_reason(customer: Customer, other: Customer) -> str | None:
+    """duplicate_reason oder - nur fuer den Einzelvergleich - dieselbe Vertragsnummer."""
+    return duplicate_reason(customer, other) or ("contract" if shares_contract(customer, other) else None)
+
+
 def find_duplicates(customer: Customer) -> list[Duplicate]:
-    query = _candidates_query([customer])
-    if query is None:
-        return []
     found = []
-    for other in query.filter(Customer.id != customer.id).order_by(Customer.id).limit(MAX_DUPLICATES * 5):
-        reason = duplicate_reason(customer, other)
-        if reason:
-            found.append(Duplicate(other, reason))
+    seen = set()
+    keys = _contract_keys(customer.id)
+    contract_ids = set(
+        db.session.execute(
+            db.select(LeipzigerEntry.customer_id).where(
+                LeipzigerEntry.contract_key.in_(keys), LeipzigerEntry.customer_id.is_not(None),
+                LeipzigerEntry.customer_id != customer.id, LeipzigerEntry.tenant_id == customer.tenant_id,
+            )
+        ).scalars()
+    ) if keys else set()
+    query = _candidates_query([customer])
+    if query is not None:
+        for other in query.filter(Customer.id != customer.id).order_by(Customer.id).limit(MAX_DUPLICATES * 5):
+            reason = duplicate_reason(customer, other)
+            if reason in ("name", "name_postal") and other.id in contract_ids:
+                reason = "contract"  # dieselbe Vertragsnummer ist der genauere Grund
+            if reason:
+                found.append(Duplicate(other, reason))
+                seen.add(other.id)
+    rest = contract_ids - seen
+    for other in Customer.query.filter(Customer.id.in_(rest)).order_by(Customer.id).limit(MAX_DUPLICATES).all() if rest else []:
+        found.append(Duplicate(other, "contract"))
     order = list(REASON_LABELS)
     return sorted(found, key=lambda item: (order.index(item.reason), item.customer.id))[:MAX_DUPLICATES]
 
@@ -212,7 +252,7 @@ def merge_customers(target: Customer, source: Customer, actor) -> dict:
         raise MergeError("Ein Datensatz kann nicht mit sich selbst zusammengeführt werden.")
     if target.tenant_id != source.tenant_id or target.tenant_id != actor.tenant_id:
         raise MergeError("Die Datensätze gehören nicht zu Ihrem Büro.")
-    if duplicate_reason(target, source) is None:
+    if match_reason(target, source) is None:
         raise MergeError("Die Datensätze sind keine erkannte Dublette und werden nicht zusammengeführt.")
 
     tenant_id, target_id = target.tenant_id, target.id

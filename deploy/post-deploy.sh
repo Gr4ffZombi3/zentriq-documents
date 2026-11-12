@@ -83,7 +83,7 @@ main() {
         fi
     done
     # Live-Dienst ist optional (deploy/enable-live.sh): nur pruefen, wenn installiert.
-    if systemctl list-unit-files zentriq-live.service 2>/dev/null | grep -q '^zentriq-live\.service'; then
+    if systemctl cat zentriq-live.service >/dev/null 2>&1; then  # ohne Pipe (pipefail/SIGPIPE, siehe update.sh)
         if systemctl is-active --quiet zentriq-live 2>/dev/null; then
             echo "    zentriq-live: aktiv"
         else

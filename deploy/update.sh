@@ -54,7 +54,9 @@ echo "==> [6/6] Starte Dienste neu..."
 sudo systemctl restart zentriq-api
 sudo systemctl restart zentriq-worker
 # Live-Dienst nur, wenn er bereits ausgerollt ist (deploy/enable-live.sh).
-if systemctl list-unit-files zentriq-live.service 2>/dev/null | grep -q '^zentriq-live\.service'; then
+# Kein "systemctl list-unit-files | grep -q" unter pipefail: grep -q beendet sich beim ersten Treffer,
+# systemctl bekommt dann ggf. SIGPIPE und die Bedingung wird zufaellig falsch (Live-Dienst nicht neu gestartet).
+if systemctl cat zentriq-live.service >/dev/null 2>&1; then
     sudo systemctl restart zentriq-live
 fi
 

@@ -40,7 +40,8 @@ done
 # 2) Gunicorn-Port frei? (informativ - der eigentliche Fehler wird beim Start sichtbar,
 #    hier nur ein fruehzeitiger, deutlicher Hinweis in den Logs)
 GUNICORN_PORT="8000"
-if ss -ltn 2>/dev/null | awk '{print $4}' | grep -q ":${GUNICORN_PORT}\$"; then
+# grep ohne -q liest die Eingabe vollstaendig: kein SIGPIPE fuer ss/awk unter pipefail.
+if ss -ltn 2>/dev/null | awk '{print $4}' | grep ":${GUNICORN_PORT}\$" >/dev/null; then
     echo "[pre-start] Hinweis: Port ${GUNICORN_PORT} ist bereits belegt."
 fi
 

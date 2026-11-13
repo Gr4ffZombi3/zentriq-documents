@@ -18,6 +18,13 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 13),
+        "title": "Buchungsseite ohne blaues Aufblitzen",
+        "text": "Auf der Online-Buchungsseite blitzt beim Antippen einer Uhrzeit oder von „Termin verbindlich buchen“ auf dem "
+        "Handy nichts Blaues mehr auf. Die gewählte Uhrzeit ist weiterhin klar markiert.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 13),
         "title": "Allgemeiner Buchungslink für Ihr Büro",
         "text": "Neben „Termine vorschlagen“ gibt es unter „Buchungslinks“ jetzt „Allgemeinen Buchungslink kopieren“: ein fester "
         "Link Ihres Büros, über den Kunden ohne Anmeldung freie Beratungstermine buchen – er bleibt nach jeder Buchung gültig "

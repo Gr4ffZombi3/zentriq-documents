@@ -34,14 +34,22 @@
     h2 { font-size: 0.98rem; margin: 1.2rem 0 0.5rem; }
     h2:first-child, .card > h2:first-of-type { margin-top: 0.2rem; }
     .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr)); gap: 0.5rem; }
-    .slot { position: relative; }
-    .slot input { position: absolute; opacity: 0; pointer-events: none; }
-    .slot span { display: block; text-align: center; padding: 0.75rem 0.2rem; border: 1px solid var(--line); border-radius: 0.7rem; font-weight: 600; cursor: pointer; min-height: 48px; }
+    /* Antippen auf dem Handy: keine Standard-Tap-Hervorhebung (Chrome/Android malt sie hellblau um die
+       Textzeile - sah aus wie ein aufblitzender blauer Buchstabe) und keine Textauswahl/Einfuegemarke im
+       Kacheltext. Rueckmeldung stattdessen ueber :active, Tastaturfokus ueber :focus-visible. */
+    .slot, button, a { -webkit-tap-highlight-color: transparent; }
+    .slot { position: relative; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+    .slot input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; pointer-events: none; }
+    .slot span { display: block; text-align: center; padding: 0.75rem 0.2rem; border: 1px solid var(--line); border-radius: 0.7rem; font-weight: 600; cursor: pointer; min-height: 48px; transition: background-color 0.12s ease; }
+    .slot:active span { background: var(--accent-soft); }
     .slot input:checked + span { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
     .slot input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
     label.field { display: block; margin-top: 0.8rem; font-size: 0.9rem; color: var(--muted); }
     label.field input { display: block; width: 100%; margin-top: 0.25rem; font-size: 1rem; padding: 0.7rem; border: 1px solid var(--line); border-radius: 0.6rem; background: var(--card); color: var(--text); }
     button { margin-top: 1.2rem; width: 100%; font-size: 1.05rem; font-weight: 600; padding: 0.85rem; border: 0; border-radius: 0.8rem; background: var(--accent); color: var(--accent-text); cursor: pointer; min-height: 52px; }
+    button { -webkit-user-select: none; user-select: none; transition: filter 0.12s ease; }
+    button:active:not([disabled]) { filter: brightness(0.92); }
+    button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
     button[disabled] { opacity: 0.6; }
     .error { color: var(--warn); font-weight: 600; margin: 0 0 0.6rem; }
     .ok { color: var(--ok); font-weight: 700; font-size: 1.15rem; margin: 0 0 0.6rem; }

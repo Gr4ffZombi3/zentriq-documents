@@ -191,3 +191,48 @@ def test_unknown_address_and_old_token_links_still_work(app, setup):
     assert app.test_client().get("/termin/gibt-es-nicht").status_code == 404
     admin, token, day = _create(app, setup, customer=False)
     assert app.test_client().get(f"/termin/{token}").status_code == 301  # alte persoenliche Links leiten weiter
+
+
+# --- Freie Zeiten folgen dem Kalender automatisch (kein Freigeben einzelner Uhrzeiten) ------------------
+
+
+def _offered(client, day, hhmm):
+    return f'value="{day.isoformat()}T{hhmm}"' in client.get("/termin/heller").get_data(as_text=True)
+
+
+def test_internal_event_disappears_at_once_and_returns_after_cancel_move_delete(app, setup):
+    admin = _enable(app, setup)
+    public = app.test_client()
+    monday, tuesday = _next(1), _next(2)
+    assert _offered(public, monday, "10:00") and _offered(public, tuesday, "10:00")
+    created = admin.post("/kalender/api/termine", json={"title": "Interne Besprechung", "start": f"{monday.isoformat()}T10:00",
+                                                        "end": f"{monday.isoformat()}T11:00", "assignee_id": setup.laura_id})
+    assert created.status_code == 201, created.get_json()
+    event = created.get_json()["event"]
+    assert not _offered(public, monday, "10:00") and not _offered(public, monday, "09:30")  # sofort weg (auch Ueberschneidung)
+    assert "Interne Besprechung" not in public.get("/termin/heller").get_data(as_text=True)
+    # absagen -> wieder buchbar
+    cancelled = admin.post(f"/kalender/api/termine/{event['id']}/absagen", json={"version": event["version"]})
+    assert cancelled.status_code == 200, cancelled.get_json()
+    assert _offered(public, monday, "10:00") and _offered(public, monday, "09:30")
+    # reaktivieren und auf Dienstag verschieben -> Montag frei, Dienstag belegt
+    event = admin.post(f"/kalender/api/termine/{event['id']}/reaktivieren", json={"version": cancelled.get_json()["event"]["version"]}).get_json()["event"]
+    assert not _offered(public, monday, "10:00")
+    moved = admin.patch(f"/kalender/api/termine/{event['id']}", json={"title": "Interne Besprechung", "start": f"{tuesday.isoformat()}T10:00",
+                                                                     "end": f"{tuesday.isoformat()}T11:00", "assignee_id": setup.laura_id,
+                                                                     "version": event["version"]})
+    assert moved.status_code == 200, moved.get_json()
+    assert _offered(public, monday, "10:00") and not _offered(public, tuesday, "10:00")
+    # loeschen -> auch Dienstag wieder frei
+    deleted = admin.delete(f"/kalender/api/termine/{event['id']}", json={"version": moved.get_json()["event"]["version"]})
+    assert deleted.status_code == 200, deleted.get_json()
+    assert _offered(public, tuesday, "10:00")
+
+
+def test_freed_time_outside_online_windows_stays_hidden(app, setup):
+    admin = _enable(app, setup)
+    monday = _next(1)
+    ev = admin.post("/kalender/api/termine", json={"title": "Nachmittag", "start": f"{monday.isoformat()}T15:00",
+                                                   "end": f"{monday.isoformat()}T16:00", "assignee_id": setup.laura_id}).get_json()["event"]
+    admin.post(f"/kalender/api/termine/{ev['id']}/absagen", json={"version": ev["version"]})
+    assert not _offered(app.test_client(), monday, "15:00")  # Montag nur 09-12 freigegeben

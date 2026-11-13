@@ -263,10 +263,19 @@ def test_memo_customer_creation_reports_busy_lock(app, world, db, monkeypatch):
         assert Customer.query.filter_by(name="Neu Kunde").count() == 0
 
 
-def test_named_lock_is_noop_without_mysql(app, db):
+def test_named_lock_serializes_within_process_without_mysql(app, db):
+    """Ohne MariaDB (SQLite in Tests/lokal) sperrt NamedLock innerhalb des Prozesses: eine zweite Sperre
+    gleichen Namens wartet bzw. laeuft in die Zeitueberschreitung; nach dem Freigeben ist sie frei."""
     lock = customer_lock.customer_creation_lock(1)
     with lock:
-        assert lock.held is False
+        assert lock.held is True
+        second = customer_lock.NamedLock(lock.name, 0)
+        with pytest.raises(customer_lock.CustomerLockTimeout):
+            second.acquire()
+    assert lock.held is False
+    again = customer_lock.NamedLock(lock.name, 0).acquire()
+    assert again.held is True
+    again.release()
 
 
 def test_cli_recompares_lists_in_report_order(app, db, tenant, tmp_path, monkeypatch):

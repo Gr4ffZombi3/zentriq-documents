@@ -16,6 +16,8 @@ Auf Datenbanken ohne GET_LOCK (SQLite in den Tests) ist die Sperre wirkungslos."
 
 from __future__ import annotations
 
+import threading
+
 from sqlalchemy import text
 
 from app.extensions import db
@@ -25,18 +27,33 @@ class CustomerLockTimeout(RuntimeError):
     """Die Sperre wurde innerhalb der Wartezeit nicht frei."""
 
 
+_LOCAL_LOCKS: dict = {}
+_LOCAL_GUARD = threading.Lock()
+
+
 class NamedLock:
+    """MariaDB GET_LOCK (prozessuebergreifend). Andere Datenbanken (SQLite in Tests/lokal): Sperre
+    innerhalb des Prozesses, damit gleichzeitige Anfragen auch dort nacheinander laufen."""
+
     def __init__(self, name: str, timeout_seconds: int):
         self.name = name[:64]
         self.timeout_seconds = timeout_seconds
         self._connection = None
+        self._local = None
 
     @property
     def held(self) -> bool:
-        return self._connection is not None
+        return self._connection is not None or self._local is not None
 
     def acquire(self) -> NamedLock:
-        if self._connection is not None or db.engine.dialect.name not in ("mysql", "mariadb"):
+        if self._connection is not None or self._local is not None:
+            return self
+        if db.engine.dialect.name not in ("mysql", "mariadb"):
+            with _LOCAL_GUARD:
+                local = _LOCAL_LOCKS.setdefault(self.name, threading.Lock())
+            if not local.acquire(timeout=self.timeout_seconds):
+                raise CustomerLockTimeout(self.name)
+            self._local = local
             return self
         connection = db.engine.connect()
         try:
@@ -55,6 +72,9 @@ class NamedLock:
         return self
 
     def release(self) -> None:
+        local, self._local = self._local, None
+        if local is not None:
+            local.release()
         connection, self._connection = self._connection, None
         if connection is None:
             return

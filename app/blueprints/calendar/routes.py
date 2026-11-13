@@ -7,9 +7,10 @@ Bueros sind fuer jede Aktion 404. Loeschen: Ersteller oder Buero-Admin; absagen/
 import re
 from datetime import date, timedelta
 
-from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
+from app.extensions import db
 from app.models import CalendarEvent
 from app.services import calendar as cal
 from app.services.global_search import MIN_QUERY_LENGTH, normalize_query, search_customers
@@ -294,14 +295,44 @@ def settings():
             db.session.commit()
             flash("Einstellungen gespeichert.", "success")
             return redirect(url_for("calendar.settings"))
+    return _render_settings(record, form=request.form if errors else None, errors=errors)
+
+
+def _render_settings(record, *, form=None, errors=None, ob_form=None, ob_errors=None, status=200):
+    from app.services import availability
+    from app.services import office_booking as ob
+
     hours = availability.office_hours(record)
+    page = ob.page_for_office()
     return render_template(
         "calendar/settings.html",
         record=record,
-        form=request.form if errors else None,
-        errors=errors,
+        form=form,
+        errors=errors or [],
         days=[(iso, _DAY_LABELS[iso - 1], hours.get(iso)) for iso in range(1, 8)],
-    )
+        ob_page=page, ob_form=ob_form, ob_errors=ob_errors or [], ob_windows=ob.windows_of(page) if page else {},
+        ob_members=cal.office_members(), member_name=cal.member_name, ob_suggested=ob.suggested_slug(current_user),
+        ob_base=(current_app.config.get("PUBLIC_URL") or request.url_root).rstrip("/"), ob_url=ob.public_url(page) if page else None,
+    ), status
+
+
+@calendar_bp.post("/einstellungen/online-buchung")
+@login_required
+def online_booking_settings():
+    """Allgemeiner Buchungslink: aktivieren/deaktivieren, Adresse, Termintyp, Dauer, Kalender, Zeitfenster.
+    Nur Buero-Admin."""
+    from app.models import OfficeSettings
+    from app.services import office_booking as ob
+
+    if not current_user.is_office_admin:
+        abort(403)
+    try:
+        page = ob.save_settings(current_user, request.form)
+    except ob.BookingError as exc:
+        db.session.rollback()
+        return _render_settings(OfficeSettings.query.first(), ob_form=request.form, ob_errors=[str(exc)], status=422)
+    flash("Online-Buchung gespeichert." + (" Der allgemeine Buchungslink ist aktiv." if page.enabled else " Der Link ist deaktiviert."), "success")
+    return redirect(url_for("calendar.settings") + "#online-buchung")
 
 
 # --- Persoenliche Buchungslinks (nur Buero-Admin) ------------------------------------------
@@ -345,8 +376,13 @@ def booking_links():
         rows.append({"link": link, "status": bl.status(link), "url": bl.public_url(link), "event": event,
                      "free": len(bl.free_times(link)) if bl.status(link) == "active" else 0})
     today = local_today()
+    from app.services import office_booking as ob
+
+    office_page = ob.page_for_office()
+    office_link = ob.public_url(office_page) if office_page and ob.usable(office_page) else None
     return render_template(
-        "calendar/booking_links.html", rows=rows, labels=bl.STATUS_LABELS, members=_link_assignees(), member_name=cal.member_name,
+        "calendar/booking_links.html", office_page=office_page, office_link=office_link,
+        rows=rows, labels=bl.STATUS_LABELS, members=_link_assignees(), member_name=cal.member_name,
         kinds=cal.LOCATION_KINDS, customer=customer, new_id=request.args.get("neu", type=int),
         defaults={"from": (today + timedelta(days=1)).isoformat(), "to": (today + timedelta(days=7)).isoformat(),
                   "valid": (today + timedelta(days=14)).isoformat()},

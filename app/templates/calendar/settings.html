@@ -64,5 +64,59 @@
     </section>
     <div class="huk-form-actions"><button type="submit" class="btn btn-primary">Speichern</button></div>
   </form>
+
+  {# Allgemeiner Buchungslink des Bueros (app/services/office_booking.py): eigenes Formular. #}
+  {% set obf = ob_form or {} %}
+  <form method="post" action="{{ url_for('calendar.online_booking_settings') }}" class="huk-form" id="online-buchung" data-ob-settings>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <section class="panel" aria-labelledby="s-online">
+      <header class="panel-header"><h2 class="panel-title" id="s-online">Online-Buchung (allgemeiner Buchungslink)</h2></header>
+      <div class="panel-body huk-fields">
+        {% for msg in ob_errors or [] %}<p class="form-error" role="alert">{{ msg }}</p>{% endfor %}
+        <p class="form-hint">Ein fester Link für Ihr Büro, z. B. für die E-Mail-Signatur. Kunden sehen nur freie Zeiten in den hier freigegebenen Fenstern – vorhandene Termine, Abwesenheiten und Sperrzeiten im gewählten Kalender, Puffer und Mindestvorlauf werden berücksichtigt. Der Link bleibt nach einer Buchung gültig.</p>
+        <label class="checkbox-row"><input type="checkbox" name="enabled" value="1" {{ 'checked' if (obf.get('enabled') if ob_form else (ob_page and ob_page.enabled)) }} data-ob-enabled> Online-Buchung aktiv</label>
+        <div class="huk-field">
+          <label class="field-label" for="ob-slug">Adresse des Links</label>
+          <div class="zq-inline-row"><span class="form-hint">{{ ob_base }}/termin/</span><input class="field-surface" id="ob-slug" name="slug" maxlength="40" required value="{{ obf.get('slug') if ob_form else (ob_page.slug if ob_page else ob_suggested) }}"></div>
+        </div>
+        <div class="huk-field">
+          <label class="field-label" for="ob-title">Termintyp</label>
+          <input class="field-surface" id="ob-title" name="title" maxlength="80" value="{{ obf.get('title') if ob_form else (ob_page.title if ob_page else 'Beratungstermin') }}">
+        </div>
+        <div class="huk-field">
+          <label class="field-label" for="ob-minutes">Dauer (Minuten)</label>
+          <input class="field-surface" id="ob-minutes" name="minutes" type="number" inputmode="numeric" min="10" max="240" value="{{ obf.get('minutes') if ob_form else (ob_page.minutes if ob_page else (record.default_minutes if record else 30)) }}">
+        </div>
+        <div class="huk-field">
+          <label class="field-label" for="ob-assignee">Termine landen im Kalender von</label>
+          <select class="field-surface" id="ob-assignee" name="assignee_id">
+            {% set current_assignee = (obf.get('assignee_id') | int if ob_form and obf.get('assignee_id') else (ob_page.assignee_user_id if ob_page else current_user.id)) %}
+            {% for m in ob_members %}<option value="{{ m.id }}" {{ 'selected' if m.id == current_assignee }}>{{ member_name(m) }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="huk-field">
+          <label class="field-label" for="ob-horizon">Buchbar für die nächsten … Tage</label>
+          <input class="field-surface" id="ob-horizon" name="horizon_days" type="number" inputmode="numeric" min="1" max="60" value="{{ obf.get('horizon_days') if ob_form else (ob_page.horizon_days if ob_page else 21) }}">
+        </div>
+        <p class="field-label">Online buchbare Zeitfenster (Europe/Berlin) – Tage ohne Fenster sind nicht buchbar</p>
+        <div class="settings-hours">
+          {% for iso, label, _w in days %}{% set wins = ob_windows.get(iso, []) %}
+            <div class="settings-hours-row ob-row">
+              <span class="settings-hours-day">{{ label }}</span>
+              {% for part in (1, 2) %}{% set w = wins[part - 1] if wins | length >= part else none %}
+                <label class="sr-only" for="ob-von-{{ iso }}-{{ part }}">{{ label }} Fenster {{ part }} von</label>
+                <input class="field-surface" id="ob-von-{{ iso }}-{{ part }}" name="ob_von_{{ iso }}_{{ part }}" type="time" value="{{ obf.get('ob_von_' ~ iso ~ '_' ~ part) if ob_form else (w[0].strftime('%H:%M') if w else '') }}">
+                <span aria-hidden="true">–</span>
+                <label class="sr-only" for="ob-bis-{{ iso }}-{{ part }}">{{ label }} Fenster {{ part }} bis</label>
+                <input class="field-surface" id="ob-bis-{{ iso }}-{{ part }}" name="ob_bis_{{ iso }}_{{ part }}" type="time" value="{{ obf.get('ob_bis_' ~ iso ~ '_' ~ part) if ob_form else (w[1].strftime('%H:%M') if w else '') }}">
+              {% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+        {% if ob_page and ob_page.enabled %}<p class="form-hint">Aktueller Link: <a href="{{ ob_url }}" target="_blank" rel="noopener">{{ ob_url }}</a></p>{% endif %}
+      </div>
+    </section>
+    <div class="huk-form-actions"><button type="submit" class="btn btn-primary">Online-Buchung speichern</button></div>
+  </form>
 </div>
 {% endblock %}

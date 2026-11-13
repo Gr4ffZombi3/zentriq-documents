@@ -10,5 +10,6 @@
       {% if view.kind %}<dt>Ort / Art</dt><dd>{{ view.kind }}</dd>{% endif %}
     </dl>
     <p class="hint">Sie können diese Seite schließen. Für Änderungen wenden Sie sich bitte an das Büro.</p>
+    {% if again_url %}<p class="hint"><a href="{{ again_url }}" data-booking-again>Weiteren Termin buchen</a></p>{% endif %}
   </div>
 {% endblock %}

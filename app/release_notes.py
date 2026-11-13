@@ -17,6 +17,15 @@ from datetime import date
 
 RELEASE_NOTES = (
     {
+        "date": date(2026, 11, 13),
+        "title": "Allgemeiner Buchungslink für Ihr Büro",
+        "text": "Neben „Termine vorschlagen“ gibt es unter „Buchungslinks“ jetzt „Allgemeinen Buchungslink kopieren“: ein fester "
+        "Link Ihres Büros, über den Kunden ohne Anmeldung freie Beratungstermine buchen – er bleibt nach jeder Buchung gültig "
+        "und passt in die E-Mail-Signatur. Wann online gebucht werden kann, legt der Büro-Admin unter „Kalender › "
+        "Einstellungen › Online-Buchung“ fest.",
+        "audience": "alle",
+    },
+    {
         "date": date(2026, 11, 12),
         "title": "Kunde anlegen mit eingefügten Kundendaten",
         "text": "Unter „Kunden › Kunde anlegen“ können Sie einen Adressblock oder einen Abschnitt aus einer E-Mail einfügen. "

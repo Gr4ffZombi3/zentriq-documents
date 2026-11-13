@@ -1,0 +1,44 @@
+{% extends "public_booking/_base.html" %}
+{% block content %}
+  <p class="lead" data-booking-lead>Wählen Sie eine freie Uhrzeit. Eine Anmeldung ist nicht erforderlich.</p>
+  <div class="card">
+    <dl class="kind" data-booking-kind>
+      <dt>Terminart</dt>
+      <dd>{{ view.title }}</dd>
+      <dd class="sub">{{ view.minutes }} Minuten</dd>
+    </dl>
+  </div>
+  <form method="post" class="card" data-booking-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="submission" value="{{ submission }}">
+    {% if error %}<p class="error" role="alert" data-booking-error>{{ error }}</p>{% endif %}
+    {% if not has_free %}<p class="hint" data-booking-none>Zurzeit sind keine Termine frei. Bitte versuchen Sie es später erneut oder wenden Sie sich an das Büro.</p>{% endif %}
+    {% for day in days %}
+      <h2>{{ day.label }}</h2>
+      {% if day["items"] %}
+        <div class="slots">
+          {% for item in day["items"] %}
+            <label class="slot"><input type="radio" name="slot" value="{{ item.value }}" required{% if selected == item.value %} checked{% endif %}><span>{{ item.time }}</span></label>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="hint" data-booking-day-empty>Keine buchbaren Zeiten.</p>
+      {% endif %}
+    {% endfor %}
+    {% if has_free %}
+      <h2>Ihre Kontaktdaten</h2>
+      <label class="field">Name<input name="name" autocomplete="name" required maxlength="120" value="{{ contact.name or '' }}"></label>
+      <label class="field">Telefon<input name="phone" type="tel" autocomplete="tel" maxlength="30" value="{{ contact.phone or '' }}"></label>
+      <label class="field">E-Mail<input name="email" type="email" autocomplete="email" maxlength="255" value="{{ contact.email or '' }}"></label>
+      <p class="hint">Telefon oder E-Mail genügt.</p>
+      <button type="submit" data-booking-submit>Termin verbindlich buchen</button>
+    {% endif %}
+  </form>
+  <script>
+    // Doppeltes Absenden verhindern (der Server schuetzt zusaetzlich).
+    document.querySelector("[data-booking-form]").addEventListener("submit", function () {
+      var b = document.querySelector("[data-booking-submit]");
+      if (b) setTimeout(function () { b.disabled = true; b.textContent = "Wird gebucht …"; }, 0);
+    });
+  </script>
+{% endblock %}

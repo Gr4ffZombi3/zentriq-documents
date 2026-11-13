@@ -53,6 +53,7 @@ from app.models.mailbox_case import (
     MailboxCaseEvent,
     MailboxSyncCursor,
 )
+from app.models.office_booking import OfficeBookingPage
 from app.models.office_settings import OfficeSettings
 from app.models.pending_case import PendingCase, PendingCaseNote
 from app.models.recommendation import Recommendation
@@ -83,6 +84,7 @@ __all__ = [
     "PendingCaseNote",
     "CalendarEventChange",
     "HukQuoteJob",
+    "OfficeBookingPage",
     "OfficeSettings",
     "FormDraft",
     "OfficeNews",

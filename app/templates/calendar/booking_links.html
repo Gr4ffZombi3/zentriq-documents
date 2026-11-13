@@ -8,8 +8,32 @@
     <a class="btn btn-secondary btn-sm" href="{{ url_for('calendar.index') }}">Zum Kalender</a>
   </div>
 
-  <section class="panel" aria-labelledby="bl-neu">
-    <header class="panel-header"><h2 class="panel-title" id="bl-neu">Buchungslink erstellen</h2></header>
+  {# Zwei Wege: konkrete Zeiten vorschlagen (persoenlicher Link, eine Buchung) oder den festen
+     allgemeinen Buchungslink des Bueros kopieren (bleibt gueltig, z. B. fuer die Signatur). #}
+  <section class="panel bl-options" aria-label="Buchungslink">
+    <div class="panel-body bl-option-grid">
+      <a class="bl-option" href="#bl-neu" data-bl-option="vorschlagen" onclick="var d=document.getElementById('bl-vorschlagen'); if(d){d.open=true;}">
+        <strong>Termine vorschlagen</strong>
+        <span>Konkrete Zeiten auswählen und einen persönlichen Link für genau eine Buchung verschicken.</span>
+      </a>
+      <div class="bl-option" data-bl-option="allgemein">
+        <strong>Allgemeinen Buchungslink kopieren</strong>
+        {% if office_link %}
+          <span>Fester Link Ihres Büros – bleibt nach jeder Buchung gültig, geeignet für die E-Mail-Signatur.</span>
+          <code id="bl-office-url" data-bl-office-url>{{ office_link }}</code>
+          <button type="button" class="btn btn-primary btn-sm" data-copy="#bl-office-url" data-bl-office-copy>Allgemeinen Buchungslink kopieren</button>
+        {% elif current_user.is_office_admin %}
+          <span>Noch nicht aktiv. Online-Buchungszeiten und Adresse legen Sie in den Kalender-Einstellungen fest.</span>
+          <a class="btn btn-secondary btn-sm" href="{{ url_for('calendar.settings') }}#online-buchung">Online-Buchung einrichten</a>
+        {% else %}
+          <span>Der Büro-Admin hat den allgemeinen Buchungslink noch nicht aktiviert.</span>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <details class="panel" id="bl-vorschlagen" aria-labelledby="bl-neu"{% if customer or not office_link %} open{% endif %}>
+    <summary class="panel-header"><h2 class="panel-title" id="bl-neu">Termine vorschlagen</h2></summary>
     <div class="panel-body">
       <form method="post" action="{{ url_for('calendar.booking_link_create') }}" class="form-stack" data-bl-form>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -59,7 +83,7 @@
         <div class="form-actions"><button type="submit" class="btn btn-primary">Buchungslink erstellen</button></div>
       </form>
     </div>
-  </section>
+  </details>
 
   <section class="panel" aria-labelledby="bl-liste">
     <header class="panel-header"><h2 class="panel-title" id="bl-liste">Erstellte Links</h2></header>

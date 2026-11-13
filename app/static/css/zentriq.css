@@ -1163,3 +1163,12 @@ html.zs-collapsed .zs-kbd { display: none; }
 .ci-confirm { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
 .ci-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
 @media (max-width: 47.99rem) { .ci-grid { grid-template-columns: 1fr; } }
+
+/* Buchungslinks: zwei Wege (Termine vorschlagen / allgemeinen Link kopieren) */
+.bl-option-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.8rem; }
+.bl-option { display: flex; flex-direction: column; align-items: flex-start; gap: 0.45rem; padding: 0.9rem 1rem; border: 1px solid var(--color-border); border-radius: 0.8rem; background: var(--color-surface); color: var(--color-text); text-decoration: none; }
+a.bl-option:hover { border-color: var(--color-primary); }
+.bl-option span { font-size: 0.88rem; color: var(--color-text-muted); }
+.bl-option code { max-width: 100%; overflow-wrap: anywhere; font-size: 0.85rem; }
+#bl-vorschlagen > summary { cursor: pointer; list-style: none; }
+.ob-row input[type="time"] { max-width: 7.5rem; }

@@ -14,6 +14,7 @@ from app.models.office_settings import OfficeSettings
 from app.services.ai import adapters, router
 from app.services.timetracking.clock import local_today
 from app.tenancy import bypass_tenant_scope
+from tests.conftest import next_workday
 from tests.test_customer_notes import API, _input, office  # noqa: F401
 from tests.test_permissions_security import login, world  # noqa: F401
 
@@ -73,7 +74,7 @@ def test_note_command_with_ambiguous_name_keeps_note(app, karl, office, no_ai):
 
 def test_short_variants_lowercase_and_date_without_dot(app, karl, no_ai):
     client = login(app, "admin-a@example.com")
-    day = local_today() + timedelta(days=2)
+    day = next_workday(2)
     booked = _input(client, f"{day.day}.{day.month}. schmidthofer termin 17 uhr")
     assert booked["kind"] == "calendar_saved" and "Karl Schmidthofer" in booked["message"]
     free = _input(client, f"Ist am {day.day}.{day.month} um 17 Uhr bei Laura frei")

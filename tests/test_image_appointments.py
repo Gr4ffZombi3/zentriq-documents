@@ -2,7 +2,7 @@
 """Termine aus Bildern: Bildpruefung, lokale Erkennung, Vorschau, Speichern. Synthetische Bilder."""
 
 import io
-from datetime import date, timedelta
+from datetime import date
 
 import pytest
 from PIL import Image, ImageDraw, ImageFont
@@ -12,7 +12,7 @@ from app.models import CalendarEvent
 from app.models.office_settings import OfficeSettings
 from app.services import image_appointments as ia
 from app.services.ai import adapters, router
-from app.services.timetracking.clock import local_today, to_local
+from app.services.timetracking.clock import to_local
 from app.tenancy import bypass_tenant_scope
 from tests.test_customer_notes import API, office  # noqa: F401
 from tests.test_permissions_security import login, world  # noqa: F401
@@ -51,7 +51,9 @@ def hours(app, office):
 
 
 def _day(n=2) -> date:
-    return local_today() + timedelta(days=n)
+    from tests.conftest import next_workday
+
+    return next_workday(n)
 
 
 def _upload(client, *images):

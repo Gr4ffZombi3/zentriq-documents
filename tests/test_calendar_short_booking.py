@@ -11,7 +11,7 @@ from app.models.ai import AiUsage
 from app.models.office_settings import OfficeSettings
 from app.services import calendar_intent
 from app.services.ai import adapters, router
-from app.services.timetracking.clock import local_today, to_local
+from app.services.timetracking.clock import to_local
 
 API = "/zentriq/api/kunden/eingabe"
 HOURS = {str(d): ["08:00", "18:00"] for d in range(1, 8)}
@@ -42,7 +42,9 @@ def office(db, tenant, user, employee):
 
 
 def _day():
-    return local_today() + timedelta(days=2)
+    from tests.conftest import next_workday
+
+    return next_workday(2)
 
 
 def _cmd(day=None, name="Schmidthofer", clock="16.30", fmt="%d.%m.%y"):

@@ -14,6 +14,7 @@ from app.models.ai import AiMessage
 from app.services import availability, email_context
 from app.services.timetracking.clock import local_to_utc_naive, local_today, to_local, utcnow_naive
 from app.tenancy import bypass_tenant_scope, use_tenant_id
+from tests.conftest import next_workday
 
 API = "/zentriq/api"
 
@@ -235,7 +236,7 @@ def test_explicit_booking_rechecks_and_prevents_double_booking(auth_client, offi
     customer = Customer(tenant_id=tenant.id, name="Max Mustermann")
     _db.session.add(customer)
     _db.session.commit()
-    day = local_today() + timedelta(days=2)
+    day = next_workday(2)
     text = f"Buche {day.strftime('%d.%m.%Y')} um 14 Uhr für Max Mustermann bei Laura"
     first = _say(auth_client, text, client_ref="b1")
     assert first["kind"] == "calendar_saved" and "Termin gebucht (bestätigt)" in first["message"], first

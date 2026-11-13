@@ -131,3 +131,16 @@ def mock_llm_extraction(monkeypatch):
     monkeypatch.setattr(
         "app.tasks.document_tasks.extract_document_data", fake_extract_document_data
     )
+
+
+def next_workday(days_ahead: int = 2):
+    """Naechster Werktag (Mo-Fr) fruehestens in `days_ahead` Tagen. Buchungstests duerfen nicht vom
+    heutigen Wochentag abhaengen: am Wochenende lehnt Zentriq Termine korrekt ab (kein Arbeitstag)."""
+    from datetime import timedelta
+
+    from app.services.timetracking.clock import local_today
+
+    day = local_today() + timedelta(days=days_ahead)
+    while day.weekday() >= 5:
+        day += timedelta(days=1)
+    return day

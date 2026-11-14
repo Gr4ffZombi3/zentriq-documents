@@ -36,6 +36,8 @@
   {% if office_member %}
     {# Schnellsuche auf dem Handy: sichtbarer Knopf (Desktop zusaetzlich Strg/Cmd+K). #}
     <button type="button" class="zs-icon-btn" data-zq-search-open aria-label="Schnellsuche" title="Schnellsuche">{{ icon('search', class='h-5 w-5') }}</button>
+    {# Teamchat auf dem Handy: fester Platz in der Kopfzeile statt schwebend (js/team-chat.js). #}
+    <button type="button" class="zs-icon-btn zq-tc-headbtn" data-zq-tc-head aria-label="Teamchat" title="Teamchat" aria-expanded="false" hidden>{{ icon('users', class='h-5 w-5') }}<span class="zq-tc-head-count" data-zq-tc-head-count hidden></span></button>
   {% endif %}
   <a href="{{ url_for('zentriq.index') }}" class="zs-icon-btn" data-zs-new aria-label="Neuer Chat" title="Neuer Chat">{{ icon('square-pen', class='h-5 w-5') }}</a>
 </header>

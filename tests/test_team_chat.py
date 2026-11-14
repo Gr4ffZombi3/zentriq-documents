@@ -121,3 +121,12 @@ def test_overview_orders_recent_chats_first(app, world):
     _send(dennis, first["id"], "Neueste Nachricht")
     ids = [c["id"] for c in dennis.get(BASE).get_json()["chats"]]
     assert ids == [first["id"], second["id"]]
+
+
+def test_mobile_header_has_fixed_teamchat_button_on_assistant_and_other_pages(app, world):
+    """Handy: Teamchat hat einen festen Platz in der Kopfzeile (nicht schwebend ueber der Begruessung)."""
+    client = login(app, "admin-a@example.com")
+    for path in ("/zentriq", "/kalender"):
+        html = client.get(path).get_data(as_text=True)
+        assert 'data-zq-tc-head' in html and 'aria-label="Teamchat"' in html, path
+        assert "data-zq-tc-head-count" in html and "data-zq-tc-sheet-close" in html, path

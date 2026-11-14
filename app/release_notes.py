@@ -17,6 +17,14 @@ from datetime import date
 
 RELEASE_NOTES = (
     {
+        "date": date(2026, 11, 14),
+        "title": "Teamchat auf dem Handy oben in der Kopfzeile",
+        "text": "Auf dem Handy liegt der Teamchat nicht mehr über der Begrüßung oder dem Eingabefeld. Sie finden ihn "
+        "oben als Symbol mit der Zahl ungelesener Nachrichten. Er öffnet sich als eigene Ansicht und lässt sich "
+        "mit × wieder schließen – Ihre Eingabe im Assistenten bleibt erhalten.",
+        "audience": "alle",
+    },
+    {
         "date": date(2026, 11, 13),
         "title": "Buchungsseite ohne blaues Aufblitzen",
         "text": "Auf der Online-Buchungsseite blitzt beim Antippen einer Uhrzeit oder von „Termin verbindlich buchen“ auf dem "

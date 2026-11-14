@@ -6,6 +6,9 @@
  * - Klick auf eine Pille klappt das Fenster nach oben auf (Kopf: Name, Vergroessern, Minimieren,
  *   Schliessen). Der Rest der Seite bleibt bedienbar.
  * - Zustand (offen/minimiert/vergroessert) je Benutzer im Browser - bleibt beim Seitenwechsel.
+ * - Handy (schmal): kein schwebender Knopf ueber dem Inhalt. Fester Platz in der Kopfzeile (Symbol
+ *   "Teamchat" mit Ungelesen-Zaehler, [data-zq-tc-head]); geoeffnet als Blatt zwischen Kopfzeile und
+ *   Zeiterfassung, Hoehe folgt dem sichtbaren Bereich (visualViewport: Tastatur, Safari-Adressleiste).
  * - Live: persoenlicher Kanal ueber zentriq-live ({"type":"chat","chat":id}); Texte holt der Browser
  *   angemeldet. Ohne Live-Dienst: regelmaessig abfragen. */
 (function () {
@@ -23,6 +26,9 @@
   var newBtn = root.querySelector("[data-zq-tc-new]");
   var menu = root.querySelector("[data-zq-tc-menu]");
   var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+  var heads = Array.prototype.slice.call(document.querySelectorAll("[data-zq-tc-head]"));
+  var sheetClose = root.querySelector("[data-zq-tc-sheet-close]");
+  var sheetOpen = false, ready = false, unreadById = {};
 
   var colleagues = [];
   var chats = {}; // id -> {id, partner, unread, state, last, pill, win, list}
@@ -61,8 +67,72 @@
     try { window.localStorage.setItem(STORE, JSON.stringify(data)); } catch (e) { /* Speicher gesperrt */ }
   }
 
+  // --- Handy: Kopfzeilen-Symbol und Blatt ----------------------------------------------------------
+  function visibleHead() {
+    return heads.find(function (b) { return b.getClientRects().length && getComputedStyle(b).display !== "none"; }) || null;
+  }
+  function anyOpen() { return order.some(function (id) { return chats[id].state !== "min"; }); }
+  function updateHeads() {
+    var total = 0;
+    Object.keys(unreadById).forEach(function (id) { total += unreadById[id] || 0; });
+    order.forEach(function (id) { if (!(id in unreadById)) total += chats[id].unread || 0; });
+    heads.forEach(function (b) {
+      b.hidden = !ready || (!colleagues.length && !order.length);
+      b.setAttribute("aria-expanded", sheetOpen ? "true" : "false");
+      b.setAttribute("aria-label", total ? "Teamchat, " + total + " ungelesen" : "Teamchat");
+      var c = b.querySelector("[data-zq-tc-head-count]");
+      if (c) { c.textContent = total > 99 ? "99+" : String(total || ""); c.hidden = !total; }
+    });
+  }
+  function openSheet() {
+    sheetOpen = true;
+    applyVisibility();
+    if (!order.length) toggleMenu(true);
+    else { var first = root.querySelector(".zq-tc-pill, .zq-tc-new"); if (first) first.focus(); }
+  }
+  function closeSheet() {
+    sheetOpen = false;
+    order.forEach(function (id) { if (chats[id].state !== "min") setState(chats[id], "min"); });
+    toggleMenu(false);
+    applyVisibility();
+    var head = visibleHead();
+    if (head) head.focus();
+  }
+  heads.forEach(function (b) { b.addEventListener("click", function () { sheetOpen ? closeSheet() : openSheet(); }); });
+  if (sheetClose) sheetClose.addEventListener("click", closeSheet);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && sheetOpen && menu.hidden) closeSheet(); });
+
+  function applyVisibility() {
+    var mobile = narrow();
+    root.classList.toggle("is-mobile", mobile);
+    root.classList.toggle("has-open", anyOpen());
+    if (mobile) root.hidden = !sheetOpen;
+    else { sheetOpen = false; root.hidden = !ready || (!colleagues.length && !order.length); }
+    updateHeads();
+    place();
+  }
+
+  function placeSheet() {
+    // Blatt unter der Kopfzeile bis ueber die Zeiterfassung (bzw. bis zum Rand des sichtbaren Bereichs).
+    var head = visibleHead();
+    var header = head ? head.closest("header") : null;
+    var top = header ? Math.max(0, header.getBoundingClientRect().bottom) : 0;
+    var vv = window.visualViewport;
+    var visibleBottom = vv ? vv.height + vv.offsetTop : window.innerHeight;
+    var clock = document.querySelector("[data-zs-clock]");
+    var fixedClock = clock && getComputedStyle(clock).position === "fixed" && clock.getClientRects().length;
+    var pill = fixedClock && clock.querySelector(".zs-clock-pill");
+    var bottom = visibleBottom;
+    if (pill) bottom = Math.min(bottom, pill.getBoundingClientRect().top - GAP);  // Zeiterfassung bleibt frei
+    root.style.top = top + "px";
+    root.style.height = Math.max(200, bottom - top) + "px";
+    root.style.right = root.style.bottom = root.style.maxWidth = "";
+  }
+
   // --- Position an der Zeiterfassung -----------------------------------------------------------------
   function place() {
+    if (narrow()) { placeSheet(); return; }
+    root.style.top = root.style.height = "";
     var clock = document.querySelector("[data-zs-clock]");
     var pill = clock && clock.querySelector(".zs-clock-pill");
     // offsetParent ist bei position:fixed immer null - sichtbar = hat eine Flaeche.
@@ -112,6 +182,8 @@
     c.textContent = chat.unread > 99 ? "99+" : String(chat.unread || "");
     c.hidden = !chat.unread || chat.state !== "min";
     chat.pill.setAttribute("aria-label", chat.partner.name + (chat.unread ? ", " + chat.unread + " ungelesen" : ""));
+    unreadById[chat.id] = chat.unread || 0;
+    updateHeads();
   }
 
   function ensure(info, state) {
@@ -223,6 +295,7 @@
   }
 
   function setState(chat, state) {
+    if (state !== "min" && narrow() && !sheetOpen) { sheetOpen = true; }
     if (state !== "min" && narrow()) {
       // Handy: nur ein Fenster offen, damit Seite und Zeiterfassung bedienbar bleiben.
       order.forEach(function (id) { if (id !== chat.id && chats[id].state !== "min") setState(chats[id], "min"); });
@@ -242,7 +315,7 @@
     }
     setCount(chat);
     save();
-    place();
+    applyVisibility();
   }
 
   function remove(chat) {
@@ -251,7 +324,7 @@
     delete chats[chat.id];
     order = order.filter(function (id) { return id !== chat.id; });
     save();
-    place();
+    applyVisibility();
   }
 
   // --- Kollegen-Auswahl ("Teamchat") -------------------------------------------------------------
@@ -283,7 +356,8 @@
   function refresh() {
     return api("GET", "").then(function (d) {
       colleagues = d.colleagues || [];
-      root.hidden = !colleagues.length && !order.length;
+      unreadById = {};
+      (d.chats || []).forEach(function (info) { unreadById[info.id] = info.unread || 0; });
       (d.chats || []).forEach(function (info) {
         var chat = chats[info.id];
         if (chat) {
@@ -294,7 +368,7 @@
           save();
         }
       });
-      place();
+      applyVisibility();
       return d;
     });
   }
@@ -329,15 +403,21 @@
     var byId = {};
     (d.chats || []).forEach(function (c) { byId[c.id] = c; });
     saved.slice().reverse().forEach(function (s) {
-      if (byId[s.id]) ensure(byId[s.id], s.state === "max" || s.state === "open" ? s.state : "min");
+      // Handy: beim Seitenwechsel nicht ueber die neue Seite legen - Chats bleiben im Blatt minimiert.
+      var restore = !narrow() && (s.state === "max" || s.state === "open") ? s.state : "min";
+      if (byId[s.id]) ensure(byId[s.id], restore);
     });
     order.slice().forEach(function (id) { if (chats[id].state !== "min") setState(chats[id], chats[id].state); });
-    root.hidden = !colleagues.length && !order.length;
+    ready = true;
     connect(d.live);
-    place();
+    applyVisibility();
   }, function () { root.hidden = true; });
 
-  window.addEventListener("resize", place);
+  window.addEventListener("resize", applyVisibility);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", place);  // iPhone-Tastatur, Safari-Adressleiste
+    window.visualViewport.addEventListener("scroll", place);
+  }
   document.addEventListener("visibilitychange", function () {
     if (!document.hidden) order.forEach(function (id) { markRead(chats[id]); });
   });

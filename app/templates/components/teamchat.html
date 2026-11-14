@@ -1,6 +1,12 @@
 {# Interner 1:1-Teamchat unten rechts (js/team-chat.js): minimierte Chats links neben der
    Zeiterfassung, aufgeklappte Fenster darueber. Daten nur ueber /arbeitsplatz/teamchat (eigenes Buero). #}
-<div class="zq-tc" data-zq-tc data-user="{{ current_user.id }}" data-base="{{ url_for('workspace.teamchat_overview') }}" hidden>
+<div class="zq-tc" data-zq-tc data-user="{{ current_user.id }}" data-base="{{ url_for('workspace.teamchat_overview') }}" hidden
+     role="region" aria-label="Teamchat">
+  {# Handy: Kopf des Teamchat-Blatts (geoeffnet ueber das Kopfzeilen-Symbol). #}
+  <div class="zq-tc-sheet-head" data-zq-tc-sheet-head>
+    <h2 class="zq-tc-sheet-title">Teamchat</h2>
+    <button type="button" class="zs-icon-btn" data-zq-tc-sheet-close aria-label="Teamchat schließen">×</button>
+  </div>
   <div class="zq-tc-windows" data-zq-tc-windows></div>
   <div class="zq-tc-bar" data-zq-tc-bar role="toolbar" aria-label="Teamchat">
     <div class="zq-tc-picker">

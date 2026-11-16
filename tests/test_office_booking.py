@@ -1,8 +1,8 @@
 # ruff: noqa: F811  (Fixtures werden aus anderen Testmodulen importiert)
 """Allgemeiner Buchungslink je Buero (/termin/<adresse>). Fiktive Daten.
 
-Buero A: Admin A, Laura (Mitarbeiterin), Dennis. Online-Fenster: Mo/Di/Do/Fr 09:00-12:00 (+ Do 14-16),
-Mittwoch ohne Freigabe; Kalender von Laura; Dauer 45 Minuten."""
+Buero A: Admin A, Laura (Mitarbeiterin), Dennis. Verfuegbarkeit aus dem Kalender (Buerozeiten der
+Terminplanung): Mo/Di/Do/Fr 09:00-12:00, Mittwoch ohne Buerozeiten; Kalender von Laura; Dauer 45 Minuten."""
 
 import re
 from datetime import datetime, time, timedelta
@@ -19,15 +19,14 @@ from tests.test_booking_links import _create, _csrf
 from tests.test_customer_notes import office  # noqa: F401
 from tests.test_permissions_security import login, world  # noqa: F401
 
-WINDOWS = {"ob_von_1_1": "09:00", "ob_bis_1_1": "12:00", "ob_von_2_1": "09:00", "ob_bis_2_1": "12:00",
-           "ob_von_4_1": "09:00", "ob_bis_4_1": "12:00", "ob_von_4_2": "14:00", "ob_bis_4_2": "16:00",
-           "ob_von_5_1": "09:00", "ob_bis_5_1": "12:00"}
+HOURS = {"1": ["09:00", "12:00"], "2": ["09:00", "12:00"], "4": ["09:00", "12:00"], "5": ["09:00", "12:00"]}
+WINDOWS: dict = {}  # fruehere Formularfelder fuer eigene Fenster - gibt es nicht mehr
 
 
 @pytest.fixture()
 def setup(app, office):
     with bypass_tenant_scope():
-        _db.session.add(OfficeSettings(tenant_id=office.tenant_a.id, hours={str(d): ["08:00", "18:00"] for d in range(1, 8)},
+        _db.session.add(OfficeSettings(tenant_id=office.tenant_a.id, hours=dict(HOURS), horizon_days=21,
                                        default_minutes=30, buffer_minutes=0, lead_minutes=0, office_name="Agentur Heller"))
         laura = User.query.filter_by(email="laura@example.com").one()
         laura.can_send_booking_links = True
@@ -67,7 +66,7 @@ def test_settings_only_for_office_admin_and_unique_address(app, setup):
     _enable(app, setup)
     with bypass_tenant_scope():
         page = OfficeBookingPage.query.one()
-        assert page.slug == "heller" and page.enabled and page.minutes == 45 and page.windows["4"] == [["09:00", "12:00"], ["14:00", "16:00"]]
+        assert page.slug == "heller" and page.enabled and page.minutes == 45
     # gleiche Adresse in einem anderen Buero: abgelehnt
     other = login(app, "admin-b@example.com").post("/kalender/einstellungen/online-buchung",
                                                    data={"enabled": "1", "slug": "heller", "minutes": "30", "assignee_id": "0", **WINDOWS})
@@ -97,7 +96,7 @@ def test_public_page_only_free_times_whole_duration_and_wednesday_empty(app, set
     with bypass_tenant_scope():
         laura = User.query.filter_by(email="laura@example.com").one()
         _db.session.add(_event(thursday, time(10, 0), time(10, 30), "Interner Geheimtermin", laura))
-        _db.session.add(_event(thursday, time(14, 0), time(16, 0), "Abwesenheit Schule", laura))  # Sperrzeit
+        _db.session.add(_event(_next(5), time(8, 0), time(12, 0), "Abwesenheit Schule", laura))  # Sperrzeit
         _db.session.commit()
     client = app.test_client()  # ohne Anmeldung
     html = client.get("/termin/heller").get_data(as_text=True)
@@ -107,9 +106,9 @@ def test_public_page_only_free_times_whole_duration_and_wednesday_empty(app, set
     th = thursday.isoformat()
     assert f"{th}T09:00" in slots and f"{th}T11:00" in slots
     assert f"{th}T09:30" not in slots and f"{th}T10:00" not in slots  # ueberschneidet 10:00-10:30
-    assert f"{th}T11:30" not in slots  # 11:30 + 45 Min. passt nicht mehr ins Fenster bis 12:00
-    assert not any(s.startswith(f"{th}T14") or s.startswith(f"{th}T15") for s in slots)  # Abwesenheit
-    assert not any(s.startswith(wednesday.isoformat()) for s in slots)  # Mittwoch ohne Freigabe
+    assert f"{th}T11:30" not in slots  # 11:30 + 45 Min. passt nicht mehr in die Buerozeit bis 12:00
+    assert not any(s.startswith(_next(5).isoformat()) for s in slots)  # Abwesenheit den ganzen Freitag
+    assert not any(s.startswith(wednesday.isoformat()) for s in slots)  # Mittwoch ohne Buerozeiten
     wed_label = f"Mittwoch, {wednesday.strftime('%d.%m.%Y')}"
     assert wed_label in html and "Keine buchbaren Zeiten" in html
     today = local_today().isoformat()
@@ -229,10 +228,51 @@ def test_internal_event_disappears_at_once_and_returns_after_cancel_move_delete(
     assert _offered(public, tuesday, "10:00")
 
 
-def test_freed_time_outside_online_windows_stays_hidden(app, setup):
+def test_freed_time_outside_calendar_availability_stays_hidden(app, setup):
     admin = _enable(app, setup)
     monday = _next(1)
     ev = admin.post("/kalender/api/termine", json={"title": "Nachmittag", "start": f"{monday.isoformat()}T15:00",
                                                    "end": f"{monday.isoformat()}T16:00", "assignee_id": setup.laura_id}).get_json()["event"]
     admin.post(f"/kalender/api/termine/{ev['id']}/absagen", json={"version": ev["version"]})
-    assert not _offered(app.test_client(), monday, "15:00")  # Montag nur 09-12 freigegeben
+    assert not _offered(app.test_client(), monday, "15:00")  # Montag laut Kalender nur 09-12
+
+
+def test_settings_show_calendar_availability_instead_of_own_windows(app, setup):
+    admin = _enable(app, setup)
+    html = admin.get("/kalender/einstellungen").get_data(as_text=True)
+    assert "Verfügbarkeit aus dem Kalender" in html and "data-ob-availability" in html
+    assert 'name="ob_von_' not in html and 'name="ob_bis_' not in html  # nichts doppelt pflegen
+    assert "Montag</span> 09:00–12:00 Uhr" in html
+
+
+def test_enabling_without_calendar_availability_is_refused(app, setup):
+    with bypass_tenant_scope():
+        OfficeSettings.query.filter_by(tenant_id=setup.tenant_a.id).one().hours = None
+        _db.session.commit()
+    r = login(app, "admin-a@example.com").post("/kalender/einstellungen/online-buchung", data={
+        "enabled": "1", "slug": "heller", "title": "Beratung", "minutes": "45", "assignee_id": str(setup.laura_id), "horizon_days": "14"})
+    assert r.status_code == 422 and "keine Verfügbarkeit hinterlegt" in r.get_data(as_text=True)
+
+
+def test_calendar_availability_change_appears_without_saving_online_settings(app, setup):
+    admin = _enable(app, setup)
+    wednesday, monday = _next(3), _next(1)
+    public = app.test_client()
+    assert not _offered(public, wednesday, "15:00") and _offered(public, monday, "09:00")
+    # Buerozeiten in der Terminplanung aendern: Mittwoch nachmittags dazu, Montag erst ab 10 Uhr
+    form = {"office_name": "Agentur Heller", "default_minutes": "30", "buffer_minutes": "0", "lead_minutes": "0", "horizon_days": "21",
+            "von_1": "10:00", "bis_1": "12:00", "von_2": "09:00", "bis_2": "12:00", "von_3": "14:00", "bis_3": "17:00",
+            "von_4": "09:00", "bis_4": "12:00", "von_5": "09:00", "bis_5": "12:00"}
+    assert admin.post("/kalender/einstellungen", data=form).status_code == 302
+    assert _offered(public, wednesday, "15:00") and not _offered(public, wednesday, "16:30")  # 16:30 + 45 > 17:00
+    assert not _offered(public, monday, "09:00") and _offered(public, monday, "10:00")
+    # Arbeitstage des Mitarbeiters gehoeren ebenfalls zur Kalenderverfuegbarkeit
+    from app.models import EmployeeProfile
+    with bypass_tenant_scope():
+        profile = EmployeeProfile.query.filter_by(user_id=setup.laura_id).first()
+        if profile is None:
+            profile = EmployeeProfile(tenant_id=setup.tenant_a.id, user_id=setup.laura_id)
+            _db.session.add(profile)
+        profile.workdays = "1245"  # Laura arbeitet mittwochs nicht
+        _db.session.commit()
+    assert not _offered(public, wednesday, "15:00")

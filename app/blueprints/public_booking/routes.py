@@ -4,7 +4,8 @@ Der Link berechtigt ausschliesslich zu: freie Zeiten dieser Freigabe sehen, eine
 Die Seite bekommt nur public_view() und die freien Uhrzeiten (keine IDs, keine Kalender-/Kunden-
 daten). Antworten werden nicht zwischengespeichert, nicht indexiert, ohne Referrer.
 
-Adresse: /termin/buchen/<token>. Fruehere Links /termin/<token> bleiben gueltig und leiten weiter.
+Adresse: /termin/buchen/<token>. Vorschlagslinks (kind "proposal") erlauben genau eine Buchung; allgemeine
+Links (kind "open") bleiben nach jeder Buchung gueltig und zeigen live die freien Zeiten aus dem Kalender. Fruehere Links /termin/<token> bleiben gueltig und leiten weiter.
 Allgemeiner Buchungslink je Buero: /termin/<adresse> (app/services/office_booking.py) - bleibt nach
 einer Buchung gueltig; Adressen sind hoechstens 40 Zeichen, Tokens 43 - keine Verwechslung.
 Nur POST bucht - Oeffnen der Seite oder Abruf der Linkvorschau (WhatsApp & Co.) verbraucht nichts."""
@@ -81,7 +82,13 @@ def _handle(token):
     with use_tenant_id(link.tenant_id):
         view = bl.public_view(link)
         confirmed = session.get(_ok_key(link))
-        if confirmed and (request.method == "GET" or bl.status(link) == "used"):
+        if bl.is_open(link):
+            # Allgemeiner Link: Bestaetigung nur direkt nach der eigenen Buchung - wer die URL erneut oeffnet
+            # (auch derselbe Browser), sieht wieder die aktuell freien Zeiten.
+            if request.method == "GET" and request.args.get("gebucht") == "1" and confirmed:
+                return _page("public_booking/confirmed.html", view=view, when=confirmed,
+                             again_url=url_for("public_booking.page", token=token))
+        elif confirmed and (request.method == "GET" or bl.status(link) == "used"):
             return _page("public_booking/confirmed.html", view=view, when=confirmed)
         state = bl.status(link)
         if state == "revoked" or state == "expired":
@@ -104,10 +111,14 @@ def _handle(token):
             else:
                 local = to_local(booked.start)
                 session[_ok_key(link)] = {"day": f"{WEEKDAYS[local.weekday()]}, {local.strftime('%d.%m.%Y')}", "time": local.strftime("%H:%M")}
+                if bl.is_open(link):
+                    return redirect(url_for("public_booking.page", token=token, gebucht=1), 303)
                 return redirect(url_for("public_booking.page", token=token), 303)
         free = bl.free_times(link)
         if not free:
-            return _notice("Keine freien Zeiten", "Alle freigegebenen Zeiten sind inzwischen vergeben. Bitte wenden Sie sich an das Büro.", 200, view)
+            text = ("Derzeit sind keine freien Termine verfügbar. Bitte versuchen Sie es später erneut oder wenden Sie sich an das Büro."
+                    if bl.is_open(link) else "Alle freigegebenen Zeiten sind inzwischen vergeben. Bitte wenden Sie sich an das Büro.")
+            return _notice("Keine freien Zeiten", text, 200, view)
         return _page("public_booking/page.html", 409 if error else 200, view=view, days=_grouped(free), error=error,
                      contact=contact, selected=request.form.get("slot") if error else None, submission=secrets.token_urlsafe(16))
 

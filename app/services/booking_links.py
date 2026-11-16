@@ -107,38 +107,16 @@ def offers_from_range(first: date, last: date, weekdays: set[int], times: list[s
     return sorted(set(out))
 
 
-def offers_from_office_hours(assignee: User, minutes: int, now: datetime | None = None) -> tuple[list[str], date]:
-    """Startzeiten aus den vom Buero-Admin festgelegten Buerozeiten (Planungszeitraum, Arbeitstage
-    des Mitarbeiters, Vorlauf, 30-Minuten-Raster). Fuer Mitarbeiter mit Buchungslink-Freigabe:
-    sie waehlen keine Zeiten selbst. Belegte Zeiten filtert free_times() beim Aufruf."""
-    from app.services import availability as av
+OPEN = "open"
+OPEN_UNTIL = datetime(2099, 12, 31)  # allgemeine Links laufen nicht ab (nur Widerruf)
 
-    s = av.settings()
-    hours = av.office_hours(s)
-    if not hours:
-        raise LinkError("Der Büro-Admin hat noch keine Bürozeiten hinterlegt.")
-    now = now or utcnow_naive()
-    earliest = to_local(now + timedelta(minutes=int(s.lead_minutes or 0))).replace(tzinfo=None)
-    today = earliest.date()
-    last = to_local(now).date() + timedelta(days=max(1, min(int(s.horizon_days or 14), 60)))
-    workdays = av.workdays_of(assignee)
-    out, day = [], today
-    while day <= last and len(out) < MAX_OFFERS:
-        window = hours.get(day.isoweekday())
-        if window and (workdays is None or day.isoweekday() in workdays):
-            cursor, limit = datetime.combine(day, window[0]), datetime.combine(day, window[1])
-            while cursor + timedelta(minutes=minutes) <= limit and len(out) < MAX_OFFERS:
-                if cursor >= earliest:
-                    out.append(cursor.strftime("%Y-%m-%dT%H:%M"))
-                cursor += timedelta(minutes=av.STEP_MINUTES)
-        day += timedelta(days=1)
-    if not out:
-        raise LinkError("In den Bürozeiten des Planungszeitraums ist keine Uhrzeit verfügbar.")
-    return out, last
+
+def is_open(link: BookingLink) -> bool:
+    return (link.kind or "proposal") == OPEN
 
 
 def create(user: User, *, title: str, location_kind: str | None, minutes: int, assignee_id: int, customer_id: int | None,
-           offers: list[str], valid_until: datetime) -> tuple[BookingLink, str]:
+           offers: list[str], valid_until: datetime | None, kind: str = "proposal") -> tuple[BookingLink, str]:
     from app.services import calendar as cal
 
     title = " ".join((title or "").split())[:120]
@@ -153,19 +131,27 @@ def create(user: User, *, title: str, location_kind: str | None, minutes: int, a
         raise LinkError("Bitte einen Mitarbeiter des Büros auswählen.")
     if customer_id and Customer.query.filter(Customer.id == customer_id).first() is None:
         raise LinkError("Der Kunde wurde nicht gefunden.")
-    now_local = to_local(utcnow_naive()).replace(tzinfo=None)
-    offers = [o for o in offers if _parse_local(o) > now_local]
-    if not offers:
-        raise LinkError("Bitte mindestens eine zukünftige Uhrzeit freigeben.")
-    if len(offers) > MAX_OFFERS:
-        raise LinkError(f"Höchstens {MAX_OFFERS} Uhrzeiten pro Link.")
-    if valid_until <= utcnow_naive():
-        raise LinkError("Die Gültigkeit muss in der Zukunft liegen.")
+    if kind == OPEN:
+        from app.services.availability import calendar_windows
+
+        if not calendar_windows(members[assignee_id]):
+            raise LinkError("Im Kalender ist keine Verfügbarkeit hinterlegt. Bitte den Büro-Admin, die Bürozeiten einzutragen.")
+        offers, valid_until = [], OPEN_UNTIL
+    else:
+        now_local = to_local(utcnow_naive()).replace(tzinfo=None)
+        offers = [o for o in offers if _parse_local(o) > now_local]
+        if not offers:
+            raise LinkError("Bitte mindestens eine zukünftige Uhrzeit freigeben.")
+        if len(offers) > MAX_OFFERS:
+            raise LinkError(f"Höchstens {MAX_OFFERS} Uhrzeiten pro Link.")
+        if valid_until is None or valid_until <= utcnow_naive():
+            raise LinkError("Die Gültigkeit muss in der Zukunft liegen.")
     token = secrets.token_urlsafe(32)
     link = BookingLink(
         tenant_id=user.tenant_id, token_hash=token_hash(token), token_enc=_fernet().encrypt(token.encode("ascii")).decode("ascii"),
         title=title, location_kind=location_kind or None, minutes=int(minutes), assignee_user_id=assignee_id,
         customer_id=customer_id or None, offers=offers, expires_at=valid_until, created_by_user_id=user.id,
+        kind=OPEN if kind == OPEN else "proposal", max_bookings=1,
     )
     db.session.add(link)
     db.session.commit()
@@ -176,6 +162,8 @@ def status(link: BookingLink, now: datetime | None = None) -> str:
     now = now or utcnow_naive()
     if link.revoked_at is not None:
         return "revoked"
+    if is_open(link):
+        return "active"  # allgemein: bleibt nach jeder Buchung gueltig, kein Ablauf
     if link.booking_count >= link.max_bookings:
         return "used"
     if link.expires_at <= now:
@@ -191,7 +179,14 @@ def revoke(user: User, link: BookingLink) -> None:
 
 
 def booked_event(link: BookingLink) -> CalendarEvent | None:
+    if is_open(link):
+        return None
     return CalendarEvent.query.filter(CalendarEvent.client_ref == f"bl-{link.id}").first()
+
+
+def open_bookings(link: BookingLink) -> int:
+    """Anzahl geplanter Termine ueber einen allgemeinen Link."""
+    return CalendarEvent.query.filter(CalendarEvent.client_ref.like(f"blo-{link.id}-%"), CalendarEvent.status == "scheduled").count()
 
 
 # --- Oeffentlicher Zugriff -----------------------------------------------------------------
@@ -211,10 +206,17 @@ def _rules(link: BookingLink) -> tuple[int, int]:
 
 
 def free_times(link: BookingLink, now: datetime | None = None) -> list[datetime]:
-    """Freie freigegebene Startzeiten (UTC, naiv). Aufruf im Mandanten-Kontext des Links."""
-    from app.services.availability import _busy
+    """Freie Startzeiten (UTC, naiv). Aufruf im Mandanten-Kontext des Links.
+    proposal: freigegebene Zeiten, soweit frei. open: live aus der Kalenderverfuegbarkeit."""
+    from app.services.availability import _busy, bookable_days, settings
 
     now = now or utcnow_naive()
+    if is_open(link):
+        if link.assignee is None:
+            return []
+        s = settings()
+        horizon = int(s.horizon_days or 14) if s else 14
+        return [t for _day, times in bookable_days(link.assignee, link.minutes, horizon, now=now, s=s) for t in times]
     lead, buffer = _rules(link)
     out = []
     for offer in link.offers or []:
@@ -308,6 +310,8 @@ def book(link_id: int, tenant_id: int, start_value: str, contact: dict, submissi
         try:
             fresh_transaction()
             link = BookingLink.query.filter(BookingLink.id == link_id).first()
+            if is_open(link):
+                return _book_open(link, start_value, contact, submission)
             existing = booked_event(link)
             if existing is not None or link.booking_count >= link.max_bookings:
                 if existing is not None and submission and link.last_submission == submission:
@@ -348,3 +352,45 @@ def book(link_id: int, tenant_id: int, start_value: str, contact: dict, submissi
             raise
         finally:
             lock.release()
+
+
+def _book_open(link: BookingLink, start_value: str, contact: dict, submission: str | None) -> Booked:
+    """Allgemeiner Link: unter der Kalendersperre (Aufrufer) erneut gegen den Kalender pruefen und buchen.
+    Jede Formularanzeige hat eine eigene Kennung - erneutes Senden ergibt denselben Termin
+    (client_ref "blo-<link>-<kennung>"), zwei Kunden buchen nie dieselbe Zeit."""
+    from app.services import calendar as cal
+
+    if link.revoked_at is not None:
+        raise LinkError("Dieser Buchungslink wurde zurückgezogen.", "gone")
+    ref = re.sub(r"[^A-Za-z0-9_-]", "", submission or "")[:40]
+    if len(ref) < 8:
+        raise LinkError("Die Seite ist veraltet. Bitte neu laden und erneut buchen.", "taken")
+    client_ref = f"blo-{link.id}-{ref}"
+    existing = CalendarEvent.query.filter(CalendarEvent.client_ref == client_ref).first()
+    if existing is not None:
+        return Booked(existing.starts_at, False)  # Doppelklick / Antwort verloren: gleiche Bestaetigung
+    try:
+        local = _parse_local(start_value)
+    except (TypeError, ValueError):
+        raise LinkError("Bitte eine Uhrzeit auswählen.", "taken") from None
+    start = local_to_utc_naive(local.date(), local.time())
+    if start not in free_times(link):
+        raise LinkError("Diese Uhrzeit ist leider nicht mehr frei.", "taken")
+    actor = _actor(link)
+    customer = Customer.query.filter(Customer.id == link.customer_id).first() if link.customer_id else None
+    who = customer.name if customer else contact.get("name", "")
+    note_lines = ["Gebucht über den allgemeinen Buchungslink (ohne Anmeldung)."]
+    if contact:
+        note_lines.append("Kontakt: " + ", ".join(v for v in (contact.get("name"), contact.get("phone"), contact.get("email")) if v))
+    link.booking_count += 1
+    link.used_at = utcnow_naive()
+    link.last_submission = ref
+    event, created, _conflicts = cal.create_event(
+        actor,
+        {"title": f"{link.title} – {who}"[:200], "start": local.strftime("%Y-%m-%dT%H:%M"),
+         "end": cal.local_iso(start + timedelta(minutes=link.minutes)), "assignee_id": link.assignee_user_id,
+         "customer_id": customer.id if customer else None, "location_kind": link.location_kind or "", "note": "\n".join(note_lines)},
+        client_ref=client_ref,
+    )
+    current_app.logger.info("booking_link.booked_open link=%s event=%s created=%s", link.id, event.id, created)
+    return Booked(event.starts_at, created)

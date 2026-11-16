@@ -58,7 +58,7 @@
           {% endif %}
         </div>
         {% if not current_user.is_office_admin %}
-        <p class="panel-note" data-bl-office-hours>Freigegeben werden die vom Büro-Admin festgelegten Bürozeiten der nächsten {{ settings.horizon_days if settings else 14 }} Tage ({{ settings.default_minutes if settings else 30 }} Minuten je Termin). Der Kunde sieht davon nur die aktuell freien Zeiten; ein Link erlaubt eine Buchung.</p>
+        <p class="panel-note" data-bl-office-hours>Verfügbarkeit aus dem Kalender: Angeboten werden die Bürozeiten der jeweils nächsten {{ settings.horizon_days if settings else 14 }} Tage ({{ settings.default_minutes if settings else 30 }} Minuten je Termin) – abzüglich vorhandener Termine, Abwesenheiten und Sperrzeiten. Der Link bleibt dauerhaft gültig: mehrere Kunden können darüber nacheinander selbst buchen, gebuchte Zeiten verschwinden automatisch.</p>
         {% else %}
         <fieldset class="form-stack">
           <legend class="field-label">Freigegebene Zeiten</legend>
@@ -94,11 +94,11 @@
           <tbody>
           {% for row in rows %}{% set link = row.link %}
             <tr data-bl-row="{{ link.id }}"{% if new_id == link.id %} class="is-new"{% endif %}>
-              <th scope="row" class="cell-strong stack-full">{{ link.title }}<br><small>{{ link.minutes }} Min. · {{ link.offers | length }} Uhrzeiten · gültig bis {{ link.expires_at | local_dt('%d.%m.%Y') }}</small></th>
+              <th scope="row" class="cell-strong stack-full">{{ link.title }}<br><small>{{ link.minutes }} Min. · {% if row.open %}Verfügbarkeit aus dem Kalender · dauerhaft gültig{% else %}{{ link.offers | length }} Uhrzeiten · gültig bis {{ link.expires_at | local_dt('%d.%m.%Y') }}{% endif %}</small></th>
               <td data-label="Mitarbeiter / Kunde">{{ member_name(link.assignee) }}{% if link.customer %}<br><small>{{ link.customer.name }}</small>{% endif %}</td>
               <td data-label="Status" data-bl-status>
                 {{ state_tag(labels[row.status], {'active': 'success', 'used': 'info', 'expired': 'neutral', 'revoked': 'warning'}[row.status]) }}
-                {% if row.event %}<br><small>Termin {{ row.event.starts_at | local_dt('%d.%m.%Y %H:%M') }} Uhr</small>{% elif row.status == 'active' %}<br><small>{{ row.free }} Zeiten frei</small>{% endif %}
+                {% if row.event %}<br><small>Termin {{ row.event.starts_at | local_dt('%d.%m.%Y %H:%M') }} Uhr</small>{% elif row.status == 'active' %}<br><small>{% if row.open %}{{ row.bookings }} {{ 'Buchung' if row.bookings == 1 else 'Buchungen' }} · {% endif %}{{ row.free }} Zeiten frei</small>{% endif %}
               </td>
               <td data-label="Link">{% if row.url and row.status == 'active' %}<code id="bl-url-{{ link.id }}" data-bl-url>{{ row.url }}</code><br><button type="button" class="btn btn-secondary btn-sm" data-copy="#bl-url-{{ link.id }}">Link kopieren</button>{% else %}–{% endif %}</td>
               <td>{% if row.status == 'active' %}<form method="post" action="{{ url_for('calendar.booking_link_revoke', link_id=link.id) }}" onsubmit="return confirm('Link widerrufen? Er kann danach nicht mehr verwendet werden.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn btn-secondary btn-sm" data-bl-revoke>Widerrufen</button></form>{% endif %}</td>

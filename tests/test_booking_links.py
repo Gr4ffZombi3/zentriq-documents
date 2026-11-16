@@ -380,8 +380,13 @@ def test_employee_link_uses_office_hours_and_books_into_admin_calendar(app, setu
     token = url.rsplit("/", 1)[1]
     link = _offers_for_link(token)
     assert link.minutes == 30 and link.assignee_user_id == setup.admin_a_id and link.created_by_user_id == setup.laura_id
-    assert all("08:00" <= o[11:] <= "17:30" for o in link.offers) and f"{_day().isoformat()}T23:30" not in link.offers
-    assert link.expires_at < utcnow_naive() + timedelta(days=16)
+    # allgemeiner Link: keine gespeicherten Zeiten, kein Ablauf - freie Zeiten live aus dem Kalender
+    assert link.kind == "open" and link.offers == [] and bl.status(link) == "active"
+    with bypass_tenant_scope():
+        from app.tenancy import use_tenant_id
+        with use_tenant_id(setup.tenant_a.id):
+            free = [to_local(t).strftime("%H:%M") for t in bl.free_times(link)]
+    assert free and all("08:00" <= t <= "17:30" for t in free) and "23:30" not in free
     assert admin_token not in html and html.count("data-bl-row=") == 1  # nur eigene Links
     # Laura kann den Link des Admins nicht widerrufen
     admin_link = _offers_for_link(admin_token)
@@ -391,11 +396,159 @@ def test_employee_link_uses_office_hours_and_books_into_admin_calendar(app, setu
     page = anon.get(f"/termin/buchen/{token}").get_data(as_text=True)
     slot = re.findall(r'name="slot" value="([^"]+)"', page)[0]
     r = anon.post(f"/termin/buchen/{token}", data={"slot": slot, "submission": _csrf(page)})
-    assert r.status_code == 303 and "Ihr Termin ist gebucht" in anon.get(f"/termin/buchen/{token}").get_data(as_text=True)
+    assert r.status_code == 303 and "Ihr Termin ist gebucht" in anon.get(r.headers["Location"]).get_data(as_text=True)
     day = slot[:10]
     events = admin.get(f"/kalender/api/termine?von={day}&bis={day}").get_json()["events"]
     mine = [e for e in events if e["title"] == "Beratungsgespräch – Karl Geheimkunde"]
     assert len(mine) == 1 and mine[0]["start"].startswith(slot)
     with bypass_tenant_scope():
-        event = CalendarEvent.query.filter(CalendarEvent.client_ref == f"bl-{link.id}").one()
+        event = CalendarEvent.query.filter(CalendarEvent.client_ref.like(f"blo-{link.id}-%")).one()
         assert event.assignee_user_id == setup.admin_a_id and event.customer_id == setup.karl_id
+
+
+
+# --- Allgemeiner Link (kind "open"): dieselbe URL fuer mehrere Kunden -------------------------------
+
+def _open_link(app, setup):
+    """Allgemeinen Link wie Laura erstellen (Mitarbeiterin mit Freigabe, Kalender des Admins)."""
+    admin = login(app, "admin-a@example.com")
+    admin.post(f"/mitarbeiter/{setup.laura_id}/buchungslinks", data={"allowed": "1"})
+    laura = login(app, "laura@example.com")
+    html = laura.post("/kalender/buchungslinks", follow_redirects=True,
+                      data={"title": "Beratungsgespräch", "assignee_id": str(setup.admin_a_id)}).get_data(as_text=True)
+    url = re.search(r'data-bl-url>([^<]+)<', html).group(1)
+    return admin, url.rsplit("/termin/buchen/", 1)[1]
+
+
+def _slots(client, token):
+    return re.findall(r'name="slot" value="([^"]+)"', client.get(f"/termin/buchen/{token}").get_data(as_text=True))
+
+
+def _book_open(client, token, slot, name):
+    page = client.get(f"/termin/buchen/{token}").get_data(as_text=True)
+    return client.post(f"/termin/buchen/{token}", data={"slot": slot, "submission": _csrf(page), "name": name, "phone": "0171 1234567"})
+
+
+def test_same_url_books_two_customers_and_booked_time_disappears(app, setup):
+    admin, token = _open_link(app, setup)
+    first, second = app.test_client(), app.test_client()  # zwei getrennte Browsersitzungen
+    slots = _slots(first, token)
+    assert len(slots) > 10
+    r1 = _book_open(first, token, slots[0], "Kundin Eins")
+    assert r1.status_code == 303 and "Ihr Termin ist gebucht" in first.get(r1.headers["Location"]).get_data(as_text=True)
+    # derselbe Link: kein "Bereits gebucht", nur die gebuchte Zeit fehlt
+    html = second.get(f"/termin/buchen/{token}").get_data(as_text=True)
+    assert "Bereits gebucht" not in html
+    now_free = _slots(second, token)
+    assert slots[0] not in now_free  # gebuchte Zeit faellt weg
+    other = slots[-1]  # weit entfernt (direkt folgende Zeit blockiert der Puffer von 15 Minuten)
+    assert other in now_free
+    r2 = _book_open(second, token, other, "Kunde Zwei")
+    assert r2.status_code == 303
+    # auch die erste Sitzung sieht beim erneuten Oeffnen wieder die freie Auswahl (keine alte Bestaetigung)
+    again = first.get(f"/termin/buchen/{token}").get_data(as_text=True)
+    assert "Ihr Termin ist gebucht" not in again
+    assert slots[0] not in _slots(first, token) and other not in _slots(first, token)
+    with bypass_tenant_scope():
+        link = BookingLink.query.filter(BookingLink.token_hash == bl.token_hash(token)).one()
+        events = CalendarEvent.query.filter(CalendarEvent.client_ref.like(f"blo-{link.id}-%")).order_by(CalendarEvent.starts_at).all()
+        assert [e.title for e in events] == ["Beratungsgespräch – Kundin Eins", "Beratungsgespräch – Kunde Zwei"]
+        assert all(e.assignee_user_id == setup.admin_a_id for e in events)  # im richtigen Kalender
+        assert [to_local(e.starts_at).strftime("%Y-%m-%dT%H:%M") for e in events] == [slots[0], other]
+        assert link.booking_count == 2 and bl.status(link) == "active"
+    # Buero sieht die Buchungen in der Linkliste
+    assert "2 Buchungen" in login(app, "laura@example.com").get("/kalender/buchungslinks").get_data(as_text=True)
+    # Absage gibt die Zeit wieder frei
+    with bypass_tenant_scope():
+        events[0].status = "cancelled"
+        _db.session.commit()
+    assert slots[0] in _slots(app.test_client(), token)
+
+
+def test_double_submit_on_open_link_gives_one_event(app, setup):
+    _admin, token = _open_link(app, setup)
+    client = app.test_client()
+    page = client.get(f"/termin/buchen/{token}").get_data(as_text=True)
+    slot, sub = re.findall(r'name="slot" value="([^"]+)"', page)[0], _csrf(page)
+    data = {"slot": slot, "submission": sub, "name": "Kundin Eins", "phone": "0171 1234567"}
+    assert client.post(f"/termin/buchen/{token}", data=data).status_code == 303
+    assert client.post(f"/termin/buchen/{token}", data=data).status_code == 303  # Antwort verloren, erneut gesendet
+    with bypass_tenant_scope():
+        assert CalendarEvent.query.filter(CalendarEvent.title == "Beratungsgespräch – Kundin Eins").count() == 1
+
+
+def test_two_simultaneous_bookings_for_same_time_store_exactly_one(app, setup):
+    import threading
+
+    _admin, token = _open_link(app, setup)
+    clients = [app.test_client(), app.test_client()]
+    pages = [c.get(f"/termin/buchen/{token}").get_data(as_text=True) for c in clients]
+    slot = re.findall(r'name="slot" value="([^"]+)"', pages[0])[0]
+    results, barrier = [None, None], threading.Barrier(2)
+
+    def go(i):
+        barrier.wait()
+        r = clients[i].post(f"/termin/buchen/{token}", data={"slot": slot, "submission": _csrf(pages[i]), "name": f"Kunde {i}", "phone": "0171 1234567"})
+        results[i] = (r.status_code, r.get_data(as_text=True))
+
+    threads = [threading.Thread(target=go, args=(i,)) for i in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(30)
+    codes = sorted(r[0] for r in results)
+    assert codes == [303, 409], codes  # einer bucht, der andere bekommt die aktualisierte Auswahl
+    loser = next(r[1] for r in results if r[0] == 409)
+    assert "nicht mehr frei" in loser and f'value="{slot}"' not in loser
+    with bypass_tenant_scope():
+        start = local_to_utc_naive(datetime.fromisoformat(slot).date(), datetime.fromisoformat(slot).time())
+        assert CalendarEvent.query.filter(CalendarEvent.starts_at == start, CalendarEvent.status == "scheduled").count() == 1
+
+
+def test_already_sent_general_link_keeps_working_after_switch(app, setup):
+    """Wie der bestehende Link aus der Produktion: frueher als Einmal-Link gespeichert, schon gebucht und
+    mit Ablaufdatum - nach der Umstellung (Migration: kind="open") bucht dieselbe URL weiter."""
+    _admin, token = _open_link(app, setup)
+    with bypass_tenant_scope():
+        link = BookingLink.query.filter(BookingLink.token_hash == bl.token_hash(token)).one()
+        link.booking_count, link.used_at, link.max_bookings = 1, utcnow_naive(), 1
+        link.expires_at = utcnow_naive() - timedelta(days=1)
+        link.offers = ["2020-01-01T09:00"]  # alte gespeicherte Zeiten spielen keine Rolle mehr
+        _db.session.commit()
+    client = app.test_client()
+    html = client.get(f"/termin/buchen/{token}").get_data(as_text=True)
+    assert "Bereits gebucht" not in html and "abgelaufen" not in html
+    slot = _slots(client, token)[0]
+    assert _book_open(client, token, slot, "Neuer Kunde").status_code == 303
+
+
+def test_open_link_follows_calendar_availability_and_revoke_still_works(app, setup):
+    admin, token = _open_link(app, setup)
+    day = local_today() + timedelta(days=2)
+    with bypass_tenant_scope():
+        s = OfficeSettings.query.filter_by(tenant_id=setup.tenant_a.id).one()
+        hours = dict(s.hours)
+        hours.pop(str(day.isoweekday()))  # an diesem Wochentag keine Buerozeit
+        s.hours = hours
+        _db.session.commit()
+    assert not any(x.startswith(day.isoformat()) for x in _slots(app.test_client(), token))
+    with bypass_tenant_scope():
+        s = OfficeSettings.query.filter_by(tenant_id=setup.tenant_a.id).one()
+        s.hours = {**s.hours, str(day.isoweekday()): ["13:00", "14:00"]}
+        _db.session.commit()
+    mine = [x for x in _slots(app.test_client(), token) if x.startswith(day.isoformat())]
+    assert mine == [f"{day.isoformat()}T13:00", f"{day.isoformat()}T13:30"]
+    with bypass_tenant_scope():
+        link = BookingLink.query.filter(BookingLink.token_hash == bl.token_hash(token)).one()
+    login(app, "laura@example.com").post(f"/kalender/buchungslinks/{link.id}/widerrufen")
+    assert app.test_client().get(f"/termin/buchen/{token}").status_code == 410
+
+
+def test_proposal_links_keep_single_booking(app, setup):
+    _admin, token, day = _create(app, setup, customer=False)
+    with bypass_tenant_scope():
+        assert BookingLink.query.filter(BookingLink.token_hash == bl.token_hash(token)).one().kind == "proposal"
+    client = app.test_client()
+    assert _book_open(client, token, _slot(day, "10:00"), "Kundin Eins").status_code == 303
+    other = app.test_client().get(f"/termin/buchen/{token}").get_data(as_text=True)
+    assert "Bereits gebucht" in other

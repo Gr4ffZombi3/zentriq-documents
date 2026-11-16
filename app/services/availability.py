@@ -134,6 +134,43 @@ def check(assignee: User, start_utc: datetime, minutes: int, s: OfficeSettings |
     return None
 
 
+def calendar_windows(assignee: User | None, s: OfficeSettings | None = None) -> dict[int, tuple[time, time]]:
+    """Verfuegbarkeit aus dem Kalender: Buerozeiten je Wochentag, beschraenkt auf die Arbeitstage des
+    Mitarbeiters (falls hinterlegt). Tage ohne Eintrag fehlen - dort gibt es keine Zeiten."""
+    hours = office_hours(s if s is not None else settings())
+    days = workdays_of(assignee) if assignee is not None else None
+    return {iso: w for iso, w in hours.items() if days is None or iso in days}
+
+
+def bookable_days(assignee: User, minutes: int, horizon_days: int, *, now: datetime | None = None,
+                  s: OfficeSettings | None = None) -> list[tuple[date, list[datetime]]]:
+    """Alle Tage des Buchungszeitraums (heute + horizon_days) mit freien Startzeiten (UTC, naiv), live aus
+    dem Kalender berechnet: Kalenderverfuegbarkeit (calendar_windows), der GANZE Termin passt hinein,
+    Mindestvorlauf, keine Ueberschneidung mit geplanten Terminen inkl. Puffer (Abwesenheiten/Sperrzeiten
+    sind Termine). Abgesagte/verschobene Termine geben ihre Zeit damit sofort wieder frei.
+    Gemeinsam genutzt vom Buero-Link (office_booking) und allgemeinen Buchungslinks (booking_links)."""
+    s = s if s is not None else settings()
+    now = now or utcnow_naive()
+    windows = calendar_windows(assignee, s)
+    lead, buffer = (int(s.lead_minutes or 0), int(s.buffer_minutes or 0)) if s else (0, 0)
+    earliest = now + timedelta(minutes=lead)
+    today = local_today(now)
+    out = []
+    for offset in range(max(1, min(int(horizon_days or 14), 60)) + 1):
+        day = today + timedelta(days=offset)
+        times: list[datetime] = []
+        window = windows.get(day.isoweekday())
+        if window:
+            cursor, limit = datetime.combine(day, window[0]), datetime.combine(day, window[1])
+            while cursor + timedelta(minutes=minutes) <= limit:
+                start = local_to_utc_naive(day, cursor.time())
+                if start >= earliest and not _busy(assignee.id, start, start + timedelta(minutes=minutes), buffer):
+                    times.append(start)
+                cursor += timedelta(minutes=STEP_MINUTES)
+        out.append((day, times))
+    return out
+
+
 def _name(user: User) -> str:
     from app.services.calendar import member_name
 

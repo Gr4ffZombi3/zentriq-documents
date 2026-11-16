@@ -18,6 +18,15 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 16),
+        "title": "Allgemeiner Buchungslink bleibt nach jeder Buchung gültig",
+        "text": "Ihr allgemeiner Buchungslink kann jetzt von beliebig vielen Kunden genutzt werden – auch bereits "
+        "verschickte Links. Angeboten werden immer die aktuell freien Zeiten aus dem Kalender (Bürozeiten und "
+        "Arbeitstage); gebuchte Zeiten verschwinden automatisch. Zeitfenster müssen dafür nicht mehr extra "
+        "eingetragen werden. Links mit gezielt vorgeschlagenen Terminen erlauben weiterhin eine Buchung.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 16),
         "title": "Teamchat: Emojis und Antworten auf Nachrichten",
         "text": "Im Teamchat gibt es neben dem Nachrichtenfeld einen Smiley für Emojis. Über „⋯“ an einer Nachricht – "
         "auf dem Handy auch durch langes Tippen – können Sie gezielt auf diese Nachricht antworten. Das Zitat steht "

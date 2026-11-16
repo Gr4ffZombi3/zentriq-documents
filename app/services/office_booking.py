@@ -1,8 +1,9 @@
 """Allgemeiner Buchungslink je Buero (/termin/<slug>) - ohne Anmeldung, ohne KI.
 
-Frei ist eine Startzeit, wenn
-- sie in einem vom Buero-Admin freigegebenen Zeitfenster des Wochentags liegt und der GESAMTE Termin
-  hineinpasst (Ortszeit Europe/Berlin, je Tag umgerechnet - Sommer-/Winterzeit stimmt),
+Frei ist eine Startzeit, wenn (availability.bookable_days - dieselbe Berechnung wie allgemeine Buchungslinks)
+- sie in der Verfuegbarkeit aus dem Kalender liegt (Buerozeiten des Wochentags, Terminplanung) und der
+  GESAMTE Termin hineinpasst (Ortszeit Europe/Berlin, je Tag umgerechnet - Sommer-/Winterzeit stimmt).
+  Eigene Zeitfenster fuer die Online-Buchung gibt es nicht mehr (nichts doppelt pflegen),
 - sie in der Zukunft liegt (plus Mindestvorlauf aus den Buero-Einstellungen),
 - der Tag ein Arbeitstag des zustaendigen Mitarbeiters ist (falls hinterlegt),
 - sich kein geplanter Termin des zustaendigen Kalenders inkl. Puffer ueberschneidet. Abwesenheiten
@@ -26,7 +27,7 @@ from flask import current_app, has_request_context, request
 from app.extensions import db
 from app.models import OfficeBookingPage, OfficeSettings, Tenant, User
 from app.services.customer_lock import CustomerLockTimeout, NamedLock, fresh_transaction
-from app.services.timetracking.clock import local_to_utc_naive, to_local, utcnow_naive
+from app.services.timetracking.clock import local_to_utc_naive, to_local
 from app.tenancy import bypass_tenant_scope, use_tenant_id
 
 STEP_MINUTES = 30
@@ -78,17 +79,12 @@ def parse_hm(value) -> time | None:
     return time(h, m) if h < 24 and m < 60 else None
 
 
-def windows_of(page: OfficeBookingPage) -> dict[int, list[tuple[time, time]]]:
-    out: dict[int, list[tuple[time, time]]] = {}
-    for key, items in (page.windows or {}).items():
-        if not str(key).isdigit() or not 1 <= int(key) <= 7 or not isinstance(items, list):
-            continue
-        for item in items:
-            if isinstance(item, (list, tuple)) and len(item) == 2:
-                start, end = parse_hm(item[0]), parse_hm(item[1])
-                if start and end and start < end:
-                    out.setdefault(int(key), []).append((start, end))
-    return {k: sorted(v) for k, v in out.items()}
+def windows_of(page: OfficeBookingPage) -> dict[int, tuple[time, time]]:
+    """Verfuegbarkeit aus dem Kalender fuer den zustaendigen Kalender (Buerozeiten x Arbeitstage)."""
+    from app.services.availability import calendar_windows
+
+    assignee = db.session.get(User, page.assignee_user_id) if page.assignee_user_id else None
+    return calendar_windows(assignee) if assignee is not None else {}
 
 
 def save_settings(user: User, form) -> OfficeBookingPage:
@@ -120,24 +116,17 @@ def save_settings(user: User, form) -> OfficeBookingPage:
         assignee_id = 0
     if assignee_id not in members:
         raise BookingError("Bitte den Kalender auswählen, in dem die Termine landen.")
-    windows: dict[str, list[list[str]]] = {}
-    for iso in range(1, 8):
-        for part in (1, 2):
-            start, end = (form.get(f"ob_von_{iso}_{part}") or "").strip(), (form.get(f"ob_bis_{iso}_{part}") or "").strip()
-            if not start and not end:
-                continue
-            ts, te = parse_hm(start), parse_hm(end)
-            if not (ts and te and ts < te):
-                raise BookingError(f"{DAY_NAMES[iso - 1]}: bitte Beginn und Ende als HH:MM angeben (Beginn vor Ende).")
-            windows.setdefault(str(iso), []).append([ts.strftime("%H:%M"), te.strftime("%H:%M")])
     enabled = form.get("enabled") in ("1", "on", "true")
-    if enabled and not windows:
-        raise BookingError("Bitte mindestens ein Zeitfenster für die Online-Buchung freigeben.")
+    from app.services.availability import calendar_windows
+
+    if enabled and not calendar_windows(members[assignee_id]):
+        raise BookingError("Für diesen Kalender ist keine Verfügbarkeit hinterlegt. Bitte zuerst unter „Terminplanung“ "
+                           "die Bürozeiten (und ggf. die Arbeitstage des Mitarbeiters) eintragen.")
     if page is None:
         page = OfficeBookingPage(tenant_id=user.tenant_id)
         db.session.add(page)
     page.slug, page.title, page.minutes, page.horizon_days = slug, title, minutes, horizon
-    page.assignee_user_id, page.windows, page.enabled = assignee_id, windows or None, enabled
+    page.assignee_user_id, page.enabled = assignee_id, enabled  # page.windows: frueher eigene Fenster, ungenutzt
     page.updated_by_user_id = user.id
     db.session.commit()
     return page
@@ -167,36 +156,14 @@ def usable(page: OfficeBookingPage) -> bool:
 # --- Freie Zeiten (Aufruf im Mandanten-Kontext des Bueros) --------------------------------------
 
 
-def _rules() -> tuple[int, int]:
-    s = OfficeSettings.query.first()
-    return (int(s.lead_minutes or 0), int(s.buffer_minutes or 0)) if s else (0, 0)
-
-
 def days(page: OfficeBookingPage, now: datetime | None = None) -> list[tuple[date, list[datetime]]]:
-    """Alle Tage der Vorausschau (auch ohne Freigabe - dann leer) mit freien Startzeiten (UTC, naiv)."""
-    from app.services.availability import _busy, workdays_of
+    """Alle Tage des Buchungszeitraums (auch ohne Verfuegbarkeit - dann leer) mit freien Startzeiten (UTC, naiv)."""
+    from app.services.availability import bookable_days
 
-    now = now or utcnow_naive()
-    lead, buffer = _rules()
-    windows = windows_of(page)
-    assignee = db.session.get(User, page.assignee_user_id)
-    workdays = workdays_of(assignee) if assignee else None
-    earliest = now + timedelta(minutes=lead)
-    today = to_local(now).date()
-    out = []
-    for offset in range(max(1, min(int(page.horizon_days or 21), MAX_HORIZON)) + 1):
-        day = today + timedelta(days=offset)
-        times: list[datetime] = []
-        if workdays is None or day.isoweekday() in workdays:
-            for start_t, end_t in windows.get(day.isoweekday(), []):
-                cursor, limit = datetime.combine(day, start_t), datetime.combine(day, end_t)
-                while cursor + timedelta(minutes=page.minutes) <= limit:
-                    start = local_to_utc_naive(day, cursor.time())
-                    if start >= earliest and not _busy(page.assignee_user_id, start, start + timedelta(minutes=page.minutes), buffer):
-                        times.append(start)
-                    cursor += timedelta(minutes=STEP_MINUTES)
-        out.append((day, sorted(set(times))))
-    return out
+    assignee = db.session.get(User, page.assignee_user_id) if page.assignee_user_id else None
+    if assignee is None:
+        return []
+    return bookable_days(assignee, page.minutes, min(int(page.horizon_days or 21), MAX_HORIZON), now=now)
 
 
 def is_free(page: OfficeBookingPage, start: datetime, now: datetime | None = None) -> bool:

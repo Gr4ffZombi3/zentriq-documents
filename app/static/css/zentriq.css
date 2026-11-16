@@ -1171,7 +1171,10 @@ a.bl-option:hover { border-color: var(--color-primary); }
 .bl-option span { font-size: 0.88rem; color: var(--color-text-muted); }
 .bl-option code { max-width: 100%; overflow-wrap: anywhere; font-size: 0.85rem; }
 #bl-vorschlagen > summary { cursor: pointer; list-style: none; }
-.ob-row input[type="time"] { max-width: 7.5rem; }
+.ob-availability { display: grid; gap: 0.35rem; padding: 0.75rem 0.9rem; border: 1px solid var(--color-border); border-radius: 0.75rem; background: var(--color-surface-muted); }
+.ob-availability .field-label, .ob-availability p { margin: 0; }
+.ob-availability-list { list-style: none; margin: 0.25rem 0 0; padding: 0; display: grid; gap: 0.15rem; font-size: 0.9rem; }
+.ob-availability-list span:first-child { display: inline-block; min-width: 6.5rem; font-weight: 600; }
 
 /* Teamchat auf dem Handy (js/team-chat.js): fester Platz in der Kopfzeile, geoeffnet als Blatt
    zwischen Kopfzeile und Zeiterfassung - nie schwebend ueber Begruessung, Rueckrufen oder Eingabefeld. */

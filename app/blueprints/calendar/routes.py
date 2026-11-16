@@ -310,7 +310,7 @@ def _render_settings(record, *, form=None, errors=None, ob_form=None, ob_errors=
         form=form,
         errors=errors or [],
         days=[(iso, _DAY_LABELS[iso - 1], hours.get(iso)) for iso in range(1, 8)],
-        ob_page=page, ob_form=ob_form, ob_errors=ob_errors or [], ob_windows=ob.windows_of(page) if page else {},
+        ob_page=page, ob_form=ob_form, ob_errors=ob_errors or [],
         ob_members=cal.office_members(), member_name=cal.member_name, ob_suggested=ob.suggested_slug(current_user),
         ob_base=(current_app.config.get("PUBLIC_URL") or request.url_root).rstrip("/"), ob_url=ob.public_url(page) if page else None,
     ), status
@@ -374,6 +374,7 @@ def booking_links():
     for link in links:
         event = bl.booked_event(link)
         rows.append({"link": link, "status": bl.status(link), "url": bl.public_url(link), "event": event,
+                     "open": bl.is_open(link), "bookings": bl.open_bookings(link) if bl.is_open(link) else None,
                      "free": len(bl.free_times(link)) if bl.status(link) == "active" else 0})
     today = local_today()
     from app.services import office_booking as ob
@@ -408,15 +409,15 @@ def booking_link_create():
             assignee = next((m for m in _link_assignees() if m.id == assignee_id), None)
             if assignee is None:
                 raise bl.LinkError("Bitte einen Büro-Admin auswählen.")
+            # Allgemeiner Link: freie Zeiten live aus der Kalenderverfuegbarkeit, mehrfach buchbar, kein Ablauf.
             s = availability_settings()
             minutes = int(s.default_minutes or 30) if s else 30
-            offers, last_day = bl.offers_from_office_hours(assignee, minutes)
             link, _token = bl.create(
                 current_user, title=form.get("title", ""), location_kind=form.get("location_kind") or None, minutes=minutes,
                 assignee_id=assignee.id, customer_id=int(form["customer_id"]) if (form.get("customer_id") or "").isdigit() else None,
-                offers=offers, valid_until=local_to_utc_naive(last_day, _time(23, 59)),
+                offers=[], valid_until=None, kind=bl.OPEN,
             )
-            flash("Buchungslink erstellt. Link kopieren und an den Kunden senden.", "success")
+            flash("Buchungslink erstellt. Er bleibt dauerhaft gültig – mehrere Kunden können darüber selbst buchen.", "success")
             return redirect(url_for("calendar.booking_links", neu=link.id))
         if form.get("mode") == "range":
             first, last = date.fromisoformat(form.get("from", "")), date.fromisoformat(form.get("to", ""))

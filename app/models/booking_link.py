@@ -3,7 +3,13 @@
 Der oeffentliche Link enthaelt nur ein zufaelliges Token (secrets.token_urlsafe(32)). Gespeichert
 wird dessen SHA-256 (Suche) und - fuer erneutes Kopieren im Buero - eine verschluesselte Fassung.
 Kunden-/Buero-IDs stehen nie im Link. Freigegeben sind ausschliesslich die gespeicherten
-Startzeiten (offers); frei ist davon, was der Kalender aktuell zulaesst."""
+Startzeiten (offers); frei ist davon, was der Kalender aktuell zulaesst.
+
+kind:
+- "proposal": gezielt vorgeschlagene Termine (offers), genau eine Buchung, mit Ablaufdatum.
+- "open": allgemeiner Link - freie Zeiten live aus der Kalenderverfuegbarkeit (Buerozeiten x
+  Arbeitstage, availability.bookable_days), beliebig viele Buchungen verschiedener Kunden, kein Ablauf
+  (nur Widerruf). offers bleibt leer."""
 
 from datetime import datetime, timezone
 
@@ -26,6 +32,7 @@ class BookingLink(TenantScopedMixin, db.Model):
     minutes = db.Column(db.Integer, nullable=False)
     assignee_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     customer_id = db.Column(db.Integer, db.ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)
+    kind = db.Column(db.String(10), nullable=False, default="proposal", server_default="proposal")
     offers = db.Column(db.JSON, nullable=False)  # ["2026-11-10T09:00", ...] Ortszeit Europe/Berlin
     expires_at = db.Column(db.DateTime, nullable=False)
     max_bookings = db.Column(db.Integer, nullable=False, default=1, server_default="1")

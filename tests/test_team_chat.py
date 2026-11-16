@@ -130,3 +130,79 @@ def test_mobile_header_has_fixed_teamchat_button_on_assistant_and_other_pages(ap
         html = client.get(path).get_data(as_text=True)
         assert 'data-zq-tc-head' in html and 'aria-label="Teamchat"' in html, path
         assert "data-zq-tc-head-count" in html and "data-zq-tc-sheet-close" in html, path
+
+
+# --- Emojis und Antworten ----------------------------------------------------------------------------
+
+def db_get(message_id):
+    from app.extensions import db as _db
+
+    return _db.session.get(TeamChatMessage, message_id)
+
+
+EMOJI = "Super 👍🏽 danke ❤️ – Team 👩‍💻 🇩🇪"
+
+
+def test_composed_emojis_survive_send_and_reload(app, world):
+    dennis, laura = login(app, "dennis@example.com"), login(app, "laura@example.com")
+    chat = _open(dennis, world.laura.id)
+    sent = _send(dennis, chat["id"], EMOJI).get_json()["message"]
+    assert sent["text"] == EMOJI
+    assert laura.get(f"{BASE}/{chat['id']}/nachrichten").get_json()["messages"][-1]["text"] == EMOJI
+    with bypass_tenant_scope():
+        assert db_get(sent["id"]).text == EMOJI
+
+
+def test_reply_quotes_original_with_sender_and_excerpt_derived_server_side(app, world):
+    dennis, laura = login(app, "dennis@example.com"), login(app, "laura@example.com")
+    chat = _open(dennis, world.laura.id)
+    first = _send(dennis, chat["id"], "Kannst du den Vertrag von Familie Muster prüfen? " + "x" * 120).get_json()["message"]
+    for i in range(3):
+        _send(laura, chat["id"], f"Zwischendurch {i}")
+    resp = laura.post(f"{BASE}/{chat['id']}/nachrichten",
+                      json={"text": "Ja, mache ich 👍", "reply_to": first["id"], "sender": "Gefälscht", "excerpt": "Gefälscht"})
+    assert resp.status_code == 201
+    reply = resp.get_json()["message"]["reply"]
+    assert reply["id"] == first["id"] and reply["sender"] == "Dennis" and reply["mine"] is False
+    assert reply["excerpt"].startswith("Kannst du den Vertrag") and reply["excerpt"].endswith("…") and len(reply["excerpt"]) <= 92
+    # beim Absender des Originals: "Du"
+    mine = [m for m in dennis.get(f"{BASE}/{chat['id']}/nachrichten").get_json()["messages"] if m.get("reply")]
+    assert mine[0]["reply"]["sender"] == "Du" and mine[0]["reply"]["mine"] is True
+    # alte Nachricht (ohne Antwort) bleibt unveraendert lesbar und zitierbar
+    assert "reply" not in dennis.get(f"{BASE}/{chat['id']}/nachrichten").get_json()["messages"][0]
+
+
+def test_reply_to_foreign_conversation_or_unknown_message_is_rejected(app, world):
+    dennis, laura = login(app, "dennis@example.com"), login(app, "laura@example.com")
+    admin_a = login(app, "admin-a@example.com")
+    private = _open(admin_a, world.laura.id)
+    secret = _send(admin_a, private["id"], "Nur fuer Laura").get_json()["message"]
+    chat = _open(dennis, world.laura.id)
+    for bad in (secret["id"], 999999, "abc"):
+        resp = dennis.post(f"{BASE}/{chat['id']}/nachrichten", json={"text": "Antwort", "reply_to": bad})
+        assert resp.status_code in (400, 422), bad
+        assert "Nur fuer Laura" not in resp.get_data(as_text=True)
+    with bypass_tenant_scope():
+        assert TeamChatMessage.query.filter_by(chat_id=chat["id"]).count() == 0
+    # Laura darf in IHRER Unterhaltung mit Admin A darauf antworten
+    assert laura.post(f"{BASE}/{private['id']}/nachrichten", json={"text": "ok", "reply_to": secret["id"]}).status_code == 201
+
+
+def test_missing_original_shows_unavailable_and_jump_loads_older_history(app, db, world):
+    dennis, laura = login(app, "dennis@example.com"), login(app, "laura@example.com")
+    chat = _open(dennis, world.laura.id)
+    old = _send(dennis, chat["id"], "Ganz alte Frage").get_json()["message"]
+    for i in range(60):
+        _send(laura, chat["id"], f"Nachricht {i}")
+    reply = laura.post(f"{BASE}/{chat['id']}/nachrichten", json={"text": "Zur alten Frage", "reply_to": old["id"]})
+    assert reply.status_code == 201
+    page = dennis.get(f"{BASE}/{chat['id']}/nachrichten").get_json()["messages"]
+    assert old["id"] not in [m["id"] for m in page]  # Original liegt im aelteren Verlauf
+    jump = dennis.get(f"{BASE}/{chat['id']}/nachrichten?ab={old['id']}&vor={page[0]['id']}").get_json()["messages"]
+    assert jump[0]["id"] == old["id"] and jump[-1]["id"] == page[0]["id"] - 1
+    with bypass_tenant_scope():
+        TeamChatMessage.query.filter_by(id=old["id"]).delete()
+        db.session.commit()
+    last = dennis.get(f"{BASE}/{chat['id']}/nachrichten").get_json()["messages"][-1]
+    assert last["id"] == reply.get_json()["message"]["id"]
+    assert last["reply"] == {"id": old["id"], "missing": True}

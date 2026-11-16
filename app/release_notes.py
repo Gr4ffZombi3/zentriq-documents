@@ -17,6 +17,14 @@ from datetime import date
 
 RELEASE_NOTES = (
     {
+        "date": date(2026, 11, 16),
+        "title": "Teamchat: Emojis und Antworten auf Nachrichten",
+        "text": "Im Teamchat gibt es neben dem Nachrichtenfeld einen Smiley für Emojis. Über „⋯“ an einer Nachricht – "
+        "auf dem Handy auch durch langes Tippen – können Sie gezielt auf diese Nachricht antworten. Das Zitat steht "
+        "über Ihrer Antwort; ein Tipp darauf springt zur ursprünglichen Nachricht.",
+        "audience": "alle",
+    },
+    {
         "date": date(2026, 11, 14),
         "title": "Teamchat auf dem Handy oben in der Kopfzeile",
         "text": "Auf dem Handy liegt der Teamchat nicht mehr über der Begrüßung oder dem Eingabefeld. Sie finden ihn "

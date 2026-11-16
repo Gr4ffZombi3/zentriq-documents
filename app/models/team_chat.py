@@ -2,7 +2,9 @@
 
 - TeamChat: genau eine Unterhaltung je Paar im selben Buero (user_low_id < user_high_id, eindeutig).
   Lesestand je Teilnehmer als ID der zuletzt gelesenen Nachricht.
-- TeamChatMessage: Textnachricht; client_ref verhindert doppeltes Speichern bei erneutem Senden."""
+- TeamChatMessage: Textnachricht; client_ref verhindert doppeltes Speichern bei erneutem Senden.
+  reply_to_id: zitierte Nachricht derselben Unterhaltung (ohne Fremdschluessel - fehlt das Original,
+  zeigt der Chat "Originalnachricht nicht verfuegbar")."""
 
 from datetime import datetime, timezone
 
@@ -42,6 +44,7 @@ class TeamChatMessage(TenantScopedMixin, db.Model):
     sender_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     text = db.Column(db.Text, nullable=False)
     client_ref = db.Column(db.String(64), nullable=True)
+    reply_to_id = db.Column(db.Integer, nullable=True, index=True)
     created_at = db.Column(db.DateTime, nullable=False, default=_now)
 
     def __repr__(self):

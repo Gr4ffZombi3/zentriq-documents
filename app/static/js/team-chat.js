@@ -9,6 +9,10 @@
  * - Handy (schmal): kein schwebender Knopf ueber dem Inhalt. Fester Platz in der Kopfzeile (Symbol
  *   "Teamchat" mit Ungelesen-Zaehler, [data-zq-tc-head]); geoeffnet als Blatt zwischen Kopfzeile und
  *   Zeiterfassung, Hoehe folgt dem sichtbaren Bereich (visualViewport: Tastatur, Safari-Adressleiste).
+ * - Emojis: Smiley-Knopf neben dem Feld, Auswahl oeffnet nach oben, Einfuegen an der Cursorposition.
+ * - Antworten: Menue an jeder Nachricht (Knopf "…", Handy zusaetzlich langes Tippen, Tastatur: Pfeile/
+ *   Enter/Escape). Vorschau ueber dem Feld (× entfernt nur das Zitat). Zitat in der Blase springt zum
+ *   Original (laedt aelteren Verlauf nach: ?ab=<id>&vor=<aelteste>); Absender/Ausschnitt liefert der Server.
  * - Live: persoenlicher Kanal ueber zentriq-live ({"type":"chat","chat":id}); Texte holt der Browser
  *   angemeldet. Ohne Live-Dienst: regelmaessig abfragen. */
 (function () {
@@ -207,6 +211,192 @@
     return chat;
   }
 
+  // --- Emojis --------------------------------------------------------------------------------------
+  var EMOJIS = ("😀 😂 😊 🙂 😉 😍 😘 😎 🤔 😅 😮 😢 😭 😡 🙈 👍 👍🏽 👎 👏 🙏 💪 👌 ✌️ 🤝 👋 👀 " +
+    "❤️ 💙 💚 🎉 🔥 ⭐ ✅ ❌ ⚠️ ❓ ☕ 🍰 📞 📅 📄 📎 💶 🚗 🏠 ⏰ 🌞 🤒").split(" ");
+
+  function insertAtCursor(input, text) {
+    var start = input.selectionStart == null ? input.value.length : input.selectionStart;
+    var end = input.selectionEnd == null ? start : input.selectionEnd;
+    if (input.setRangeText) input.setRangeText(text, start, end, "end");
+    else { input.value = input.value.slice(0, start) + text + input.value.slice(end); input.selectionStart = input.selectionEnd = start + text.length; }
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function buildEmojiPicker(chat, input, toggle) {
+    var panel = el("div", "zq-tc-emoji");
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-label", "Emoji auswählen");
+    panel.hidden = true;
+    var grid = el("div", "zq-tc-emoji-grid");
+    EMOJIS.forEach(function (e) {
+      var b = el("button", null, e); b.type = "button"; b.setAttribute("aria-label", "Emoji " + e);
+      b.addEventListener("mousedown", function (ev) { ev.preventDefault(); }); // Fokus/Cursor im Feld behalten
+      b.addEventListener("click", function () { insertAtCursor(input, e); close(false); if (!narrow()) input.focus(); });
+      grid.appendChild(b);
+    });
+    panel.appendChild(grid);
+    function buttons() { return Array.prototype.slice.call(grid.querySelectorAll("button")); }
+    panel.addEventListener("keydown", function (ev) {
+      var list = buttons(), i = list.indexOf(document.activeElement), cols = 8;
+      var move = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: cols, ArrowUp: -cols }[ev.key];
+      if (move && i >= 0) { ev.preventDefault(); list[Math.max(0, Math.min(list.length - 1, i + move))].focus(); }
+      else if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); close(true); }
+    });
+    function open() {
+      panel.hidden = false; toggle.setAttribute("aria-expanded", "true");
+      // passt immer ins Fenster (auch mit Handy-Tastatur): hoechstens bis unter die Fensterkopfzeile
+      var win = panel.closest(".zq-tc-win"), head = win && win.querySelector(".zq-tc-head"), form = panel.parentNode;
+      if (win && head) panel.style.maxHeight = Math.max(96, Math.min(184, form.getBoundingClientRect().top - head.getBoundingClientRect().bottom - 8)) + "px";
+      if (!narrow() || !("ontouchstart" in window)) buttons()[0].focus();
+    }
+    function close(focusToggle) {
+      panel.hidden = true; toggle.setAttribute("aria-expanded", "false");
+      if (focusToggle) toggle.focus();
+    }
+    toggle.addEventListener("mousedown", function (ev) { ev.preventDefault(); });
+    toggle.addEventListener("click", function () { panel.hidden ? open() : close(false); });
+    document.addEventListener("click", function (ev) {
+      if (!panel.hidden && !panel.contains(ev.target) && ev.target !== toggle && !toggle.contains(ev.target)) close(false);
+    });
+    chat.closeEmoji = function () { close(false); };
+    return panel;
+  }
+
+  // --- Antworten: Menue an der Nachricht ------------------------------------------------------------
+  var msgMenu = null;
+  function closeMsgMenu(focusBack) {
+    if (!msgMenu) return;
+    var back = msgMenu.opener;
+    msgMenu.remove(); msgMenu = null;
+    if (back) { back.setAttribute("aria-expanded", "false"); if (focusBack) back.focus(); }
+  }
+  function openMsgMenu(chat, li, opener) {
+    closeMsgMenu(false);
+    var m = li._msg;
+    var menuEl = el("div", "zq-tc-msgmenu");
+    menuEl.setAttribute("role", "menu");
+    menuEl.setAttribute("aria-label", "Aktionen zur Nachricht");
+    function item(label, fn) {
+      var b = el("button", null, label); b.type = "button"; b.setAttribute("role", "menuitem"); b.tabIndex = -1;
+      b.addEventListener("click", function () { closeMsgMenu(false); fn(); });
+      menuEl.appendChild(b);
+    }
+    item("Antworten", function () { startReply(chat, m); });
+    item("Text kopieren", function () {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(m.text).catch(function () {});
+      if (opener) opener.focus();
+    });
+    menuEl.addEventListener("keydown", function (ev) {
+      var items = Array.prototype.slice.call(menuEl.querySelectorAll("button")), i = items.indexOf(document.activeElement);
+      if (ev.key === "ArrowDown" || ev.key === "ArrowUp") { ev.preventDefault(); items[(i + (ev.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus(); }
+      else if (ev.key === "Home") { ev.preventDefault(); items[0].focus(); }
+      else if (ev.key === "End") { ev.preventDefault(); items[items.length - 1].focus(); }
+      else if (ev.key === "Escape" || ev.key === "Tab") { ev.preventDefault(); ev.stopPropagation(); closeMsgMenu(true); }
+    });
+    li.appendChild(menuEl);
+    menuEl.opener = opener || li.querySelector(".zq-tc-more");
+    msgMenu = menuEl;
+    if (menuEl.opener) menuEl.opener.setAttribute("aria-expanded", "true");
+    // nach oben aufklappen, wenn unten kein Platz ist
+    var listRect = chat.list.getBoundingClientRect(), r = menuEl.getBoundingClientRect();
+    if (r.bottom > listRect.bottom - 4) menuEl.classList.add("is-up");
+    menuEl.querySelector("button").focus();
+  }
+  document.addEventListener("click", function (ev) {
+    if (msgMenu && !msgMenu.contains(ev.target) && !(msgMenu.opener && msgMenu.opener.contains(ev.target))) closeMsgMenu(false);
+  });
+
+  function shortText(text) {
+    var flat = String(text || "").replace(/\s+/g, " ").trim();
+    var chars = Array.from ? Array.from(flat) : flat.split("");
+    return chars.length > 90 ? chars.slice(0, 90).join("").trim() + " …" : flat;
+  }
+
+  function startReply(chat, m) {
+    chat.replyTo = { id: m.id };
+    chat.draft.querySelector(".zq-tc-draft-sender").textContent = m.mine ? "Du" : chat.partner.name;
+    chat.draft.querySelector(".zq-tc-draft-text").textContent = shortText(m.text);
+    chat.draft.hidden = false;
+    chat.input.focus();
+    place();
+  }
+  function clearReply(chat) {
+    chat.replyTo = null;
+    if (chat.draft) chat.draft.hidden = true;
+  }
+
+  function jumpTo(chat, id) {
+    function show() {
+      var target = chat.list.querySelector('[data-id="' + id + '"]');
+      if (!target) return false;
+      target.scrollIntoView({ block: "center", behavior: "smooth" });
+      target.classList.remove("is-flash"); void target.offsetWidth; target.classList.add("is-flash");
+      target.tabIndex = -1; target.focus({ preventScroll: true });
+      setTimeout(function () { target.classList.remove("is-flash"); }, 1800);
+      return true;
+    }
+    if (show()) return;
+    var first = chat.list.querySelector(".zq-tc-msg[data-id]");
+    var oldest = first ? Number(first.getAttribute("data-id")) : 0;
+    function unavailable() { chat.error.textContent = "Originalnachricht nicht verfügbar"; chat.error.hidden = false; setTimeout(function () { chat.error.hidden = true; }, 3000); }
+    if (!oldest || id >= oldest) { unavailable(); return; }
+    api("GET", "/" + chat.id + "/nachrichten?ab=" + id + "&vor=" + oldest).then(function (d) {
+      prepend(chat, d.messages);
+      if (!show()) unavailable();
+    }, unavailable);
+  }
+
+  function renderMessage(chat, m) {
+    var li = el("li", "zq-tc-msg" + (m.mine ? " is-mine" : ""));
+    li.setAttribute("data-id", String(m.id));
+    li._msg = m;
+    if (m.reply) {
+      if (m.reply.missing) {
+        li.appendChild(el("span", "zq-tc-quote is-missing", "Originalnachricht nicht verfügbar"));
+      } else {
+        var q = el("button", "zq-tc-quote" + (m.reply.mine ? " is-mine" : "")); q.type = "button";
+        q.setAttribute("aria-label", "Zitat von " + m.reply.sender + ": " + m.reply.excerpt + " – zur Originalnachricht springen");
+        q.appendChild(el("strong", null, m.reply.sender));
+        q.appendChild(el("span", null, m.reply.excerpt));
+        q.addEventListener("click", function () { jumpTo(chat, m.reply.id); });
+        li.appendChild(q);
+      }
+    }
+    li.appendChild(el("span", "zq-tc-text", m.text));
+    li.appendChild(el("time", null, m.when));
+    var more = el("button", "zq-tc-more", "⋯"); more.type = "button";
+    more.setAttribute("aria-label", "Aktionen zur Nachricht"); more.setAttribute("aria-haspopup", "menu"); more.setAttribute("aria-expanded", "false");
+    more.addEventListener("click", function (ev) { ev.stopPropagation(); if (msgMenu && msgMenu.opener === more) closeMsgMenu(true); else openMsgMenu(chat, li, more); });
+    li.appendChild(more);
+    // Handy: langes Tippen oeffnet dasselbe Menue
+    var timer = null, sx = 0, sy = 0, fired = false;
+    li.addEventListener("touchstart", function (ev) {
+      fired = false;
+      if (ev.target.closest(".zq-tc-quote, .zq-tc-more, .zq-tc-msgmenu")) return; sx = ev.touches[0].clientX; sy = ev.touches[0].clientY;
+      timer = setTimeout(function () { fired = true; timer = null; if (navigator.vibrate) navigator.vibrate(15); openMsgMenu(chat, li, more); }, 450);
+    }, { passive: true });
+    li.addEventListener("touchmove", function (ev) {
+      if (timer && (Math.abs(ev.touches[0].clientX - sx) > 10 || Math.abs(ev.touches[0].clientY - sy) > 10)) { clearTimeout(timer); timer = null; }
+    }, { passive: true });
+    li.addEventListener("touchend", function (ev) {
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (fired) { ev.preventDefault(); fired = false; } // nur das Loslassen nach dem langen Tippen schlucken
+    });
+    li.addEventListener("contextmenu", function (ev) { if (timer || msgMenu) ev.preventDefault(); });
+    return li;
+  }
+
+  function prepend(chat, items) {
+    var list = chat.list, before = list.scrollHeight, top = list.scrollTop;
+    var anchor = list.querySelector(".zq-tc-msg");
+    items.forEach(function (m) {
+      if (list.querySelector('[data-id="' + m.id + '"]')) return;
+      list.insertBefore(renderMessage(chat, m), anchor);
+    });
+    list.scrollTop = top + (list.scrollHeight - before);
+  }
+
   function buildWindow(chat) {
     var win = el("section", "zq-tc-win");
     win.setAttribute("role", "dialog");
@@ -226,13 +416,28 @@
     win.appendChild(chat.list);
     chat.error = el("p", "zq-tc-error"); chat.error.hidden = true; chat.error.setAttribute("role", "alert");
     win.appendChild(chat.error);
+    // Zitatvorschau direkt ueber dem Feld
+    var draft = el("div", "zq-tc-draft"); draft.hidden = true;
+    var draftBody = el("div", "zq-tc-draft-body");
+    draftBody.appendChild(el("strong", "zq-tc-draft-sender"));
+    draftBody.appendChild(el("span", "zq-tc-draft-text"));
+    var draftX = el("button", "zq-tc-draft-x", "×"); draftX.type = "button"; draftX.setAttribute("aria-label", "Zitat entfernen"); draftX.title = "Zitat entfernen";
+    draftX.addEventListener("click", function () { clearReply(chat); input.focus(); place(); });
+    draft.appendChild(draftBody); draft.appendChild(draftX);
+    win.appendChild(draft);
+    chat.draft = draft;
     var form = el("form", "zq-tc-form");
     var input = el("textarea"); input.rows = 1; input.maxLength = 2000; input.placeholder = "Nachricht …";
     input.setAttribute("aria-label", "Nachricht an " + chat.partner.name);
+    var smile = el("button", "zq-tc-smile", "🙂"); smile.type = "button";
+    smile.setAttribute("aria-label", "Emoji einfügen"); smile.title = "Emoji einfügen";
+    smile.setAttribute("aria-haspopup", "dialog"); smile.setAttribute("aria-expanded", "false");
     var send = el("button", "btn btn-primary btn-sm", "Senden"); send.type = "submit";
-    form.appendChild(input); form.appendChild(send);
+    form.appendChild(smile); form.appendChild(input); form.appendChild(send);
+    form.appendChild(buildEmojiPicker(chat, input, smile));
     input.addEventListener("keydown", function (e) {
       if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit ? form.requestSubmit() : submit(); }
+      else if (e.key === "Escape" && chat.replyTo) { e.preventDefault(); e.stopPropagation(); clearReply(chat); }
     });
     input.addEventListener("input", function () { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 112) + "px"; });
     form.addEventListener("submit", function (e) { e.preventDefault(); submit(); });
@@ -241,8 +446,12 @@
       if (!text || send.disabled) return;
       send.disabled = true;
       chat.error.hidden = true;
-      api("POST", "/" + chat.id + "/nachrichten", { text: text, client_ref: newRef() }).then(function (d) {
+      var body = { text: text, client_ref: newRef() };
+      if (chat.replyTo) body.reply_to = chat.replyTo.id;
+      if (chat.closeEmoji) chat.closeEmoji();
+      api("POST", "/" + chat.id + "/nachrichten", body).then(function (d) {
         input.value = ""; input.style.height = "auto";
+        clearReply(chat);
         append(chat, [d.message]);
       }, function (err) {
         chat.error.textContent = err.message; chat.error.hidden = false; // Text bleibt im Feld
@@ -259,12 +468,8 @@
     if (empty && items.length) empty.remove();
     var nearBottom = chat.list.scrollHeight - chat.list.scrollTop - chat.list.clientHeight < 60;
     items.forEach(function (m) {
-      if (m.id <= chat.last && chat.list.querySelector('[data-id="' + m.id + '"]')) return;
-      var li = el("li", "zq-tc-msg" + (m.mine ? " is-mine" : ""));
-      li.setAttribute("data-id", String(m.id));
-      li.appendChild(document.createTextNode(m.text));
-      li.appendChild(el("time", null, m.when));
-      chat.list.appendChild(li);
+      if (chat.list.querySelector('[data-id="' + m.id + '"]')) return;
+      chat.list.appendChild(renderMessage(chat, m));
       chat.last = Math.max(chat.last, m.id);
     });
     if (nearBottom || items.some(function (m) { return m.mine; })) chat.list.scrollTop = chat.list.scrollHeight;

@@ -7,6 +7,8 @@ Regeln (jede Anfrage prueft sie serverseitig erneut):
 - Genau eine Unterhaltung je Paar (user_low_id < user_high_id, eindeutig je Buero).
 - Live: ueber zentriq-live geht nur {"type": "chat", "chat": <id>} an die persoenlichen Kanaele beider
   Teilnehmer - den Text holt der Browser angemeldet ueber die API.
+- Antworten (reply_to_id) nur auf Nachrichten DERSELBEN Unterhaltung; Absender und Vorschau werden beim
+  Lesen aus dem Original abgeleitet (nie vom Browser uebernommen).
 Logs enthalten keine Nachrichtentexte."""
 
 from __future__ import annotations
@@ -25,6 +27,8 @@ from app.services.timetracking.clock import to_local
 
 MAX_TEXT = 2000
 PAGE = 50
+EXCERPT = 90
+JUMP_MAX = 1000  # Nachladen bis zur zitierten Nachricht: hoechstens so viele Nachrichten auf einmal
 
 
 class ChatError(Exception):
@@ -147,19 +151,84 @@ def _when(value) -> str:
     return local.strftime("%H:%M") if local.date() == today else local.strftime("%d.%m. %H:%M")
 
 
-def serialize_message(message: TeamChatMessage, user) -> dict:
-    return {"id": message.id, "mine": message.sender_id == user.id, "text": message.text, "when": _when(message.created_at)}
+def excerpt(text: str) -> str:
+    flat = " ".join((text or "").split())
+    if len(flat) <= EXCERPT:
+        return flat
+    cut = flat[:EXCERPT].rstrip()
+    # nicht mitten in einem zusammengesetzten Emoji (Hautton, Variationszeichen, ZWJ) abschneiden
+    while cut and (cut[-1] in "\u200d\ufe0f" or "\U0001f3fb" <= cut[-1] <= "\U0001f3ff"):
+        cut = cut[:-1]
+    return cut + " …"
 
 
-def messages(user, chat: TeamChat, after: int | None = None, before: int | None = None) -> list[dict]:
+def _sender_name(sender_id: int, user, names: dict) -> str:
+    if sender_id == user.id:
+        return "Du"
+    if sender_id not in names:
+        other = db.session.get(User, sender_id)
+        names[sender_id] = member_name(other) if other is not None else "Ehemaliger Kollege"
+    return names[sender_id]
+
+
+def _replies(rows, chat_id: int) -> dict:
+    """Zitierte Originale der Zeilen - nur aus derselben Unterhaltung (eine Abfrage)."""
+    ids = {m.reply_to_id for m in rows if m.reply_to_id}
+    if not ids:
+        return {}
+    found = TeamChatMessage.query.filter(TeamChatMessage.id.in_(ids), TeamChatMessage.chat_id == chat_id).all()
+    return {m.id: m for m in found}
+
+
+def serialize_message(message: TeamChatMessage, user, originals: dict | None = None, names: dict | None = None) -> dict:
+    data = {"id": message.id, "mine": message.sender_id == user.id, "text": message.text, "when": _when(message.created_at)}
+    if message.reply_to_id:
+        if originals is None:
+            originals = _replies([message], message.chat_id)
+        original = originals.get(message.reply_to_id)
+        if original is None:
+            data["reply"] = {"id": message.reply_to_id, "missing": True}
+        else:
+            data["reply"] = {"id": original.id, "mine": original.sender_id == user.id,
+                             "sender": _sender_name(original.sender_id, user, names if names is not None else {}),
+                             "excerpt": excerpt(original.text)}
+    return data
+
+
+def serialize_messages(user, rows, chat_id: int) -> list[dict]:
+    originals, names = _replies(rows, chat_id), {}
+    return [serialize_message(m, user, originals, names) for m in rows]
+
+
+def messages(user, chat: TeamChat, after: int | None = None, before: int | None = None,
+             since: int | None = None) -> list[dict]:
+    """after: neuere Nachrichten; before: aeltere Seite; since + before: alles von der zitierten Nachricht
+    `since` bis vor `before` (Sprung zum Original, hoechstens JUMP_MAX)."""
     query = TeamChatMessage.query.filter(TeamChatMessage.chat_id == chat.id)
     if after:
         rows = query.filter(TeamChatMessage.id > int(after)).order_by(TeamChatMessage.id).limit(PAGE).all()
+    elif since and before:
+        rows = (query.filter(TeamChatMessage.id >= int(since), TeamChatMessage.id < int(before))
+                .order_by(TeamChatMessage.id).limit(JUMP_MAX).all())
     else:
         if before:
             query = query.filter(TeamChatMessage.id < int(before))
         rows = list(reversed(query.order_by(TeamChatMessage.id.desc()).limit(PAGE).all()))
-    return [serialize_message(m, user) for m in rows]
+    return serialize_messages(user, rows, chat.id)
+
+
+def _reply_target(chat: TeamChat, reply_to) -> int | None:
+    if reply_to in (None, "", 0):
+        return None
+    try:
+        reply_to = int(reply_to)
+    except (TypeError, ValueError):
+        raise ChatError("Die zitierte Nachricht ist ungültig.") from None
+    exists = TeamChatMessage.query.filter(TeamChatMessage.id == reply_to, TeamChatMessage.chat_id == chat.id).first()
+    if exists is None:
+        # fremde Unterhaltung oder unbekannt: gleiche Antwort, keine Auskunft
+        raise ChatError("Die zitierte Nachricht gehört nicht zu dieser Unterhaltung.", 422)
+    return reply_to
 
 
 def _notify(chat: TeamChat, kind: str = "chat") -> None:
@@ -167,7 +236,7 @@ def _notify(chat: TeamChat, kind: str = "chat") -> None:
         live.publish(chat.tenant_id, f"user:{uid}", {"type": kind, "chat": chat.id})
 
 
-def send(user, chat: TeamChat, text: str, client_ref: str | None = None) -> dict:
+def send(user, chat: TeamChat, text: str, client_ref: str | None = None, reply_to=None) -> dict:
     text = (text or "").strip()
     if not text:
         raise ChatError("Bitte eine Nachricht eingeben.")
@@ -175,12 +244,14 @@ def send(user, chat: TeamChat, text: str, client_ref: str | None = None) -> dict
         raise ChatError(f"Die Nachricht ist zu lang (höchstens {MAX_TEXT} Zeichen).")
     if _active_partner(user, chat) is None:
         raise ChatError("Dieser Kollege ist nicht mehr im Büro aktiv – die Nachricht wurde nicht gesendet.", 409)
+    reply_to_id = _reply_target(chat, reply_to)
     ref = (client_ref or "").strip()[:64] or None
     if ref:
         existing = TeamChatMessage.query.filter_by(sender_id=user.id, client_ref=ref).first()
         if existing is not None and existing.chat_id == chat.id:
             return serialize_message(existing, user)
-    message = TeamChatMessage(tenant_id=chat.tenant_id, chat_id=chat.id, sender_id=user.id, text=text, client_ref=ref)
+    message = TeamChatMessage(tenant_id=chat.tenant_id, chat_id=chat.id, sender_id=user.id, text=text, client_ref=ref,
+                              reply_to_id=reply_to_id)
     db.session.add(message)
     chat.last_message_at = _now()
     try:

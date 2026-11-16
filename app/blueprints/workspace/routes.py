@@ -108,7 +108,8 @@ def teamchat_messages(chat_id):
         chat = team_chat.get_chat(current_user, chat_id)
         after = request.args.get("nach", type=int)
         before = request.args.get("vor", type=int)
-        items = team_chat.messages(current_user, chat, after=after, before=before)
+        since = request.args.get("ab", type=int)
+        items = team_chat.messages(current_user, chat, after=after, before=before, since=since)
     except team_chat.ChatError as exc:
         return _chat_error(exc)
     return _no_store(jsonify({"chat": team_chat.serialize_chat(chat, current_user), "messages": items}))
@@ -123,7 +124,8 @@ def teamchat_send(chat_id):
     try:
         chat = team_chat.get_chat(current_user, chat_id)
         message = team_chat.send(current_user, chat, data.get("text") if isinstance(data.get("text"), str) else "",
-                                 client_ref=data.get("client_ref") if isinstance(data.get("client_ref"), str) else None)
+                                 client_ref=data.get("client_ref") if isinstance(data.get("client_ref"), str) else None,
+                                 reply_to=data.get("reply_to") if isinstance(data.get("reply_to"), (int, str)) else None)
     except team_chat.ChatError as exc:
         db.session.rollback()
         return _chat_error(exc)

@@ -173,7 +173,7 @@
 .zc-files { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem; }
 .zc-file { font-size: 0.78rem; border: 1px solid var(--color-border); border-radius: 0.5rem; padding: 0.15rem 0.5rem; background: var(--color-surface); color: var(--color-text-muted); }
 .zc-msg-assistant { align-self: stretch; }
-.zc-msg-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.75rem; margin-top: 0.5rem; font-size: 0.75rem; color: var(--color-text-soft); }
+.zc-msg-meta { user-select: none; -webkit-user-select: none; display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.75rem; margin-top: 0.5rem; font-size: 0.75rem; color: var(--color-text-soft); }
 .zc-msg-meta button { display: inline-flex; align-items: center; gap: 0.3rem; background: none; border: 0; padding: 0.2rem 0.35rem; border-radius: 0.4rem; color: var(--color-text-muted); font-size: 0.75rem; cursor: pointer; }
 .zc-msg-meta button:hover { background: var(--color-surface-muted); color: var(--color-text); }
 .zc-info { cursor: help; font-size: 0.8rem; color: var(--color-text-soft); }

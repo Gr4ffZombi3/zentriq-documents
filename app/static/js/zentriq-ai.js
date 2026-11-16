@@ -166,20 +166,92 @@
     else fallback();
   }
 
-  // E-Mail-Entwurf manuell markiert und kopiert (Strg/Cmd+C, Kontextmenue, iPhone): beruehrt die
-  // Markierung einen Entwurf, nur den markierten Text als text/plain - sonst uebernimmt Outlook den
-  // Hintergrund aus dem HTML. Zeilenumbrueche (Absaetze, Aufzaehlungen) bleiben im <pre> erhalten.
-  // Markierungen ohne Entwurf kopiert der Browser wie bisher.
+  // Manuell markiert und kopiert (Strg/Cmd+C, Kontextmenue "Kopieren", iPhone): beruehrt die
+  // Markierung eine Assistentenantwort, landet nur der markierte Text als text/plain in der
+  // Zwischenablage. Sonst schreibt der Browser HTML mit den berechneten Stilen der Chatblase
+  // (Hintergrund, Schrift), und Outlook/Word uebernehmen den Hintergrund beim normalen Einfuegen.
+  // Eingabefelder und alle anderen Bereiche kopiert der Browser wie bisher.
+  // Markierung -> Klartext: Bloecke (Absatz, Liste, Entwurf, Ueberschrift, Tabelle) durch eine
+  // Leerzeile getrennt, Listenpunkte/<br>/Tabellenzeilen je eine Zeile, Leerraum in <pre> und
+  // Benutzernachrichten unveraendert. Bedienelemente (Kopieren-Knopf, Code-Kopfzeile) werden
+  // nicht mitkopiert und sind per CSS nicht markierbar.
+  var PARA = { P: 1, UL: 1, OL: 1, PRE: 1, H1: 1, H2: 1, H3: 1, H4: 1, H5: 1, H6: 1, BLOCKQUOTE: 1, TABLE: 1, HR: 1 };
+  var SKIP = ".zc-msg-meta, .zc-code-head, .zc-action-buttons, .zc-retry, button";
+  function plainSelection(sel) {
+    var out = [];
+    var skipBullet = false;
+    var brk = function (kind) { out.push(kind); };
+    function walk(node, pre) {
+      if (node.nodeType === 3) {
+        var t = node.nodeValue.replace(/\u00a0/g, " ");
+        if (!pre) t = t.replace(/\s+/g, " ");
+        if (t) out.push(t);
+        return;
+      }
+      if (node.nodeType !== 1 && node.nodeType !== 11) return;
+      if (node.nodeType === 1 && node.matches(SKIP)) return;
+      var tag = node.nodeName;
+      var block = PARA[tag] || (node.nodeType === 1 && node.matches(".zc-code, .zc-msg, .zc-md, .zc-action, .zc-note, .zc-error"));
+      var inPre = pre || tag === "PRE" || (node.nodeType === 1 && node.matches(".zc-msg-user"));
+      if (tag === "BR") { brk("\n"); return; }
+      if (block) brk("\n\n");
+      if (tag === "LI" || tag === "TR" || tag === "DIV") brk("\n");
+      var bullet = tag === "LI" && !skipBullet;
+      if (tag === "LI") skipBullet = false;
+      if (bullet && node.parentNode && node.parentNode.nodeName === "OL") out.push((Array.prototype.indexOf.call(node.parentNode.children, node) + (parseInt(node.parentNode.getAttribute("start"), 10) || 1)) + ". ");
+      else if (bullet) out.push("- ");
+      if ((tag === "TD" || tag === "TH") && node.previousElementSibling) out.push("\t");
+      for (var c = node.firstChild; c; c = c.nextSibling) walk(c, inPre);
+      if (block) brk("\n\n");
+      if (tag === "LI" || tag === "TR" || tag === "DIV") brk("\n");
+    }
+    for (var r = 0; r < sel.rangeCount; r++) {
+      if (r) brk("\n");
+      var range = sel.getRangeAt(r);
+      var frag = range.cloneContents();
+      // Beginnt die Markierung mitten in einem Listenpunkt, bekommt dieser Rest keinen Spiegelstrich.
+      var startEl = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
+      var startLi = startEl && startEl.closest("li");
+      if (startLi) {
+        var before = document.createRange();
+        before.setStart(startLi, 0);
+        before.setEnd(range.startContainer, range.startOffset);
+        skipBullet = before.toString().trim() !== "";
+      }
+      // Markierung innerhalb eines <pre>/Benutzertexts: Leerraum dort ebenfalls erhalten.
+      var anc = range.commonAncestorContainer;
+      anc = anc.nodeType === 1 ? anc : anc.parentElement;
+      walk(frag, !!(anc && anc.closest("pre, .zc-msg-user")));
+    }
+    // Zeilen sauber zusammensetzen: Folgen von Umbruechen -> hoechstens eine Leerzeile.
+    var text = "", pending = "";
+    out.forEach(function (part) {
+      if (part === "\n" || part === "\n\n") { if (part.length > pending.length) pending = part; return; }
+      if (pending && text) {
+        text = text.replace(/[ \t]+$/, "") + pending;
+        part = part.replace(/^ +/, "");
+      }
+      pending = "";
+      text += part;
+    });
+    return text.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").replace(/^\s+|\s+$/g, "");
+  }
+  function touchesAnswer(sel) {
+    var answers = thread.querySelectorAll(".zc-msg-assistant .zc-md");
+    for (var r = 0; r < sel.rangeCount; r++) {
+      for (var a = 0; a < answers.length; a++) if (sel.getRangeAt(r).intersectsNode(answers[a])) return true;
+    }
+    return false;
+  }
   thread.addEventListener("copy", function (e) {
     var sel = window.getSelection();
     if (!sel || sel.isCollapsed || !e.clipboardData) return;
-    var drafts = thread.querySelectorAll(".zc-code-prose code");
-    var hit = false;
-    for (var r = 0; r < sel.rangeCount && !hit; r++) {
-      for (var d = 0; d < drafts.length && !hit; d++) hit = sel.getRangeAt(r).intersectsNode(drafts[d]);
-    }
-    if (!hit) return;
-    e.clipboardData.setData("text/plain", sel.toString());
+    var t = e.target && e.target.nodeType === 1 ? e.target : (e.target && e.target.parentElement);
+    if (t && t.closest("input, textarea, [contenteditable='true']")) return;
+    if (!touchesAnswer(sel)) return;
+    var text = plainSelection(sel);
+    if (!text) return;
+    e.clipboardData.setData("text/plain", text);
     e.preventDefault();
   });
 

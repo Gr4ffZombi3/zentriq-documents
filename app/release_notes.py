@@ -18,6 +18,15 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 16),
+        "title": "Kopieren aus dem Assistenten ohne Hintergrundfarbe",
+        "text": "Wenn Sie einen Teil einer Antwort des Assistenten markieren und kopieren – mit Strg+C oder über "
+        "das Kontextmenü –, wird nur der markierte Text übernommen. In Outlook oder Word passt er sich der "
+        "Formatierung dort an; die Hintergrundfarbe aus Zentriq kommt nicht mehr mit. Absätze und Aufzählungen "
+        "bleiben erhalten.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 16),
         "title": "Allgemeiner Buchungslink bleibt nach jeder Buchung gültig",
         "text": "Ihr allgemeiner Buchungslink kann jetzt von beliebig vielen Kunden genutzt werden – auch bereits "
         "verschickte Links. Angeboten werden immer die aktuell freien Zeiten aus dem Kalender (Bürozeiten und "

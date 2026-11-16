@@ -901,3 +901,23 @@ def test_switching_model_mid_tool_round_sends_results_as_text(app, world, fake, 
     assert model == "gemini-flash-lite-latest"
     assert not any(m.get("tool_calls") or m.get("role") == "tool" for m in messages)
     assert any("Ergebnis von Werkzeug meine_arbeitszeiten" in (m.get("content") or "") for m in messages)
+
+
+def test_copy_from_assistant_answers_is_plain_text_only():
+    """Markieren + Strg+C/Kontextmenue in einer Antwort: nur text/plain (sonst nimmt Outlook den
+    Hintergrund der Chatblase mit). Der Handler gilt fuer alle Antworten, nicht nur Entwuerfe, und
+    laesst Eingabefelder in Ruhe; Bedienelemente der Antwort sind nicht markierbar. Verhalten im
+    Browser per Playwright geprueft; hier nur gegen Rueckbau abgesichert."""
+    from pathlib import Path
+
+    static = Path(__file__).resolve().parents[1] / "app" / "static"
+    js = (static / "js" / "zentriq-ai.js").read_text(encoding="utf-8")
+    handler = js[js.index('thread.addEventListener("copy"'):]
+    handler = handler[: handler.index("});") ]
+    assert ".zc-msg-assistant .zc-md" in js
+    assert 'setData("text/plain"' in handler and "preventDefault()" in handler
+    assert "text/html" not in handler
+    assert "input, textarea" in handler
+    css = (static / "css" / "zentriq.css").read_text(encoding="utf-8")
+    meta = next(line for line in css.splitlines() if line.startswith(".zc-msg-meta {"))
+    assert "user-select: none" in meta

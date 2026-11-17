@@ -404,7 +404,7 @@ def booking_links():
     customer = None
     if request.args.get("kunde", type=int):
         customer = Customer.query.filter(Customer.id == request.args.get("kunde", type=int)).first()
-    query = BookingLink.query
+    query = BookingLink.query.filter(BookingLink.deleted_at.is_(None))
     if not current_user.is_office_admin:
         query = query.filter(BookingLink.created_by_user_id == current_user.id)
     links = query.order_by(BookingLink.created_at.desc(), BookingLink.id.desc()).limit(100).all()
@@ -500,16 +500,51 @@ def booking_confirmation_resend(confirmation_id):
     return redirect(url_for("calendar.booking_links"))
 
 
-@calendar_bp.post("/buchungslinks/<int:link_id>/widerrufen")
-@login_required
-def booking_link_revoke(link_id):
+def _own_link(link_id):
+    """Buero-Admin: jeder Link des Bueros; Mitarbeiter mit Freigabe: nur selbst erstellte. Geloeschte: 404."""
     from app.models import BookingLink
-    from app.services import booking_links as bl
 
     _links_allowed()
     link = get_or_404_scoped(BookingLink, link_id)
+    if link.deleted_at is not None:
+        abort(404)
     if not current_user.is_office_admin and link.created_by_user_id != current_user.id:
         abort(403)
+    return link
+
+
+@calendar_bp.post("/buchungslinks/<int:link_id>/name")
+@login_required
+def booking_link_rename(link_id):
+    from app.services import booking_links as bl
+
+    link = _own_link(link_id)
+    try:
+        bl.rename(current_user, link, request.form.get("title"))
+    except bl.LinkError as exc:
+        flash(str(exc), "error")
+    else:
+        flash("Name geändert. Der Link bleibt gleich – Kunden sehen den neuen Namen beim nächsten Öffnen.", "success")
+    return redirect(url_for("calendar.booking_links") + f"#bl-row-{link.id}")
+
+
+@calendar_bp.post("/buchungslinks/<int:link_id>/loeschen")
+@login_required
+def booking_link_delete(link_id):
+    from app.services import booking_links as bl
+
+    link = _own_link(link_id)
+    bl.delete(current_user, link)
+    flash("Buchungslink gelöscht. Er kann nicht mehr verwendet werden; bereits gebuchte Termine bleiben im Kalender.", "success")
+    return redirect(url_for("calendar.booking_links"))
+
+
+@calendar_bp.post("/buchungslinks/<int:link_id>/widerrufen")
+@login_required
+def booking_link_revoke(link_id):
+    from app.services import booking_links as bl
+
+    link = _own_link(link_id)
     bl.revoke(current_user, link)
     flash("Buchungslink widerrufen. Er kann nicht mehr verwendet werden.", "success")
     return redirect(url_for("calendar.booking_links"))

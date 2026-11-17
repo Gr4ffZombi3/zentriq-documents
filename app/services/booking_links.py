@@ -178,6 +178,28 @@ def revoke(user: User, link: BookingLink) -> None:
         db.session.commit()
 
 
+def rename(user: User, link: BookingLink, title: str | None) -> None:
+    """Namen (Terminart) aendern - Link-Adresse, Zeiten und Buchungen bleiben. Kunden sehen den neuen Namen
+    beim naechsten Oeffnen; bereits gebuchte Termine behalten ihren Kalendertitel."""
+    title = " ".join((title or "").split())[:120]
+    if not title:
+        raise LinkError("Bitte einen Namen angeben (z. B. „Beratungsgespräch“).")
+    if title != link.title:
+        link.title = title
+        db.session.commit()
+        current_app.logger.info("booking_link.renamed link=%s by=%s", link.id, user.id)
+
+
+def delete(user: User, link: BookingLink) -> None:
+    """Loeschen: Link sofort ungueltig und aus der Liste entfernt; gebuchte Termine bleiben im Kalender."""
+    now = utcnow_naive()
+    if link.revoked_at is None:
+        link.revoked_at, link.revoked_by_user_id = now, user.id
+    link.deleted_at = link.deleted_at or now
+    db.session.commit()
+    current_app.logger.info("booking_link.deleted link=%s by=%s", link.id, user.id)
+
+
 def booked_event(link: BookingLink) -> CalendarEvent | None:
     if is_open(link):
         return None
@@ -197,7 +219,7 @@ def find(token: str | None) -> BookingLink | None:
     if not token or len(token) > 100 or not re.fullmatch(r"[A-Za-z0-9_-]+", token):
         return None
     with bypass_tenant_scope():
-        return BookingLink.query.filter(BookingLink.token_hash == token_hash(token)).first()
+        return BookingLink.query.filter(BookingLink.token_hash == token_hash(token), BookingLink.deleted_at.is_(None)).first()
 
 
 def _rules(link: BookingLink) -> tuple[int, int]:
@@ -309,7 +331,7 @@ def book(link_id: int, tenant_id: int, start_value: str, contact: dict, submissi
 
     with use_tenant_id(tenant_id):
         link = BookingLink.query.filter(BookingLink.id == link_id).first()
-        if link is None:
+        if link is None or link.deleted_at is not None:
             raise LinkError("Dieser Buchungslink ist nicht mehr gültig.", "gone")
         lock = NamedLock(f"zentriq-cal-{tenant_id}-{link.assignee_user_id}", 15)
         try:
@@ -319,6 +341,8 @@ def book(link_id: int, tenant_id: int, start_value: str, contact: dict, submissi
         try:
             fresh_transaction()
             link = BookingLink.query.filter(BookingLink.id == link_id).first()
+            if link is None or link.deleted_at is not None:
+                raise LinkError("Dieser Buchungslink ist nicht mehr gültig.", "gone")
             if is_open(link):
                 return _book_open(link, start_value, contact, submission)
             existing = booked_event(link)

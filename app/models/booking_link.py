@@ -42,6 +42,9 @@ class BookingLink(TenantScopedMixin, db.Model):
     revoked_at = db.Column(db.DateTime, nullable=True)
     revoked_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    # Geloescht (Buero): Link ungueltig und aus der Liste verschwunden. Zeile bleibt, damit Termine
+    # (client_ref "bl-<id>"/"blo-<id>-...") ihre Link-Zuordnung behalten und keine ID wiederverwendet wird.
+    deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=_now)
 
     assignee = db.relationship("User", foreign_keys=[assignee_user_id])

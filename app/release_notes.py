@@ -18,6 +18,14 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 17),
+        "title": "Buchungslinks umbenennen und löschen",
+        "text": "Unter „Buchungslinks“ können Sie den Namen eines Links jederzeit ändern – die Adresse bleibt gleich, "
+        "Kunden sehen den neuen Namen beim nächsten Öffnen. Nicht mehr benötigte Links lassen sich löschen; "
+        "bereits gebuchte Termine bleiben im Kalender.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 17),
         "title": "Eigener Titel für Ihre Buchungsseite",
         "text": "Unter Kalender → Einstellungen → „Online-Buchung“ können Sie den Titel Ihrer Buchungsseite festlegen, "
         "zum Beispiel „Termin bei der HUK-COBURG – Max Muster buchen“. Er erscheint als Überschrift und im "

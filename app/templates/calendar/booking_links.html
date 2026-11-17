@@ -114,15 +114,28 @@
           <thead><tr><th scope="col">Terminart</th><th scope="col">Mitarbeiter / Kunde</th><th scope="col">Status</th><th scope="col">Link</th><th scope="col"></th></tr></thead>
           <tbody>
           {% for row in rows %}{% set link = row.link %}
-            <tr data-bl-row="{{ link.id }}"{% if new_id == link.id %} class="is-new"{% endif %}>
-              <th scope="row" class="cell-strong stack-full">{{ link.title }}<br><small>{{ link.minutes }} Min. · {% if row.open %}Verfügbarkeit aus dem Kalender · dauerhaft gültig{% else %}{{ link.offers | length }} Uhrzeiten · gültig bis {{ link.expires_at | local_dt('%d.%m.%Y') }}{% endif %}</small></th>
+            <tr id="bl-row-{{ link.id }}" data-bl-row="{{ link.id }}"{% if new_id == link.id %} class="is-new"{% endif %}>
+              <th scope="row" class="cell-strong stack-full"><span data-bl-title>{{ link.title }}</span><br><small>{{ link.minutes }} Min. · {% if row.open %}Verfügbarkeit aus dem Kalender · dauerhaft gültig{% else %}{{ link.offers | length }} Uhrzeiten · gültig bis {{ link.expires_at | local_dt('%d.%m.%Y') }}{% endif %}</small></th>
               <td data-label="Mitarbeiter / Kunde">{{ member_name(link.assignee) }}{% if link.customer %}<br><small>{{ link.customer.name }}</small>{% endif %}</td>
               <td data-label="Status" data-bl-status>
                 {{ state_tag(labels[row.status], {'active': 'success', 'used': 'info', 'expired': 'neutral', 'revoked': 'warning'}[row.status]) }}
                 {% if row.event %}<br><small>Termin {{ row.event.starts_at | local_dt('%d.%m.%Y %H:%M') }} Uhr</small>{% elif row.status == 'active' %}<br><small>{% if row.open %}{{ row.bookings }} {{ 'Buchung' if row.bookings == 1 else 'Buchungen' }} · {% endif %}{{ row.free }} Zeiten frei</small>{% endif %}
               </td>
               <td data-label="Link">{% if row.url and row.status == 'active' %}<code id="bl-url-{{ link.id }}" data-bl-url>{{ row.url }}</code><br><button type="button" class="btn btn-secondary btn-sm" data-copy="#bl-url-{{ link.id }}">Link kopieren</button>{% else %}–{% endif %}</td>
-              <td>{% if row.status == 'active' %}<form method="post" action="{{ url_for('calendar.booking_link_revoke', link_id=link.id) }}" onsubmit="return confirm('Link widerrufen? Er kann danach nicht mehr verwendet werden.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn btn-secondary btn-sm" data-bl-revoke>Widerrufen</button></form>{% endif %}</td>
+              <td class="bl-actions">
+                <details class="bl-rename" data-bl-rename>
+                  <summary class="btn btn-secondary btn-sm">Umbenennen</summary>
+                  <form method="post" action="{{ url_for('calendar.booking_link_rename', link_id=link.id) }}" class="bl-rename-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <label class="field-label" for="bl-title-{{ link.id }}">Name des Links</label>
+                    <input class="field-surface" id="bl-title-{{ link.id }}" name="title" maxlength="120" required value="{{ link.title }}">
+                    <p class="form-hint">Kunden sehen den neuen Namen als Terminart. Die Adresse des Links bleibt gleich.</p>
+                    <button type="submit" class="btn btn-primary btn-sm" data-bl-rename-save>Speichern</button>
+                  </form>
+                </details>
+                {% if row.status == 'active' %}<form method="post" action="{{ url_for('calendar.booking_link_revoke', link_id=link.id) }}" onsubmit="return confirm('Link widerrufen? Er kann danach nicht mehr verwendet werden.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn btn-secondary btn-sm" data-bl-revoke>Widerrufen</button></form>{% endif %}
+                <form method="post" action="{{ url_for('calendar.booking_link_delete', link_id=link.id) }}" onsubmit="return confirm('Diesen Link löschen? {% if row.status == 'active' %}Kunden mit diesem Link können danach nicht mehr buchen. {% endif %}Bereits gebuchte Termine bleiben im Kalender.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn btn-secondary btn-sm btn-danger-text" data-bl-delete>Löschen</button></form>
+              </td>
             </tr>
           {% endfor %}
           </tbody>

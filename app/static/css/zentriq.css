@@ -1271,6 +1271,14 @@ a.bl-option:hover { border-color: var(--color-primary); }
 .bl-mail-list { list-style: none; margin: 0.75rem 0 0; padding: 0; display: grid; gap: 0.5rem; }
 .bl-mail-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.6rem 0.75rem; border: 1px solid var(--color-border, #d5dae1); border-radius: 0.5rem; }
 .bl-mail-list small { color: var(--color-text-muted, #5b6573); }
+.bl-actions { white-space: normal; }
+.bl-actions > form, .bl-actions > details { display: inline-block; margin: 0 0.25rem 0.35rem 0; vertical-align: top; }
+.bl-rename > summary { list-style: none; cursor: pointer; }
+.bl-rename > summary::-webkit-details-marker { display: none; }
+.bl-rename[open] { display: block; }
+.bl-rename-form { display: grid; gap: 0.4rem; margin-top: 0.5rem; padding: 0.75rem; min-width: min(18rem, 100%); border: 1px solid var(--color-border, #d5dae1); border-radius: 0.5rem; background: var(--color-surface, #fff); }
+.bl-rename-form .btn { justify-self: start; }
+.btn-danger-text { color: var(--color-error-text, #8f2d30); }
 
 /* Schwebende Leiste unten rechts (Zeiterfassung, Teamchat): Seiteninhalt laesst sich immer ueber
    sie hinaus scrollen - letzte Tabellenzeile/Schaltflaeche bleibt erreichbar. */

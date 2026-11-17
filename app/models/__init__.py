@@ -10,6 +10,7 @@ from app.models.ai import (
 )
 from app.models.analysis_run import AnalysisRun
 from app.models.audit_log import AuditEventType, AuditLog
+from app.models.booking_confirmation import BookingConfirmation
 from app.models.booking_link import BookingLink
 from app.models.calendar import CalendarEvent, CalendarEventChange
 from app.models.customer import Customer
@@ -78,6 +79,7 @@ from app.models.user_session import UserSession
 from app.models.workspace import FormDraft, OfficeNews, SavedView, UserPreference
 
 __all__ = [
+    "BookingConfirmation",
     "BookingLink",
     "CalendarEvent",
     "PendingCase",

@@ -18,6 +18,15 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 17),
+        "title": "Bestätigung per E-Mail nach Online-Buchung",
+        "text": "Gibt ein Kunde beim Buchen über einen Buchungslink seine E-Mail-Adresse an, erhält er automatisch "
+        "eine Bestätigung mit Datum, Uhrzeit, Dauer und Ort bzw. dem Hinweis auf den Telefontermin. Antwortet er "
+        "darauf, landet die Antwort bei der E-Mail-Adresse Ihres Büros (Kalender → Einstellungen). Konnte eine "
+        "Bestätigung nicht zugestellt werden, sehen Sie das unter „Buchungslinks“ und können sie erneut senden.",
+        "audience": "admin",
+    },
+    {
+        "date": date(2026, 11, 17),
         "title": "Eigenes Logo auf der Buchungsseite",
         "text": "Unter Kalender → Einstellungen → „Logo Ihres Büros“ können Sie ein Logo hochladen (PNG, JPG oder "
         "WebP). Es erscheint auf Ihrer Buchungsseite, in der Buchungsbestätigung und als Bild in der Linkvorschau, "

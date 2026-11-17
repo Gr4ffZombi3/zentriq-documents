@@ -204,6 +204,7 @@ def clean_contact(name: str | None, phone: str | None, email: str | None) -> dic
 class Booked:
     start: datetime
     created: bool
+    event_id: int | None = None
 
 
 def book(page_id: int, tenant_id: int, start_value: str, contact: dict, submission: str | None) -> Booked:
@@ -235,7 +236,7 @@ def book(page_id: int, tenant_id: int, start_value: str, contact: dict, submissi
             client_ref = f"ob-{ref}"
             existing = cal.CalendarEvent.query.filter_by(created_by_user_id=assignee_id, client_ref=client_ref).first()
             if existing is not None:
-                return Booked(existing.starts_at, False)  # Doppelklick / erneut gesendet: gleiche Bestaetigung
+                return Booked(existing.starts_at, False, existing.id)  # Doppelklick / erneut gesendet: gleiche Bestaetigung
             start = local_to_utc_naive(local.date(), local.time())
             if page is None or not usable(page) or not is_free(page, start):
                 raise BookingError("Diese Uhrzeit ist leider nicht mehr frei. Bitte wählen Sie eine der aktuell freien Zeiten.", "taken")
@@ -249,7 +250,7 @@ def book(page_id: int, tenant_id: int, start_value: str, contact: dict, submissi
                 client_ref=client_ref,
             )
             current_app.logger.info("office_booking.booked page=%s event=%s created=%s", page.id, event.id, created)
-            return Booked(event.starts_at, created)
+            return Booked(event.starts_at, created, event.id)
         except Exception:
             db.session.rollback()
             raise

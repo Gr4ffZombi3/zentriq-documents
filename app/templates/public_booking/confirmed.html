@@ -10,6 +10,7 @@
       {% if view.kind %}<dt>Ort / Art</dt><dd>{{ view.kind }}</dd>{% endif %}
       {% if view.office %}<dt>Bei</dt><dd>{{ view.office }}</dd>{% endif %}
     </dl>
+    {% if when.email %}<p class="hint" data-booking-mail>Eine Bestätigung senden wir per E-Mail an <strong>{{ when.email }}</strong>.</p>{% endif %}
     <p class="hint">Sie können diese Seite schließen. Für Änderungen wenden Sie sich bitte an das Büro{% if view.phone %} unter <a href="tel:{{ view.phone | replace(' ', '') }}">{{ view.phone }}</a>{% endif %}.</p>
     {% if again_url %}<a class="again" href="{{ again_url }}" data-booking-again>Weiteren Termin buchen</a>{% endif %}
   </div>

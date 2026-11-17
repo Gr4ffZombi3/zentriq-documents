@@ -35,6 +35,21 @@ def _notice(title: str, text: str, status: int = 200, view: dict | None = None):
     return _page("public_booking/notice.html", status, title=title, text=text, view=view)
 
 
+def _confirm_by_mail(tenant_id: int, event_id, contact: dict, title: str) -> None:
+    """Bestaetigungs-E-Mail einplanen. Ein Fehler hier darf die Buchung nie rueckgaengig machen."""
+    from flask import current_app
+
+    from app.services import booking_confirmation
+
+    try:
+        booking_confirmation.queue(tenant_id, event_id, contact, title)
+    except Exception:
+        current_app.logger.exception("booking_confirmation.queue_failed event=%s", event_id)
+        from app.services.system_errors import record_system_error
+
+        record_system_error("mail", "Buchungsbestaetigung: queue", location="Buchungsbestätigung", tenant_id=tenant_id)
+
+
 def _ok_key(link) -> str:
     return "bl_ok_" + link.token_hash[:16]
 
@@ -132,8 +147,11 @@ def _handle(token):
                     return _notice("Bereits gebucht", str(exc), 200, view)
                 error, contact = str(exc), contact_input
             else:
+                if booked.created:  # erst nach dem gespeicherten Termin; Doppelklick/Neuladen: created=False
+                    _confirm_by_mail(link.tenant_id, booked.event_id, contact, link.title)
                 local = to_local(booked.start)
-                session[_ok_key(link)] = {"day": f"{WEEKDAYS[local.weekday()]}, {local.strftime('%d.%m.%Y')}", "time": local.strftime("%H:%M")}
+                session[_ok_key(link)] = {"day": f"{WEEKDAYS[local.weekday()]}, {local.strftime('%d.%m.%Y')}", "time": local.strftime("%H:%M"),
+                                          "email": (contact or {}).get("email") or ""}
                 if bl.is_open(link):
                     return redirect(url_for("public_booking.page", token=token, gebucht=1), 303)
                 return redirect(url_for("public_booking.page", token=token), 303)
@@ -181,8 +199,11 @@ def _office(page):
                 if exc.code == "taken":
                     selected = None  # Auswahl wurde aktualisiert - die alte Zeit gibt es nicht mehr
             else:
+                if booked.created:
+                    _confirm_by_mail(page.tenant_id, booked.event_id, cleaned, page.title)
                 local = to_local(booked.start)
-                session[key] = {"day": f"{WEEKDAYS[local.weekday()]}, {local.strftime('%d.%m.%Y')}", "time": local.strftime("%H:%M")}
+                session[key] = {"day": f"{WEEKDAYS[local.weekday()]}, {local.strftime('%d.%m.%Y')}", "time": local.strftime("%H:%M"),
+                                "email": cleaned.get("email") or ""}
                 return redirect(url_for("public_booking.legacy", token=page.slug, gebucht="1"), 303)
         days = _office_days(page)
         return _page("public_booking/office.html", 409 if error else 200, view=view, days=days, error=error, contact=contact,

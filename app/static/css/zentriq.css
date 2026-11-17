@@ -1268,6 +1268,9 @@ a.bl-option:hover { border-color: var(--color-primary); }
   .zq-step .btn { min-height: 2.5rem; padding: 0 0.7rem; font-size: 0.78rem; white-space: normal; text-align: center; max-width: 9.5rem; }
 }
 .bl-office-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.bl-mail-list { list-style: none; margin: 0.75rem 0 0; padding: 0; display: grid; gap: 0.5rem; }
+.bl-mail-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.6rem 0.75rem; border: 1px solid var(--color-border, #d5dae1); border-radius: 0.5rem; }
+.bl-mail-list small { color: var(--color-text-muted, #5b6573); }
 
 /* Schwebende Leiste unten rechts (Zeiterfassung, Teamchat): Seiteninhalt laesst sich immer ueber
    sie hinaus scrollen - letzte Tabellenzeile/Schaltflaeche bleibt erreichbar. */

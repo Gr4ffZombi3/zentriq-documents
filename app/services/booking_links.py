@@ -265,6 +265,7 @@ def public_view(link: BookingLink) -> dict:
 class Booked:
     start: datetime
     created: bool
+    event_id: int | None = None
 
 
 def _actor(link: BookingLink) -> User:
@@ -316,7 +317,7 @@ def book(link_id: int, tenant_id: int, start_value: str, contact: dict, submissi
             existing = booked_event(link)
             if existing is not None or link.booking_count >= link.max_bookings:
                 if existing is not None and submission and link.last_submission == submission:
-                    return Booked(existing.starts_at, False)  # doppelt abgeschickt: gleiche Bestaetigung
+                    return Booked(existing.starts_at, False, existing.id)  # doppelt abgeschickt: gleiche Bestaetigung
                 raise LinkError("Über diesen Link wurde bereits ein Termin gebucht.", "used")
             if link.revoked_at is not None or link.expires_at <= utcnow_naive():
                 raise LinkError("Dieser Buchungslink ist abgelaufen oder wurde zurückgezogen.", "gone")
@@ -347,7 +348,7 @@ def book(link_id: int, tenant_id: int, start_value: str, contact: dict, submissi
                 db.session.rollback()
                 raise LinkError("Über diesen Link wurde bereits ein Termin gebucht.", "used")
             current_app.logger.info("booking_link.booked link=%s event=%s", link.id, event.id)
-            return Booked(event.starts_at, True)
+            return Booked(event.starts_at, True, event.id)
         except Exception:
             db.session.rollback()
             raise
@@ -369,7 +370,7 @@ def _book_open(link: BookingLink, start_value: str, contact: dict, submission: s
     client_ref = f"blo-{link.id}-{ref}"
     existing = CalendarEvent.query.filter(CalendarEvent.client_ref == client_ref).first()
     if existing is not None:
-        return Booked(existing.starts_at, False)  # Doppelklick / Antwort verloren: gleiche Bestaetigung
+        return Booked(existing.starts_at, False, existing.id)  # Doppelklick / Antwort verloren: gleiche Bestaetigung
     try:
         local = _parse_local(start_value)
     except (TypeError, ValueError):
@@ -394,7 +395,7 @@ def _book_open(link: BookingLink, start_value: str, contact: dict, submission: s
         client_ref=client_ref,
     )
     current_app.logger.info("booking_link.booked_open link=%s event=%s created=%s", link.id, event.id, created)
-    return Booked(event.starts_at, created)
+    return Booked(event.starts_at, created, event.id)
 
 
 def _logo(settings, external: bool = False):

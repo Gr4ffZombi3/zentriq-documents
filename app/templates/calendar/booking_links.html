@@ -8,6 +8,24 @@
     <a class="btn btn-secondary btn-sm" href="{{ url_for('calendar.index') }}">Zum Kalender</a>
   </div>
 
+  {% if mail_problems %}
+    {# Nur Buero-Admin: Bestaetigungs-E-Mails, die nicht zugestellt werden konnten - der Termin selbst ist gebucht. #}
+    <section class="panel" aria-labelledby="bl-mail" data-bl-mail-problems>
+      <header class="panel-header"><h2 class="panel-title" id="bl-mail">Bestätigungs-E-Mails nicht zugestellt</h2></header>
+      <div class="panel-body">
+        <p class="hint">Die Termine sind gebucht und stehen im Kalender – nur die Bestätigung an den Kunden ist nicht angekommen. Senden Sie sie erneut oder melden Sie sich direkt beim Kunden.</p>
+        <ul class="bl-mail-list">
+          {% for p in mail_problems %}
+            <li data-bl-mail-problem="{{ p.id }}">
+              <span><strong>{{ p.name or p.recipient }}</strong>{% if p.name %} · {{ p.recipient }}{% endif %}{% if p.when %} · Termin {{ p.when }} Uhr{% endif %}<br><small>{{ p.error }} · gebucht {{ p.booked }}</small></span>
+              {% if p.resendable %}<form method="post" action="{{ url_for('calendar.booking_confirmation_resend', confirmation_id=p.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn btn-secondary btn-sm" data-bl-mail-resend>Erneut senden</button></form>{% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </section>
+  {% endif %}
+
   {# Zwei Wege: konkrete Zeiten vorschlagen (persoenlicher Link, eine Buchung) oder den festen
      allgemeinen Buchungslink des Bueros kopieren (bleibt gueltig, z. B. fuer die Signatur). #}
   <section class="panel bl-options" aria-label="Buchungslink">

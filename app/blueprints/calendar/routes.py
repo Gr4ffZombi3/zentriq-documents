@@ -410,8 +410,11 @@ def booking_links():
 
     office_page = ob.page_for_office()
     office_link = ob.public_url(office_page) if office_page and ob.usable(office_page) else None
+    from app.services import booking_confirmation
+
+    mail_problems = booking_confirmation.problems() if current_user.is_office_admin else []
     return render_template(
-        "calendar/booking_links.html", office_page=office_page, office_link=office_link,
+        "calendar/booking_links.html", office_page=office_page, office_link=office_link, mail_problems=mail_problems,
         rows=rows, labels=bl.STATUS_LABELS, members=_link_assignees(), member_name=cal.member_name,
         kinds=cal.LOCATION_KINDS, customer=customer, new_id=request.args.get("neu", type=int),
         defaults={"from": (today + timedelta(days=1)).isoformat(), "to": (today + timedelta(days=7)).isoformat(),
@@ -470,6 +473,22 @@ def booking_link_create():
         return redirect(back)
     flash(f"Buchungslink erstellt ({len(link.offers)} freigegebene Uhrzeiten). Link kopieren und an den Kunden senden.", "success")
     return redirect(url_for("calendar.booking_links", neu=link.id))
+
+
+@calendar_bp.post("/buchungslinks/bestaetigung/<int:confirmation_id>/erneut")
+@login_required
+def booking_confirmation_resend(confirmation_id):
+    """Buero-Admin: nicht zugestellte Bestaetigungs-E-Mail erneut senden (aktuelles Buero)."""
+    from app.services import booking_confirmation
+
+    _links_allowed()
+    if not current_user.is_office_admin:
+        abort(403)
+    if booking_confirmation.resend(confirmation_id):
+        flash("Bestätigung wird erneut gesendet.", "success")
+    else:
+        flash("Diese Bestätigung kann nicht erneut gesendet werden.", "error")
+    return redirect(url_for("calendar.booking_links"))
 
 
 @calendar_bp.post("/buchungslinks/<int:link_id>/widerrufen")

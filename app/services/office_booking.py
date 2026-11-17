@@ -181,6 +181,7 @@ def public_view(page: OfficeBookingPage) -> dict:
         "person": None, "title": page.title, "kind": None, "minutes": page.minutes, "office": office,
         "address": (s.address or "").strip() if s else "", "phone": (s.phone or "").strip() if s else "",
         "email": (s.email or "").strip() if s else "", "needs_contact": True,
+        "logo_url": _logo(s), "logo_abs": _logo(s, external=True),
     }
 
 
@@ -254,3 +255,9 @@ def book(page_id: int, tenant_id: int, start_value: str, contact: dict, submissi
             raise
         finally:
             lock.release()
+
+
+def _logo(settings, external: bool = False):
+    from app.services.office_logo import url_of
+
+    return url_of(settings, external=external)

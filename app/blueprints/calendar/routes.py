@@ -298,7 +298,7 @@ def settings():
     return _render_settings(record, form=request.form if errors else None, errors=errors)
 
 
-def _render_settings(record, *, form=None, errors=None, ob_form=None, ob_errors=None, status=200):
+def _render_settings(record, *, form=None, errors=None, ob_form=None, ob_errors=None, logo_error=None, status=200):
     from app.services import availability
     from app.services import office_booking as ob
 
@@ -313,7 +313,36 @@ def _render_settings(record, *, form=None, errors=None, ob_form=None, ob_errors=
         ob_page=page, ob_form=ob_form, ob_errors=ob_errors or [],
         ob_members=cal.office_members(), member_name=cal.member_name, ob_suggested=ob.suggested_slug(current_user),
         ob_base=(current_app.config.get("PUBLIC_URL") or request.url_root).rstrip("/"), ob_url=ob.public_url(page) if page else None,
+        logo_url=_logo_url(record), logo_error=logo_error,
     ), status
+
+
+def _logo_url(record):
+    from app.services.office_logo import url_of
+
+    return url_of(record)
+
+
+@calendar_bp.post("/einstellungen/logo")
+@login_required
+def logo_upload():
+    """Buerologo hochladen bzw. entfernen (nur Buero-Admin; app/services/office_logo.py)."""
+    from app.models import OfficeSettings
+    from app.services import office_logo
+
+    if not current_user.is_office_admin:
+        abort(403)
+    if request.form.get("aktion") == "entfernen":
+        office_logo.remove(current_user)
+        flash("Logo entfernt – die Buchungsseite zeigt wieder die Anfangsbuchstaben.", "success")
+        return redirect(url_for("calendar.settings") + "#s-logo")
+    upload = request.files.get("logo")
+    try:
+        office_logo.save(current_user, upload.read(office_logo.MAX_UPLOAD_BYTES + 1) if upload else b"")
+    except office_logo.LogoError as exc:
+        return _render_settings(OfficeSettings.query.first(), logo_error=str(exc), status=422)
+    flash("Logo gespeichert. Es erscheint auf Ihrer Buchungsseite und in der Bestätigung.", "success")
+    return redirect(url_for("calendar.settings") + "#s-logo")
 
 
 @calendar_bp.post("/einstellungen/online-buchung")

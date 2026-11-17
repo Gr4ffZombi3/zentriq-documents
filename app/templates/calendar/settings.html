@@ -65,6 +65,32 @@
     <div class="huk-form-actions"><button type="submit" class="btn btn-primary">Speichern</button></div>
   </form>
 
+  {# Buerologo (app/services/office_logo.py): eigenes Formular mit Datei-Upload. #}
+  <form method="post" action="{{ url_for('calendar.logo_upload') }}" enctype="multipart/form-data" class="huk-form" id="s-logo" data-logo-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <section class="panel" aria-labelledby="s-logo-title">
+      <header class="panel-header"><h2 class="panel-title" id="s-logo-title">Logo Ihres Büros</h2></header>
+      <div class="panel-body huk-fields">
+        {% if logo_error %}<p class="form-error" role="alert" data-logo-error>{{ logo_error }}</p>{% endif %}
+        <p class="form-hint">Erscheint auf Ihrer öffentlichen Buchungsseite, in der Buchungsbestätigung und als Bild in der Linkvorschau (z. B. WhatsApp). Ohne Logo zeigen wir die Anfangsbuchstaben des Büronamens.</p>
+        <div class="logo-row">
+          <div class="logo-preview" data-logo-preview>
+            {% if logo_url %}<img src="{{ logo_url }}" alt="Aktuelles Logo">{% else %}<span class="form-hint">Noch kein Logo</span>{% endif %}
+          </div>
+          <div class="huk-field">
+            <label class="field-label" for="s-logo-file">{{ 'Neues Logo auswählen' if logo_url else 'Logo auswählen' }}</label>
+            <input class="field-surface" id="s-logo-file" name="logo" type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" required>
+            <p class="form-hint">PNG, JPG oder WebP, höchstens 3 MB. Am besten quer und mit transparentem Hintergrund – wir verkleinern auf höchstens 600 × 240 Pixel.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+    <div class="huk-form-actions">
+      <button type="submit" class="btn btn-primary">Logo hochladen</button>
+      {% if logo_url %}<button type="submit" class="btn btn-secondary" name="aktion" value="entfernen" formnovalidate data-logo-remove>Logo entfernen</button>{% endif %}
+    </div>
+  </form>
+
   {# Allgemeiner Buchungslink des Bueros (app/services/office_booking.py): eigenes Formular. #}
   {% set obf = ob_form or {} %}
   <form method="post" action="{{ url_for('calendar.online_booking_settings') }}" class="huk-form" id="online-buchung" data-ob-settings>

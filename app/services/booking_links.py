@@ -257,6 +257,7 @@ def public_view(link: BookingLink) -> dict:
         "phone": (s.phone or "").strip() if s else "",
         "email": (s.email or "").strip() if s else "",
         "needs_contact": link.customer_id is None,
+        "logo_url": _logo(s), "logo_abs": _logo(s, external=True),
     }
 
 
@@ -394,3 +395,9 @@ def _book_open(link: BookingLink, start_value: str, contact: dict, submission: s
     )
     current_app.logger.info("booking_link.booked_open link=%s event=%s created=%s", link.id, event.id, created)
     return Booked(event.starts_at, created)
+
+
+def _logo(settings, external: bool = False):
+    from app.services.office_logo import url_of
+
+    return url_of(settings, external=external)

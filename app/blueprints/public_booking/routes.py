@@ -53,6 +53,29 @@ def _grouped(times) -> "OrderedDict[str, list]":
     return days
 
 
+@public_booking_bp.get("/logo/<rev>.png")
+def logo(rev):
+    """Buerologo fuer Buchungsseite und Linkvorschau - oeffentlich, Adresse = Inhalts-Kennung."""
+    from flask import abort
+
+    from app.models.office_settings import OfficeSettings
+    from app.tenancy import bypass_tenant_scope
+
+    if len(rev) != 16 or any(ch not in "0123456789abcdef" for ch in rev):
+        abort(404)
+    with bypass_tenant_scope():
+        record = OfficeSettings.query.filter(OfficeSettings.logo_rev == rev).first()
+        data = record.logo_png if record is not None else None
+    if not data:
+        abort(404)
+    response = make_response(data)
+    response.headers["Content-Type"] = "image/png"
+    response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
+    return response
+
+
 @public_booking_bp.route("/<token>", methods=["GET", "POST"])
 def legacy(token):
     """Allgemeiner Buchungslink des Bueros (/termin/<adresse>) bzw. bereits verschickte persoenliche Links

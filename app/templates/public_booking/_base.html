@@ -13,6 +13,9 @@
   <meta property="og:site_name" content="Zentriqai">
   <meta property="og:title" content="{{ preview_title }}">
   <meta property="og:description" content="Online-Terminbuchung{% if view and view.office %} – {{ view.office }}{% endif %}. Eine Anmeldung ist nicht erforderlich.">
+  {%- if view and view.logo_abs %}
+  <meta property="og:image" content="{{ view.logo_abs }}">
+  {%- endif %}
   <meta name="theme-color" content="#f5f6f8">
   {#- Gleiche Schrift und Farben wie die Arbeitsoberflaeche (app/static/css/tailwind_source.css). -#}
   <link rel="preload" href="/static/fonts/InterVariable-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -24,6 +27,8 @@
     body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 "InterVariable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-feature-settings: "cv11", "ss01"; -webkit-text-size-adjust: 100%; -webkit-font-smoothing: antialiased; }
     main { max-width: 36rem; margin: 0 auto; padding: 1.5rem 1rem 2rem; }
     .brand { display: flex; align-items: center; gap: 0.85rem; }
+    .logo { flex: none; display: block; max-width: min(10rem, 40vw); max-height: 3.5rem; width: auto; height: auto; object-fit: contain; }
+    .brand:has(.logo) { flex-wrap: wrap; }
     .mono { flex: none; display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: 0.85rem; background: var(--accent); color: var(--accent-text); font-weight: 650; font-size: 1.1rem; letter-spacing: 0.02em; }
     .eyebrow { margin: 0; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--accent); }
     h1 { font-size: 1.4rem; line-height: 1.25; margin: 0.1rem 0 0; font-weight: 650; letter-spacing: -0.01em; overflow-wrap: anywhere; }
@@ -101,7 +106,8 @@
       {%- for w in (view.office or '').replace('&', ' ').replace('-', ' ').split() if w | lower not in skip and w[:1].isalpha() %}{% if initials | length < 2 %}{% set _ = initials.append(w[:1] | upper) %}{% endif %}{% endfor %}
       <header>
         <div class="brand">
-          {% if initials %}<span class="mono" aria-hidden="true" data-booking-mono>{{ initials | join('') }}</span>{% endif %}
+          {% if view.logo_url %}<img class="logo" src="{{ view.logo_url }}" alt="Logo {{ view.office }}" data-booking-logo>
+          {% elif initials %}<span class="mono" aria-hidden="true" data-booking-mono>{{ initials | join('') }}</span>{% endif %}
           <div>
             <p class="eyebrow">Online-Terminbuchung</p>
             <h1>{% block heading %}{{ view.heading if view.person else (view.office or view.heading) }}{% endblock %}</h1>

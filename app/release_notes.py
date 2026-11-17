@@ -18,6 +18,14 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 17),
+        "title": "Eigenes Logo auf der Buchungsseite",
+        "text": "Unter Kalender → Einstellungen → „Logo Ihres Büros“ können Sie ein Logo hochladen (PNG, JPG oder "
+        "WebP). Es erscheint auf Ihrer Buchungsseite, in der Buchungsbestätigung und als Bild in der Linkvorschau, "
+        "zum Beispiel in WhatsApp. Ohne Logo bleiben die Anfangsbuchstaben Ihres Büros.",
+        "audience": "admin",
+    },
+    {
+        "date": date(2026, 11, 17),
         "title": "Neues, helleres Erscheinungsbild und schnellere Bedienung",
         "text": "Zentriq ist heller und ruhiger: weiße Karten auf sanftem Hintergrund, gut lesbare Schrift und "
         "deutliche Rahmen an Suche und Eingabefeld. Die Seitenleiste ist nach Arbeitsabläufen geordnet – mit "

@@ -31,5 +31,10 @@ class OfficeSettings(TenantScopedMixin, db.Model):
     buffer_minutes = db.Column(db.Integer, nullable=False, default=0, server_default="0")
     lead_minutes = db.Column(db.Integer, nullable=False, default=120, server_default="120")
     horizon_days = db.Column(db.Integer, nullable=False, default=14, server_default="14")
+    # Buerologo fuer Buchungsseite/Bestaetigung/Linkvorschau (app/services/office_logo.py): bereits
+    # geprueft, verkleinert und als PNG neu gespeichert. deferred: wird nur beim Ausliefern geladen.
+    logo_png = db.deferred(db.Column(db.LargeBinary(length=16 * 1024 * 1024 - 1), nullable=True))
+    # Inhalts-Kennung (sha256, 16 Zeichen) - Teil der oeffentlichen URL, aendert sich mit jedem Logo.
+    logo_rev = db.Column(db.String(16), nullable=True, index=True)
     updated_at = db.Column(db.DateTime, nullable=False, default=_now, onupdate=_now)
     updated_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

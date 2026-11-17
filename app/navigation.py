@@ -49,6 +49,8 @@ class NavArea:
     icon: str = "file-text"
     # False: nicht in der Seitenleiste, aber weiter ueber die Schnellsuche erreichbar.
     in_sidebar: bool = True
+    # Endpunkte unter prefixes, die zu einem eigenen Bereich gehoeren (Kalender ohne Buchungslinks).
+    exclude: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -108,14 +110,26 @@ PLATFORM_GROUPS = (
 )
 
 OFFICE_GROUPS = (
+    # Nach Arbeitsablauf: wen betrifft es (Kunden, Termine, Buchungslink) - was ist zu tun.
     NavGroup(
         "main",
-        None,
+        "Kunden & Termine",
         (
             # Zentriq-Kundenstamm (nur OFFICE_ADMIN); Mitarbeiter finden Kunden ueber die Suche.
             NavArea("customers", "Kunden", "customers.list_customers", ("customers.",), admin_only=True, icon="users"),
             NavArea("customer_search", "Kunden", "search.search", ("search.",), admin_only=False, staff_only=True, icon="users"),
-            NavArea("calendar", "Kalender", "calendar.index", ("calendar.",), admin_only=False, icon="calendar"),
+            NavArea("calendar", "Kalender", "calendar.index", ("calendar.",), admin_only=False, icon="calendar",
+                    exclude=("calendar.booking_links", "calendar.booking_link_create", "calendar.booking_link_revoke")),
+            # Eigener Eintrag, damit ein neues Buero seinen Buchungslink sofort findet.
+            NavArea("booking_links", "Buchungslinks", "calendar.booking_links",
+                    ("calendar.booking_links", "calendar.booking_link_create", "calendar.booking_link_revoke"), admin_only=False, icon="link"),
+            NavArea("overview", "Übersicht", "portal.overview", ("portal.overview",), admin_only=False, icon="layout-dashboard", in_sidebar=False),
+        ),
+    ),
+    NavGroup(
+        "work",
+        "Abarbeiten",
+        (
             NavArea(
                 "leipziger",
                 "Leipziger Liste",
@@ -127,7 +141,6 @@ OFFICE_GROUPS = (
             ),
             NavArea("voice", "Memo", "dashboard.index", ("dashboard.",), admin_only=False, icon="mic"),
             NavArea("time", "Zeiterfassung", "timetracking.index", ("timetracking.",), admin_only=False, items=TIME_ITEMS, icon="clock"),
-            NavArea("overview", "Übersicht", "portal.overview", ("portal.overview",), admin_only=False, icon="layout-dashboard", in_sidebar=False),
         ),
     ),
     NavGroup(
@@ -194,9 +207,12 @@ def build_navigation() -> dict:
                 continue
             if area.staff_only and is_admin:
                 continue
+            # Buchungslinks nur mit Berechtigung (Admin immer, Mitarbeiter mit Freigabe) - sonst 403.
+            if area.key == "booking_links" and not getattr(current_user, "may_send_booking_links", False):
+                continue
             if not _visible(area, is_admin):
                 continue
-            active = active_area is None and _matches(endpoint, area.prefixes)
+            active = active_area is None and _matches(endpoint, area.prefixes) and not _matches(endpoint, area.exclude)
             if from_staff and area.key in ("staff", "office_settings"):
                 active = area.key == "staff"
             entries.append(

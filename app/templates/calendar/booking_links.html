@@ -21,7 +21,10 @@
         {% if office_link %}
           <span>Fester Link Ihres Büros – bleibt nach jeder Buchung gültig, geeignet für die E-Mail-Signatur.</span>
           <code id="bl-office-url" data-bl-office-url>{{ office_link }}</code>
-          <button type="button" class="btn btn-primary btn-sm" data-copy="#bl-office-url" data-bl-office-copy>Allgemeinen Buchungslink kopieren</button>
+          <span class="bl-office-actions">
+            <button type="button" class="btn btn-primary btn-sm" data-copy="#bl-office-url" data-bl-office-copy>Allgemeinen Buchungslink kopieren</button>
+            <a class="btn btn-secondary btn-sm" href="{{ office_link }}" target="_blank" rel="noopener" data-bl-office-preview>Buchungsseite ansehen</a>
+          </span>
         {% elif current_user.is_office_admin %}
           <span>Noch nicht aktiv. Online-Buchungszeiten und Adresse legen Sie in den Kalender-Einstellungen fest.</span>
           <a class="btn btn-secondary btn-sm" href="{{ url_for('calendar.settings') }}#online-buchung">Online-Buchung einrichten</a>
@@ -108,7 +111,7 @@
         </table>
       </div>
     {% else %}
-      <p class="empty-note">Noch keine Buchungslinks.</p>
+      <p class="empty-note">Noch keine persönlichen Buchungslinks. Wählen Sie oben „Termine vorschlagen“, um einem Kunden zwei bis fünf passende Zeiten zu schicken – gebuchte Termine erscheinen automatisch im Kalender.</p>
     {% endif %}
   </section>
 </div>

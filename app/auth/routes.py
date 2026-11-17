@@ -83,7 +83,10 @@ def _complete_login(user: User, details: dict | None = None):
     workspace.record_login(user)
     db.session.commit()
     log_audit_event(AuditEventType.LOGIN_SUCCESS, tenant_id=user.tenant_id, user=user, details=details)
-    return redirect(url_for("portal.home"))
+    # Direkt zur Startseite der Rolle (vorher Umweg ueber "/" = eine Weiterleitung mehr pro Login).
+    from app.navigation import home_endpoint_for
+
+    return redirect(url_for(home_endpoint_for(user)))
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])

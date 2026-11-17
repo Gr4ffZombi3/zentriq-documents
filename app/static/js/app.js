@@ -1036,3 +1036,64 @@
   var existing = document.querySelector("[data-zq-farewell]");
   if (existing) arm(existing);
 })();
+
+// Sofortige Rueckmeldung bei Aktionen (Designsystem 2026-11):
+// - Seitenwechsel per Link oder Formular: schmaler Ladebalken oben (.zq-progress), sobald der
+//   Browser wirklich navigiert (Links, die andere Skripte abfangen - Reiter, Seitenfenster -,
+//   bleiben aussen vor).
+// - Klassische Formulare: der gedrueckte Knopf zeigt "beschaeftigt" (.is-busy) und ein zweites
+//   Absenden desselben Formulars wird im Browser verworfen. Der Server schuetzt zusaetzlich
+//   (_idem, js/session-guard.js). Nach Zurueck (bfcache) oder Datei-Download ist alles wieder frei.
+(function () {
+  var root = document.documentElement;
+  var bar = document.createElement("div");
+  bar.className = "zq-progress";
+  bar.setAttribute("aria-hidden", "true");
+  var safety = null;
+  function attach() { if (!bar.parentNode && document.body) document.body.appendChild(bar); }
+  if (document.body) attach(); else document.addEventListener("DOMContentLoaded", attach);
+
+  function busyOff() {
+    root.classList.remove("zq-loading");
+    Array.prototype.forEach.call(document.querySelectorAll(".is-busy[data-zq-busy]"), function (b) {
+      b.classList.remove("is-busy"); b.removeAttribute("data-zq-busy"); b.removeAttribute("aria-busy");
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("form[data-zq-submitting]"), function (f) { f.removeAttribute("data-zq-submitting"); });
+  }
+  function loading() {
+    attach();
+    root.classList.add("zq-loading");
+    clearTimeout(safety);
+    safety = setTimeout(busyOff, 12000); // z. B. Datei-Download: Seite bleibt stehen
+  }
+  window.addEventListener("pageshow", busyOff);
+
+  document.addEventListener("click", function (e) {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var a = e.target.closest && e.target.closest("a[href]");
+    if (!a || a.target && a.target !== "_self" || a.hasAttribute("download") || a.hasAttribute("data-no-progress")) return;
+    var href = a.getAttribute("href");
+    if (!href || href.charAt(0) === "#" || /^(javascript|mailto|tel):/i.test(href)) return;
+    if (a.origin !== location.origin) return;
+    if (a.pathname === location.pathname && a.search === location.search && a.hash) return;
+    // Erst nach allen anderen Klick-Handlern entscheiden (Reiter/Seitenfenster rufen preventDefault).
+    setTimeout(function () { if (!e.defaultPrevented) loading(); }, 0);
+  });
+
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (!form || form.tagName !== "FORM") return;
+    if (form.target && form.target !== "_self") return;
+    if (form.hasAttribute("hx-post") || form.hasAttribute("hx-get") || form.hasAttribute("data-no-progress")) return;
+    if (form.hasAttribute("data-zq-submitting")) { e.preventDefault(); return; }
+    var submitter = e.submitter;
+    setTimeout(function () {
+      if (e.defaultPrevented) return; // Skript der Seite uebernimmt (fetch) oder Pruefung laeuft
+      form.setAttribute("data-zq-submitting", "");
+      if (submitter && submitter.classList) {
+        submitter.classList.add("is-busy"); submitter.setAttribute("data-zq-busy", ""); submitter.setAttribute("aria-busy", "true");
+      }
+      loading();
+    }, 0);
+  });
+})();

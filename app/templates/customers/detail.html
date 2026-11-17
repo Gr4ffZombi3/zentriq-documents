@@ -22,73 +22,53 @@
     <div class="zq-live" data-zq-live="{{ url_for('workspace.live_token', customer_id=customer.id) }}"
          data-zq-live-editing="{{ url_for('workspace.live_editing', customer_id=customer.id) }}" hidden></div>
   {% endif %}
-  {% if panel %}
-    <p class="zq-panel-kicker">Kundenakte</p>
-  {% else %}
-    {% call page_header(customer.name, 'Stammdaten, zugeordnete Dokumente und alle erkannten Leipziger-Vorgänge in einer kompakten Akte.', 'Kundenakte') %}
-      {{ button(back_label, href=back_url, variant='secondary', icon_name='arrow-left') }}
-    {% endcall %}
-  {% endif %}
+  {% if panel %}<p class="zq-panel-kicker">Kundenakte</p>{% endif %}
+  {# Kopf der Akte: wer (Name, Nummer, Zuordnung), wie erreichbar (antippbar), was tun (Aktionen). #}
+  {% set initials = (customer.first_name[:1] if customer.first_name else customer.name[:1]) ~ (customer.last_name[:1] if customer.last_name else '') %}
+  <header class="cust-head" data-cust-head>
+    <div class="cust-id">
+      <span class="cust-avatar" aria-hidden="true">{{ initials | upper }}</span>
+      <div class="min-w-0">
+        {% if panel %}<p class="cust-name">{{ customer.name }}</p>{% else %}<h1 class="cust-name">{{ customer.name }}</h1>{% endif %}
+        <p class="cust-sub">
+          {% if customer.customer_number %}<span class="tabular">Kd.-Nr. {{ customer.customer_number }}</span>{% endif %}
+          {% if customer.date_of_birth %}<span>geb. <span class="tabular">{{ customer.date_of_birth.strftime('%d.%m.%Y') }}</span></span>{% endif %}
+          {% if customer.date_of_birth and customer.postal_code %}
+            {{ badge('Stabile Zuordnung', variant='success') }}
+          {% elif customer.date_of_birth or customer.postal_code %}
+            {{ badge('Teilweise abgesichert', variant='warning') }}
+          {% else %}
+            {{ badge('Nur Namensabgleich', variant='muted') }}
+          {% endif %}
+          {% if possible_duplicates %}{{ badge('Mögliche Dublette', variant='warning') }}{% endif %}
+        </p>
+      </div>
+      {% if not panel %}<a class="btn btn-secondary btn-sm cust-back" href="{{ back_url }}">{{ icon('arrow-left', class='h-4 w-4') }}{{ back_label }}</a>{% endif %}
+    </div>
+    <ul class="cust-contact" aria-label="Kontaktdaten">
+      {% set phone = customer.phone or customer.phone_landline or customer.phone_private %}
+      {% if phone %}<li><a href="tel:{{ phone | replace(' ', '') }}">{{ icon('phone', class='h-4 w-4') }}<span class="tabular">{{ phone }}</span></a></li>{% endif %}
+      {% if customer.email %}<li><a href="mailto:{{ customer.email }}">{{ icon('mail', class='h-4 w-4') }}<span>{{ customer.email }}</span></a></li>{% endif %}
+      {% if customer.street or customer.city or customer.postal_code %}
+        <li><span>{{ icon('map-pin', class='h-4 w-4') }}<span>{% if customer.street %}{{ customer.street }} {{ customer.house_number or '' }}, {% endif %}{{ customer.postal_code or '' }} {{ customer.city or '' }}</span></span></li>
+      {% endif %}
+      {% if not phone and not customer.email %}<li class="cust-contact-missing">Noch keine Telefonnummer oder E-Mail hinterlegt – unten unter „Stammdaten“ ergänzen.</li>{% endif %}
+    </ul>
+    <div class="cust-actions" role="group" aria-label="Aktionen zum Kunden">
+      <a class="btn btn-primary btn-sm" href="{{ url_for('zentriq.index', kunde=customer.id) }}">{{ icon('square-pen', class='h-4 w-4') }}Notiz oder Rückruf</a>
+      <a class="btn btn-secondary btn-sm" href="{{ url_for('calendar.index', kunde=customer.id, kunde_name=customer.name) }}">{{ icon('calendar-plus', class='h-4 w-4') }}Termin eintragen</a>
+      {% if current_user.may_send_booking_links %}<a class="btn btn-secondary btn-sm" href="{{ url_for('calendar.booking_links', kunde=customer.id) }}">{{ icon('link', class='h-4 w-4') }}Buchungslink senden</a>{% endif %}
+      <a class="btn btn-secondary btn-sm" href="{{ url_for('huk.new', kunde=customer.id) }}">{{ icon('trending-up', class='h-4 w-4') }}Kfz-Berechnung</a>
+    </div>
+  </header>
 
-  <div class="chip-bar">
-    {% if customer.date_of_birth %}
-      <span class="meta-chip">{{ icon('calendar-days', class='h-3.5 w-3.5') }}{{ customer.date_of_birth.strftime('%d.%m.%Y') }}</span>
-    {% endif %}
-    {% if customer.city or customer.postal_code %}
-      <span class="meta-chip">{{ icon('map-pin', class='h-3.5 w-3.5') }}{{ customer.city or '-' }}{% if customer.postal_code %} / {{ customer.postal_code }}{% endif %}</span>
-    {% endif %}
-    {% if customer.email %}
-      <span class="meta-chip">{{ icon('mail', class='h-3.5 w-3.5') }}{{ customer.email }}</span>
-    {% endif %}
-    {% if customer.phone %}
-      <span class="meta-chip">{{ icon('phone', class='h-3.5 w-3.5') }}{{ customer.phone }}</span>
-    {% endif %}
-    {% if customer.date_of_birth and customer.postal_code %}
-      {{ badge('Stabile Zuordnung', variant='success') }}
-    {% elif customer.date_of_birth or customer.postal_code %}
-      {{ badge('Teilweise abgesichert', variant='warning') }}
-    {% else %}
-      {{ badge('Nur Namensabgleich', variant='muted') }}
-    {% endif %}
-    {% if possible_duplicates %}
-      {{ badge('Mögliche Dublette', variant='warning') }}
-    {% endif %}
-  </div>
-
-  <section class="summary-strip summary-strip-6" aria-label="Kundenzusammenfassung">
-    <article class="summary-metric">
-      <span class="summary-metric-label">Dokumente</span>
-      <strong class="summary-metric-value">{{ summary.documents }}</strong>
-      <p class="summary-metric-copy">Verknüpfte Uploads</p>
-    </article>
-    <article class="summary-metric">
-      <span class="summary-metric-label">Vorgänge</span>
-      <strong class="summary-metric-value">{{ summary.cases }}</strong>
-      <p class="summary-metric-copy">Erkannte Listenzeilen</p>
-    </article>
-    <article class="summary-metric">
-      <span class="summary-metric-label">Angebote</span>
-      <strong class="summary-metric-value">{{ summary.offers }}</strong>
-      <p class="summary-metric-copy">Offene Angebotsfälle</p>
-    </article>
-    <article class="summary-metric">
-      <span class="summary-metric-label">Abschlüsse</span>
-      <strong class="summary-metric-value">{{ summary.closures }}</strong>
-      <p class="summary-metric-copy">Mit dokumentiertem Beginn</p>
-    </article>
-    <article class="summary-metric">
-      <span class="summary-metric-label">Offene Vorgänge</span>
-      <strong class="summary-metric-value">{{ summary.open_cases }}</strong>
-      <p class="summary-metric-copy">Mit Folgebedarf</p>
-    </article>
-    <article class="summary-metric">
-      <span class="summary-metric-label">Stornos</span>
-      <strong class="summary-metric-value">{{ summary.stornos }}</strong>
-      <p class="summary-metric-copy">Erkannte Abgänge</p>
-    </article>
+  <section class="cust-kpis" aria-label="Kundenzusammenfassung">
+    {% for label, value, hint in (('Dokumente', summary.documents, 'Verknüpfte Uploads'), ('Vorgänge', summary.cases, 'Erkannte Listenzeilen'), ('Offen', summary.open_cases, 'Vorgänge mit Folgebedarf'), ('Angebote', summary.offers, 'Offene Angebotsfälle'), ('Abschlüsse', summary.closures, 'Mit dokumentiertem Beginn'), ('Stornos', summary.stornos, 'Erkannte Abgänge')) %}
+      <div class="cust-kpi{{ ' is-zero' if not value }}" title="{{ hint }}"><span class="cust-kpi-value tabular">{{ value }}</span><span class="cust-kpi-label">{{ label }}</span></div>
+    {% endfor %}
   </section>
 
-  <div class="grid gap-5 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+  <div class="grid gap-5 items-start xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
     {% call card(padding='p-5 sm:p-6') %}
       <div class="section-heading">
         <div>

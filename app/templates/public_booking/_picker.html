@@ -1,0 +1,95 @@
+{#- Terminauswahl fuer die oeffentlichen Buchungsseiten (office.html: dauerhafter Buero-Link,
+    page.html: persoenlicher/allgemeiner Buchungslink).
+
+    day_list: [(Label "Mittwoch, 18.11.2026", [slot, ...]), ...] - Tage in Reihenfolge, auch ohne Zeiten.
+    Mit JavaScript: Kalender (7 Spalten, Mo-So) -> nur die Uhrzeiten des gewaehlten Tags, darunter
+    die gewaehlte Zeit als Zusammenfassung. Ohne JavaScript: alle Tage untereinander (Rueckfall),
+    jedes Formular funktioniert unveraendert ueber die Radio-Buttons name="slot". -#}
+{% macro slot_picker(day_list, selected) -%}
+{%- set WD = {'Montag': 1, 'Dienstag': 2, 'Mittwoch': 3, 'Donnerstag': 4, 'Freitag': 5, 'Samstag': 6, 'Sonntag': 7} -%}
+{%- set MON = ['', 'Jan.', 'Feb.', 'März', 'Apr.', 'Mai', 'Juni', 'Juli', 'Aug.', 'Sep.', 'Okt.', 'Nov.', 'Dez.'] -%}
+<div class="picker" data-picker>
+  <div class="step-head"><span class="step-no" aria-hidden="true">1</span><h2>Tag wählen</h2></div>
+  <div class="cal" data-cal hidden>
+    <div class="cal-head" aria-hidden="true"><span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span></div>
+    <div class="cal-days" role="group" aria-label="Tag wählen">
+      {%- for label, items in day_list %}
+        {%- set name, date_s = label.split(', ') %}
+        {%- set month = date_s[3:5] | int %}
+        <button type="button" class="cal-day{{ ' is-empty' if not items }}" data-day="{{ loop.index0 }}"
+                {% if loop.first %}style="grid-column-start: {{ WD.get(name, 1) }}"{% endif %}
+                aria-pressed="false" aria-label="{{ label }}{{ ' – Keine buchbaren Zeiten' if not items else ' – ' ~ items | length ~ ' freie Zeiten' }}"{{ ' disabled' if not items }}>
+          <span class="cal-num">{{ date_s[:2] | int }}</span>
+          {%- if loop.first or date_s[:2] == '01' %}<span class="cal-mon">{{ MON[month] }}</span>{% endif %}
+        </button>
+      {%- endfor %}
+    </div>
+  </div>
+  <div class="step-head"><span class="step-no" aria-hidden="true">2</span><h2>Uhrzeit wählen</h2></div>
+  {%- for label, items in day_list %}
+    <section class="day-panel{{ ' is-empty' if not items }}" data-panel="{{ loop.index0 }}">
+      <h3>{{ label }}</h3>
+      {%- if items %}
+        <div class="slots">
+          {%- for item in items %}
+            <label class="slot"><input type="radio" name="slot" value="{{ item.value }}" data-label="{{ label }}" data-time="{{ item.time }}" required{% if selected == item.value %} checked{% endif %}><span>{{ item.time }}</span></label>
+          {%- endfor %}
+        </div>
+      {%- else %}
+        <p class="hint" data-booking-day-empty>Keine buchbaren Zeiten.</p>
+      {%- endif %}
+    </section>
+  {%- endfor %}
+  <p class="choice" data-choice hidden aria-live="polite"></p>
+</div>
+{%- endmacro %}
+
+{% macro picker_script() -%}
+<script>
+  // Kalender statt endloser Liste: Tag waehlen -> nur dessen Uhrzeiten. Ohne JS bleibt die Liste.
+  (function () {
+    var root = document.querySelector("[data-picker]");
+    if (!root) return;
+    var cal = root.querySelector("[data-cal]"), days = root.querySelectorAll("[data-day]"), panels = root.querySelectorAll("[data-panel]");
+    var choice = root.querySelector("[data-choice]");
+    root.classList.add("is-js");
+    cal.hidden = false;
+    function show(i, focusSlots) {
+      Array.prototype.forEach.call(days, function (d) { d.setAttribute("aria-pressed", d.getAttribute("data-day") === String(i) ? "true" : "false"); });
+      Array.prototype.forEach.call(panels, function (p) { p.hidden = p.getAttribute("data-panel") !== String(i); });
+      if (focusSlots) { var first = root.querySelector('[data-panel="' + i + '"] input'); if (first && window.matchMedia("(max-width: 40rem)").matches) root.querySelector('[data-panel="' + i + '"]').scrollIntoView({ behavior: "smooth", block: "nearest" }); }
+    }
+    function summary() {
+      var c = root.querySelector('input[name="slot"]:checked');
+      choice.hidden = !c;
+      if (c) choice.textContent = "Ihr Termin: " + c.getAttribute("data-label") + " um " + c.getAttribute("data-time") + " Uhr";
+    }
+    Array.prototype.forEach.call(days, function (d) { d.addEventListener("click", function () { show(d.getAttribute("data-day"), true); }); });
+    root.addEventListener("change", summary);
+    var checked = root.querySelector('input[name="slot"]:checked');
+    var start = checked ? checked.closest("[data-panel]").getAttribute("data-panel") : null;
+    if (start === null) { var firstDay = root.querySelector("[data-day]:not([disabled])"); start = firstDay ? firstDay.getAttribute("data-day") : "0"; }
+    show(start, false);
+    summary();
+  })();
+  // Doppeltes Absenden verhindern (der Server schuetzt zusaetzlich).
+  (function () {
+    var form = document.querySelector("[data-booking-form]");
+    if (!form) return;
+    form.addEventListener("submit", function () {
+      var b = form.querySelector("[data-booking-submit]");
+      if (b) setTimeout(function () { b.disabled = true; b.classList.add("is-busy"); b.textContent = "Wird gebucht …"; }, 0);
+    });
+  })();
+</script>
+{%- endmacro %}
+
+{% macro contact_fields(contact) -%}
+  <div class="step-head"><span class="step-no" aria-hidden="true">3</span><h2>Ihre Kontaktdaten</h2></div>
+  <label class="field">Name<input name="name" autocomplete="name" required maxlength="120" value="{{ contact.name or '' }}"></label>
+  <div class="field-row">
+    <label class="field">Telefon<input name="phone" type="tel" autocomplete="tel" inputmode="tel" maxlength="30" value="{{ contact.phone or '' }}"></label>
+    <label class="field">E-Mail<input name="email" type="email" autocomplete="email" maxlength="255" value="{{ contact.email or '' }}"></label>
+  </div>
+  <p class="hint">Telefon oder E-Mail genügt – darüber meldet sich das Büro bei Rückfragen.</p>
+{%- endmacro %}

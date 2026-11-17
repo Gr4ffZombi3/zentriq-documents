@@ -90,7 +90,17 @@
       {{ pending_offer(q) }}
     {% endcall %}
   {% else %}
-    {% call empty_state('Noch keine Kunden', 'Kunden entstehen automatisch beim Import einer Leipziger Liste und aus Memos.', 'users') %}{% endcall %}
+    {% if q %}
+      {% call empty_state('Keine Treffer für „' ~ q ~ '“', 'Prüfen Sie die Schreibweise oder suchen Sie nach Telefonnummer bzw. Kundennummer. Ist der Kunde neu, legen Sie ihn direkt an.', 'search') %}
+        <a class="btn btn-primary" href="{{ url_for('customers.new') }}">Kunde anlegen</a>
+        <a class="btn btn-secondary" href="{{ url_for('customers.list_customers') }}">Alle Kunden anzeigen</a>
+      {% endcall %}
+    {% else %}
+      {% call empty_state('Noch keine Kunden', 'Legen Sie Ihren ersten Kunden an. Kunden entstehen außerdem automatisch beim Import einer Leipziger Liste und aus Memos.', 'users') %}
+        <a class="btn btn-primary" href="{{ url_for('customers.new') }}">Ersten Kunden anlegen</a>
+        <a class="btn btn-secondary" href="{{ url_for('documents.list_documents') }}">Leipziger Liste importieren</a>
+      {% endcall %}
+    {% endif %}
   {% endif %}
 </div>
 {% endblock %}

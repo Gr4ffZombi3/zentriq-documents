@@ -42,7 +42,7 @@ def test_login_with_other_spelling(client, db, tenant):
         data={"login_type": "vermittlernummer", "identifier": "080950-T", "password": "geheimespasswort1"},
     )
     assert resp.status_code == 302
-    assert resp.headers["Location"] == "/"
+    assert resp.headers["Location"] == "/zentriq"  # direkt zur Startseite der Rolle, kein Umweg ueber "/"
 
 
 def test_user_admin_rejects_duplicate_in_other_spelling(auth_client, db, tenant):

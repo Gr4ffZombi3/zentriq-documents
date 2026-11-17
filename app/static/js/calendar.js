@@ -79,8 +79,8 @@
   function colorOf(id) { var m = member(id); return m ? m.color : "slate"; }
 
   // --- Zeitraum ------------------------------------------------------------------------------
-  function range() {
-    var a = state.anchor, v = state.view;
+  function range(anchor) {
+    var a = anchor || state.anchor, v = state.view;
     if (v === "day") return [a, a];
     if (v === "workweek") { var s = addDays(a, -weekday(a)); return [s, addDays(s, 4)]; }
     if (v === "week") { var w = addDays(a, -weekday(a)); return [w, addDays(w, 6)]; }
@@ -106,17 +106,48 @@
   }
 
   // --- Laden / Aktualisieren -----------------------------------------------------------------
-  function load() {
-    var r = range();
-    els.body.setAttribute("aria-busy", "true");
+  // Wochenwechsel ohne Wartezeit: Nachbarzeitraeume werden im Hintergrund vorgeladen und sofort
+  // gezeigt - aber NUR, wenn sie zum zuletzt bekannten Aenderungsstand des Bueros (stamp) passen.
+  // Danach wird immer frisch geladen und neu gezeichnet; jede eigene Aenderung und jeder neue
+  // Stand (poll) leert den Zwischenspeicher. Verspaetete Antworten (schnelles Weiterklicken)
+  // werden verworfen.
+  var cache = {}, loadSeq = 0;
+  function cacheKey(r) { return state.view + ":" + r[0] + ":" + r[1]; }
+  function clearCache() { cache = {}; }
+  function fetchRange(r) {
     return request("GET", "/termine?von=" + r[0] + "&bis=" + r[1]).then(function (d) {
-      state.events = d.events; state.members = d.members; state.stamp = d.stamp;
+      cache[cacheKey(r)] = { events: d.events, members: d.members, stamp: d.stamp };
+      return d;
+    });
+  }
+  function prefetchNeighbours() {
+    if (state.view === "month" || state.view === "list") return;
+    var stepDays = state.view === "day" ? 1 : 7;
+    [-stepDays, stepDays].forEach(function (n) {
+      var r = range(addDays(state.anchor, n));
+      if (!cache[cacheKey(r)]) fetchRange(r).catch(function () {});
+    });
+  }
+  function load() {
+    var r = range(), mine = ++loadSeq, hit = cache[cacheKey(r)];
+    if (hit && state.stamp && hit.stamp === state.stamp) {
+      state.events = hit.events.slice(); state.members = hit.members;
       render();
-    }, function (err) { status(err.message, "error"); }).finally(function () { els.body.setAttribute("aria-busy", "false"); });
+    } else {
+      els.period.textContent = periodLabel(); // Zeitraum sofort umschalten, Termine folgen
+    }
+    els.body.setAttribute("aria-busy", "true");
+    return fetchRange(r).then(function (d) {
+      if (mine !== loadSeq) return; // inzwischen anderer Zeitraum gewaehlt
+      state.events = d.events.slice(); state.members = d.members; state.stamp = d.stamp;
+      render();
+      prefetchNeighbours();
+    }, function (err) { if (mine === loadSeq) status(err.message, "error"); }).finally(function () { if (mine === loadSeq) els.body.setAttribute("aria-busy", "false"); });
   }
   function poll() {
     if (document.hidden || state.dragging || state.busy) return;
     request("GET", "/stand").then(function (d) {
+      if (state.stamp && d.stamp !== state.stamp) clearCache();
       if (state.stamp && d.stamp !== state.stamp && !els.dialog.open) { load(); }
     }, function () {});
   }
@@ -390,6 +421,7 @@
   }
 
   function replaceEvent(ev) {
+    clearCache();
     var i = state.events.findIndex(function (x) { return x.id === ev.id; });
     if (i >= 0) state.events[i] = ev; else state.events.push(ev);
   }
@@ -535,7 +567,7 @@
   }
   function remove(e) {
     request("DELETE", "/termine/" + e.id, { version: e.version }).then(function () {
-      state.events = state.events.filter(function (x) { return x.id !== e.id; }); hidePop(); render(); status("Termin gelöscht.", "ok");
+      clearCache(); state.events = state.events.filter(function (x) { return x.id !== e.id; }); hidePop(); render(); status("Termin gelöscht.", "ok");
     }, function (err) { status(err.message, "error"); if (err.status === 409) load(); });
   }
 
@@ -584,25 +616,31 @@
   f.end.addEventListener("change", checkConflicts);
   assigneeSel.addEventListener("change", checkConflicts);
 
+  var conflictSeq = 0;
   function checkConflicts() {
     clearTimeout(conflictTimer);
+    var mine = ++conflictSeq;
     conflictTimer = setTimeout(function () {
       if (!f.start.value || !f.end.value || !f.assignee_id.value) return;
       var q = "?start=" + f.start.value.slice(0, 16) + "&ende=" + f.end.value.slice(0, 16) + "&mitarbeiter=" + f.assignee_id.value + (state.editing ? "&ohne=" + state.editing.id : "");
       request("GET", "/konflikte" + q).then(function (d) {
+        if (mine !== conflictSeq) return;
         conflictEl.hidden = !d.conflicts.length;
         conflictEl.textContent = d.conflicts.length ? "Hinweis: " + (member(+f.assignee_id.value) || {}).name + " hat zu dieser Zeit bereits " + d.conflicts.map(function (c) { return "„" + c.title + "“ (" + hm(c.start) + "–" + hm(c.end) + ")"; }).join(", ") + ". Speichern ist trotzdem möglich." : "";
       }, function () {});
     }, 250);
   }
 
+  var custSeq = 0;
   custInput.addEventListener("input", function () {
     f.customer_id.value = "";
     clearTimeout(custTimer);
     var q = custInput.value.trim();
-    if (q.length < 2) { custList.hidden = true; custInput.setAttribute("aria-expanded", "false"); return; }
+    if (q.length < 2) { custSeq++; custList.hidden = true; custInput.setAttribute("aria-expanded", "false"); return; }
+    var mine = ++custSeq;
     custTimer = setTimeout(function () {
       request("GET", "/kunden?q=" + encodeURIComponent(q)).then(function (d) {
+        if (mine !== custSeq) return; // verspaetete Antwort zu einem aelteren Suchbegriff
         custList.textContent = "";
         d.customers.forEach(function (c, i) {
           var li = el("li"); li.setAttribute("role", "option"); li.id = "cal-cust-" + i; li.tabIndex = -1;

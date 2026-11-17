@@ -3,7 +3,7 @@ def test_login_with_correct_credentials_succeeds(client, db, user):
         "/auth/login", data={"login_type": "email", "identifier": user.email, "password": "testpassword123"}
     )
     assert resp.status_code == 302
-    assert resp.headers["Location"] == "/"
+    assert resp.headers["Location"] == "/zentriq"  # direkt zur Startseite der Rolle, kein Umweg ueber "/"
 
     dashboard_resp = client.get("/", follow_redirects=True)
     assert dashboard_resp.status_code == 200
@@ -15,7 +15,7 @@ def test_login_with_vermittlernummer_succeeds(client, db, user):
         data={"login_type": "vermittlernummer", "identifier": user.vermittlernummer, "password": "testpassword123"},
     )
     assert resp.status_code == 302
-    assert resp.headers["Location"] == "/"
+    assert resp.headers["Location"] == "/zentriq"  # direkt zur Startseite der Rolle, kein Umweg ueber "/"
 
     dashboard_resp = client.get("/", follow_redirects=True)
     assert dashboard_resp.status_code == 200

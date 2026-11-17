@@ -4,7 +4,7 @@
 
 @font-face {
   font-family: "InterVariable";
-  src: url("/static/fonts/InterVariable.woff2") format("woff2");
+  src: url("/static/fonts/InterVariable-latin.woff2") format("woff2");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
@@ -17,34 +17,44 @@
   --content-max-width: 86rem;
   --content-wide-max-width: 92rem;
 
-  /* Gedaempft hell (Standard): grau getoenter Seitenhintergrund statt Reinweiss, leicht
-     abgesetzte Inhaltsflaechen, etwas dunklere Seitenleiste, zurueckhaltende Rahmen und
-     Schatten, sparsame Akzentfarbe. Der Dunkelmodus (.dark, unten) nutzt dieselben Namen -
-     Komponenten verwenden nur diese Variablen, nie feste Farben. */
-  --color-bg: #e8ebef;
-  --color-bg-elevated: #e1e5ea;
-  --color-surface: #f6f7f9;
-  --color-surface-muted: #eef0f3;
-  --color-surface-strong: #e2e6eb;
-  --color-sidebar: #dde2e8;
-  --color-border: #d3d9e0;
-  --color-border-strong: #b9c1cb;
-  --color-text: #1d2530;
-  --color-text-muted: #4a5563;
-  --color-text-soft: #687381;
-  --color-primary: #2b5888;
-  --color-primary-hover: #234a73;
-  --color-primary-soft: #dbe4ee;
-  --color-primary-strong: #1b3f66;
+  /* Hell und ruhig (Standard, 2026-11): sanft abgetoentes Weiss als Arbeitsflaeche, klares Weiss
+     fuer Karten und Dialoge, Anthrazit fuer Text, zurueckhaltende Linien und EIN Blau fuer
+     Hauptaktionen und aktive Auswahl. Kontraste (auf Weiss / auf Flaeche): Text 14:1, muted 7:1,
+     soft 5:1 (auch Platzhalter, Nebeninfos), Feldrahmen 2.6:1. Der Dunkelmodus (.dark, unten)
+     nutzt dieselben Namen - Komponenten verwenden nur diese Variablen, nie feste Farben. */
+  --color-bg: #f5f6f8;
+  --color-bg-elevated: #eceff2;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f3f5f7;
+  --color-surface-strong: #e8ebef;
+  --color-sidebar: #eef0f3;
+  --color-border: #e1e5ea;
+  --color-border-strong: #c9d0d8;
+  --color-field-border: #9ba4b0;
+  --color-text: #1f2733;
+  --color-text-muted: #4a5462;
+  --color-text-soft: #5f6976;
+  --color-primary: #1f5fae;
+  --color-primary-hover: #1a5096;
+  --color-primary-soft: #e8f0fa;
+  --color-primary-strong: #163f73;
   --color-on-primary: #ffffff;
-  --color-success: #2a7350;
-  --color-warning: #9a6514;
-  --color-error: #a83c3f;
-  --color-success-text: #1e5c3e;
+  --color-success: #1f7a4d;
+  --color-warning: #9a6212;
+  --color-error: #b3393c;
+  --color-success-text: #19633f;
   --color-warning-text: #74490c;
-  --color-error-text: #8a2f32;
-  --color-shadow: rgba(16, 24, 40, 0.035);
-  --color-shadow-strong: rgba(16, 24, 40, 0.08);
+  --color-error-text: #8f2d30;
+  --color-shadow: rgba(16, 24, 40, 0.04);
+  --color-shadow-strong: rgba(16, 24, 40, 0.09);
+
+  /* Typografie: feste Groessen/Gewichte je Rolle (Inter). */
+  --text-page-title: 1.375rem;
+  --text-section-title: 1rem;
+  --text-body: 0.9375rem;
+  --text-table: 0.875rem;
+  --text-label: 0.8125rem;
+  --text-meta: 0.8125rem;
   --radius-card: 10px;
   --radius-panel: 10px;
   --radius-sm: 7px;
@@ -84,6 +94,7 @@
   --color-sidebar: #111419;
   --color-border: #2b323c;
   --color-border-strong: #3a4350;
+  --color-field-border: #4a5462;
   --color-text: #e2e6ea;
   --color-text-muted: #a5aeb9;
   --color-text-soft: #838d99;
@@ -7845,4 +7856,106 @@
   .abr-raw { margin: 0.25rem 0 0; color: var(--color-text-muted); font-size: 0.85rem; overflow-wrap: anywhere; }
   .abr-review { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.4rem; margin-top: 0.5rem; }
   .abr-inline { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+}
+
+/* =========================================================================================
+   Designsystem (2026-11): EINE verbindliche Fassung fuer Buttons, Felder, Panels, Tabellen,
+   Titel, Fokus, Lade-/Leer-/Fehlerzustaende. Steht bewusst am Ende der Komponenten-Schicht und
+   gewinnt damit gegen aeltere, verstreute Definitionen weiter oben. Neue Seiten nutzen nur
+   diese Klassen und die Tokens aus @theme.
+   ========================================================================================= */
+@layer components {
+  /* Typografie */
+  body { font-size: var(--text-body); font-feature-settings: "cv11", "ss01"; }
+  .page-toolbar-title { font-size: var(--text-page-title); font-weight: 650; letter-spacing: -0.012em; line-height: 1.25; color: var(--color-text); }
+  .page-subtitle { font-size: var(--text-meta); color: var(--color-text-muted); line-height: 1.5; }
+  .panel-title { font-size: var(--text-section-title); font-weight: 600; letter-spacing: -0.005em; color: var(--color-text); }
+  .field-label { font-size: var(--text-label); font-weight: 600; color: var(--color-text-muted); }
+  .form-hint { color: var(--color-text-soft); }
+  /* Zahlen, Zeiten, Kundennummern stehen sauber untereinander. */
+  .data-table, .cal-hour, .cal-ev, .count-tag, time, .tabular, .zq-tc time { font-variant-numeric: tabular-nums; }
+
+  /* Flaechen */
+  .panel { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-panel); box-shadow: 0 1px 2px var(--color-shadow); }
+  .panel-header { border-bottom: 1px solid var(--color-border); }
+
+  /* Buttons: Ruhe, Hover, gedrueckt, Fokus, deaktiviert, beschaeftigt */
+  .btn { border-radius: var(--radius-sm); font-weight: 600; transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease, transform 60ms ease; }
+  .btn:active:not(:disabled):not([aria-disabled="true"]) { transform: translateY(1px); }
+  .btn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+  .btn-primary { background: var(--color-primary); border-color: var(--color-primary); color: var(--color-on-primary); }
+  .btn-primary:hover { background: var(--color-primary-hover); border-color: var(--color-primary-hover); color: var(--color-on-primary); }
+  .btn-secondary { background: var(--color-surface); border-color: var(--color-border-strong); color: var(--color-text); }
+  .btn-secondary:hover { background: var(--color-surface-muted); border-color: var(--color-field-border); }
+  .btn:disabled, .btn[aria-disabled="true"] { opacity: 1; cursor: not-allowed; background: var(--color-surface-muted); border-color: var(--color-border); color: var(--color-text-soft); }
+  .btn.is-busy, button.is-busy { position: relative; pointer-events: none; }
+  .btn.is-busy::after, button.is-busy::after {
+    content: ""; width: 0.85em; height: 0.85em; margin-left: 0.15rem; border-radius: 999px;
+    border: 2px solid currentColor; border-right-color: transparent; animation: zq-spin 0.7s linear infinite; flex: none;
+  }
+
+  /* Felder: sichtbarer Rahmen, deutlicher Fokus, lesbarer deaktivierter Zustand */
+  .field-surface { background: var(--color-surface); border: 1px solid var(--color-field-border); border-radius: var(--radius-sm); color: var(--color-text); }
+  .field-surface:hover { border-color: var(--color-text-soft); }
+  .field-surface:focus, .field-surface:focus-visible { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-primary) 22%, transparent); }
+  .field-surface:disabled, .field-surface[readonly] { background: var(--color-surface-muted); border-color: var(--color-border-strong); color: var(--color-text-muted); cursor: not-allowed; }
+  ::placeholder { color: var(--color-text-soft); opacity: 1; }
+
+  /* Tabellen: kompakt auf dem Desktop, klare Kopfzeile, ruhige Zeilen */
+  .data-table { font-size: var(--text-table); }
+  .data-table thead th { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em; color: var(--color-text-muted); background: var(--color-surface-muted); }
+  .data-table tbody tr:hover { background: color-mix(in oklab, var(--color-primary) 4%, var(--color-surface)); }
+
+  /* Fokus fuer alles Bedienbare ohne eigene Regel (Tastatur) */
+  a:focus-visible, summary:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; border-radius: 4px; }
+
+  /* Leere Ansichten mit naechstem Schritt (components/ui.html: empty_state) */
+  .zq-empty { display: grid; justify-items: center; gap: 0.5rem; padding: 2.5rem 1.25rem; text-align: center; }
+  .zq-empty-icon { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: 0.75rem; background: var(--color-primary-soft); color: var(--color-primary); }
+  .zq-empty-title { font-size: var(--text-section-title); font-weight: 600; color: var(--color-text); }
+  .zq-empty-text { max-width: 34rem; color: var(--color-text-muted); font-size: var(--text-meta); }
+  .zq-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin-top: 0.5rem; }
+
+  /* Seitenwechsel-Rueckmeldung: schmaler Balken oben, sobald ein Link/Formular laedt (js/app.js) */
+  .zq-progress { position: fixed; inset: 0 0 auto 0; height: 3px; z-index: 1000; pointer-events: none; opacity: 0; transition: opacity 150ms ease; }
+  .zq-progress::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 35%; background: var(--color-primary); border-radius: 0 3px 3px 0; animation: var(--animate-indeterminate); }
+  html.zq-loading .zq-progress { opacity: 1; transition-delay: 80ms; }
+}
+
+@keyframes zq-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .btn.is-busy::after, button.is-busy::after, .zq-progress::before { animation-duration: 2s; }
+}
+
+/* Kundenakte: Kopf mit Name, Kontakt und Aktionen (templates/customers/detail.html) */
+@layer components {
+  .cust-head { display: grid; gap: 0.9rem; padding: 1.15rem 1.25rem; margin-bottom: 1rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-panel); box-shadow: 0 1px 2px var(--color-shadow); }
+  .cust-id { display: flex; align-items: center; gap: 0.9rem; min-width: 0; }
+  .cust-avatar { flex: none; display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: 999px; background: var(--color-primary-soft); color: var(--color-primary-strong); font-weight: 650; font-size: 1.05rem; }
+  .cust-name { margin: 0; font-size: var(--text-page-title); font-weight: 650; letter-spacing: -0.012em; line-height: 1.2; overflow-wrap: anywhere; }
+  .cust-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.85rem; margin: 0.3rem 0 0; color: var(--color-text-muted); font-size: var(--text-meta); }
+  .cust-back { margin-left: auto; flex: none; }
+  .cust-contact { display: flex; flex-wrap: wrap; gap: 0.4rem 1.25rem; margin: 0; padding: 0; list-style: none; font-size: 0.9rem; }
+  .cust-contact li { min-width: 0; }
+  .cust-contact a, .cust-contact li > span { display: inline-flex; align-items: center; gap: 0.45rem; min-height: 2rem; color: var(--color-text); text-decoration: none; overflow-wrap: anywhere; }
+  .cust-contact a:hover { color: var(--color-primary); }
+  .cust-contact svg { flex: none; color: var(--color-text-soft); }
+  .cust-contact-missing { color: var(--color-text-soft); font-size: var(--text-meta); }
+  .cust-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; padding-top: 0.9rem; border-top: 1px solid var(--color-border); }
+  .cust-kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin-bottom: 1rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-panel); overflow: hidden; }
+  .cust-kpi { display: flex; flex-direction: column; gap: 0.1rem; padding: 0.7rem 1rem; border-left: 1px solid var(--color-border); }
+  .cust-kpi:first-child { border-left: 0; }
+  .cust-kpi-value { font-size: 1.15rem; font-weight: 650; color: var(--color-text); }
+  .cust-kpi-label { font-size: 0.75rem; color: var(--color-text-muted); }
+  .cust-kpi.is-zero .cust-kpi-value { color: var(--color-text-soft); font-weight: 500; }
+  @media (max-width: 40rem) {
+    .cust-head { padding: 1rem; }
+    .cust-id { display: grid; grid-template-columns: auto minmax(0, 1fr); }
+    .cust-back { order: -1; grid-column: 1 / -1; justify-self: start; margin-left: 0; }
+    .cust-actions .btn { flex: 1 1 calc(50% - 0.5rem); min-height: 2.75rem; }
+    .cust-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .cust-kpi:nth-child(4) { border-left: 0; }
+    .cust-kpi:nth-child(n+4) { border-top: 1px solid var(--color-border); }
+  }
 }

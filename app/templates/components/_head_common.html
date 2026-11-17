@@ -20,6 +20,8 @@
 {# Version aus dem Dateiinhalt (static_rev): neues CSS bekommt immer eine neue URL. Der feste Wert
    greift nur, solange nach einem git pull noch der alte Python-Prozess laeuft. #}
 {% set _rev = static_rev if static_rev is defined else none %}
+{# Schrift frueh anstossen (sonst startet der Abruf erst nach dem CSS): gleiche URL wie @font-face. #}
+<link rel="preload" href="/static/fonts/InterVariable-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=_rev('css/app.css') if _rev else '20261001-layout-1') }}">
 {# ZentriqAI-Oberflaeche (Seitenleiste, Chat, Zeiterfassungsmodul) - eigene Datei, kein Tailwind-Build noetig. #}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/zentriq.css', v=_rev('css/zentriq.css') if _rev else '1') }}">
@@ -29,7 +31,7 @@
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png', v=_rev('img/apple-touch-icon.png') if _rev else '1') }}">
 {# Installierbare Web-App (Manifest, Service Worker: app/blueprints/pwa/routes.py). #}
 <link rel="manifest" href="{{ url_for('pwa.manifest') }}">
-<meta name="theme-color" content="#e9ecf0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#14181e" media="(prefers-color-scheme: dark)">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">

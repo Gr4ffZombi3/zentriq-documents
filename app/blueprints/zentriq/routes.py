@@ -104,7 +104,14 @@ def index(conversation_id=None):
         greeting=_greeting(),
         max_chars=int(current_app.config.get("ZENTRIQ_AI_MAX_INPUT_CHARS") or 12000),
         customer_notes_enabled=bool(current_user.is_office_admin or current_user.is_employee),
+        first_steps=[] if conversation_id else _first_steps(),
     )
+
+
+def _first_steps() -> list[dict]:
+    from app.services.onboarding import first_steps
+
+    return first_steps(current_user)
 
 
 # --- JSON-API ------------------------------------------------------------------------------

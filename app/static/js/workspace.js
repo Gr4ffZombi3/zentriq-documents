@@ -546,11 +546,12 @@
 
     var query = function () {
       var q = input.value.trim(), mine = ++seq;
-      if (!q) { hits = []; render("Kundenname oder Seite eingeben, z. B. „Kalender“ oder „Abrechnung“."); return; }
+      if (!q) { list.removeAttribute("aria-busy"); hits = []; render("Kundenname oder Seite eingeben, z. B. „Kalender“ oder „Abrechnung“."); return; }
       fetch(search.getAttribute("data-url") + "?q=" + encodeURIComponent(q), { credentials: "same-origin", headers: { Accept: "application/json" } })
         .then(function (r) { return r.ok ? r.json() : { pages: [], customers: [] }; })
         .then(function (d) {
           if (mine !== seq) return;
+          list.removeAttribute("aria-busy");
           hits = d.pages.map(function (p) { return { label: p.label, url: p.url, group: "Seiten" }; })
             .concat(d.customers.map(function (c) { return { label: c.label, detail: c.detail, url: c.url, group: "Kunden" }; }))
             .concat((d.cases || []).map(function (c) { return { label: c.label, detail: c.detail, url: c.url, group: "Vorgänge ohne Kundenakte" }; }));
@@ -558,7 +559,7 @@
           selected = 0;
           render(hits.length ? null : (q.length < 2 ? "Bitte mindestens zwei Zeichen eingeben." : "Keine Treffer für „" + q + "“."));
         })
-        .catch(function () { if (mine === seq) render("Suche gerade nicht möglich."); });
+        .catch(function () { if (mine === seq) { list.removeAttribute("aria-busy"); render("Suche gerade nicht möglich."); } });
     };
 
     var go = function (i) { var hit = hits[i]; if (hit) { closeSearch(); location.href = hit.url; } };
@@ -569,7 +570,8 @@
       input.value = "";
       hits = [];
       render("Kundenname oder Seite eingeben, z. B. „Kalender“ oder „Abrechnung“.");
-      setTimeout(function () { input.focus(); }, 0);
+      input.focus(); // sofort: schnell getippte erste Zeichen gehen nicht verloren
+      setTimeout(function () { if (document.activeElement !== input) input.focus(); }, 0);
     };
     var closeSearch = function () {
       if (search.hidden) return;
@@ -578,7 +580,9 @@
       if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
     };
 
-    input.addEventListener("input", function () { clearTimeout(debounce); debounce = setTimeout(query, 150); });
+    // 90 ms: tippt man weiter, geht keine Anfrage pro Taste raus; alte Treffer bleiben bis zur Antwort stehen
+    // (kein Flackern), verspaetete Antworten verwirft query() ueber seq.
+    input.addEventListener("input", function () { clearTimeout(debounce); list.setAttribute("aria-busy", "true"); debounce = setTimeout(query, 90); });
     input.addEventListener("keydown", function (ev) {
       if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
         ev.preventDefault();

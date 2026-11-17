@@ -56,6 +56,21 @@
     <div class="zc-thread" data-zc-thread>
       <div class="zc-welcome" data-zc-welcome>
         <h1>{{ greeting }}</h1>
+        {% if first_steps %}
+          {# Frisch eingerichtetes Buero: was noch fehlt, mit direktem Weg (app/services/onboarding.py). #}
+          <section class="zq-steps" aria-labelledby="zq-steps-title" data-zq-first-steps>
+            <h2 id="zq-steps-title" class="zq-steps-title">Erste Schritte für Ihr Büro</h2>
+            <ol class="zq-steps-list">
+              {% for step in first_steps %}
+                <li class="zq-step">
+                  <span class="zq-step-icon" aria-hidden="true">{{ icon(step.icon, class='h-5 w-5') }}</span>
+                  <div class="zq-step-body"><strong>{{ step.title }}</strong><span>{{ step.text }}</span></div>
+                  <a class="btn btn-secondary btn-sm" href="{{ step.url }}">{{ step.action }}</a>
+                </li>
+              {% endfor %}
+            </ol>
+          </section>
+        {% endif %}
       </div>
     </div>
   </div>

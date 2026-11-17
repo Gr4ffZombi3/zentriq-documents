@@ -155,8 +155,19 @@ def bookable_days(assignee: User, minutes: int, horizon_days: int, *, now: datet
     lead, buffer = (int(s.lead_minutes or 0), int(s.buffer_minutes or 0)) if s else (0, 0)
     earliest = now + timedelta(minutes=lead)
     today = local_today(now)
+    span = max(1, min(int(horizon_days or 14), 60))
+    # Belegte Zeiten EINMAL fuer den ganzen Zeitraum laden (vorher eine Abfrage je moeglicher
+    # Startzeit, ~250 pro Seitenaufruf). Gleiche Bedingung wie _busy, nur im Speicher geprueft.
+    pad = timedelta(minutes=buffer)
+    range_start = local_to_utc_naive(today, time(0, 0)) - timedelta(days=1)
+    range_end = local_to_utc_naive(today + timedelta(days=span + 1), time(0, 0)) + timedelta(days=1)
+    taken = [(e.starts_at, e.ends_at) for e in _busy(assignee.id, range_start, range_end, buffer)]
+
+    def is_taken(start: datetime, end: datetime) -> bool:
+        return any(b_start < end + pad and b_end > start - pad for b_start, b_end in taken)
+
     out = []
-    for offset in range(max(1, min(int(horizon_days or 14), 60)) + 1):
+    for offset in range(span + 1):
         day = today + timedelta(days=offset)
         times: list[datetime] = []
         window = windows.get(day.isoweekday())
@@ -164,7 +175,7 @@ def bookable_days(assignee: User, minutes: int, horizon_days: int, *, now: datet
             cursor, limit = datetime.combine(day, window[0]), datetime.combine(day, window[1])
             while cursor + timedelta(minutes=minutes) <= limit:
                 start = local_to_utc_naive(day, cursor.time())
-                if start >= earliest and not _busy(assignee.id, start, start + timedelta(minutes=minutes), buffer):
+                if start >= earliest and not is_taken(start, start + timedelta(minutes=minutes)):
                     times.append(start)
                 cursor += timedelta(minutes=STEP_MINUTES)
         out.append((day, times))

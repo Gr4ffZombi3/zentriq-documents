@@ -17,6 +17,24 @@ from datetime import date
 
 RELEASE_NOTES = (
     {
+        "date": date(2026, 11, 17),
+        "title": "Neues, helleres Erscheinungsbild und schnellere Bedienung",
+        "text": "Zentriq ist heller und ruhiger: weiße Karten auf sanftem Hintergrund, gut lesbare Schrift und "
+        "deutliche Rahmen an Suche und Eingabefeld. Die Seitenleiste ist nach Arbeitsabläufen geordnet – mit "
+        "eigenem Eintrag „Buchungslinks“. Kundenakten zeigen Name, Kontaktdaten und Aktionen direkt oben. "
+        "Der Wochenwechsel im Kalender und die Schnellsuche reagieren spürbar schneller, und beim Klicken "
+        "zeigt ein schmaler Balken oben sofort, dass die nächste Seite lädt.",
+        "audience": "alle",
+    },
+    {
+        "date": date(2026, 11, 17),
+        "title": "Buchungsseite für Ihre Kunden übersichtlicher",
+        "text": "Ihre Kunden wählen auf der Buchungsseite zuerst den Tag in einer Monatsansicht und sehen dann nur "
+        "die freien Uhrzeiten dieses Tages. Die gewählte Zeit steht vor dem Absenden noch einmal da. Kopf und "
+        "Bestätigung zeigen den Namen und die Kontaktdaten Ihres Büros.",
+        "audience": "admin",
+    },
+    {
         "date": date(2026, 11, 16),
         "title": "Kopieren aus dem Assistenten ohne Hintergrundfarbe",
         "text": "Wenn Sie einen Teil einer Antwort des Assistenten markieren und kopieren – mit Strg+C oder über "

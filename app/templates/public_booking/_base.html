@@ -110,7 +110,7 @@
           {% elif initials %}<span class="mono" aria-hidden="true" data-booking-mono>{{ initials | join('') }}</span>{% endif %}
           <div>
             <p class="eyebrow">Online-Terminbuchung</p>
-            <h1>{% block heading %}{{ view.heading if view.person else (view.office or view.heading) }}{% endblock %}</h1>
+            <h1>{% block heading %}{{ view.heading if (view.person or view.custom_heading) else (view.office or view.heading) }}{% endblock %}</h1>
           </div>
         </div>
         {% if view.address or view.phone or view.email %}

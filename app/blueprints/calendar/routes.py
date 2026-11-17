@@ -313,8 +313,17 @@ def _render_settings(record, *, form=None, errors=None, ob_form=None, ob_errors=
         ob_page=page, ob_form=ob_form, ob_errors=ob_errors or [],
         ob_members=cal.office_members(), member_name=cal.member_name, ob_suggested=ob.suggested_slug(current_user),
         ob_base=(current_app.config.get("PUBLIC_URL") or request.url_root).rstrip("/"), ob_url=ob.public_url(page) if page else None,
-        logo_url=_logo_url(record), logo_error=logo_error,
+        logo_url=_logo_url(record), logo_error=logo_error, ob_default_title=_default_title(record),
     ), status
+
+
+def _default_title(record):
+    """Standardtitel der Buchungsseite, wenn kein eigener hinterlegt ist (wie office_booking.public_view)."""
+    from app.models import Tenant
+
+    tenant = db.session.get(Tenant, current_user.tenant_id)
+    office = (record.office_name if record and record.office_name else (tenant.name if tenant else "")) or ""
+    return f"Termin bei {office} buchen" if office else "Termin buchen"
 
 
 def _logo_url(record):

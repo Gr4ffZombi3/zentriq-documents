@@ -36,5 +36,8 @@ class OfficeSettings(TenantScopedMixin, db.Model):
     logo_png = db.deferred(db.Column(db.LargeBinary(length=16 * 1024 * 1024 - 1), nullable=True))
     # Inhalts-Kennung (sha256, 16 Zeichen) - Teil der oeffentlichen URL, aendert sich mit jedem Logo.
     logo_rev = db.Column(db.String(16), nullable=True, index=True)
+    # Eigene Ueberschrift der oeffentlichen Buchungsseiten (Buero-Link und alle Buchungslinks des Bueros),
+    # z. B. "Termin bei der HUK-COBURG – Justin Heller buchen". Leer = Standardtitel.
+    booking_title = db.Column(db.String(120), nullable=True)
     updated_at = db.Column(db.DateTime, nullable=False, default=_now, onupdate=_now)
     updated_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

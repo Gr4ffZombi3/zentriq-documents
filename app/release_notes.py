@@ -18,6 +18,14 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 17),
+        "title": "Eigener Titel für Ihre Buchungsseite",
+        "text": "Unter Kalender → Einstellungen → „Online-Buchung“ können Sie den Titel Ihrer Buchungsseite festlegen, "
+        "zum Beispiel „Termin bei der HUK-COBURG – Max Muster buchen“. Er erscheint als Überschrift und im "
+        "Browser-Tab – auch bei bereits verschickten Buchungslinks. Ohne Eintrag bleibt der bisherige Titel.",
+        "audience": "admin",
+    },
+    {
+        "date": date(2026, 11, 17),
         "title": "Bestätigung per E-Mail nach Online-Buchung",
         "text": "Gibt ein Kunde beim Buchen über einen Buchungslink seine E-Mail-Adresse an, erhält er automatisch "
         "eine Bestätigung mit Datum, Uhrzeit, Dauer und Ort bzw. dem Hinweis auf den Telefontermin. Antwortet er "

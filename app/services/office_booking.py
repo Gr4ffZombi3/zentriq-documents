@@ -128,6 +128,13 @@ def save_settings(user: User, form) -> OfficeBookingPage:
     page.slug, page.title, page.minutes, page.horizon_days = slug, title, minutes, horizon
     page.assignee_user_id, page.enabled = assignee_id, enabled  # page.windows: frueher eigene Fenster, ungenutzt
     page.updated_by_user_id = user.id
+    if "page_title" in form:
+        settings = OfficeSettings.query.first()
+        if settings is None:
+            settings = OfficeSettings(tenant_id=user.tenant_id)
+            db.session.add(settings)
+        settings.booking_title = clean_title(form.get("page_title"))
+        settings.updated_by_user_id = user.id
     db.session.commit()
     return page
 
@@ -171,13 +178,26 @@ def is_free(page: OfficeBookingPage, start: datetime, now: datetime | None = Non
     return any(start in times for d, times in days(page, now) if d == day)
 
 
+TITLE_MAX = 120
+
+
+def clean_title(value: str | None) -> str | None:
+    """Eigener Seitentitel: eine Zeile, hoechstens 120 Zeichen; leer = Standardtitel."""
+    return " ".join((value or "").split())[:TITLE_MAX] or None
+
+
+def custom_title(settings) -> str | None:
+    return clean_title(getattr(settings, "booking_title", None)) if settings is not None else None
+
+
 def public_view(page: OfficeBookingPage) -> dict:
     """Nur Bueroprofil und Termintyp - keine Mitarbeiter-, Kunden- oder Kalenderdaten."""
     tenant = db.session.get(Tenant, page.tenant_id)
     s = OfficeSettings.query.first()
     office = (s.office_name if s and s.office_name else (tenant.name if tenant else "")) or ""
     return {
-        "heading": f"Termin bei {office} buchen" if office else "Termin buchen",
+        "heading": custom_title(s) or (f"Termin bei {office} buchen" if office else "Termin buchen"),
+        "custom_heading": bool(custom_title(s)),
         "person": None, "title": page.title, "kind": None, "minutes": page.minutes, "office": office,
         "address": (s.address or "").strip() if s else "", "phone": (s.phone or "").strip() if s else "",
         "email": (s.email or "").strip() if s else "", "needs_contact": True,

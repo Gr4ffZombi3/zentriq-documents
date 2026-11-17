@@ -236,6 +236,12 @@ def _person(link: BookingLink) -> str | None:
     return name or None
 
 
+def custom_title(settings) -> str | None:
+    from app.services.office_booking import custom_title as _custom
+
+    return _custom(settings)
+
+
 def public_view(link: BookingLink) -> dict:
     """Nur das, was der Kunde sehen darf: Terminart, Mitarbeitername und das Bueroprofil
     (Name, Anschrift, Kontakt). Nie Kunden-, Kalender- oder Notizdaten - auch nicht in der Linkvorschau."""
@@ -246,8 +252,9 @@ def public_view(link: BookingLink) -> dict:
     office = (s.office_name if s and s.office_name else (tenant.name if tenant else "")) or ""
     person = _person(link)
     heading = f"Termin bei {person} buchen" if person else (f"Termin bei {office} buchen" if office else "Termin buchen")
+    custom = custom_title(s)
     return {
-        "heading": heading,
+        "heading": custom or heading, "custom_heading": bool(custom),
         "person": person,
         "title": link.title,
         "kind": cal.LOCATION_KINDS.get(link.location_kind or "") if link.location_kind else None,

@@ -34,7 +34,7 @@
         <strong>Termine vorschlagen</strong>
         <span>Konkrete Zeiten auswählen und einen persönlichen Link für genau eine Buchung verschicken.</span>
       </a>
-      <div class="bl-option" data-bl-option="allgemein">
+      <div class="bl-option" id="bl-office" data-bl-option="allgemein">
         <strong>Allgemeinen Buchungslink kopieren</strong>
         {% if office_link %}
           <span>Fester Link Ihres Büros – bleibt nach jeder Buchung gültig, geeignet für die E-Mail-Signatur.</span>
@@ -43,11 +43,34 @@
             <button type="button" class="btn btn-primary btn-sm" data-copy="#bl-office-url" data-bl-office-copy>Allgemeinen Buchungslink kopieren</button>
             <a class="btn btn-secondary btn-sm" href="{{ office_link }}" target="_blank" rel="noopener" data-bl-office-preview>Buchungsseite ansehen</a>
           </span>
+        {% elif current_user.is_office_admin and office_page and not office_page.enabled %}
+          <span data-bl-office-off>Ausgeschaltet – Kunden können über diesen Link gerade nicht buchen.</span>
         {% elif current_user.is_office_admin %}
           <span>Noch nicht aktiv. Online-Buchungszeiten und Adresse legen Sie in den Kalender-Einstellungen fest.</span>
           <a class="btn btn-secondary btn-sm" href="{{ url_for('calendar.settings') }}#online-buchung">Online-Buchung einrichten</a>
         {% else %}
           <span>Der Büro-Admin hat den allgemeinen Buchungslink noch nicht aktiviert.</span>
+        {% endif %}
+        {% if current_user.is_office_admin and office_page %}
+          <span class="bl-office-actions bl-actions" data-bl-office-manage>
+            <details class="bl-rename" data-bl-office-rename>
+              <summary class="btn btn-secondary btn-sm">Adresse ändern</summary>
+              <form method="post" action="{{ url_for('calendar.office_link_address') }}" class="bl-rename-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label class="field-label" for="bl-office-slug">Adresse des Links</label>
+                <span class="zq-inline-row"><small>{{ office_base }}</small><input class="field-surface" id="bl-office-slug" name="slug" maxlength="40" required value="{{ office_page.slug }}"></span>
+                <p class="form-hint">Kleinbuchstaben, Ziffern und Bindestrich (Umlaute werden umgewandelt). Achtung: Der bisherige Link funktioniert danach nicht mehr – auch nicht in Ihrer E-Mail-Signatur.</p>
+                <button type="submit" class="btn btn-primary btn-sm" data-bl-office-rename-save>Speichern</button>
+              </form>
+            </details>
+            <form method="post" action="{{ url_for('calendar.office_link_enabled') }}"{% if office_page.enabled %} onsubmit="return confirm('Allgemeinen Buchungslink ausschalten? Kunden können darüber dann nicht mehr buchen. Bereits gebuchte Termine bleiben im Kalender.');"{% endif %}>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="enabled" value="{{ '0' if office_page.enabled else '1' }}">
+              {% if office_page.enabled %}<button type="submit" class="btn btn-secondary btn-sm btn-danger-text" data-bl-office-off-btn>Ausschalten</button>
+              {% else %}<button type="submit" class="btn btn-primary btn-sm" data-bl-office-on-btn>Einschalten</button>{% endif %}
+            </form>
+            <a class="btn btn-secondary btn-sm" href="{{ url_for('calendar.settings') }}#online-buchung">Weitere Einstellungen</a>
+          </span>
         {% endif %}
       </div>
     </div>

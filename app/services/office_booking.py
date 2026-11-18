@@ -87,18 +87,49 @@ def windows_of(page: OfficeBookingPage) -> dict[int, tuple[time, time]]:
     return calendar_windows(assignee) if assignee is not None else {}
 
 
-def save_settings(user: User, form) -> OfficeBookingPage:
-    """Nur Buero-Admin (Aufrufer prueft). Wirft BookingError mit verstaendlicher Meldung."""
-    from app.services import calendar as cal
+NO_AVAILABILITY = ("Für diesen Kalender ist keine Verfügbarkeit hinterlegt. Bitte zuerst unter „Terminplanung“ "
+                   "die Bürozeiten (und ggf. die Arbeitstage des Mitarbeiters) eintragen.")
 
-    page = page_for_office()
-    slug = slugify(form.get("slug") or "")
+
+def _checked_slug(value, page: OfficeBookingPage | None) -> str:
+    slug = slugify(value or "")
     if not _SLUG.match(slug or "") or slug in RESERVED:
         raise BookingError("Bitte eine Adresse aus Kleinbuchstaben, Ziffern und Bindestrich angeben (z. B. „heller“).")
     with bypass_tenant_scope():
         taken = OfficeBookingPage.query.filter(OfficeBookingPage.slug == slug).first()
     if taken is not None and (page is None or taken.id != page.id):
         raise BookingError("Diese Adresse ist bereits vergeben. Bitte eine andere wählen.")
+    return slug
+
+
+def change_slug(user: User, page: OfficeBookingPage, value) -> bool:
+    """Nur Buero-Admin (Aufrufer prueft). Aendert nur die Adresse; True, wenn sie sich geaendert hat."""
+    slug = _checked_slug(value, page)
+    if slug == page.slug:
+        return False
+    page.slug, page.updated_by_user_id = slug, user.id
+    db.session.commit()
+    return True
+
+
+def set_enabled(user: User, page: OfficeBookingPage, enabled: bool) -> None:
+    """Nur Buero-Admin (Aufrufer prueft). Einschalten nur mit hinterlegter Verfuegbarkeit."""
+    from app.services.availability import calendar_windows
+
+    if enabled:
+        assignee = db.session.get(User, page.assignee_user_id) if page.assignee_user_id else None
+        if assignee is None or assignee.tenant_id != page.tenant_id or not calendar_windows(assignee):
+            raise BookingError(NO_AVAILABILITY)
+    page.enabled, page.updated_by_user_id = bool(enabled), user.id
+    db.session.commit()
+
+
+def save_settings(user: User, form) -> OfficeBookingPage:
+    """Nur Buero-Admin (Aufrufer prueft). Wirft BookingError mit verstaendlicher Meldung."""
+    from app.services import calendar as cal
+
+    page = page_for_office()
+    slug = _checked_slug(form.get("slug"), page)
     title = " ".join((form.get("title") or "").split())[:80] or "Beratungstermin"
     try:
         minutes = int(form.get("minutes") or 0)
@@ -120,8 +151,7 @@ def save_settings(user: User, form) -> OfficeBookingPage:
     from app.services.availability import calendar_windows
 
     if enabled and not calendar_windows(members[assignee_id]):
-        raise BookingError("Für diesen Kalender ist keine Verfügbarkeit hinterlegt. Bitte zuerst unter „Terminplanung“ "
-                           "die Bürozeiten (und ggf. die Arbeitstage des Mitarbeiters) eintragen.")
+        raise BookingError(NO_AVAILABILITY)
     if page is None:
         page = OfficeBookingPage(tenant_id=user.tenant_id)
         db.session.add(page)

@@ -424,6 +424,7 @@ def booking_links():
     mail_problems = booking_confirmation.problems() if current_user.is_office_admin else []
     return render_template(
         "calendar/booking_links.html", office_page=office_page, office_link=office_link, mail_problems=mail_problems,
+        office_base=ob.public_url(office_page).rsplit("/", 1)[0] + "/" if office_page else None,
         rows=rows, labels=bl.STATUS_LABELS, members=_link_assignees(), member_name=cal.member_name,
         kinds=cal.LOCATION_KINDS, customer=customer, new_id=request.args.get("neu", type=int),
         defaults={"from": (today + timedelta(days=1)).isoformat(), "to": (today + timedelta(days=7)).isoformat(),
@@ -498,6 +499,53 @@ def booking_confirmation_resend(confirmation_id):
     else:
         flash("Diese Bestätigung kann nicht erneut gesendet werden.", "error")
     return redirect(url_for("calendar.booking_links"))
+
+
+def _office_page_admin():
+    """Allgemeiner Buero-Link: nur Buero-Admin, serverseitig."""
+    from app.services import office_booking as ob
+
+    if not current_user.is_office_admin:
+        abort(403)
+    page = ob.page_for_office()
+    if page is None:
+        abort(404)
+    return page
+
+
+@calendar_bp.post("/buchungslinks/buero/adresse")
+@login_required
+def office_link_address():
+    from app.services import office_booking as ob
+
+    page = _office_page_admin()
+    try:
+        changed = ob.change_slug(current_user, page, request.form.get("slug"))
+    except ob.BookingError as exc:
+        db.session.rollback()
+        flash(str(exc), "error")
+    else:
+        flash("Adresse geändert. Der bisherige Link funktioniert nicht mehr – bitte den neuen Link weitergeben."
+              if changed else "Die Adresse ist unverändert.", "success")
+    return redirect(url_for("calendar.booking_links") + "#bl-office")
+
+
+@calendar_bp.post("/buchungslinks/buero/aktiv")
+@login_required
+def office_link_enabled():
+    from app.services import office_booking as ob
+
+    page = _office_page_admin()
+    enabled = request.form.get("enabled") == "1"
+    try:
+        ob.set_enabled(current_user, page, enabled)
+    except ob.BookingError as exc:
+        db.session.rollback()
+        flash(str(exc), "error")
+    else:
+        flash("Allgemeiner Buchungslink eingeschaltet." if enabled else
+              "Allgemeiner Buchungslink ausgeschaltet. Kunden können darüber nicht mehr buchen; gebuchte Termine bleiben.", "success")
+    return redirect(url_for("calendar.booking_links") + "#bl-office")
 
 
 def _own_link(link_id):

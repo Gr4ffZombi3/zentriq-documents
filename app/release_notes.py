@@ -17,6 +17,14 @@ from datetime import date
 
 RELEASE_NOTES = (
     {
+        "date": date(2026, 11, 18),
+        "title": "Allgemeinen Buchungslink direkt verwalten",
+        "text": "Unter „Buchungslinks“ können Sie die Adresse Ihres allgemeinen Buchungslinks jetzt direkt ändern "
+        "sowie den Link aus- und wieder einschalten. Nach einer Adressänderung funktioniert der bisherige Link "
+        "nicht mehr – denken Sie an Ihre E-Mail-Signatur.",
+        "audience": "admin",
+    },
+    {
         "date": date(2026, 11, 17),
         "title": "Buchungslinks umbenennen und löschen",
         "text": "Unter „Buchungslinks“ können Sie den Namen eines Links jederzeit ändern – die Adresse bleibt gleich, "

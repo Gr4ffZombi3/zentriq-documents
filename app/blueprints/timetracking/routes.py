@@ -243,6 +243,8 @@ def week():
         current_url=url_for("timetracking.week"),
         request_link=_request_link,
         own_absences=absences.active_between([current_user.id], start, end),
+        own_account=absences.vacation_account(current_user, start.year),
+        format_days=absences.format_days,
     )
 
 
@@ -262,6 +264,8 @@ def month():
         current_url=url_for("timetracking.month"),
         request_link=_request_link,
         own_absences=absences.active_between([current_user.id], start, end),
+        own_account=absences.vacation_account(current_user, start.year),
+        format_days=absences.format_days,
     )
 
 
@@ -398,6 +402,8 @@ def employee(user_id):
         today_url=link(view, today),
         view_links={key: link(key, anchor) for key in VIEWS},
         day_link=lambda target_day: link("tag", target_day),
+        account=absences.vacation_account(employee_user, anchor.year),
+        format_days=absences.format_days,
     )
 
 
@@ -425,6 +431,29 @@ def _absence_redirect(month: date | None = None, anchor: str = ""):
 def _flash_notes(notes: list[str]) -> None:
     for note in notes:
         flash(note, "info")
+
+
+def _flash_warnings(notes: list[str]) -> None:
+    for note in notes:
+        flash(note, "warning")
+
+
+@timetracking_bp.post("/abwesenheiten/urlaubskonto/<int:user_id>")
+@login_required
+@admin_required
+def vacation_entitlement(user_id):
+    member = get_office_member_or_404(user_id)
+    year = request.form.get("jahr", type=int) or local_today().year
+    try:
+        absences.save_entitlement(current_user, member, year, request.form.get("days"), request.form.get("carryover"))
+    except absences.AbsenceError as exc:
+        db.session.rollback()
+        flash(str(exc), "error")
+    else:
+        account = absences.vacation_account(member, year)
+        flash(f"Urlaubskonto {year} für {_member_name(member)} gespeichert: Resturlaub {absences.format_days(account.rest)} Tage.", "success")
+    month = request.form.get("monat") or f"{year}-01"
+    return redirect(url_for("timetracking.absences_overview", monat=month) + f"#konto-{member.id}")
 
 
 @timetracking_bp.get("/abwesenheiten")
@@ -462,6 +491,9 @@ def absences_overview():
         next_url=url_for("timetracking.absences_overview", monat=_shift("monat", month_start, 1).strftime("%Y-%m")),
         current_url=url_for("timetracking.absences_overview"),
         open_form=request.args.get("neu") == "1",
+        year=month_start.year,
+        accounts=[absences.vacation_account(m, month_start.year) for m in active_members],
+        format_days=absences.format_days,
     )
 
 
@@ -485,6 +517,8 @@ def absence_create():
     what = "Krankheit" if absence.kind == "sick" else "Urlaub"
     flash(f"{what} für {_member_name(member)} eingetragen: {absences.period_text(absence.start_date, absence.end_date)}.", "success")
     _flash_notes(notes)
+    if absence.kind == "vacation":
+        _flash_warnings(absences.vacation_warning(member, absence.start_date, absence.end_date))
     return _absence_redirect(absence.start_date, f"#abw-{absence.id}")
 
 
@@ -507,6 +541,8 @@ def absence_edit(absence_id):
         else:
             flash(f"Zeitraum geändert: {absences.period_text(start, end)}. Stunden und Berichte sind neu berechnet.", "success")
             _flash_notes(notes)
+            if absence.kind == "vacation":
+                _flash_warnings(absences.vacation_warning(member, start, end))
             return _absence_redirect(start, f"#abw-{absence.id}")
     return render_template("timetracking/absence_form.html", absence=absence, member=member, member_name=_member_name,
                            values=values, days=absences.absence_days(member, absence))
@@ -589,11 +625,12 @@ def employee_export(user_id, fmt):
     summary = service.summarize_user_period(employee_user, month_start, month_end)
     name, personnel_number = _export_name(employee_user)
     sick_rows = absences.overview([employee_user], month_start, month_end, "sick")
+    account = absences.vacation_account(employee_user, month_start.year)
     filename = f"arbeitszeiten-{_file_slug(name)}-{month_start.strftime('%Y-%m')}.{fmt}"
     if fmt == "csv":
-        return _download(export.month_csv(name, personnel_number, summary, local_today(), sick_rows), filename, "text/csv; charset=utf-8")
+        return _download(export.month_csv(name, personnel_number, summary, local_today(), sick_rows, account), filename, "text/csv; charset=utf-8")
     tenant = db.session.get(Tenant, current_user.tenant_id)
-    data = export.month_pdf(tenant.name if tenant else "", name, personnel_number, summary, local_today(), sick_rows)
+    data = export.month_pdf(tenant.name if tenant else "", name, personnel_number, summary, local_today(), sick_rows, account)
     return _download(data, filename, "application/pdf")
 
 
@@ -609,7 +646,7 @@ def team_export():
         if not user.is_active and not summary.net_seconds and not summary.sick_seconds:
             continue
         name, personnel_number = _export_name(user)
-        rows.append((name, personnel_number, summary))
+        rows.append((name, personnel_number, summary, absences.vacation_account(user, month_start.year)))
     rows.sort(key=lambda row: row[0].lower())
     filename = f"arbeitszeiten-buero-{month_start.strftime('%Y-%m')}.csv"
     return _download(export.team_csv(rows, month_start), filename, "text/csv; charset=utf-8")

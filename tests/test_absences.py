@@ -230,7 +230,7 @@ def test_export_contains_sick_hours_and_basis_note(app, staff):
     assert pdf.status_code == 200 and pdf.data[:4] == b"%PDF"
     team = admin.get("/zeiterfassung/team/export.csv?monat=2026-10").get_data().decode("utf-8-sig")
     laura_row = next(row for row in team.splitlines() if row.startswith("Laura"))
-    assert laura_row.split(";")[-4:] == ["3", "12:00", "1", "4:00"]
+    assert laura_row.split(";")[-5:] == ["3", "12:00", "1", "4:00", ""]  # Resturlaub: kein Anspruch hinterlegt
 
 
 def test_holiday_state_setting(app, staff):

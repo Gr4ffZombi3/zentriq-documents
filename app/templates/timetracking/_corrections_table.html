@@ -1,5 +1,5 @@
-{% set field_labels = {'started_at': 'Beginn', 'ended_at': 'Ende', 'work_date': 'Arbeitstag', 'zeitraum': 'Zeitraum', 'status': 'Bearbeitungsstatus'} %}
-{% set target_labels = {'session': 'Buchung', 'break': 'Pause', 'absence': 'Krankheit/Urlaub'} %}
+{% set field_labels = {'started_at': 'Beginn', 'ended_at': 'Ende', 'work_date': 'Arbeitstag', 'zeitraum': 'Zeitraum', 'status': 'Bearbeitungsstatus', 'anspruch': 'Jahresanspruch', 'uebertrag': 'Übertrag'} %}
+{% set target_labels = {'session': 'Buchung', 'break': 'Pause', 'absence': 'Krankheit/Urlaub', 'entitlement': 'Urlaubskonto'} %}
 {% set action_labels = {'update': 'Geändert', 'create': 'Nachgetragen', 'void': 'Storniert', 'release': 'Zur Korrektur markiert', 'status': 'Status geändert'} %}
 <div class="table-wrap">
   <table class="data-table">
@@ -21,7 +21,7 @@
           <td class="whitespace-nowrap">{{ entry.created_at | local_dt('%d.%m.%Y %H:%M:%S') }}</td>
           {% if show_employee %}<td>{{ entry.user.employee_profile.display_name if entry.user.employee_profile and entry.user.employee_profile.display_name else entry.user.email }}</td>{% endif %}
           <td class="whitespace-nowrap">{{ target_labels.get(entry.target_type, entry.target_type) }} #{{ entry.target_id }}{% if entry.field %} · {{ field_labels.get(entry.field, entry.field) }}{% endif %}</td>
-          <td>{{ ('Eingetragen' if entry.target_type == 'absence' and entry.action == 'create' else ('Entfernt' if entry.target_type == 'absence' and entry.action == 'void' else action_labels.get(entry.action, entry.action))) }}</td>
+          <td>{{ ('Eingetragen' if entry.target_type in ('absence', 'entitlement') and entry.action == 'create' else ('Entfernt' if entry.target_type == 'absence' and entry.action == 'void' else action_labels.get(entry.action, entry.action))) }}</td>
           <td class="whitespace-nowrap">{{ entry.old_value | iso_local_dt if entry.field in ('started_at', 'ended_at') else (entry.old_value or '–') }}</td>
           <td class="whitespace-nowrap">{{ entry.new_value | iso_local_dt if entry.field in ('started_at', 'ended_at') else (entry.new_value or '–') }}</td>
           <td>{{ entry.corrected_by_email_snapshot or 'System' }}{% if entry.request_id %}<span class="cell-sub">Antrag #{{ entry.request_id }}</span>{% endif %}</td>

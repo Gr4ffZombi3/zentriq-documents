@@ -285,3 +285,20 @@ class TimeAbsence(TenantScopedMixin, db.Model):
 
     def covers(self, day) -> bool:
         return self.start_date <= day <= self.end_date
+
+
+class VacationEntitlement(TenantScopedMixin, db.Model):
+    """Urlaubskonto je Mitarbeiter und Kalenderjahr: Jahresanspruch und Uebertrag aus dem Vorjahr
+    in Arbeitstagen (halbe Tage moeglich). Genommene/geplante Tage werden aus den
+    Urlaubseintraegen berechnet (absences.vacation_account), nicht gespeichert."""
+
+    __tablename__ = "vacation_entitlements"
+    __table_args__ = (db.UniqueConstraint("user_id", "year", name="uq_vacation_entitlements_user_year"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    year = db.Column(db.Integer, nullable=False)
+    days = db.Column(db.Numeric(5, 1), nullable=False, default=0)
+    carryover = db.Column(db.Numeric(5, 1), nullable=False, default=0)
+    updated_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive, onupdate=utcnow_naive)

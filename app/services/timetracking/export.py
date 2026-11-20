@@ -91,7 +91,17 @@ def _sick_lines(sick_rows) -> list[list[str]]:
     return lines
 
 
-def month_csv(employee_name: str, personnel_number: str | None, summary: PeriodSummary, today: date, sick_rows=None) -> bytes:
+def _account_text(account) -> str | None:
+    if account is None or not account.has_entitlement:
+        return None
+    from app.services.timetracking.absences import format_days
+
+    return (f"Urlaubskonto {account.year}: Anspruch {format_days(account.days)} + Übertrag {format_days(account.carryover)} Tage · "
+            f"genommen {account.taken} · geplant {account.planned} · Resturlaub {format_days(account.rest)} Tage")
+
+
+def month_csv(employee_name: str, personnel_number: str | None, summary: PeriodSummary, today: date, sick_rows=None,
+              account=None) -> bytes:
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=";", lineterminator="\r\n")
     writer.writerow(["Arbeitszeitnachweis", month_name(summary.start)])
@@ -102,6 +112,9 @@ def month_csv(employee_name: str, personnel_number: str | None, summary: PeriodS
     writer.writerow(HEADER)
     writer.writerows(day_rows(summary, today))
     writer.writerow(_totals(summary))
+    if _account_text(account):
+        writer.writerow([])
+        writer.writerow([_account_text(account)])
     sick = _sick_lines(sick_rows)
     if sick:
         writer.writerow([])
@@ -112,14 +125,18 @@ def month_csv(employee_name: str, personnel_number: str | None, summary: PeriodS
     return ("﻿" + buffer.getvalue()).encode("utf-8")
 
 
-def team_csv(rows: list[tuple[str, str | None, PeriodSummary]], month: date) -> bytes:
+def team_csv(rows: list[tuple], month: date) -> bytes:
+    """rows: (Name, Personalnummer, PeriodSummary[, Urlaubskonto])."""
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=";", lineterminator="\r\n")
     writer.writerow(["Arbeitszeiten", month_name(month)])
     writer.writerow([])
     writer.writerow(["Mitarbeiter", "Personalnummer", "Ist", "Soll", "Saldo", "Pausen", "Unvollständige Buchungen",
-                     "Krankheitstage", "Krankheitsstunden", "Urlaubstage", "Urlaubsstunden"])
-    for name, personnel_number, summary in rows:
+                     "Krankheitstage", "Krankheitsstunden", "Urlaubstage", "Urlaubsstunden", f"Resturlaub {month.year}"])
+    from app.services.timetracking.absences import format_days
+
+    for name, personnel_number, summary, *extra in rows:
+        account = extra[0] if extra else None
         writer.writerow(
             [
                 name,
@@ -133,6 +150,7 @@ def team_csv(rows: list[tuple[str, str | None, PeriodSummary]], month: date) -> 
                 format_duration(summary.sick_seconds),
                 str(summary.vacation_days),
                 format_duration(summary.vacation_seconds),
+                format_days(account.rest) if account is not None and account.has_entitlement else "",
             ]
         )
     return ("﻿" + buffer.getvalue()).encode("utf-8")
@@ -182,6 +200,7 @@ def _row(page, y, values, bold=False, shade=False):
 def month_pdf(
     office_name: str, employee_name: str, personnel_number: str | None, summary: PeriodSummary, today: date,
     sick_rows=None,
+    account=None,
 ) -> bytes:
     document = fitz.open()
     page = document.new_page(width=_PAGE_WIDTH, height=_PAGE_HEIGHT)
@@ -199,6 +218,9 @@ def month_pdf(
         totals += (f" · Krank {format_duration(summary.sick_seconds)} Std. ({summary.sick_days} Tage)"
                    f" · Urlaub {format_duration(summary.vacation_seconds)} Std.")
     _text(page, _MARGIN, y, totals, size=9.5)
+    if _account_text(account):
+        y += 13
+        _text(page, _MARGIN, y, _account_text(account), size=9)
     y += 26
 
     _row(page, y, [label for label, _, _ in _COLUMNS], bold=True, shade=True)

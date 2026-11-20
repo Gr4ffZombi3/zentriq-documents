@@ -145,6 +145,53 @@
     {% endif %}
   {% endcall %}
 
+  {% call panel('Urlaubskonto ' ~ year, 'Anspruch in Arbeitstagen nach dem Arbeitszeitmodell (bei Teilzeit ggf. anteilig). Gezählt werden nur geplante Arbeitstage mit Urlaub – keine Feiertage, freien Tage oder Krankheitstage.', flush=True) %}
+    <div class="table-wrap">
+      <table class="data-table table-stack" data-vac-accounts>
+        <thead><tr>
+          <th scope="col">Mitarbeiter</th>
+          <th scope="col" class="num">Anspruch</th>
+          <th scope="col" class="num">Übertrag {{ year - 1 }}</th>
+          <th scope="col" class="num">Genommen</th>
+          <th scope="col" class="num">Geplant</th>
+          <th scope="col" class="num">Resturlaub</th>
+          <th scope="col"><span class="sr-only">Aktion</span></th>
+        </tr></thead>
+        <tbody>
+        {% for acc in accounts %}
+          <tr id="konto-{{ acc.member.id }}" data-vac-row="{{ acc.member.id }}">
+            <th scope="row" class="cell-strong">{{ member_name(acc.member) }}</th>
+            <td class="num" data-label="Anspruch">{{ format_days(acc.days) if acc.has_entitlement else '–' }}</td>
+            <td class="num" data-label="Übertrag">{{ format_days(acc.carryover) if acc.has_entitlement else '–' }}</td>
+            <td class="num" data-label="Genommen" data-vac-taken>{{ acc.taken }}</td>
+            <td class="num" data-label="Geplant" data-vac-planned>{{ acc.planned }}</td>
+            <td class="num" data-label="Resturlaub" data-vac-rest>
+              {% if acc.rest is none %}<span class="cell-sub">nicht hinterlegt</span>
+              {% else %}<strong class="{{ 'balance-minus' if acc.rest < 0 else '' }}">{{ format_days(acc.rest) }} Tage</strong>{% endif %}
+            </td>
+            <td class="bl-actions">
+              <details class="bl-rename" data-vac-edit>
+                <summary class="btn btn-secondary btn-sm">{{ 'Ändern' if acc.has_entitlement else 'Anspruch eintragen' }}</summary>
+                <form method="post" action="{{ url_for('timetracking.vacation_entitlement', user_id=acc.member.id) }}" class="bl-rename-form">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="jahr" value="{{ year }}">
+                  <input type="hidden" name="monat" value="{{ month_start.strftime('%Y-%m') }}">
+                  <label class="field-label" for="vac-days-{{ acc.member.id }}">Jahresanspruch {{ year }} (Tage)</label>
+                  <input class="field-surface" id="vac-days-{{ acc.member.id }}" name="days" inputmode="decimal" required value="{{ format_days(acc.days) if acc.has_entitlement else '' }}" placeholder="z. B. 30">
+                  <label class="field-label" for="vac-carry-{{ acc.member.id }}">Übertrag aus {{ year - 1 }} (Tage)</label>
+                  <input class="field-surface" id="vac-carry-{{ acc.member.id }}" name="carryover" inputmode="decimal" value="{{ format_days(acc.carryover) if acc.has_entitlement else '0' }}">
+                  <p class="form-hint">Halbe Tage mit Komma, z. B. 2,5.</p>
+                  <button type="submit" class="btn btn-primary btn-sm" data-vac-save>Speichern</button>
+                </form>
+              </details>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endcall %}
+
   {% call panel('Feiertage', 'An gesetzlichen Feiertagen beträgt das Soll 0 Stunden.') %}
     <div id="feiertage">
       {% if holidays %}

@@ -71,6 +71,7 @@ from app.models.timetracking import (
     TimeAbsence,
     TimeCorrection,
     TimeCorrectionRequest,
+    VacationEntitlement,
     WorkBreak,
     WorkSession,
 )
@@ -130,6 +131,7 @@ __all__ = [
     "EmployeeProfile",
     "EmployeeWorkPlan",
     "TimeAbsence",
+    "VacationEntitlement",
     "TimeCorrection",
     "TimeCorrectionRequest",
     "WorkBreak",

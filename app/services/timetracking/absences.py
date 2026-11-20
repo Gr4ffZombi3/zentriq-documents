@@ -14,9 +14,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 
 from app.extensions import db
-from app.models import TimeAbsence, User
+from app.models import TimeAbsence, User, VacationEntitlement
 from app.models.office_settings import OfficeSettings
 from app.models.timetracking import ABSENCE_KINDS, REFUND_STATUSES, utcnow_naive
 from app.services.customer_lock import CustomerLockTimeout, NamedLock
@@ -281,3 +282,124 @@ def overview(members: list[User], month_start: date, month_end: date, kind: str 
         rows.append(row)
     return rows
 
+
+
+# --- Urlaubskonto --------------------------------------------------------------------------------
+
+
+def format_days(value) -> str:
+    """Decimal/float/int -> '30' bzw. '2,5' (deutsche Schreibweise)."""
+    if value is None:
+        return "–"
+    number = Decimal(str(value)).quantize(Decimal("0.1"))
+    text = f"{number:f}".rstrip("0").rstrip(".") if "." in f"{number:f}" else f"{number:f}"
+    return text.replace(".", ",").replace("-", "−")
+
+
+def parse_days(value, label: str) -> Decimal:
+    raw = (value or "").strip().replace(",", ".") or "0"
+    try:
+        number = Decimal(raw)
+    except InvalidOperation:
+        raise AbsenceError(f"Bitte {label} als Zahl angeben (z. B. 30 oder 2,5).") from None
+    if number < 0 or number > 365:
+        raise AbsenceError(f"{label[0].upper() + label[1:]} muss zwischen 0 und 365 Tagen liegen.")
+    if number * 2 != (number * 2).to_integral_value():
+        raise AbsenceError(f"{label[0].upper() + label[1:]}: bitte ganze oder halbe Tage angeben.")
+    return number.quantize(Decimal("0.1"))
+
+
+@dataclass
+class VacationAccount:
+    member: User
+    year: int
+    entitlement: VacationEntitlement | None
+    taken: int = 0  # Urlaubstage bis einschl. heute
+    planned: int = 0  # kuenftige Urlaubstage
+
+    @property
+    def has_entitlement(self) -> bool:
+        return self.entitlement is not None
+
+    @property
+    def days(self) -> Decimal:
+        return Decimal(self.entitlement.days) if self.entitlement else Decimal(0)
+
+    @property
+    def carryover(self) -> Decimal:
+        return Decimal(self.entitlement.carryover) if self.entitlement else Decimal(0)
+
+    @property
+    def total(self) -> Decimal:
+        return self.days + self.carryover
+
+    @property
+    def used(self) -> int:
+        return self.taken + self.planned
+
+    @property
+    def rest(self) -> Decimal | None:
+        return self.total - self.used if self.entitlement else None
+
+
+def _vacation_days(member: User, year: int, today: date, now: datetime) -> tuple[int, int]:
+    """Gezaehlt werden geplante Arbeitstage mit Urlaub: keine Feiertage, keine freien Tage,
+    keine Krankheitstage (Krankheit hat Vorrang) und keine voll gearbeiteten Tage."""
+    from app.services.timetracking.service import sessions_between
+
+    start, end = date(year, 1, 1), date(year, 12, 31)
+    items = active_between([member.id], start, end)
+    if not any(item.kind == "vacation" for item in items):
+        return 0, 0
+    first = max(start, min(item.start_date for item in items if item.kind == "vacation"))
+    last = min(end, max(item.end_date for item in items if item.kind == "vacation"))
+    summary = summarize_period(sessions_between([member.id], first, last), first, last, member.employee_profile,
+                               last, now, absences=items, holidays=holidays(first, last))
+    taken = sum(1 for d in summary.days if d.vacation_seconds and d.day <= today)
+    planned = sum(1 for d in summary.days if d.vacation_seconds and d.day > today)
+    return taken, planned
+
+
+def vacation_account(member: User, year: int, now: datetime | None = None) -> VacationAccount:
+    from app.services.timetracking.clock import local_today
+
+    now = now or utcnow_naive()
+    entitlement = VacationEntitlement.query.filter_by(user_id=member.id, year=year).first()
+    taken, planned = _vacation_days(member, year, local_today(now), now)
+    return VacationAccount(member=member, year=year, entitlement=entitlement, taken=taken, planned=planned)
+
+
+def save_entitlement(actor: User, member: User, year: int, days_value, carryover_value) -> VacationEntitlement:
+    if not 2000 <= year <= 2100:
+        raise AbsenceError("Ungültiges Jahr.")
+    days = parse_days(days_value, "den Jahresanspruch")
+    carryover = parse_days(carryover_value, "den Übertrag")
+    row = VacationEntitlement.query.filter_by(user_id=member.id, year=year).first()
+    created = row is None
+    if created:
+        row = VacationEntitlement(tenant_id=member.tenant_id, user_id=member.id, year=year, days=0, carryover=0)
+        db.session.add(row)
+        db.session.flush()
+    from app.services.timetracking.service import _record as record
+
+    for field_name, label, new in (("days", "anspruch", days), ("carryover", "uebertrag", carryover)):
+        old = None if created else Decimal(getattr(row, field_name))
+        if created or old != new:
+            record(actor, row, "entitlement", "create" if created else "update", field=label,
+                   old=None if old is None else f"{year}: {format_days(old)} Tage", new=f"{year}: {format_days(new)} Tage")
+            setattr(row, field_name, new)
+    row.updated_by_user_id = actor.id
+    db.session.commit()
+    return row
+
+
+def vacation_warning(member: User, start: date, end: date) -> list[str]:
+    notes = []
+    for year in range(start.year, end.year + 1):
+        account = vacation_account(member, year)
+        if account.rest is not None and account.rest < 0:
+            notes.append(f"Achtung: Damit sind {format_days(-account.rest)} Urlaubstage mehr eingetragen, als im "
+                         f"Urlaubskonto {year} verfügbar sind (Anspruch und Übertrag {format_days(account.total)} Tage).")
+        elif account.entitlement is None:
+            notes.append(f"Für {year} ist noch kein Urlaubsanspruch hinterlegt – bitte im Urlaubskonto eintragen.")
+    return notes

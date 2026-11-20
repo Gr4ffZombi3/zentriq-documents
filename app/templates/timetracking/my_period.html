@@ -42,6 +42,18 @@
     {% endif %}
   {% endcall %}
 
+  {% if own_account and (own_account.has_entitlement or own_account.used) %}
+    {% call panel('Mein Urlaubskonto ' ~ own_account.year) %}
+      <dl class="vac-own" data-own-account>
+        <div><dt>Anspruch</dt><dd>{{ format_days(own_account.days) if own_account.has_entitlement else '–' }}</dd></div>
+        <div><dt>Übertrag</dt><dd>{{ format_days(own_account.carryover) if own_account.has_entitlement else '–' }}</dd></div>
+        <div><dt>Genommen</dt><dd>{{ own_account.taken }}</dd></div>
+        <div><dt>Geplant</dt><dd>{{ own_account.planned }}</dd></div>
+        <div><dt>Resturlaub</dt><dd><strong>{{ (format_days(own_account.rest) ~ ' Tage') if own_account.rest is not none else 'noch nicht hinterlegt' }}</strong></dd></div>
+      </dl>
+    {% endcall %}
+  {% endif %}
+
   {% if own_absences %}
     {% call panel('Meine Krankheits- und Urlaubseinträge', 'Eingetragen vom Büro. Angerechnet werden die ausgefallenen Sollstunden laut Arbeitszeitmodell.', flush=True) %}
       <ul class="abs-own" data-own-absences>

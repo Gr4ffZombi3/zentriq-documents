@@ -46,6 +46,7 @@
     {{ kpi('Differenz', summary.balance_seconds | duration(signed=True), tone='success' if summary.balance_seconds > 0 else ('danger' if summary.balance_seconds < 0 else None)) }}
     {{ kpi('Pausen', summary.break_seconds | duration) }}
     {% if summary.sick_seconds %}{{ kpi('Krank', summary.sick_seconds | duration, meta=summary.sick_days ~ (' Arbeitstag' if summary.sick_days == 1 else ' Arbeitstage')) }}{% endif %}
+    {% if account.has_entitlement %}{{ kpi('Resturlaub ' ~ account.year, format_days(account.rest) ~ ' Tage', meta=account.taken ~ ' genommen · ' ~ account.planned ~ ' geplant', href=url_for('timetracking.absences_overview', monat=account.year ~ '-01') ~ '#konto-' ~ employee.id) }}{% endif %}
     {% if summary.vacation_seconds %}{{ kpi('Urlaub', summary.vacation_seconds | duration, meta=summary.vacation_days ~ (' Tag' if summary.vacation_days == 1 else ' Tage')) }}{% endif %}
   </div>
 

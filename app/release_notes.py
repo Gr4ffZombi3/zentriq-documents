@@ -18,6 +18,21 @@ from datetime import date
 RELEASE_NOTES = (
     {
         "date": date(2026, 11, 20),
+        "title": "Urlaubskonto je Mitarbeiter",
+        "text": "Unter Zeiterfassung → „Krankheit & Urlaub“ hinterlegen Sie je Mitarbeiter den Jahresanspruch und den "
+        "Übertrag aus dem Vorjahr. Genommene, geplante und verbleibende Urlaubstage werden automatisch aus den "
+        "Urlaubseinträgen berechnet – Feiertage, freie Tage und Krankheitstage zählen nicht. Übersteigt neuer "
+        "Urlaub den Rest, erscheint ein Hinweis.",
+        "audience": "admin",
+    },
+    {
+        "date": date(2026, 11, 20),
+        "title": "Ihr Urlaubskonto",
+        "text": "In „Meine Arbeitszeiten“ sehen Sie Ihren Urlaubsanspruch, genommene und geplante Tage sowie Ihren Resturlaub.",
+        "audience": "mitarbeiter",
+    },
+    {
+        "date": date(2026, 11, 20),
         "title": "Krankheit, Urlaub und Feiertage in der Zeiterfassung",
         "text": "Unter Zeiterfassung → Team → „Krankheit & Urlaub“ tragen Sie Krankheit oder Urlaub für einen Tag oder "
         "einen Zeitraum ein. Die ausgefallenen Sollstunden werden aus dem Arbeitszeitmodell berechnet und erzeugen "

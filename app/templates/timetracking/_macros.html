@@ -11,6 +11,9 @@
 {%- endmacro %}
 
 {% macro day_notes(day) -%}
+  {%- if day.holiday %}{{ state_tag('Feiertag: ' ~ day.holiday, 'info') }} {% endif -%}
+  {%- if day.absence_kind == 'sick' and not day.holiday %}<span data-day-sick>{{ state_tag('Krank', 'warning') }}</span> {% endif -%}
+  {%- if day.absence_kind == 'vacation' and not day.holiday %}<span data-day-vacation>{{ state_tag('Urlaub', 'info') }}</span> {% endif -%}
   {%- if day.is_running %}{{ state_tag('läuft', 'info') }} {% endif -%}
   {%- if day.has_incomplete %}{{ state_tag('Ausstempeln fehlt', 'danger') }} {% endif -%}
   {%- if day.is_corrected %}{{ state_tag('korrigiert', 'neutral') }}{% endif -%}
@@ -24,6 +27,7 @@
 
 {# Tabelle fuer Woche/Monat. row_link(day) -> URL oder None; request_link(day) -> URL fuer Mitarbeiter. #}
 {% macro period_table(summary, today, row_link=None, request_link=None) -%}
+{% set show_abs = summary.sick_seconds or summary.vacation_seconds %}
 <div class="table-wrap">
   <table class="data-table">
     <thead>
@@ -34,6 +38,7 @@
         <th scope="col" class="num">Ende</th>
         <th scope="col" class="num">Pausen</th>
         <th scope="col" class="num">Ist</th>
+        {% if show_abs %}<th scope="col" class="num" title="Angerechnete Sollstunden bei Krankheit bzw. Urlaub">Krank/Urlaub</th>{% endif %}
         <th scope="col" class="num">Soll</th>
         <th scope="col" class="num">Saldo</th>
         <th scope="col">Hinweis</th>
@@ -43,7 +48,7 @@
     <tbody>
       {% for day in summary.days %}
         {% set future = day.day > today %}
-        <tr class="{{ 'is-today' if day.day == today else '' }} {{ 'is-muted' if future or (not day.sessions and not day.target_seconds) else '' }}">
+        <tr class="{{ 'is-today' if day.day == today else '' }} {{ 'is-muted' if future or (not day.sessions and not day.target_seconds and not day.absence_kind) else '' }}">
           <th scope="row" class="whitespace-nowrap">
             {% if row_link %}<a class="table-link" href="{{ row_link(day.day) }}">{% endif %}
             {{ day.day | weekday_short }}, {{ day.day.strftime('%d.%m.') }}
@@ -54,6 +59,7 @@
           <td class="num">{{ day.last_end | local_time }}</td>
           <td class="num">{{ day.break_seconds | duration if day.sessions else '–' }}</td>
           <td class="num">{{ day.net_seconds | duration if day.sessions else '–' }}</td>
+          {% if show_abs %}<td class="num">{{ day.absence_seconds | duration if day.absence_seconds else '–' }}</td>{% endif %}
           <td class="num">{{ day.target_seconds | duration if day.target_seconds else '–' }}</td>
           <td class="num">{{ balance(day.balance_seconds) if not future and (day.sessions or day.target_seconds) else '–' }}</td>
           <td>{{ day_notes(day) }}</td>
@@ -70,6 +76,7 @@
         <th scope="row" colspan="4">Summe</th>
         <td class="num">{{ summary.break_seconds | duration }}</td>
         <td class="num">{{ summary.net_seconds | duration }}</td>
+        {% if show_abs %}<td class="num">{{ (summary.sick_seconds + summary.vacation_seconds) | duration }}</td>{% endif %}
         <td class="num">{{ summary.target_seconds | duration }}</td>
         <td class="num">{{ balance(summary.balance_seconds) }}</td>
         <td colspan="{{ 2 if request_link else 1 }}"></td>

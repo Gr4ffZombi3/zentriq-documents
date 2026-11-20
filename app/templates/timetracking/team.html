@@ -14,6 +14,7 @@
       <input class="toolbar-select" type="month" id="export-monat" name="monat" value="{{ today.strftime('%Y-%m') }}">
       <button type="submit" class="btn btn-secondary btn-sm">CSV exportieren</button>
     </form>
+    {{ button('Krankheit & Urlaub', href=url_for('timetracking.absences_overview'), variant='secondary', size='sm') }}
     {{ button('Mitarbeiter', href=url_for('office.staff'), variant='ghost', size='sm') }}
   {% endcall %}
 

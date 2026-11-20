@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/portal.html" import panel %}
+{% block title %}{{ absence.label }} korrigieren – Zentriq{% endblock %}
+{% block content %}
+<div class="page-shell">
+  <a class="back-link" href="{{ url_for('timetracking.absences_overview', monat=absence.start_date.strftime('%Y-%m')) }}">← Krankheit & Urlaub</a>
+  {{ page_header(('Krankheit' if absence.kind == 'sick' else 'Urlaub') ~ ' korrigieren', member_name(member)) }}
+
+  {% call panel('Zeitraum') %}
+    <form method="post" class="abs-form" data-abs-edit>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-grid form-grid-2">
+        <div class="form-field">
+          <label class="field-label" for="abs-start">Erster Tag</label>
+          <input class="field-surface" type="date" id="abs-start" name="start_date" value="{{ values.start_date }}" required
+                 onchange="var e=document.getElementById('abs-end'); if(!e.value || e.value < this.value){e.value=this.value;} e.min=this.value;">
+        </div>
+        <div class="form-field">
+          <label class="field-label" for="abs-end">Letzter Tag</label>
+          <input class="field-surface" type="date" id="abs-end" name="end_date" value="{{ values.end_date }}" min="{{ values.start_date }}" required>
+        </div>
+      </div>
+      <p class="form-hint">Nach dem Speichern werden Stundenverlauf, Monatsbericht und Export sofort neu berechnet. Die Änderung wird mit Ihrem Namen und dem Zeitpunkt protokolliert.</p>
+      <button type="submit" class="btn btn-primary" data-abs-edit-save>Speichern</button>
+    </form>
+  {% endcall %}
+
+  {% call panel('Aktuelle Berechnung', flush=True) %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th scope="col">Tag</th><th scope="col" class="num">Soll</th><th scope="col" class="num">Gearbeitet</th><th scope="col" class="num">{{ absence.label }}</th><th scope="col">Hinweis</th></tr></thead>
+        <tbody>
+        {% for d in days %}
+          <tr class="{{ 'is-muted' if not d.missed_seconds }}">
+            <th scope="row">{{ d.day | weekday_short }}, {{ d.day.strftime('%d.%m.%Y') }}</th>
+            <td class="num">{{ d.planned_seconds | duration if d.planned_seconds else '–' }}</td>
+            <td class="num">{{ d.worked_seconds | duration if d.worked_seconds else '–' }}</td>
+            <td class="num">{{ d.missed_seconds | duration if d.missed_seconds else '–' }}</td>
+            <td>{% if d.holiday %}Feiertag: {{ d.holiday }}{% elif not d.planned_seconds %}kein Arbeitstag{% elif d.worked_seconds %}teilweise gearbeitet{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot><tr><th scope="row">Summe</th><td></td><td></td><td class="num">{{ days | sum(attribute='missed_seconds') | duration }}</td><td>{{ days | selectattr('missed_seconds') | list | length }} ausgefallene Arbeitstage</td></tr></tfoot>
+      </table>
+    </div>
+  {% endcall %}
+</div>
+{% endblock %}

@@ -525,6 +525,8 @@ def test_already_sent_general_link_keeps_working_after_switch(app, setup):
 def test_open_link_follows_calendar_availability_and_revoke_still_works(app, setup):
     admin, token = _open_link(app, setup)
     day = local_today() + timedelta(days=2)
+    while day.isoweekday() > 5:  # Werktag (Arbeitstage des Kalenders), sonst am Freitag/Samstag ausgefuehrt leer
+        day += timedelta(days=1)
     with bypass_tenant_scope():
         s = OfficeSettings.query.filter_by(tenant_id=setup.tenant_a.id).one()
         hours = dict(s.hours)

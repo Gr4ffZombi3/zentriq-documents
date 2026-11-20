@@ -21,13 +21,15 @@
     {{ kpi('Ist', (summary.net_seconds | duration) ~ ' Std.') }}
     {{ kpi('Differenz', (summary.balance_seconds | duration(signed=True)) ~ ' Std.', tone='success' if summary.balance_seconds > 0 else ('danger' if summary.balance_seconds < 0 else None)) }}
     {{ kpi('Pausen', (summary.break_seconds | duration) ~ ' Std.') }}
+    {% if summary.sick_seconds %}{{ kpi('Krank', (summary.sick_seconds | duration) ~ ' Std.', meta=summary.sick_days ~ (' Arbeitstag' if summary.sick_days == 1 else ' Arbeitstage')) }}{% endif %}
+    {% if summary.vacation_seconds %}{{ kpi('Urlaub', (summary.vacation_seconds | duration) ~ ' Std.', meta=summary.vacation_days ~ (' Tag' if summary.vacation_days == 1 else ' Tage')) }}{% endif %}
   </div>
 
   {% if summary.has_incomplete %}
     <div class="notice notice-danger"><div><p class="notice-title">Unvollständige Buchung</p><p class="notice-copy">Mindestens ein Tag enthält eine Buchung ohne Ausstempeln. Sie wird erst nach einer Korrektur angerechnet.</p></div></div>
   {% endif %}
 
-  {% set has_sessions = summary.days | selectattr('sessions') | list | length > 0 %}
+  {% set has_sessions = (summary.days | selectattr('sessions') | list | length > 0) or (summary.days | selectattr('absence_kind') | list | length > 0) %}
   {% call panel(heading, flush=True) %}
     {% if has_sessions or summary.start <= today %}
       {% if not has_sessions %}
@@ -39,5 +41,15 @@
       <p class="empty-note">Dieser Zeitraum liegt in der Zukunft.</p>
     {% endif %}
   {% endcall %}
+
+  {% if own_absences %}
+    {% call panel('Meine Krankheits- und Urlaubseinträge', 'Eingetragen vom Büro. Angerechnet werden die ausgefallenen Sollstunden laut Arbeitszeitmodell.', flush=True) %}
+      <ul class="abs-own" data-own-absences>
+        {% for a in own_absences %}
+          <li><strong>{{ a.label }}</strong> {{ a.start_date.strftime('%d.%m.%Y') }}{% if a.end_date != a.start_date %} – {{ a.end_date.strftime('%d.%m.%Y') }}{% endif %}</li>
+        {% endfor %}
+      </ul>
+    {% endcall %}
+  {% endif %}
 </div>
 {% endblock %}

@@ -1,0 +1,283 @@
+"""Krankheit und Urlaub in der Zeiterfassung (nur Buero-Admin schreibt; Aufrufer prueft die Rolle).
+
+- Gespeichert werden nur Art, Zeitraum und Bearbeitungsstatus - keine Diagnose, keine Stunden.
+- Ausgefallene Sollstunden werden aus dem Arbeitszeitmodell berechnet (calc.summarize_period):
+  Tagessoll minus bereits geleistete Arbeitszeit, Feiertage 0. Korrekturen an Zeitraum oder
+  Buchungen wirken dadurch sofort in Stundenverlauf, Monatsbericht und Export.
+- Keine doppelte Krankheit (bzw. doppelter Urlaub) fuer denselben Tag; Urlaub nicht ueber
+  Krankheit. Krankheit ueber Urlaub ist erlaubt - diese Tage zaehlen dann als Krankheit.
+- Jede Aenderung landet mit Bearbeiter und Zeitpunkt im Korrekturprotokoll (TimeCorrection).
+- Die Uebersicht dokumentiert Ausfallzeiten als Grundlage zur Pruefung eines
+  Erstattungsantrags; ein Anspruch oder Betrag wird daraus nicht abgeleitet."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import date, datetime
+
+from app.extensions import db
+from app.models import TimeAbsence, User
+from app.models.office_settings import OfficeSettings
+from app.models.timetracking import ABSENCE_KINDS, REFUND_STATUSES, utcnow_naive
+from app.services.customer_lock import CustomerLockTimeout, NamedLock
+from app.services.timetracking.calc import PeriodSummary, summarize_period
+from app.services.timetracking.holidays import DEFAULT_STATE, STATES, holidays_between
+
+MAX_DAYS = 366
+
+
+class AbsenceError(ValueError):
+    pass
+
+
+def _fmt(day: date) -> str:
+    return day.strftime("%d.%m.%Y")
+
+
+def period_text(start: date, end: date) -> str:
+    return _fmt(start) if start == end else f"{_fmt(start)} – {_fmt(end)}"
+
+
+# --- Feiertage ----------------------------------------------------------------------------------
+
+
+def holiday_state() -> str:
+    settings = OfficeSettings.query.first()
+    state = settings.holiday_state if settings is not None else None
+    return state if state in STATES else DEFAULT_STATE
+
+
+def holidays(start: date, end: date) -> dict[date, str]:
+    return holidays_between(start, end, holiday_state())
+
+
+def set_holiday_state(actor: User, state: str) -> None:
+    if state not in STATES:
+        raise AbsenceError("Bitte ein Bundesland auswählen.")
+    settings = OfficeSettings.query.first()
+    if settings is None:
+        settings = OfficeSettings(tenant_id=actor.tenant_id)
+        db.session.add(settings)
+    settings.holiday_state = state
+    settings.updated_by_user_id = actor.id
+    db.session.commit()
+
+
+# --- Laden / Zusammenfassen -----------------------------------------------------------------------
+
+
+def active_between(user_ids, start: date, end: date, kind: str | None = None) -> list[TimeAbsence]:
+    user_ids = list(user_ids)
+    if not user_ids:
+        return []
+    query = TimeAbsence.query.filter(
+        TimeAbsence.user_id.in_(user_ids), TimeAbsence.deleted_at.is_(None),
+        TimeAbsence.start_date <= end, TimeAbsence.end_date >= start,
+    )
+    if kind:
+        query = query.filter(TimeAbsence.kind == kind)
+    return query.order_by(TimeAbsence.start_date, TimeAbsence.id).all()
+
+
+def summarize(user: User, sessions, start: date, end: date, today: date, now: datetime) -> PeriodSummary:
+    return summarize_period(sessions, start, end, user.employee_profile, today, now,
+                            absences=active_between([user.id], start, end), holidays=holidays(start, end))
+
+
+# --- Pruefen und Speichern ------------------------------------------------------------------------
+
+
+def parse_day(value, label: str) -> date:
+    try:
+        return date.fromisoformat((value or "").strip())
+    except ValueError:
+        raise AbsenceError(f"Bitte {label} als Datum angeben.") from None
+
+
+def _validate(member: User, kind: str, start: date, end: date, exclude_id: int | None = None) -> list[str]:
+    """Prueft Zeitraum und Ueberschneidungen. Gibt verstaendliche Hinweise zurueck (keine Fehler)."""
+    if kind not in ABSENCE_KINDS:
+        raise AbsenceError("Bitte Krankheit oder Urlaub auswählen.")
+    if end < start:
+        raise AbsenceError("Das Ende darf nicht vor dem Beginn liegen.")
+    if (end - start).days + 1 > MAX_DAYS:
+        raise AbsenceError(f"Bitte höchstens {MAX_DAYS} Tage auf einmal eintragen.")
+    others = [item for item in active_between([member.id], start, end) if item.id != exclude_id]
+    same = [item for item in others if item.kind == kind]
+    if same:
+        hit = same[0]
+        what = "Krankheit" if kind == "sick" else "Urlaub"
+        raise AbsenceError(
+            f"Für diesen Zeitraum ist bereits {what} eingetragen ({period_text(hit.start_date, hit.end_date)}). "
+            "Bitte den vorhandenen Eintrag bearbeiten, statt ihn doppelt anzulegen.")
+    notes = []
+    if kind == "vacation":
+        sick = [item for item in others if item.kind == "sick"]
+        if sick:
+            hit = sick[0]
+            raise AbsenceError(
+                f"Im Zeitraum ist bereits Krankheit eingetragen ({period_text(hit.start_date, hit.end_date)}). "
+                "Urlaub kann nicht auf Krankheitstage gelegt werden – bitte den Urlaub davor bzw. danach eintragen.")
+    else:
+        vacation = [item for item in others if item.kind == "vacation"]
+        if vacation:
+            days = sum((min(end, v.end_date) - max(start, v.start_date)).days + 1 for v in vacation)
+            notes.append(f"An {days} {'Tag' if days == 1 else 'Tagen'} war Urlaub eingetragen. Diese Tage zählen jetzt als "
+                         "Krankheit, nicht als Urlaub.")
+    return notes
+
+
+def _effect_notes(member: User, start: date, end: date) -> list[str]:
+    from app.services.timetracking.service import sessions_between
+
+    notes = []
+    worked = sorted({item.work_date for item in sessions_between([member.id], start, end)})
+    if worked:
+        notes.append(f"An {len(worked)} {'Tag' if len(worked) == 1 else 'Tagen'} ist bereits Arbeitszeit erfasst "
+                     f"({', '.join(d.strftime('%d.%m.') for d in worked[:5])}{' …' if len(worked) > 5 else ''}). "
+                     "Sie bleibt erhalten; angerechnet werden nur die verbleibenden Sollstunden.")
+    free = holidays(start, end)
+    if free:
+        notes.append("Feiertag im Zeitraum (" + ", ".join(f"{name} {d.strftime('%d.%m.')}" for d, name in sorted(free.items()))
+                     + ") – zählt nicht als ausgefallener Arbeitstag.")
+    return notes
+
+
+def _record(actor: User, absence: TimeAbsence, action: str, field_name: str | None, old, new) -> None:
+    from app.services.timetracking.service import _record as record
+
+    record(actor, absence, "absence", action, field=field_name, old=old, new=new)
+
+
+def _value(absence_kind: str, start: date, end: date) -> str:
+    return f"{ABSENCE_KINDS[absence_kind]} {period_text(start, end)}"
+
+
+def create(actor: User, member: User, kind: str, start: date, end: date) -> tuple[TimeAbsence, list[str]]:
+    try:
+        with NamedLock(f"zq-absence-{member.id}", 10):
+            db.session.commit()  # frischer Datenstand fuer die Doppelpruefung
+            notes = _validate(member, kind, start, end)
+            absence = TimeAbsence(tenant_id=member.tenant_id, user_id=member.id, kind=kind, start_date=start, end_date=end,
+                                  refund_status="open" if kind == "sick" else None,
+                                  created_by_user_id=actor.id, updated_by_user_id=actor.id)
+            db.session.add(absence)
+            db.session.flush()
+            _record(actor, absence, "create", "zeitraum", None, _value(kind, start, end))
+            db.session.commit()
+    except CustomerLockTimeout:
+        db.session.rollback()
+        raise AbsenceError("Der Eintrag wird gerade gespeichert. Bitte kurz warten und die Seite neu laden.") from None
+    return absence, notes + _effect_notes(member, start, end)
+
+
+def update(actor: User, absence: TimeAbsence, start: date, end: date) -> list[str]:
+    member = db.session.get(User, absence.user_id)
+    try:
+        with NamedLock(f"zq-absence-{member.id}", 10):
+            db.session.commit()
+            db.session.refresh(absence)
+            if absence.deleted_at is not None:
+                raise AbsenceError("Der Eintrag wurde inzwischen entfernt.")
+            notes = _validate(member, absence.kind, start, end, exclude_id=absence.id)
+            if (start, end) != (absence.start_date, absence.end_date):
+                old = _value(absence.kind, absence.start_date, absence.end_date)
+                absence.start_date, absence.end_date, absence.updated_by_user_id = start, end, actor.id
+                _record(actor, absence, "update", "zeitraum", old, _value(absence.kind, start, end))
+            db.session.commit()
+    except CustomerLockTimeout:
+        db.session.rollback()
+        raise AbsenceError("Der Eintrag wird gerade gespeichert. Bitte kurz warten und die Seite neu laden.") from None
+    return notes + _effect_notes(member, start, end)
+
+
+def remove(actor: User, absence: TimeAbsence) -> None:
+    if absence.deleted_at is not None:
+        return
+    absence.deleted_at, absence.deleted_by_user_id, absence.updated_by_user_id = utcnow_naive(), actor.id, actor.id
+    _record(actor, absence, "void", "zeitraum", _value(absence.kind, absence.start_date, absence.end_date), None)
+    db.session.commit()
+
+
+def set_status(actor: User, absence: TimeAbsence, status: str) -> bool:
+    if absence.kind != "sick":
+        raise AbsenceError("Der Bearbeitungsstatus gilt nur für Krankheit.")
+    if status not in REFUND_STATUSES:
+        raise AbsenceError("Bitte einen gültigen Bearbeitungsstatus wählen.")
+    old = absence.refund_status or "open"
+    if old == status:
+        return False
+    absence.refund_status, absence.updated_by_user_id = status, actor.id
+    _record(actor, absence, "status", "status", REFUND_STATUSES[old], REFUND_STATUSES[status])
+    db.session.commit()
+    return True
+
+
+# --- Monatsuebersicht fuer die Erstattungspruefung -----------------------------------------------
+
+
+@dataclass
+class AbsenceDay:
+    day: date
+    planned_seconds: int
+    worked_seconds: int
+    missed_seconds: int
+    holiday: str | None
+
+
+@dataclass
+class OverviewRow:
+    member: User
+    absence: TimeAbsence
+    days: list[AbsenceDay] = field(default_factory=list)  # nur Tage im gewaehlten Monat
+    total_days: int = 0  # ausgefallene geplante Arbeitstage im gesamten Zeitraum
+    total_seconds: int = 0
+
+    @property
+    def month_days(self) -> int:
+        return sum(1 for item in self.days if item.missed_seconds)
+
+    @property
+    def month_seconds(self) -> int:
+        return sum(item.missed_seconds for item in self.days)
+
+    @property
+    def month_start(self) -> date:
+        return self.days[0].day
+
+    @property
+    def month_end(self) -> date:
+        return self.days[-1].day
+
+    @property
+    def crosses_month(self) -> bool:
+        return (self.absence.start_date, self.absence.end_date) != (self.month_start, self.month_end)
+
+
+def absence_days(member: User, absence: TimeAbsence, now: datetime | None = None) -> list[AbsenceDay]:
+    """Alle Tage des Zeitraums mit geplantem Soll (auch kuenftige), geleisteter Zeit und
+    ausgefallenen Stunden - unabhaengig von 'Soll bis heute'."""
+    from app.services.timetracking.service import sessions_between
+
+    now = now or utcnow_naive()
+    sessions = sessions_between([member.id], absence.start_date, absence.end_date)
+    summary = summarize_period(sessions, absence.start_date, absence.end_date, member.employee_profile,
+                               absence.end_date, now, absences=[absence],
+                               holidays=holidays(absence.start_date, absence.end_date))
+    return [AbsenceDay(day=item.day, planned_seconds=item.target_seconds, worked_seconds=item.net_seconds,
+                       missed_seconds=item.absence_seconds, holiday=item.holiday) for item in summary.days]
+
+
+def overview(members: list[User], month_start: date, month_end: date, kind: str = "sick") -> list[OverviewRow]:
+    by_id = {item.id: item for item in members}
+    rows = []
+    for absence in active_between(by_id, month_start, month_end, kind=kind):
+        member = by_id[absence.user_id]
+        all_days = absence_days(member, absence)
+        row = OverviewRow(member=member, absence=absence,
+                          days=[item for item in all_days if month_start <= item.day <= month_end],
+                          total_days=sum(1 for item in all_days if item.missed_seconds),
+                          total_seconds=sum(item.missed_seconds for item in all_days))
+        rows.append(row)
+    return rows
+

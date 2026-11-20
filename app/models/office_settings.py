@@ -39,5 +39,7 @@ class OfficeSettings(TenantScopedMixin, db.Model):
     # Eigene Ueberschrift der oeffentlichen Buchungsseiten (Buero-Link und alle Buchungslinks des Bueros),
     # z. B. "Termin bei der HUK-COBURG – Justin Heller buchen". Leer = Standardtitel.
     booking_title = db.Column(db.String(120), nullable=True)
+    # Bundesland fuer gesetzliche Feiertage der Zeiterfassung (holidays.STATES).
+    holiday_state = db.Column(db.String(2), nullable=False, default="NW", server_default="NW")
     updated_at = db.Column(db.DateTime, nullable=False, default=_now, onupdate=_now)
     updated_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

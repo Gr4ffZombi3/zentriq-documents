@@ -1295,3 +1295,25 @@ a.bl-option:hover { border-color: var(--color-primary); }
 .logo-row .huk-field { flex: 1 1 18rem; min-width: 0; }
 .logo-preview { display: grid; place-items: center; width: 12rem; max-width: 100%; height: 5.5rem; padding: 0.6rem; border: 1px dashed var(--color-border-strong); border-radius: var(--radius-sm, 7px); background: var(--color-surface-muted); }
 .logo-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+/* Zeiterfassung: Krankheit & Urlaub */
+.abs-new { padding: 0; }
+.abs-new-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; padding: 0.9rem 1rem; cursor: pointer; list-style: none; }
+.abs-new-summary::-webkit-details-marker { display: none; }
+.abs-new-hint { font-size: 0.88rem; color: var(--color-text-muted); }
+.abs-form { display: grid; gap: 0.9rem; max-width: 40rem; }
+.abs-form .btn { justify-self: start; }
+.abs-kind { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; border: 0; padding: 0; margin: 0; }
+.abs-kind label { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 2.75rem; }
+.abs-legal { margin: 0.75rem 1rem; }
+.abs-status { display: flex; gap: 0.4rem; align-items: center; }
+.abs-status select { min-width: 9rem; }
+.abs-days { margin-top: 0.35rem; font-size: 0.85rem; }
+.abs-days summary { cursor: pointer; color: var(--color-primary); }
+.abs-days ul { margin: 0.35rem 0 0; padding-left: 1rem; }
+.abs-holidays, .abs-own { margin: 0 0 0.8rem; padding-left: 1.1rem; }
+.abs-own { padding: 0.8rem 1rem 0.8rem 2rem; margin: 0; }
+@media (max-width: 640px) {
+  .abs-form input[type="date"], .abs-form select { min-height: 2.75rem; font-size: 1rem; }
+  .abs-form .btn { justify-self: stretch; }
+}

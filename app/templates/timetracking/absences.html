@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% from "ui/display.html" import page_header %}
+{% from "ui/forms.html" import button %}
+{% from "ui/portal.html" import kpi, panel, state_tag %}
+{% block title %}Krankheit & Urlaub – Zeiterfassung – Zentriq{% endblock %}
+{% block content %}
+{% set month_label = month_start | month_name %}
+{% set sick_hours = sick_rows | sum(attribute='month_seconds') %}
+{% set sick_days = sick_rows | sum(attribute='month_days') %}
+{% set open_count = sick_rows | selectattr('absence.refund_status', 'in', [None, 'open']) | list | length %}
+<div class="page-shell page-shell-wide">
+  <a class="back-link" href="{{ url_for('timetracking.team') }}">← Team</a>
+  {% call page_header('Krankheit & Urlaub', 'Krankheit und Urlaub je Mitarbeiter eintragen. Ausgefallene Sollstunden werden aus dem Arbeitszeitmodell berechnet – geleistete Stunden bleiben erhalten.') %}
+    <div class="period-nav">
+      {{ button('Zurück', href=prev_url, variant='secondary', size='sm') }}
+      <span class="period-nav-label">{{ month_label }}</span>
+      {{ button('Weiter', href=next_url, variant='secondary', size='sm') }}
+      {{ button('Aktuell', href=current_url, variant='ghost', size='sm') }}
+    </div>
+  {% endcall %}
+
+  <details class="panel abs-new" id="krankheit-eintragen" {{ 'open' if open_form or not sick_rows }} data-abs-new>
+    <summary class="abs-new-summary"><span class="btn btn-primary btn-sm">Krankheit eintragen</span><span class="abs-new-hint">oder Urlaub – für einen Tag oder einen Zeitraum</span></summary>
+    <form method="post" action="{{ url_for('timetracking.absence_create') }}" class="panel-body abs-form" data-abs-form>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-field">
+        <label class="field-label" for="abs-user">Mitarbeiter</label>
+        <select class="field-surface" id="abs-user" name="user_id" required>
+          {% if not preselect %}<option value="">Bitte wählen</option>{% endif %}
+          {% for m in members %}<option value="{{ m.id }}" {{ 'selected' if preselect == m.id }}>{{ member_name(m) }}</option>{% endfor %}
+        </select>
+      </div>
+      <fieldset class="form-field abs-kind">
+        <legend class="field-label">Art</legend>
+        <label><input type="radio" name="kind" value="sick" {{ 'checked' if form_kind == 'sick' }}> Krankheit</label>
+        <label><input type="radio" name="kind" value="vacation" {{ 'checked' if form_kind == 'vacation' }}> Urlaub</label>
+      </fieldset>
+      <div class="form-grid form-grid-2">
+        <div class="form-field">
+          <label class="field-label" for="abs-start">Erster Tag</label>
+          <input class="field-surface" type="date" id="abs-start" name="start_date" value="{{ start_value }}" required
+                 onchange="var e=document.getElementById('abs-end'); if(!e.value || e.value < this.value){e.value=this.value;} e.min=this.value;">
+        </div>
+        <div class="form-field">
+          <label class="field-label" for="abs-end">Letzter Tag</label>
+          <input class="field-surface" type="date" id="abs-end" name="end_date" value="{{ start_value }}" min="{{ start_value }}" required>
+          <span class="form-hint">Für einen einzelnen Tag gleiches Datum wählen.</span>
+        </div>
+      </div>
+      <p class="form-hint">Es wird keine Diagnose abgefragt oder gespeichert. Feiertage und freie Tage zählen nicht als ausgefallene Arbeitstage.</p>
+      <button type="submit" class="btn btn-primary" data-abs-save>Speichern</button>
+    </form>
+  </details>
+
+  <div class="kpi-row">
+    {{ kpi('Krankheitszeiträume', sick_rows | length) }}
+    {{ kpi('Ausgefallene Arbeitstage', sick_days) }}
+    {{ kpi('Krankheitsstunden', (sick_hours | duration) ~ ' Std.') }}
+    {{ kpi('Zu prüfen', open_count, tone='warning' if open_count else None) }}
+  </div>
+
+  {% call panel('Krankheit im ' ~ month_label ~ ' – Erstattungsprüfung', flush=True) %}
+    <div class="notice notice-info abs-legal" data-abs-legal><p class="notice-copy">Die Angaben dokumentieren Ausfallzeiten und dienen als <strong>Grundlage zur Prüfung des Erstattungsantrags</strong>. Ob und in welcher Höhe eine Erstattung besteht, ergibt sich daraus nicht.</p></div>
+    {% if sick_rows %}
+      <div class="table-wrap">
+        <table class="data-table table-stack abs-table" data-abs-sick>
+          <thead><tr>
+            <th scope="col">Mitarbeiter</th>
+            <th scope="col">Krankheitszeitraum</th>
+            <th scope="col" class="num">Ausgefallene Arbeitstage</th>
+            <th scope="col" class="num">Krankheitsstunden</th>
+            <th scope="col">Bearbeitungsstatus</th>
+            <th scope="col"><span class="sr-only">Aktionen</span></th>
+          </tr></thead>
+          <tbody>
+          {% for row in sick_rows %}{% set a = row.absence %}
+            <tr id="abw-{{ a.id }}" data-abs-row="{{ a.id }}">
+              <th scope="row" class="cell-strong">{{ member_name(row.member) }}</th>
+              <td data-label="Zeitraum">{{ a.start_date.strftime('%d.%m.%Y') }}{% if a.end_date != a.start_date %} – {{ a.end_date.strftime('%d.%m.%Y') }}{% endif %}
+                {% if row.crosses_month %}<br><small>davon im {{ month_label }}: {{ row.month_start.strftime('%d.%m.') }}–{{ row.month_end.strftime('%d.%m.') }} · gesamt {{ row.total_days }} Tage / {{ row.total_seconds | duration }} Std.</small>{% endif %}
+                <details class="abs-days"><summary>Tage anzeigen</summary>
+                  <ul>{% for d in row.days %}<li>{{ d.day | weekday_short }}, {{ d.day.strftime('%d.%m.') }}:
+                    {% if d.holiday %}Feiertag ({{ d.holiday }})
+                    {% elif not d.planned_seconds %}kein Arbeitstag
+                    {% else %}Soll {{ d.planned_seconds | duration }}{% if d.worked_seconds %} · gearbeitet {{ d.worked_seconds | duration }}{% endif %} · <strong>krank {{ d.missed_seconds | duration }}</strong>{% endif %}</li>{% endfor %}</ul>
+                </details>
+              </td>
+              <td class="num" data-label="Ausgefallene Arbeitstage" data-abs-days>{{ row.month_days }}</td>
+              <td class="num" data-label="Krankheitsstunden" data-abs-hours>{{ row.month_seconds | duration }} Std.</td>
+              <td data-label="Bearbeitungsstatus">
+                <form method="post" action="{{ url_for('timetracking.absence_status', absence_id=a.id) }}" class="abs-status">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="monat" value="{{ month_start.strftime('%Y-%m') }}">
+                  <label class="sr-only" for="abs-status-{{ a.id }}">Bearbeitungsstatus</label>
+                  <select class="field-surface" id="abs-status-{{ a.id }}" name="status" onchange="this.form.submit()" data-abs-status>
+                    {% for key, label in statuses.items() %}<option value="{{ key }}" {{ 'selected' if (a.refund_status or 'open') == key }}>{{ label }}</option>{% endfor %}
+                  </select>
+                  <noscript><button type="submit" class="btn btn-secondary btn-sm">Speichern</button></noscript>
+                </form>
+                <small class="cell-sub">zuletzt {{ a.updated_at | local_dt('%d.%m.%Y %H:%M') }}{% if a.updated_by %} · {{ member_name(a.updated_by) }}{% endif %}</small>
+              </td>
+              <td class="bl-actions">
+                <a class="btn btn-secondary btn-sm" href="{{ url_for('timetracking.absence_edit', absence_id=a.id) }}">Korrigieren</a>
+                <form method="post" action="{{ url_for('timetracking.absence_remove', absence_id=a.id) }}" onsubmit="return confirm('Krankheitseintrag entfernen? Die Stunden werden neu berechnet.');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-secondary btn-sm btn-danger-text" data-abs-remove>Entfernen</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-note">Im {{ month_label }} ist keine Krankheit eingetragen.</p>
+    {% endif %}
+  {% endcall %}
+
+  {% call panel('Urlaub im ' ~ month_label, flush=True) %}
+    {% if vacation_rows %}
+      <div class="table-wrap">
+        <table class="data-table table-stack" data-abs-vacation>
+          <thead><tr><th scope="col">Mitarbeiter</th><th scope="col">Zeitraum</th><th scope="col" class="num">Urlaubstage im Monat</th><th scope="col" class="num">Stunden</th><th scope="col"><span class="sr-only">Aktionen</span></th></tr></thead>
+          <tbody>
+          {% for row in vacation_rows %}{% set a = row.absence %}
+            <tr id="abw-{{ a.id }}">
+              <th scope="row" class="cell-strong">{{ member_name(row.member) }}</th>
+              <td data-label="Zeitraum">{{ a.start_date.strftime('%d.%m.%Y') }}{% if a.end_date != a.start_date %} – {{ a.end_date.strftime('%d.%m.%Y') }}{% endif %}</td>
+              <td class="num" data-label="Urlaubstage">{{ row.month_days }}</td>
+              <td class="num" data-label="Stunden">{{ row.month_seconds | duration }} Std.</td>
+              <td class="bl-actions">
+                <a class="btn btn-secondary btn-sm" href="{{ url_for('timetracking.absence_edit', absence_id=a.id) }}">Korrigieren</a>
+                <form method="post" action="{{ url_for('timetracking.absence_remove', absence_id=a.id) }}" onsubmit="return confirm('Urlaubseintrag entfernen? Die Stunden werden neu berechnet.');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-secondary btn-sm btn-danger-text">Entfernen</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-note">Im {{ month_label }} ist kein Urlaub eingetragen.</p>
+    {% endif %}
+  {% endcall %}
+
+  {% call panel('Feiertage', 'An gesetzlichen Feiertagen beträgt das Soll 0 Stunden.') %}
+    <div id="feiertage">
+      {% if holidays %}
+        <ul class="abs-holidays">{% for d, name in holidays %}<li>{{ d | weekday_short }}, {{ d.strftime('%d.%m.') }} – {{ name }}</li>{% endfor %}</ul>
+      {% else %}
+        <p class="empty-note">Im {{ month_label }} gibt es keinen gesetzlichen Feiertag.</p>
+      {% endif %}
+      <form method="post" action="{{ url_for('timetracking.holiday_state') }}" class="toolbar-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="monat" value="{{ month_start.strftime('%Y-%m') }}">
+        <label class="toolbar-label" for="abs-state">Bundesland</label>
+        <select class="toolbar-select" id="abs-state" name="state">
+          {% for code, name in states.items() %}<option value="{{ code }}" {{ 'selected' if code == holiday_state }}>{{ name }}</option>{% endfor %}
+        </select>
+        <button type="submit" class="btn btn-secondary btn-sm">Speichern</button>
+      </form>
+    </div>
+  {% endcall %}
+</div>
+{% endblock %}

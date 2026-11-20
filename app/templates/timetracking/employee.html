@@ -19,6 +19,7 @@
   <a class="back-link" href="{{ url_for('timetracking.team') }}">← Team</a>
   {% call page_header(employee_name, employee.email ~ ' · ' ~ employee.role.label ~ ((' · Wochensoll ' ~ ((profile.weekly_minutes_on(today) * 60) | duration) ~ ' Std. (' ~ profile.day_plan_label ~ ')') if profile else ' · kein Sollprofil hinterlegt')) %}
     <div class="clock-status">{{ presence(state.status) }}</div>
+    {{ button('Krankheit eintragen', href=url_for('timetracking.absences_overview', mitarbeiter=employee.id, neu=1, von=(anchor if view == 'tag' else today).isoformat()) ~ '#krankheit-eintragen', variant='secondary', size='sm') }}
   {% endcall %}
 
   {% if open_entries %}
@@ -44,6 +45,8 @@
     {{ kpi('Soll' ~ (' bis heute' if view != 'tag' else ''), summary.target_seconds | duration) }}
     {{ kpi('Differenz', summary.balance_seconds | duration(signed=True), tone='success' if summary.balance_seconds > 0 else ('danger' if summary.balance_seconds < 0 else None)) }}
     {{ kpi('Pausen', summary.break_seconds | duration) }}
+    {% if summary.sick_seconds %}{{ kpi('Krank', summary.sick_seconds | duration, meta=summary.sick_days ~ (' Arbeitstag' if summary.sick_days == 1 else ' Arbeitstage')) }}{% endif %}
+    {% if summary.vacation_seconds %}{{ kpi('Urlaub', summary.vacation_seconds | duration, meta=summary.vacation_days ~ (' Tag' if summary.vacation_days == 1 else ' Tage')) }}{% endif %}
   </div>
 
   {% if view == 'tag' %}

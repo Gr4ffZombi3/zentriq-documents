@@ -100,9 +100,11 @@ def sessions_between(user_ids, start: date, end: date, include_voided: bool = Fa
 
 
 def summarize_user_period(user: User, start: date, end: date, now: datetime | None = None) -> PeriodSummary:
+    from app.services.timetracking import absences
+
     now = now or utcnow_naive()
     sessions = sessions_between([user.id], start, end)
-    return summarize_period(sessions, start, end, user.employee_profile, local_today(now), now)
+    return absences.summarize(user, sessions, start, end, local_today(now), now)
 
 
 @dataclass
@@ -132,12 +134,20 @@ def build_team_overview(users: list[User], now: datetime | None = None) -> list[
         item.user_id for item in WorkBreak.query.filter(WorkBreak.open_marker == 1).all()
     } if user_ids else set()
 
+    from app.services.timetracking import absences
+
+    free_days = absences.holidays(range_start, range_end)
+    by_user_absences: dict[int, list] = {}
+    for item in absences.active_between(user_ids, range_start, range_end):
+        by_user_absences.setdefault(item.user_id, []).append(item)
+
     rows = []
     for user in users:
         user_sessions = by_user.get(user.id, [])
         profile = user.employee_profile
-        week = summarize_period(user_sessions, week_start, week_end, profile, today, now)
-        month = summarize_period(user_sessions, month_start, month_end, profile, today, now)
+        user_absences = by_user_absences.get(user.id, [])
+        week = summarize_period(user_sessions, week_start, week_end, profile, today, now, user_absences, free_days)
+        month = summarize_period(user_sessions, month_start, month_end, profile, today, now, user_absences, free_days)
         today_summary = next(item for item in week.days if item.day == today)
         running = [item for item in user_sessions if item.is_open and not is_stale(item, now)]
         if running:

@@ -242,3 +242,46 @@ class EmployeeWorkPlan(TenantScopedMixin, db.Model):
                 pause = f", {int(d.get('break') or 0)} Min. Pause" if int(d.get("break") or 0) else ""
                 parts.append(f"{WEEKDAY_SHORT[i - 1]} {d['start']}–{d['end']}{pause} ({m // 60}:{m % 60:02d})")
         return "; ".join(parts) + ", übrige Tage 0 Std." if parts else "keine Arbeitstage"
+
+
+ABSENCE_KINDS = {"sick": "Krank", "vacation": "Urlaub"}
+REFUND_STATUSES = {"open": "Zu prüfen", "applied": "Beantragt", "refunded": "Erstattet"}
+
+
+class TimeAbsence(TenantScopedMixin, db.Model):
+    """Krankheit oder Urlaub eines Mitarbeiters (ganze Kalendertage, Europe/Berlin). Gespeichert
+    werden nur Art, Zeitraum und Bearbeitungsstatus - keine Diagnose. Ausgefallene Sollstunden
+    werden immer aus dem Arbeitszeitmodell berechnet (nicht gespeichert), damit Korrekturen an
+    Buchungen sofort wirken. Entfernen = deleted_at; jede Aenderung steht zusaetzlich im
+    Korrekturprotokoll (TimeCorrection, target_type "absence")."""
+
+    __tablename__ = "time_absences"
+    __table_args__ = (db.Index("ix_time_absences_user_start", "user_id", "start_date"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    kind = db.Column(db.String(16), nullable=False)  # ABSENCE_KINDS
+    start_date = db.Column(db.Date, nullable=False)
+    end_date = db.Column(db.Date, nullable=False)
+    # Erstattungspruefung (nur Krankheit): REFUND_STATUSES, manuell gepflegt.
+    refund_status = db.Column(db.String(16), nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
+    updated_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive, onupdate=utcnow_naive)
+    deleted_at = db.Column(db.DateTime, nullable=True)
+    deleted_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    user = db.relationship("User", foreign_keys=[user_id])
+    updated_by = db.relationship("User", foreign_keys=[updated_by_user_id])
+
+    @property
+    def label(self) -> str:
+        return ABSENCE_KINDS.get(self.kind, self.kind)
+
+    @property
+    def status_label(self) -> str:
+        return REFUND_STATUSES.get(self.refund_status or "open", "Zu prüfen")
+
+    def covers(self, day) -> bool:
+        return self.start_date <= day <= self.end_date

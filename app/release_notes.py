@@ -17,6 +17,23 @@ from datetime import date
 
 RELEASE_NOTES = (
     {
+        "date": date(2026, 11, 20),
+        "title": "Krankheit, Urlaub und Feiertage in der Zeiterfassung",
+        "text": "Unter Zeiterfassung → Team → „Krankheit & Urlaub“ tragen Sie Krankheit oder Urlaub für einen Tag oder "
+        "einen Zeitraum ein. Die ausgefallenen Sollstunden werden aus dem Arbeitszeitmodell berechnet und erzeugen "
+        "keine Minusstunden; gesetzliche Feiertage zählen automatisch mit 0 Stunden Soll. Die Monatsübersicht zeigt "
+        "je Krankheitszeitraum die ausgefallenen Arbeitstage und Stunden mit dem Status „Zu prüfen“, „Beantragt“ "
+        "oder „Erstattet“ – als Grundlage für Ihre Erstattungsanträge.",
+        "audience": "admin",
+    },
+    {
+        "date": date(2026, 11, 20),
+        "title": "Krank, Urlaub und Feiertage in Ihren Arbeitszeiten",
+        "text": "In „Meine Arbeitszeiten“ sehen Sie jetzt Krankheits- und Urlaubstage sowie Feiertage. Diese Tage "
+        "werden mit Ihren geplanten Stunden angerechnet und erzeugen keine Minusstunden.",
+        "audience": "mitarbeiter",
+    },
+    {
         "date": date(2026, 11, 18),
         "title": "Allgemeinen Buchungslink direkt verwalten",
         "text": "Unter „Buchungslinks“ können Sie die Adresse Ihres allgemeinen Buchungslinks jetzt direkt ändern "

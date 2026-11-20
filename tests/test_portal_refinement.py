@@ -357,7 +357,7 @@ def test_admin_exports_employee_month_as_csv_and_pdf(app, world):
     assert "attachment" in resp.headers["Content-Disposition"]
     text = resp.data.decode("utf-8-sig")
     assert "Mitarbeiter;Dennis" in text
-    assert "Datum;Tag;Beginn;Ende;Pausen;Ist;Soll;Saldo;Hinweis" in text
+    assert "Datum;Tag;Beginn;Ende;Pausen;Ist;Soll;Saldo;Krank;Urlaub;Hinweis" in text
     assert "Summe" in text
     pdf = client.get(f"/zeiterfassung/team/{world.dennis_id}/export.pdf")
     assert pdf.status_code == 200 and pdf.mimetype == "application/pdf"

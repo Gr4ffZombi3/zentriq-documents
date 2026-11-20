@@ -15,6 +15,7 @@ from app.extensions import db
 from app.models import (
     CorrectionRequestStatus,
     Tenant,
+    TimeAbsence,
     TimeCorrection,
     TimeCorrectionRequest,
     User,
@@ -23,7 +24,7 @@ from app.models import (
 )
 from app.models.audit_log import AuditEventType
 from app.services.audit import log_audit_event
-from app.services.timetracking import export, service
+from app.services.timetracking import absences, export, service
 from app.services.timetracking.calc import month_bounds, week_bounds
 from app.services.timetracking.clock import local_to_utc_naive, local_today, to_local, utcnow_naive
 from app.services.timetracking.service import TimeTrackingError
@@ -241,6 +242,7 @@ def week():
         next_url=url_for("timetracking.week", datum=_shift("woche", start, 1).isoformat()),
         current_url=url_for("timetracking.week"),
         request_link=_request_link,
+        own_absences=absences.active_between([current_user.id], start, end),
     )
 
 
@@ -259,6 +261,7 @@ def month():
         next_url=url_for("timetracking.month", monat=_shift("monat", start, 1).strftime("%Y-%m")),
         current_url=url_for("timetracking.month"),
         request_link=_request_link,
+        own_absences=absences.active_between([current_user.id], start, end),
     )
 
 
@@ -398,6 +401,159 @@ def employee(user_id):
     )
 
 
+# --- Admin: Krankheit und Urlaub ---------------------------------------------------------------
+
+
+def _absence_or_404(absence_id: int) -> TimeAbsence:
+    absence = get_or_404_scoped(TimeAbsence, absence_id)
+    if absence.deleted_at is not None:
+        abort(404)
+    _employee_or_404(absence.user_id)  # nur Mitglieder des eigenen Bueros
+    return absence
+
+
+def _member_name(user: User) -> str:
+    profile = user.employee_profile
+    return profile.display_name if profile and profile.display_name else user.email
+
+
+def _absence_redirect(month: date | None = None, anchor: str = ""):
+    params = {"monat": month.strftime("%Y-%m")} if month else {}
+    return redirect(url_for("timetracking.absences_overview", **params) + anchor)
+
+
+def _flash_notes(notes: list[str]) -> None:
+    for note in notes:
+        flash(note, "info")
+
+
+@timetracking_bp.get("/abwesenheiten")
+@login_required
+@admin_required
+def absences_overview():
+    today = local_today()
+    month_start, month_end = month_bounds(_parse_month(request.args.get("monat"), today))
+    members = office_members_query(include_deleted=True).order_by(User.email).all()
+    active_members = sorted([m for m in members if m.is_active and not m.deleted_at], key=lambda m: _member_name(m).lower())
+    preselect = request.args.get("mitarbeiter", type=int)
+    start_value = request.args.get("von") or today.isoformat()
+    sick_rows = absences.overview(members, month_start, month_end, "sick")
+    vacation_rows = absences.overview(members, month_start, month_end, "vacation")
+    for rows in (sick_rows, vacation_rows):
+        rows.sort(key=lambda row: (_member_name(row.member).lower(), row.absence.start_date))
+    from app.services.timetracking.holidays import STATES
+
+    return render_template(
+        "timetracking/absences.html",
+        month_start=month_start,
+        month_end=month_end,
+        members=active_members,
+        preselect=preselect,
+        form_kind=request.args.get("art") if request.args.get("art") in ("sick", "vacation") else "sick",
+        start_value=start_value,
+        sick_rows=sick_rows,
+        vacation_rows=vacation_rows,
+        holidays=sorted(absences.holidays(month_start, month_end).items()),
+        holiday_state=absences.holiday_state(),
+        states=STATES,
+        member_name=_member_name,
+        statuses=absences.REFUND_STATUSES,
+        prev_url=url_for("timetracking.absences_overview", monat=_shift("monat", month_start, -1).strftime("%Y-%m")),
+        next_url=url_for("timetracking.absences_overview", monat=_shift("monat", month_start, 1).strftime("%Y-%m")),
+        current_url=url_for("timetracking.absences_overview"),
+        open_form=request.args.get("neu") == "1",
+    )
+
+
+@timetracking_bp.post("/abwesenheiten/neu")
+@login_required
+@admin_required
+def absence_create():
+    try:
+        member = get_office_member_or_404(int(request.form.get("user_id") or 0))
+    except ValueError:
+        abort(404)
+    try:
+        start = absences.parse_day(request.form.get("start_date"), "den Beginn")
+        end = absences.parse_day(request.form.get("end_date") or request.form.get("start_date"), "das Ende")
+        absence, notes = absences.create(current_user, member, request.form.get("kind") or "sick", start, end)
+    except absences.AbsenceError as exc:
+        db.session.rollback()
+        flash(str(exc), "error")
+        return redirect(url_for("timetracking.absences_overview", mitarbeiter=member.id, neu=1,
+                                art=request.form.get("kind") or "sick", von=request.form.get("start_date") or None))
+    what = "Krankheit" if absence.kind == "sick" else "Urlaub"
+    flash(f"{what} für {_member_name(member)} eingetragen: {absences.period_text(absence.start_date, absence.end_date)}.", "success")
+    _flash_notes(notes)
+    return _absence_redirect(absence.start_date, f"#abw-{absence.id}")
+
+
+@timetracking_bp.route("/abwesenheiten/<int:absence_id>/bearbeiten", methods=["GET", "POST"])
+@login_required
+@admin_required
+def absence_edit(absence_id):
+    absence = _absence_or_404(absence_id)
+    member = db.session.get(User, absence.user_id)
+    values = {"start_date": absence.start_date.isoformat(), "end_date": absence.end_date.isoformat()}
+    if request.method == "POST":
+        values = {key: request.form.get(key, "") for key in values}
+        try:
+            start = absences.parse_day(values["start_date"], "den Beginn")
+            end = absences.parse_day(values["end_date"] or values["start_date"], "das Ende")
+            notes = absences.update(current_user, absence, start, end)
+        except absences.AbsenceError as exc:
+            db.session.rollback()
+            flash(str(exc), "error")
+        else:
+            flash(f"Zeitraum geändert: {absences.period_text(start, end)}. Stunden und Berichte sind neu berechnet.", "success")
+            _flash_notes(notes)
+            return _absence_redirect(start, f"#abw-{absence.id}")
+    return render_template("timetracking/absence_form.html", absence=absence, member=member, member_name=_member_name,
+                           values=values, days=absences.absence_days(member, absence))
+
+
+@timetracking_bp.post("/abwesenheiten/<int:absence_id>/entfernen")
+@login_required
+@admin_required
+def absence_remove(absence_id):
+    absence = _absence_or_404(absence_id)
+    absences.remove(current_user, absence)
+    flash(f"{absence.label}-Eintrag {absences.period_text(absence.start_date, absence.end_date)} entfernt. "
+          "Stunden und Berichte sind neu berechnet.", "success")
+    return _absence_redirect(absence.start_date)
+
+
+@timetracking_bp.post("/abwesenheiten/<int:absence_id>/status")
+@login_required
+@admin_required
+def absence_status(absence_id):
+    absence = _absence_or_404(absence_id)
+    month = _parse_month(request.form.get("monat"), absence.start_date)
+    try:
+        changed = absences.set_status(current_user, absence, request.form.get("status") or "")
+    except absences.AbsenceError as exc:
+        db.session.rollback()
+        flash(str(exc), "error")
+    else:
+        if changed:
+            flash(f"Bearbeitungsstatus: {absence.status_label}.", "success")
+    return _absence_redirect(month, f"#abw-{absence.id}")
+
+
+@timetracking_bp.post("/abwesenheiten/bundesland")
+@login_required
+@admin_required
+def holiday_state():
+    try:
+        absences.set_holiday_state(current_user, request.form.get("state") or "")
+    except absences.AbsenceError as exc:
+        db.session.rollback()
+        flash(str(exc), "error")
+    else:
+        flash("Bundesland für Feiertage gespeichert. Sollstunden sind neu berechnet.", "success")
+    return _absence_redirect(_parse_month(request.form.get("monat"), local_today()), "#feiertage")
+
+
 # --- Admin: Monatsexport (Lohnabrechnung / Archiv) -------------------------------------------
 
 
@@ -432,11 +588,12 @@ def employee_export(user_id, fmt):
     month_start, month_end = month_bounds(_export_month())
     summary = service.summarize_user_period(employee_user, month_start, month_end)
     name, personnel_number = _export_name(employee_user)
+    sick_rows = absences.overview([employee_user], month_start, month_end, "sick")
     filename = f"arbeitszeiten-{_file_slug(name)}-{month_start.strftime('%Y-%m')}.{fmt}"
     if fmt == "csv":
-        return _download(export.month_csv(name, personnel_number, summary, local_today()), filename, "text/csv; charset=utf-8")
+        return _download(export.month_csv(name, personnel_number, summary, local_today(), sick_rows), filename, "text/csv; charset=utf-8")
     tenant = db.session.get(Tenant, current_user.tenant_id)
-    data = export.month_pdf(tenant.name if tenant else "", name, personnel_number, summary, local_today())
+    data = export.month_pdf(tenant.name if tenant else "", name, personnel_number, summary, local_today(), sick_rows)
     return _download(data, filename, "application/pdf")
 
 
@@ -449,7 +606,7 @@ def team_export():
     rows = []
     for user in users:
         summary = service.summarize_user_period(user, month_start, month_end)
-        if not user.is_active and not summary.net_seconds:
+        if not user.is_active and not summary.net_seconds and not summary.sick_seconds:
             continue
         name, personnel_number = _export_name(user)
         rows.append((name, personnel_number, summary))

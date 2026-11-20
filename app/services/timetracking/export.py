@@ -23,6 +23,12 @@ def _time(value: datetime | None) -> str:
 
 def _note(day) -> str:
     notes = []
+    if day.holiday:
+        notes.append(f"Feiertag: {day.holiday}")
+    elif day.absence_kind == "sick":
+        notes.append("Krank")
+    elif day.absence_kind == "vacation":
+        notes.append("Urlaub")
     if day.is_running:
         notes.append("läuft")
     if day.has_incomplete:
@@ -46,13 +52,17 @@ def day_rows(summary: PeriodSummary, today: date) -> list[list[str]]:
                 format_duration(day.net_seconds) if day.sessions else "",
                 format_duration(day.target_seconds) if day.target_seconds else "",
                 format_duration(day.balance_seconds, signed=True) if has_data and day.day <= today else "",
+                format_duration(day.sick_seconds) if day.sick_seconds else "",
+                format_duration(day.vacation_seconds) if day.vacation_seconds else "",
                 _note(day),
             ]
         )
     return rows
 
 
-HEADER = ["Datum", "Tag", "Beginn", "Ende", "Pausen", "Ist", "Soll", "Saldo", "Hinweis"]
+HEADER = ["Datum", "Tag", "Beginn", "Ende", "Pausen", "Ist", "Soll", "Saldo", "Krank", "Urlaub", "Hinweis"]
+LEGAL_NOTE = ("Die Krankheitszeiträume dokumentieren Ausfallzeiten als Grundlage zur Prüfung des Erstattungsantrags; "
+              "ein Erstattungsanspruch oder -betrag ergibt sich daraus nicht.")
 
 
 def _totals(summary: PeriodSummary) -> list[str]:
@@ -65,11 +75,23 @@ def _totals(summary: PeriodSummary) -> list[str]:
         format_duration(summary.net_seconds),
         format_duration(summary.target_seconds),
         format_duration(summary.balance_seconds, signed=True),
+        format_duration(summary.sick_seconds),
+        format_duration(summary.vacation_seconds),
         "",
     ]
 
 
-def month_csv(employee_name: str, personnel_number: str | None, summary: PeriodSummary, today: date) -> bytes:
+def _sick_lines(sick_rows) -> list[list[str]]:
+    """Krankheitszeitraeume des Monats (absences.OverviewRow)."""
+    lines = []
+    for row in sick_rows or ():
+        a = row.absence
+        period = a.start_date.strftime("%d.%m.%Y") + ("" if a.end_date == a.start_date else " – " + a.end_date.strftime("%d.%m.%Y"))
+        lines.append([period, str(row.month_days), format_duration(row.month_seconds), a.status_label])
+    return lines
+
+
+def month_csv(employee_name: str, personnel_number: str | None, summary: PeriodSummary, today: date, sick_rows=None) -> bytes:
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=";", lineterminator="\r\n")
     writer.writerow(["Arbeitszeitnachweis", month_name(summary.start)])
@@ -80,6 +102,13 @@ def month_csv(employee_name: str, personnel_number: str | None, summary: PeriodS
     writer.writerow(HEADER)
     writer.writerows(day_rows(summary, today))
     writer.writerow(_totals(summary))
+    sick = _sick_lines(sick_rows)
+    if sick:
+        writer.writerow([])
+        writer.writerow(["Krankheitszeiträume (Grundlage zur Prüfung des Erstattungsantrags)"])
+        writer.writerow(["Zeitraum", "Ausgefallene Arbeitstage im Monat", "Krankheitsstunden im Monat", "Bearbeitungsstatus"])
+        writer.writerows(sick)
+        writer.writerow([LEGAL_NOTE])
     return ("﻿" + buffer.getvalue()).encode("utf-8")
 
 
@@ -88,7 +117,8 @@ def team_csv(rows: list[tuple[str, str | None, PeriodSummary]], month: date) -> 
     writer = csv.writer(buffer, delimiter=";", lineterminator="\r\n")
     writer.writerow(["Arbeitszeiten", month_name(month)])
     writer.writerow([])
-    writer.writerow(["Mitarbeiter", "Personalnummer", "Ist", "Soll", "Saldo", "Pausen", "Unvollständige Buchungen"])
+    writer.writerow(["Mitarbeiter", "Personalnummer", "Ist", "Soll", "Saldo", "Pausen", "Unvollständige Buchungen",
+                     "Krankheitstage", "Krankheitsstunden", "Urlaubstage", "Urlaubsstunden"])
     for name, personnel_number, summary in rows:
         writer.writerow(
             [
@@ -99,6 +129,10 @@ def team_csv(rows: list[tuple[str, str | None, PeriodSummary]], month: date) -> 
                 format_duration(summary.balance_seconds, signed=True),
                 format_duration(summary.break_seconds),
                 "ja" if summary.has_incomplete else "nein",
+                str(summary.sick_days),
+                format_duration(summary.sick_seconds),
+                str(summary.vacation_days),
+                format_duration(summary.vacation_seconds),
             ]
         )
     return ("﻿" + buffer.getvalue()).encode("utf-8")
@@ -109,15 +143,17 @@ def team_csv(rows: list[tuple[str, str | None, PeriodSummary]], month: date) -> 
 _PAGE_WIDTH, _PAGE_HEIGHT = fitz.paper_size("a4")
 _MARGIN = 40
 _COLUMNS = [  # (Kopf, Breite in pt, rechtsbuendig)
-    ("Datum", 62, False),
-    ("Tag", 28, False),
-    ("Beginn", 44, True),
-    ("Ende", 44, True),
-    ("Pausen", 46, True),
-    ("Ist", 46, True),
-    ("Soll", 46, True),
-    ("Saldo", 50, True),
-    ("Hinweis", 149, False),
+    ("Datum", 58, False),
+    ("Tag", 24, False),
+    ("Beginn", 38, True),
+    ("Ende", 36, True),
+    ("Pausen", 40, True),
+    ("Ist", 38, True),
+    ("Soll", 38, True),
+    ("Saldo", 44, True),
+    ("Krank", 38, True),
+    ("Urlaub", 40, True),
+    ("Hinweis", 121, False),
 ]
 _ROW_HEIGHT = 17
 _FONT_SIZE = 8.5
@@ -144,7 +180,8 @@ def _row(page, y, values, bold=False, shade=False):
 
 
 def month_pdf(
-    office_name: str, employee_name: str, personnel_number: str | None, summary: PeriodSummary, today: date
+    office_name: str, employee_name: str, personnel_number: str | None, summary: PeriodSummary, today: date,
+    sick_rows=None,
 ) -> bytes:
     document = fitz.open()
     page = document.new_page(width=_PAGE_WIDTH, height=_PAGE_HEIGHT)
@@ -158,6 +195,9 @@ def month_pdf(
         f"Ist {format_duration(summary.net_seconds)} Std. · Soll {format_duration(summary.target_seconds)} Std. · "
         f"Differenz {format_duration(summary.balance_seconds, signed=True)} Std. · Pausen {format_duration(summary.break_seconds)} Std."
     )
+    if summary.sick_seconds or summary.vacation_seconds:
+        totals += (f" · Krank {format_duration(summary.sick_seconds)} Std. ({summary.sick_days} Tage)"
+                   f" · Urlaub {format_duration(summary.vacation_seconds)} Std.")
     _text(page, _MARGIN, y, totals, size=9.5)
     y += 26
 
@@ -172,6 +212,21 @@ def month_pdf(
         _row(page, y, values)
     y += _ROW_HEIGHT
     _row(page, y, _totals(summary), bold=True, shade=True)
+
+    sick = _sick_lines(sick_rows)
+    if sick:
+        if y > _PAGE_HEIGHT - _MARGIN - 80 - _ROW_HEIGHT * len(sick):
+            page = document.new_page(width=_PAGE_WIDTH, height=_PAGE_HEIGHT)
+            y = _MARGIN
+        y += 30
+        _text(page, _MARGIN, y, "Krankheitszeiträume – Grundlage zur Prüfung des Erstattungsantrags", size=10, bold=True)
+        for period, days, hours, status in sick:
+            y += _ROW_HEIGHT
+            _text(page, _MARGIN + 4, y, f"{period}: {days} ausgefallene Arbeitstage, {hours} Std. Krankheit · Status: {status}")
+        y += _ROW_HEIGHT
+        _text(page, _MARGIN + 4, y, LEGAL_NOTE[:118], size=7.5, color=(0.32, 0.36, 0.42))
+        if len(LEGAL_NOTE) > 118:
+            _text(page, _MARGIN + 4, y + 10, LEGAL_NOTE[118:].strip(), size=7.5, color=(0.32, 0.36, 0.42))
 
     footer = f"Erstellt am {to_local(utcnow_naive()).strftime('%d.%m.%Y %H:%M')} Uhr · Zentriq"
     for number, current in enumerate(document, start=1):
